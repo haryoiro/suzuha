@@ -1,3 +1,4 @@
+// Package observe provides logging, metrics, and observability utilities.
 package observe
 
 import (

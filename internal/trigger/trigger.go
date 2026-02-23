@@ -1,3 +1,4 @@
+// Package trigger provides scheduled event triggering via cron expressions.
 package trigger
 
 import (

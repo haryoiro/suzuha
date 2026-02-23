@@ -102,7 +102,7 @@ func (c *Client) call(ctx context.Context, name string, input json.RawMessage) (
 	id := c.nextID.Add(1)
 	req, err := transport.NewRequest(id, "tools/call", map[string]any{
 		"name":  name,
-		"input": json.RawMessage(input),
+		"input": input,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("remote %s: build call request: %w", c.name, err)

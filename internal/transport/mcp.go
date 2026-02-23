@@ -6,6 +6,6 @@ package transport
 //
 // MCP servers communicate via stdio or Streamable HTTP.
 // The bridge translates between MCP's native protocol and
-// suzuha's JsonRpcMessage format.
+// suzuha's JSONRPCMessage format.
 //
 // TODO: Implement when MCP tool servers are needed.

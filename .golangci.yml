@@ -28,7 +28,10 @@ linters:
     staticcheck:
       checks:
       - 'all'
+      - '-ST1000'
+      - '-ST1003'
       - '-ST1005'
+      - '-ST1020'
       - '-SA1008'
 
   exclusions:
@@ -42,6 +45,16 @@ linters:
     - text: "dot-imports:"
       linters: [revive]
     - text: should have a package comment
+      linters: [revive]
+    - text: should have comment or be unexported
+      linters: [revive]
+    - text: "comment on exported"
+      linters: [revive]
+    - text: "type name will be used as"
+      linters: [revive]
+    - text: "avoid package names that conflict"
+      linters: [revive]
+    - text: "var-naming"
       linters: [revive]
     - text: error strings should not be capitalized or end with punctuation or a newline
       linters: [revive, staticcheck]

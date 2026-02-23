@@ -30,7 +30,7 @@ func (t *WebSocketTransport) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (t *WebSocketTransport) Send(ctx context.Context, msg *JsonRpcMessage) error {
+func (t *WebSocketTransport) Send(ctx context.Context, msg *JSONRPCMessage) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("websocket: marshal: %w", err)
@@ -45,7 +45,7 @@ func (t *WebSocketTransport) Send(ctx context.Context, msg *JsonRpcMessage) erro
 	return nil
 }
 
-func (t *WebSocketTransport) Receive(ctx context.Context) (*JsonRpcMessage, error) {
+func (t *WebSocketTransport) Receive(ctx context.Context) (*JSONRPCMessage, error) {
 	// Set read deadline from context if available.
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = t.conn.SetReadDeadline(deadline)
@@ -56,7 +56,7 @@ func (t *WebSocketTransport) Receive(ctx context.Context) (*JsonRpcMessage, erro
 		return nil, fmt.Errorf("websocket: read: %w", err)
 	}
 
-	var msg JsonRpcMessage
+	var msg JSONRPCMessage
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return nil, fmt.Errorf("websocket: unmarshal: %w", err)
 	}
