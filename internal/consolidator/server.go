@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/llm"
@@ -62,19 +63,49 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 const compactSystemPrompt = `You are a memory consolidation agent. Your job is to analyze a conversation and:
 1. Select which messages are most important to keep in short-term context.
 2. Extract key information that should be stored as long-term memories.
+3. Assess affinity changes based on the emotional tone and content of interactions.
 
 Respond in this exact format:
+
 KEEP: 0,2,5,7 (comma-separated message indices to keep)
+
 MEMORIES:
-- [user] Information about user preferences or facts
+- [user user_id=<platform_user_id>] Information about that specific user's preferences or facts
 - [world] General world knowledge or facts discussed
-- [tool] Tool usage patterns or results worth remembering`
+- [tool] Tool usage patterns or results worth remembering
+
+IMPORTANT: For [user] memories, always include the user_id of the person the fact is about.
+The user_id can be found in message metadata (user_id=... in the message header).
+If the fact is about a user whose user_id is not clear, omit the user_id.
+
+AFFINITY:
+- [delta] user_id=<platform_user_id> platform=<platform> delta=<+/-float> messages=<comma-separated indices> reason=<brief explanation>
+
+Rules for AFFINITY:
+- Positive interactions (gratitude, enjoyment, warmth, shared interests) increase affinity (+0.1 to +1.0)
+- Negative interactions (hostility, rudeness, disrespect) decrease affinity (-0.1 to -1.0)
+- Neutral interactions have no affinity entry (omit them)
+- Group temporally close positive interactions from the same user into a single delta
+- The reason should be concise (under 50 chars)
+- Each user who participated should have at most one affinity entry
+- The context may include "[User profile: ...]" system messages with affinity history.
+  Use this history to detect behavioral contradictions:
+  - If a user with negative history shows genuine improvement (apology, kindness), allow a larger positive delta (+0.5 to +1.0)
+  - If a user with positive history suddenly becomes hostile, apply a stronger negative delta (-0.5 to -1.0)
+  - Consistency matters: sustained positive/negative behavior should reinforce the trend
+
+If there are no affinity changes, omit the AFFINITY section entirely.`
 
 func buildCompactPrompt(messages []llm.Message, targetCount int) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Here are %d messages. Select approximately %d to keep.\n\n", len(messages), targetCount)
 	for i, m := range messages {
-		fmt.Fprintf(&sb, "[%d] %s: %s\n", i, m.Role, m.Content)
+		if m.UserID != "" {
+			fmt.Fprintf(&sb, "[%d] %s (user_id=%s, platform=%s, name=%s): %s\n",
+				i, m.Role, m.UserID, m.Source, m.UserName, m.Content)
+		} else {
+			fmt.Fprintf(&sb, "[%d] %s: %s\n", i, m.Role, m.Content)
+		}
 	}
 	return sb.String()
 }
@@ -83,7 +114,7 @@ func parseCompactResponse(text string, msgCount int) *CompactResult {
 	result := &CompactResult{}
 
 	lines := strings.Split(text, "\n")
-	inMemories := false
+	section := "" // "memories", "affinity"
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -97,36 +128,116 @@ func parseCompactResponse(text string, msgCount int) *CompactResult {
 					result.KeepIndices = append(result.KeepIndices, idx)
 				}
 			}
+			section = ""
 			continue
 		}
 
 		if strings.HasPrefix(line, "MEMORIES:") {
-			inMemories = true
+			section = "memories"
+			continue
+		}
+		if strings.HasPrefix(line, "AFFINITY:") {
+			section = "affinity"
 			continue
 		}
 
-		if inMemories && strings.HasPrefix(line, "- ") {
-			content := strings.TrimPrefix(line, "- ")
-			memType := memory.MemoryTypeWorld
-			if strings.HasPrefix(content, "[user]") {
-				memType = memory.MemoryTypeUser
-				content = strings.TrimPrefix(content, "[user]")
-			} else if strings.HasPrefix(content, "[world]") {
-				memType = memory.MemoryTypeWorld
-				content = strings.TrimPrefix(content, "[world]")
-			} else if strings.HasPrefix(content, "[tool]") {
-				memType = memory.MemoryTypeTool
-				content = strings.TrimPrefix(content, "[tool]")
+		if !strings.HasPrefix(line, "- ") {
+			continue
+		}
+		content := strings.TrimPrefix(line, "- ")
+
+		switch section {
+		case "memories":
+			if mem, ok := parseMemoryLine(content); ok {
+				result.Memories = append(result.Memories, mem)
 			}
-			content = strings.TrimSpace(content)
-			if content != "" {
-				result.Memories = append(result.Memories, memory.Memory{
-					Type:    memType,
-					Content: content,
-				})
+		case "affinity":
+			if delta, ok := parseAffinityDelta(content); ok {
+				result.AffinityDeltas = append(result.AffinityDeltas, delta)
 			}
 		}
 	}
 
 	return result
+}
+
+func parseMemoryLine(content string) (memory.Memory, bool) {
+	memType := memory.MemoryTypeWorld
+	var metadata map[string]any
+
+	switch {
+	case strings.HasPrefix(content, "[user"):
+		memType = memory.MemoryTypeUser
+		// Parse optional user_id: [user user_id=abc123] or [user]
+		endBracket := strings.Index(content, "]")
+		if endBracket < 0 {
+			return memory.Memory{}, false
+		}
+		tag := content[1:endBracket] // "user user_id=abc123" or "user"
+		content = content[endBracket+1:]
+
+		// Extract user_id from tag if present.
+		if idx := strings.Index(tag, "user_id="); idx >= 0 {
+			userID := tag[idx+len("user_id="):]
+			userID = strings.TrimSpace(userID)
+			if userID != "" {
+				metadata = map[string]any{"user_id": userID}
+			}
+		}
+	case strings.HasPrefix(content, "[world]"):
+		memType = memory.MemoryTypeWorld
+		content = strings.TrimPrefix(content, "[world]")
+	case strings.HasPrefix(content, "[tool]"):
+		memType = memory.MemoryTypeTool
+		content = strings.TrimPrefix(content, "[tool]")
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return memory.Memory{}, false
+	}
+	return memory.Memory{Type: memType, Content: content, Metadata: metadata}, true
+}
+
+// parseAffinityDelta parses: [delta] user_id=X platform=Y delta=+0.5 messages=1,3,5 reason=...
+func parseAffinityDelta(s string) (AffinityDelta, bool) {
+	if !strings.HasPrefix(s, "[delta]") {
+		return AffinityDelta{}, false
+	}
+	s = strings.TrimPrefix(s, "[delta]")
+	s = strings.TrimSpace(s)
+
+	d := AffinityDelta{}
+
+	// Split into key=value parts. "reason=" may contain spaces, so handle it specially.
+	parts := strings.Fields(s)
+	for i, part := range parts {
+		switch {
+		case strings.HasPrefix(part, "user_id="):
+			d.PlatformUserID = strings.TrimPrefix(part, "user_id=")
+		case strings.HasPrefix(part, "platform="):
+			d.Platform = strings.TrimPrefix(part, "platform=")
+		case strings.HasPrefix(part, "delta="):
+			val := strings.TrimPrefix(part, "delta=")
+			if f, err := strconv.ParseFloat(val, 64); err == nil {
+				d.Delta = f
+			}
+		case strings.HasPrefix(part, "messages="):
+			idxStr := strings.TrimPrefix(part, "messages=")
+			for _, idx := range strings.Split(idxStr, ",") {
+				if n, err := strconv.Atoi(strings.TrimSpace(idx)); err == nil {
+					d.MessageIndices = append(d.MessageIndices, n)
+				}
+			}
+		case strings.HasPrefix(part, "reason="):
+			// reason is the rest of the line from here.
+			reasonParts := append([]string{strings.TrimPrefix(part, "reason=")}, parts[i+1:]...)
+			d.Reason = strings.Join(reasonParts, " ")
+			return d, d.PlatformUserID != ""
+		}
+	}
+
+	if d.PlatformUserID == "" {
+		return AffinityDelta{}, false
+	}
+	return d, true
 }

@@ -15,8 +15,18 @@ type CompactRequest struct {
 
 // CompactResult is returned by the consolidator with compaction decisions.
 type CompactResult struct {
-	KeepIndices []int
-	Memories    []memory.Memory
+	KeepIndices    []int
+	Memories       []memory.Memory
+	AffinityDeltas []AffinityDelta
+}
+
+// AffinityDelta represents an affinity change detected by the consolidator.
+type AffinityDelta struct {
+	PlatformUserID string
+	Platform       string
+	Delta          float64
+	Reason         string
+	MessageIndices []int // which message indices contributed to this assessment
 }
 
 // Client is the interface the agent uses to request compaction.
