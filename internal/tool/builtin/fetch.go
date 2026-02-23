@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/tool"
 )
+
+const maxBodyBytes = 512 << 10 // 512KB raw read limit
+const maxOutputRunes = 4000   // truncate final output for LLM context
 
 // Fetch is a built-in tool that fetches a URL and returns the body.
 type Fetch struct {
@@ -24,7 +28,9 @@ func NewFetch() *Fetch {
 }
 
 func (f *Fetch) Name() string        { return "fetch" }
-func (f *Fetch) Description() string { return "Fetch the contents of a URL and return the body text." }
+func (f *Fetch) Description() string {
+	return "Fetch a URL and return its content as Markdown. HTML pages are automatically cleaned (scripts, styles, navigation removed)."
+}
 
 func (f *Fetch) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -63,13 +69,26 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 	}
 	defer resp.Body.Close()
 
-	// Limit read to 1MB.
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
 		return tool.ErrorResult("read body: " + err.Error()), nil
 	}
 
-	return tool.TextResult(fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, string(body))), nil
+	ct := resp.Header.Get("Content-Type")
+	text := string(body)
+
+	// Convert HTML to Markdown.
+	if strings.Contains(ct, "text/html") || strings.HasPrefix(text, "<!") || strings.HasPrefix(text, "<html") {
+		text = htmlToMarkdown(text)
+	}
+
+	// Truncate to keep LLM context manageable.
+	runes := []rune(text)
+	if len(runes) > maxOutputRunes {
+		text = string(runes[:maxOutputRunes]) + "\n\n...(truncated)"
+	}
+
+	return tool.TextResult(fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, text)), nil
 }
 
 var _ tool.Tool = (*Fetch)(nil)
