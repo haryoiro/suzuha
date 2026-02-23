@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/haryoiro/suzuha/internal/admin/handler"
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
@@ -33,11 +34,28 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/memories/{id}", memH.Get)
 	mux.HandleFunc("PUT /api/memories/{id}", memH.Update)
 	mux.HandleFunc("DELETE /api/memories/{id}", memH.Delete)
+	mux.HandleFunc("GET /api/memories/vec-stats", memH.VecStats)
+	mux.HandleFunc("GET /api/memories/with-vec", memH.ListWithVec)
 
 	// Metrics proxy.
 	metH := handler.NewMetricsHandler(cfg.AgentMetrics, logger)
 	mux.HandleFunc("GET /api/metrics", metH.Proxy)
 	mux.HandleFunc("GET /api/metrics/json", metH.ProxyJSON)
+
+	// Users.
+	userH := handler.NewUsersHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/users", userH.List)
+	mux.HandleFunc("GET /api/users/{id}", userH.Get)
+	mux.HandleFunc("GET /api/users/{id}/affinity", userH.AffinityEvents)
+
+	// Agent operations (compact, etc.).
+	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
+	agentH := handler.NewAgentHandler(agentBase, logger)
+	mux.HandleFunc("POST /api/agent/compact", agentH.Compact)
+
+	// Agent context proxy.
+	ctxH := handler.NewContextHandler(cfg.AgentContext, logger)
+	mux.HandleFunc("GET /api/context", ctxH.Proxy)
 
 	// Log streaming.
 	logH := handler.NewLogHandler(cfg.AgentLogs, cfg.ConsolLogs, logger)
@@ -62,6 +80,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 				`<h3>API endpoints</h3><ul>` +
 				`<li><a href="/api/health" style="color:#7c3aed">GET /api/health</a></li>` +
 				`<li><a href="/api/memories" style="color:#7c3aed">GET /api/memories</a></li>` +
+				`<li><a href="/api/users" style="color:#7c3aed">GET /api/users</a></li>` +
 				`<li><a href="/api/metrics/json" style="color:#7c3aed">GET /api/metrics/json</a></li>` +
 				`<li>GET /api/logs/stream (SSE)</li>` +
 				`</ul></body></html>`))

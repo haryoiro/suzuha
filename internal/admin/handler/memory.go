@@ -144,6 +144,100 @@ func (h *MemoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// VecStats handles GET /api/memories/vec-stats.
+// Returns vector storage statistics: total memories, embedded count, dimensions.
+func (h *MemoryHandler) VecStats(w http.ResponseWriter, r *http.Request) {
+	db := h.store.DB()
+	ctx := r.Context()
+
+	var totalMemories int
+	db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories").Scan(&totalMemories)
+
+	var embeddedCount int
+	db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories_vec").Scan(&embeddedCount)
+
+	// Get IDs with embeddings for the list endpoint.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total_memories":  totalMemories,
+		"embedded_count":  embeddedCount,
+		"missing_count":   totalMemories - embeddedCount,
+		"coverage_pct":    safePct(embeddedCount, totalMemories),
+	})
+}
+
+func safePct(n, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(n) / float64(total) * 100
+}
+
+// ListWithVec handles GET /api/memories/with-vec.
+// Returns memories along with whether each has a vector embedding.
+func (h *MemoryHandler) ListWithVec(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+
+	opts := memory.ListOpts{
+		Offset:   offset,
+		Limit:    limit,
+		Type:     memory.MemoryType(q.Get("type")),
+		Query:    q.Get("q"),
+		OrderBy:  q.Get("order"),
+		OrderDir: q.Get("dir"),
+	}
+
+	memories, total, err := h.store.List(r.Context(), opts)
+	if err != nil {
+		h.logger.Error("list memories with vec", "error", err)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if memories == nil {
+		memories = []memory.Memory{}
+	}
+
+	// Look up which IDs have embeddings.
+	embeddedSet := make(map[string]bool)
+	if len(memories) > 0 {
+		ids := make([]any, len(memories))
+		placeholders := ""
+		for i, m := range memories {
+			ids[i] = m.ID
+			if i > 0 {
+				placeholders += ","
+			}
+			placeholders += "?"
+		}
+		rows, err := h.store.DB().QueryContext(r.Context(),
+			"SELECT id FROM memories_vec WHERE id IN ("+placeholders+")", ids...)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var id string
+				rows.Scan(&id)
+				embeddedSet[id] = true
+			}
+		}
+	}
+
+	type memWithVec struct {
+		memory.Memory
+		HasEmbedding bool `json:"has_embedding"`
+	}
+
+	result := make([]memWithVec, len(memories))
+	for i, m := range memories {
+		result[i] = memWithVec{Memory: m, HasEmbedding: embeddedSet[m.ID]}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": result, "total": total})
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
