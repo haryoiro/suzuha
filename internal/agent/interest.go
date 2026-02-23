@@ -18,6 +18,11 @@ func ShouldRespond(e event.Event, botID string) bool {
 		return true
 	}
 
+	// Always respond to DMs.
+	if isDM, ok := payload["is_dm"].(bool); ok && isDM {
+		return true
+	}
+
 	// Always respond to mentions.
 	if isMention, ok := payload["is_mention"].(bool); ok && isMention {
 		return true
@@ -30,7 +35,27 @@ func ShouldRespond(e event.Event, botID string) bool {
 		}
 	}
 
-	// Default: don't respond to random messages.
+	// For regular channel messages, let the LLM decide.
+	return true
+}
+
+// isDirectlyAddressed returns true if the event is a DM, mention, CLI input, or trigger.
+func isDirectlyAddressed(e event.Event, botID string) bool {
+	if e.Source == "cli" || e.Type == "trigger" {
+		return true
+	}
+	payload := e.Payload
+	if isDM, ok := payload["is_dm"].(bool); ok && isDM {
+		return true
+	}
+	if isMention, ok := payload["is_mention"].(bool); ok && isMention {
+		return true
+	}
+	if content, ok := payload["content"].(string); ok && botID != "" {
+		if containsBotMention(content, botID) {
+			return true
+		}
+	}
 	return false
 }
 
