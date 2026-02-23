@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,7 +12,12 @@ import (
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/scheduler/tasks"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -34,33 +40,107 @@ func run() error {
 
 	logger := observe.NewLogger(cfg.Observe.LogLevel)
 
-	// Setup memory store.
-	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, nil, false)
-	if err != nil {
-		return fmt.Errorf("open memory store: %w", err)
-	}
-	defer store.Close()
-
-	// Setup LLM client for consolidation.
+	// Setup LLM client for consolidation (before memory store so we can wire embedFn).
 	llmClient, err := llm.NewClient(
-		cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey,
-		cfg.LLM.MaxTokens, nil, logger,
+		cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey, cfg.LLM.APIBase,
+		cfg.LLM.MaxTokens, cfg.LLM.EmbeddingModel, cfg.LLM.EmbeddingDims,
+		nil, logger,
 	)
 	if err != nil {
 		return fmt.Errorf("create llm client: %w", err)
 	}
 
+	// Setup memory store with embedding function.
+	embedFn := func(ctx context.Context, text string) ([]float32, error) {
+		return llmClient.Embed(ctx, text)
+	}
+	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, false)
+	if err != nil {
+		return fmt.Errorf("open memory store: %w", err)
+	}
+	defer store.Close()
+
 	srv := consolidator.NewServer(llmClient, store, logger)
 
-	// TODO: Start gRPC server using srv.Compact as the handler.
-	// For now, just log and wait.
-	_ = srv
+	// Start gRPC server.
+	lis, err := net.Listen("tcp", cfg.Consolidator.Address)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", cfg.Consolidator.Address, err)
+	}
+
+	grpcServer := grpc.NewServer()
+	consolidator.NewGRPCServer(srv).Register(grpcServer)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Setup scheduler if enabled.
+	var sched *scheduler.Scheduler
+	if cfg.Consolidator.Scheduler.Enabled {
+		// Connect to agent notification service.
+		var notifier notification.NotifyFunc
+		agentConn, dialErr := grpc.NewClient(
+			cfg.Consolidator.AgentNotify,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if dialErr != nil {
+			logger.Warn("scheduler: agent notification unavailable, notifications disabled", "error", dialErr)
+			notifier = notification.Nop()
+		} else {
+			defer agentConn.Close()
+			notifier = notification.NewGRPCNotifier(agentConn)
+			logger.Info("scheduler: agent notification connected", "address", cfg.Consolidator.AgentNotify)
+		}
+
+		// Build CronContext with shared services.
+		cc := &scheduler.CronContext{
+			LLM:      llmClient,
+			Memory:   store,
+			Notifier: notifier,
+			DB:       store.DB(),
+			Logger:   logger,
+		}
+
+		// Create and configure scheduler.
+		taskRegistry := scheduler.NewRegistry()
+		taskRegistry.Register(&tasks.RSSTask{})
+
+		sched = scheduler.New(taskRegistry, cc, logger)
+
+		if setupErr := sched.Setup(ctx); setupErr != nil {
+			return fmt.Errorf("scheduler setup: %w", setupErr)
+		}
+
+		// Convert config jobs to scheduler JobDefs.
+		jobDefs := make([]scheduler.JobDef, len(cfg.Consolidator.Scheduler.Jobs))
+		for i, j := range cfg.Consolidator.Scheduler.Jobs {
+			jobDefs[i] = scheduler.JobDef{
+				Name:   j.Name,
+				Task:   j.Task,
+				Cron:   j.Cron,
+				Config: j.Config,
+			}
+		}
+		if loadErr := sched.LoadJobs(jobDefs); loadErr != nil {
+			return fmt.Errorf("scheduler load jobs: %w", loadErr)
+		}
+
+		sched.Start()
+		logger.Info("scheduler started", "jobs", len(cfg.Consolidator.Scheduler.Jobs))
+	}
+
+	go func() {
+		<-ctx.Done()
+		logger.Info("suzuha-consolidator shutting down")
+		if sched != nil {
+			sched.Stop()
+		}
+		grpcServer.GracefulStop()
+	}()
+
 	logger.Info("suzuha-consolidator started", "address", cfg.Consolidator.Address)
-	<-ctx.Done()
-	logger.Info("suzuha-consolidator shutting down")
+	if err := grpcServer.Serve(lis); err != nil {
+		return fmt.Errorf("grpc serve: %w", err)
+	}
 	return nil
 }
