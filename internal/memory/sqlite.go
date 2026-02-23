@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // register sqlite3 driver
 )
 
 func init() {
@@ -100,27 +102,93 @@ func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 
 	// Update vector index.
 	if len(mem.Embedding) > 0 {
-		embJSON, _ := json.Marshal(mem.Embedding)
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO memories_vec (id, embedding) VALUES (?, ?)`,
-			mem.ID, string(embJSON),
-		)
+		if blob, err := sqlite_vec.SerializeFloat32(mem.Embedding); err == nil {
+			_, _ = tx.ExecContext(ctx,
+				`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
+				mem.ID, blob,
+			)
+		}
 	}
 
 	return tx.Commit()
 }
 
 func (s *SQLiteStore) Search(ctx context.Context, query string, limit int) ([]Memory, error) {
-	return s.searchInternal(ctx, query, "", limit)
+	return s.searchInternal(ctx, query, "", limit, time.Time{})
 }
 
 func (s *SQLiteStore) SearchByType(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error) {
-	return s.searchInternal(ctx, query, memType, limit)
+	return s.searchInternal(ctx, query, memType, limit, time.Time{})
 }
 
-func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error) {
-	// trigram tokenizer requires 3+ chars for substring match.
-	// Fall back to LIKE for short queries.
+func (s *SQLiteStore) SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]Memory, error) {
+	return s.searchInternal(ctx, query, "", limit, since)
+}
+
+// rrfK is the constant used in Reciprocal Rank Fusion scoring.
+const rrfK = 60
+
+// scoredID holds a memory ID with its vector distance from a KNN query.
+type scoredID struct {
+	id       string
+	distance float32
+}
+
+func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType MemoryType, limit int, since time.Time) ([]Memory, error) {
+	// 1. FTS keyword search.
+	ftsResults, ftsErr := s.searchFTS(ctx, query, memType, limit*2, since)
+
+	// 2. Vector similarity search (if embedFn is available).
+	var vecResults []scoredID
+	var vecErr error
+	if s.embedFn != nil {
+		vecResults, vecErr = s.searchVec(ctx, query, memType, limit*2)
+		// Non-fatal: degrade to FTS-only on vec failure.
+	}
+
+	// Filter vec results by time if needed.
+	if !since.IsZero() && len(vecResults) > 0 {
+		vecResults, _ = s.filterVecBySince(ctx, vecResults, since, limit*2)
+	}
+
+	// 3. If both failed, return FTS error.
+	if ftsErr != nil && (vecErr != nil || len(vecResults) == 0) {
+		return nil, fmt.Errorf("memory: search: %w", ftsErr)
+	}
+
+	// 4. If only FTS succeeded, return FTS results.
+	if len(vecResults) == 0 || vecErr != nil {
+		return ftsResults, ftsErr
+	}
+
+	// 5. If only vec succeeded, load and return vec results.
+	if ftsErr != nil || len(ftsResults) == 0 {
+		ids := make([]string, len(vecResults))
+		for i, v := range vecResults {
+			ids[i] = v.id
+		}
+		loaded, err := s.loadMemoriesByIDs(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		var results []Memory
+		for _, v := range vecResults {
+			if m, ok := loaded[v.id]; ok {
+				results = append(results, m)
+			}
+			if len(results) >= limit {
+				break
+			}
+		}
+		return results, nil
+	}
+
+	// 6. Both succeeded: merge via RRF.
+	return s.rrfMerge(ctx, ftsResults, vecResults, limit)
+}
+
+// searchFTS performs keyword search via FTS5 (trigram) or LIKE fallback.
+func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType MemoryType, limit int, since time.Time) ([]Memory, error) {
 	var q string
 	var args []any
 
@@ -142,6 +210,11 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 		args = append(args, string(memType))
 	}
 
+	if !since.IsZero() {
+		q += ` AND m.created_at >= ?`
+		args = append(args, since)
+	}
+
 	if len([]rune(query)) >= 3 {
 		q += ` ORDER BY rank LIMIT ?`
 	} else {
@@ -151,15 +224,263 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("memory: search: %w", err)
+		return nil, fmt.Errorf("memory: fts search: %w", err)
 	}
 	defer rows.Close()
 
+	return scanMemories(rows)
+}
+
+// searchVec performs KNN vector search via sqlite-vec.
+func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType MemoryType, limit int) ([]scoredID, error) {
+	embedding, err := s.embedFn(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("memory: embed query: %w", err)
+	}
+	if len(embedding) == 0 {
+		return nil, nil
+	}
+
+	blob, err := sqlite_vec.SerializeFloat32(embedding)
+	if err != nil {
+		return nil, fmt.Errorf("memory: serialize embedding: %w", err)
+	}
+
+	// Over-fetch if we need to filter by type in Go.
+	fetchLimit := limit
+	if memType != "" {
+		fetchLimit = limit * 3
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, distance FROM memories_vec WHERE embedding MATCH ? AND k = ?`,
+		blob, fetchLimit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("memory: vec search: %w", err)
+	}
+	defer rows.Close()
+
+	var results []scoredID
+	for rows.Next() {
+		var r scoredID
+		if err := rows.Scan(&r.id, &r.distance); err != nil {
+			return nil, fmt.Errorf("memory: vec scan: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Filter by type if needed.
+	if memType != "" && len(results) > 0 {
+		results, err = s.filterVecByType(ctx, results, memType, limit)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
+}
+
+// filterVecByType filters vec results by memory type using a DB lookup.
+func (s *SQLiteStore) filterVecByType(ctx context.Context, results []scoredID, memType MemoryType, limit int) ([]scoredID, error) {
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.id
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	args := make([]any, 0, len(ids)+1)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	args = append(args, string(memType))
+
+	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND type = ?`, placeholders)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("memory: filter by type: %w", err)
+	}
+	defer rows.Close()
+
+	allowed := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		allowed[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var filtered []scoredID
+	for _, r := range results {
+		if allowed[r.id] {
+			filtered = append(filtered, r)
+		}
+		if len(filtered) >= limit {
+			break
+		}
+	}
+	return filtered, nil
+}
+
+// filterVecBySince filters vec results by creation time.
+func (s *SQLiteStore) filterVecBySince(ctx context.Context, results []scoredID, since time.Time, limit int) ([]scoredID, error) {
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.id
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	args := make([]any, 0, len(ids)+1)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	args = append(args, since)
+
+	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND created_at >= ?`, placeholders)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("memory: filter by since: %w", err)
+	}
+	defer rows.Close()
+
+	allowed := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		allowed[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var filtered []scoredID
+	for _, r := range results {
+		if allowed[r.id] {
+			filtered = append(filtered, r)
+		}
+		if len(filtered) >= limit {
+			break
+		}
+	}
+	return filtered, nil
+}
+
+// rrfMerge combines FTS and vector search results using Reciprocal Rank Fusion.
+func (s *SQLiteStore) rrfMerge(ctx context.Context, ftsResults []Memory, vecResults []scoredID, limit int) ([]Memory, error) {
+	scores := make(map[string]float64)
+	memMap := make(map[string]Memory)
+
+	// FTS results contribute rank-based scores.
+	for rank, m := range ftsResults {
+		scores[m.ID] += 1.0 / float64(rrfK+rank+1)
+		memMap[m.ID] = m
+	}
+
+	// Vec results contribute rank-based scores (already ordered by distance asc).
+	for rank, v := range vecResults {
+		scores[v.id] += 1.0 / float64(rrfK+rank+1)
+	}
+
+	// Sort by RRF score descending.
+	type idScore struct {
+		id    string
+		score float64
+	}
+	ranked := make([]idScore, 0, len(scores))
+	for id, score := range scores {
+		ranked = append(ranked, idScore{id, score})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		return ranked[i].score > ranked[j].score
+	})
+
+	// Collect results, loading any IDs that only came from vec search.
+	var results []Memory
+	var toLoad []string
+	for _, r := range ranked {
+		if len(results)+len(toLoad) >= limit {
+			break
+		}
+		if m, ok := memMap[r.id]; ok {
+			results = append(results, m)
+		} else {
+			toLoad = append(toLoad, r.id)
+		}
+	}
+
+	if len(toLoad) > 0 {
+		loaded, err := s.loadMemoriesByIDs(ctx, toLoad)
+		if err != nil {
+			return results, nil // Return what we have.
+		}
+		// Insert loaded memories at their ranked positions.
+		for _, id := range toLoad {
+			if m, ok := loaded[id]; ok {
+				results = append(results, m)
+			}
+		}
+	}
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
+// loadMemoriesByIDs batch-loads memories by their IDs.
+func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[string]Memory, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	q := fmt.Sprintf(
+		`SELECT id, type, content, metadata, created_at, updated_at FROM memories WHERE id IN (%s)`,
+		placeholders,
+	)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("memory: load by ids: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]Memory, len(ids))
+	for rows.Next() {
+		var m Memory
+		var metaJSON, typeStr string
+		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("memory: load scan: %w", err)
+		}
+		m.Type = MemoryType(typeStr)
+		_ = json.Unmarshal([]byte(metaJSON), &m.Metadata)
+		result[m.ID] = m
+	}
+	return result, rows.Err()
+}
+
+// scanMemories scans rows into a slice of Memory.
+func scanMemories(rows *sql.Rows) ([]Memory, error) {
 	var results []Memory
 	for rows.Next() {
 		var m Memory
-		var metaJSON string
-		var typeStr string
+		var metaJSON, typeStr string
 		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("memory: scan: %w", err)
 		}
@@ -319,6 +640,50 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 	}
 
 	return tx.Commit()
+}
+
+// BackfillEmbeddings generates embeddings for memories that don't have them yet.
+// Returns the number of memories processed.
+func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (int, error) {
+	if s.embedFn == nil {
+		return 0, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT m.id, m.content FROM memories m
+		 WHERE m.id NOT IN (SELECT id FROM memories_vec)
+		 LIMIT ?`, batchSize)
+	if err != nil {
+		return 0, fmt.Errorf("memory: backfill query: %w", err)
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		var id, content string
+		if err := rows.Scan(&id, &content); err != nil {
+			return count, fmt.Errorf("memory: backfill scan: %w", err)
+		}
+
+		emb, err := s.embedFn(ctx, content)
+		if err != nil || len(emb) == 0 {
+			continue
+		}
+
+		blob, err := sqlite_vec.SerializeFloat32(emb)
+		if err != nil {
+			continue
+		}
+
+		if _, err := s.db.ExecContext(ctx,
+			`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
+			id, blob,
+		); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, rows.Err()
 }
 
 // DB returns the underlying *sql.DB for sharing with other stores (e.g. user.Store).

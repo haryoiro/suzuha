@@ -2,16 +2,19 @@ package memory
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 // MemoryType categorizes memory entries.
 type MemoryType string
 
+// Memory type constants categorize long-term memory entries.
 const (
 	MemoryTypeUser  MemoryType = "user"
 	MemoryTypeWorld MemoryType = "world"
 	MemoryTypeTool  MemoryType = "tool"
+	MemoryTypeRSS   MemoryType = "rss"
 )
 
 // Memory is a single long-term memory entry.
@@ -38,6 +41,9 @@ type Store interface {
 	// SearchByType narrows search to a specific memory type.
 	SearchByType(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error)
 
+	// SearchRecent performs hybrid search but only returns memories created after since.
+	SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]Memory, error)
+
 	// Close releases database resources.
 	Close() error
 }
@@ -57,6 +63,9 @@ type AdminStore interface {
 
 	// Delete removes a memory by ID from all tables.
 	Delete(ctx context.Context, id string) error
+
+	// DB returns the underlying *sql.DB for direct queries.
+	DB() *sql.DB
 }
 
 // ListOpts controls pagination and filtering for List.
