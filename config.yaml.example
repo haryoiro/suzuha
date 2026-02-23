@@ -1,0 +1,32 @@
+# suzuha configuration template
+# Copy to config.yaml and fill in your values:
+#   cp config.yaml.example config.yaml
+
+llm:
+  provider: "openai"           # "openai", "anthropic", etc.
+  model: "gpt-4"
+  api_key: ""  # Set in .env as LLM_API_KEY, or fill in directly
+  max_tokens: 8000
+
+discord:
+  token: "${DISCORD_TOKEN}"
+  bot_id: ""
+
+memory:
+  db_path: "/data/memory.db"   # Docker volume path
+
+agent:
+  system_prompt: "You are Suzuha, a friendly AI assistant."
+  interest_threshold: 0.5
+  context_window_pct: 0.8
+
+consolidator:
+  address: "consolidator:50051"  # Docker Compose service name
+
+observe:
+  log_level: "debug"
+  metrics_addr: ":9090"
+
+tool_servers: []
+
+triggers: []
