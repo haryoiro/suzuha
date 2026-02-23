@@ -1,0 +1,47 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+  # バグ検出系
+  - govet        # Go公式の静的解析
+  - staticcheck  # 高品質な静的解析（gosimple, stylecheck 含む）
+  - ineffassign  # 使われない代入の検出
+  - unused       # 未使用コードの検出
+
+  # スタイル・品質系
+  - gocritic     # コードスタイル・パフォーマンスの指摘
+  - revive       # golintの後継、スタイルチェック
+  - unconvert    # 不要な型変換の検出
+  - gocyclo      # 循環的複雑度のチェック
+
+  # その他
+  - durationcheck # time.Duration の誤用検出
+  - gomodguard    # 禁止パッケージのimport検出
+  - misspell      # スペルミス検出
+  - usetesting    # テストでのos.Setenv使用を検出（tenvの後継）
+
+  settings:
+    misspell:
+      locale: US
+
+    staticcheck:
+      checks:
+      - 'all'
+      - '-ST1005'
+      - '-SA1008'
+
+  exclusions:
+    presets:
+    - common-false-positives
+    rules:
+    - text: "empty-block:"
+      linters: [revive]
+    - text: "unused-parameter:"
+      linters: [revive]
+    - text: "dot-imports:"
+      linters: [revive]
+    - text: should have a package comment
+      linters: [revive]
+    - text: error strings should not be capitalized or end with punctuation or a newline
+      linters: [revive, staticcheck]
