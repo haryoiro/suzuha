@@ -11,11 +11,19 @@ const levelColors: Record<string, string> = {
   ERROR: "red",
 };
 
+function formatValue(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return JSON.stringify(v);
+}
+
 function LogRow({ entry }: { entry: LogEntry }) {
   const time = new Date(entry.time).toLocaleTimeString("ja-JP", {
     hour12: false,
     fractionalSecondDigits: 3,
   });
+
+  const attrs = entry.attrs ? Object.entries(entry.attrs) : [];
 
   return (
     <div
@@ -26,27 +34,30 @@ function LogRow({ entry }: { entry: LogEntry }) {
         fontFamily: "monospace",
         fontSize: 12,
         borderBottom: "1px solid rgba(255,255,255,0.06)",
-        alignItems: "flex-start",
+        alignItems: "baseline",
+        whiteSpace: "nowrap",
       }}
     >
-      <span style={{ color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>
+      <span style={{ color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>
         {time}
       </span>
       <Tag
         color={levelColors[entry.level] ?? "default"}
-        style={{ margin: 0, minWidth: 48, textAlign: "center" }}
+        style={{ margin: 0, minWidth: 48, textAlign: "center", flexShrink: 0 }}
       >
         {entry.level}
       </Tag>
       {entry.source && (
-        <Tag style={{ margin: 0 }}>{entry.source}</Tag>
+        <Tag style={{ margin: 0, flexShrink: 0 }}>{entry.source}</Tag>
       )}
-      <span style={{ flex: 1, wordBreak: "break-all" }}>{entry.msg}</span>
-      {entry.attrs && Object.keys(entry.attrs).length > 0 && (
-        <span style={{ color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap" }}>
-          {JSON.stringify(entry.attrs)}
+      <span>{entry.msg}</span>
+      {attrs.map(([k, v]) => (
+        <span key={k}>
+          <span style={{ color: "rgba(255,255,255,0.35)" }}>{k}</span>
+          <span style={{ color: "rgba(255,255,255,0.2)" }}>=</span>
+          <span style={{ color: "rgba(255,255,255,0.55)" }}>{formatValue(v)}</span>
         </span>
-      )}
+      ))}
     </div>
   );
 }

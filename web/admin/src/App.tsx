@@ -5,12 +5,16 @@ import {
   DatabaseOutlined,
   BarChartOutlined,
   FileTextOutlined,
+  TeamOutlined,
+  MessageOutlined,
 } from "@ant-design/icons";
 import { DashboardPage } from "./routes/index";
 import { MemoriesPage } from "./routes/memories/index";
 import { MemoryDetailPage } from "./routes/memories/$id";
 import { MetricsPage } from "./routes/metrics";
 import { LogsPage } from "./routes/logs";
+import { UsersPage } from "./routes/users/index";
+import { ContextPage } from "./routes/context";
 
 const { Sider, Content } = Layout;
 
@@ -18,7 +22,9 @@ type Page =
   | { key: "dashboard" }
   | { key: "memories" }
   | { key: "memory-detail"; id: string }
+  | { key: "users" }
   | { key: "metrics" }
+  | { key: "context" }
   | { key: "logs" };
 
 export function App() {
@@ -27,7 +33,9 @@ export function App() {
   const menuItems = [
     { key: "dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
     { key: "memories", icon: <DatabaseOutlined />, label: "Memories" },
+    { key: "users", icon: <TeamOutlined />, label: "Users" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
+    { key: "context", icon: <MessageOutlined />, label: "Context" },
     { key: "logs", icon: <FileTextOutlined />, label: "Logs" },
   ];
 
@@ -43,8 +51,12 @@ export function App() {
         return <MemoriesPage onViewDetail={navigateToMemory} />;
       case "memory-detail":
         return <MemoryDetailPage id={page.id} onBack={navigateBack} />;
+      case "users":
+        return <UsersPage />;
       case "metrics":
         return <MetricsPage />;
+      case "context":
+        return <ContextPage />;
       case "logs":
         return <LogsPage />;
     }

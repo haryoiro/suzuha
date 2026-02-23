@@ -85,11 +85,102 @@ export const memoriesApi = {
     }),
   delete: (id: string) =>
     fetch(`${BASE_URL}/api/memories/${id}`, { method: "DELETE" }),
+  vecStats: () =>
+    fetchJSON<VecStatsResponse>("/api/memories/vec-stats"),
+  listWithVec: (params: ListParams) =>
+    fetchJSON<ListWithVecResponse>(`/api/memories/with-vec${toQuery(params)}`),
+};
+
+export interface VecStatsResponse {
+  total_memories: number;
+  embedded_count: number;
+  missing_count: number;
+  coverage_pct: number;
+}
+
+export interface MemoryWithVec extends Memory {
+  has_embedding: boolean;
+}
+
+export interface ListWithVecResponse {
+  data: MemoryWithVec[];
+  total: number;
+}
+
+// Users API
+export interface User {
+  id: string;
+  display_name: string;
+  role: string;
+  affinity: number;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  platforms?: PlatformLink[];
+}
+
+export interface PlatformLink {
+  platform: string;
+  platform_user_id: string;
+  platform_name: string;
+}
+
+export interface AffinityEvent {
+  id: string;
+  user_id: string;
+  delta: number;
+  reason: string;
+  created_at: string;
+}
+
+export const usersApi = {
+  list: (params: ListParams) =>
+    fetchJSON<{ data: User[]; total: number }>(`/api/users${toQuery(params)}`),
+  get: (id: string) =>
+    fetchJSON<{ data: User }>(`/api/users/${id}`),
+  affinityEvents: (id: string, limit?: number) =>
+    fetchJSON<{ data: AffinityEvent[] }>(
+      `/api/users/${id}/affinity${limit ? `?limit=${limit}` : ""}`
+    ),
 };
 
 // Metrics API
 export const metricsApi = {
   json: () => fetchJSON<MetricsResponse>("/api/metrics/json"),
+};
+
+// Agent API
+export const agentApi = {
+  compact: () =>
+    fetchJSON<{ ok: boolean; message_count: number }>("/api/agent/compact", {
+      method: "POST",
+    }),
+};
+
+// Context API
+export interface ContextMessage {
+  role: string;
+  content: string;
+  user_id?: string;
+  user_name?: string;
+  source?: string;
+  channel?: string;
+  message_id?: string;
+  timestamp: string;
+  tool_call_id?: string;
+  tool_calls?: unknown[];
+}
+
+export interface ContextResponse {
+  messages: ContextMessage[];
+  count: number;
+  estimated_tokens: number;
+  usage_ratio: number;
+  max_tokens: number;
+}
+
+export const contextApi = {
+  get: () => fetchJSON<ContextResponse>("/api/context"),
 };
 
 // Log stream (SSE)

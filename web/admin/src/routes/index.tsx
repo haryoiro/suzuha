@@ -1,6 +1,8 @@
-import { Card, Col, Row, Statistic, Spin } from "antd";
+import { Button, Card, Col, Row, Statistic, Spin, message } from "antd";
+import { useState } from "react";
 import { useMetrics } from "../hooks/useMetrics";
 import type { MetricItem } from "../lib/api";
+import { agentApi } from "../lib/api";
 
 function findMetric(
   metrics: MetricItem[] | undefined,
@@ -10,8 +12,22 @@ function findMetric(
 }
 
 export function DashboardPage() {
-  const { data, isLoading } = useMetrics();
+  const { data, isLoading, refetch } = useMetrics();
   const metrics = data?.metrics;
+  const [compacting, setCompacting] = useState(false);
+
+  const handleCompact = async () => {
+    setCompacting(true);
+    try {
+      const res = await agentApi.compact();
+      message.success(`Compact done (${res.message_count} messages remaining)`);
+      refetch();
+    } catch {
+      message.error("Compact failed");
+    } finally {
+      setCompacting(false);
+    }
+  };
 
   const tokensIn = findMetric(metrics, "suzuha_llm_tokens_input_total");
   const tokensOut = findMetric(metrics, "suzuha_llm_tokens_output_total");
@@ -62,6 +78,14 @@ export function DashboardPage() {
               precision={0}
               suffix="%"
             />
+            <Button
+              size="small"
+              loading={compacting}
+              onClick={handleCompact}
+              style={{ marginTop: 8 }}
+            >
+              Compact
+            </Button>
           </Card>
         </Col>
         <Col xs={12} lg={6}>

@@ -10,6 +10,8 @@ import {
   Form,
   message,
   Popconfirm,
+  Statistic,
+  Progress,
 } from "antd";
 import {
   PlusOutlined,
@@ -17,7 +19,9 @@ import {
   DeleteOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
+import { useQuery } from "@tanstack/react-query";
 import { useMemories, useCreateMemory, useDeleteMemory } from "../../hooks/useMemories";
+import { memoriesApi } from "../../lib/api";
 import type { Memory } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
 
@@ -41,6 +45,12 @@ export function MemoriesPage({ onViewDetail }: Props) {
   const [searchInput, setSearchInput] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [form] = Form.useForm();
+
+  const { data: stats } = useQuery({
+    queryKey: ["vec-stats"],
+    queryFn: memoriesApi.vecStats,
+    refetchInterval: 10000,
+  });
 
   const { data, isLoading } = useMemories({
     offset,
@@ -110,8 +120,44 @@ export function MemoriesPage({ onViewDetail }: Props) {
     }
   };
 
+  const coveragePct = stats?.coverage_pct ?? 0;
+
   return (
     <div>
+      {stats && (
+        <Space size="large" style={{ marginBottom: 16 }}>
+          <Statistic title="Total" value={stats.total_memories} />
+          <Statistic
+            title="Embedded"
+            value={stats.embedded_count}
+            valueStyle={{ color: "#52c41a" }}
+          />
+          <Statistic
+            title="Missing"
+            value={stats.missing_count}
+            valueStyle={{
+              color: stats.missing_count > 0 ? "#faad14" : "inherit",
+            }}
+          />
+          <div style={{ width: 100 }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 4 }}>
+              Coverage
+            </div>
+            <Progress
+              percent={Math.round(coveragePct)}
+              size="small"
+              strokeColor={
+                coveragePct >= 90
+                  ? "#52c41a"
+                  : coveragePct >= 50
+                    ? "#faad14"
+                    : "#f5222d"
+              }
+            />
+          </div>
+        </Space>
+      )}
+
       <div
         style={{
           display: "flex",
