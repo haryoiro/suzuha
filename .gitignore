@@ -4,6 +4,9 @@ tmp/
 *.dll
 *.so
 *.dylib
+suzuha-agent
+suzuha-consolidator
+suzuha-admin
 
 # Environment
 .env
@@ -11,6 +14,13 @@ config.yaml
 
 # Database
 *.db
+data/
+
+# Dependencies
+.pnpm-store/
+
+# Runtime
+.suzuha/
 
 # IDE
 .idea/
