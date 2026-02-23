@@ -209,6 +209,36 @@ func TestResolve_BotUser(t *testing.T) {
 	}
 }
 
+func TestResolve_ExistingUserMarkedAsBot(t *testing.T) {
+	botID := "999888777"
+	// First, create a store WITHOUT bot ID — simulates user created before is_bot existed.
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	u, err := store.Resolve(ctx, "discord", botID, "SuzuhaBot")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if u.IsBot {
+		t.Fatal("expected is_bot=false before AddBotID")
+	}
+
+	// Now register the bot ID (simulates startup after Discord connect).
+	store.AddBotID(botID)
+
+	// Re-resolve — should auto-fix is_bot to true.
+	u2, err := store.Resolve(ctx, "discord", botID, "SuzuhaBot")
+	if err != nil {
+		t.Fatalf("Resolve after AddBotID: %v", err)
+	}
+	if !u2.IsBot {
+		t.Error("expected is_bot=true after AddBotID + Resolve")
+	}
+	if u.ID != u2.ID {
+		t.Errorf("expected same user ID, got %s and %s", u.ID, u2.ID)
+	}
+}
+
 func TestGet_NotFound(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()

@@ -91,6 +91,12 @@ func (a *Agent) AgentContext() *Context {
 	return a.ctx
 }
 
+// SetBotID updates the bot's platform user ID at runtime.
+// Used when the actual ID is only known after platform connection (e.g. Discord).
+func (a *Agent) SetBotID(id string) {
+	a.botID = id
+}
+
 // Run starts the agent event loop. Blocks until ctx is canceled.
 func (a *Agent) Run(ctx context.Context) error {
 	events := a.bus.Subscribe()

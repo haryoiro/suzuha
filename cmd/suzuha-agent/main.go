@@ -88,15 +88,9 @@ func run() error {
 
 	// Setup chat interface: Discord if token is set, otherwise CLI.
 	var chatIface chat.Interface
+	var dc *discord.Chat
 	if cfg.Discord.Token != "" {
-		dc := discord.New(cfg.Discord.Token, cfg.Discord.BotID, bus, logger)
-		dc.OnReady(func(s *discordgo.Session) {
-			registry.Register(builtin.NewDiscordReact(s))
-			registry.Register(builtin.NewDiscordReply(s))
-			registry.Register(builtin.NewDiscordGetHistory(s))
-			registry.Register(builtin.NewDiscordSendDM(s))
-			logger.Info("discord tools registered")
-		})
+		dc = discord.New(cfg.Discord.Token, cfg.Discord.BotID, bus, logger)
 		chatIface = dc
 		logger.Info("chat mode: discord")
 	} else {
@@ -138,6 +132,39 @@ func run() error {
 	registry.Register(builtin.NewRSSUnsubscribe(store.DB()))
 	registry.Register(builtin.NewRSSList(store.DB()))
 	registry.Register(builtin.NewRSSPreference(store))
+
+	// Register Discord OnReady callback (after agent is created so closure can reference ag).
+	if dc != nil {
+		dc.OnReady(func(s *discordgo.Session) {
+			// Register Discord-specific tools.
+			registry.Register(builtin.NewDiscordReact(s))
+			registry.Register(builtin.NewDiscordReply(s))
+			registry.Register(builtin.NewDiscordGetHistory(s))
+			registry.Register(builtin.NewDiscordSendDM(s))
+			logger.Info("discord tools registered")
+
+			// Fetch bot's own identity from Discord and register in Users.
+			me := s.State.User
+			userStore.AddBotID(me.ID)
+			ag.SetBotID(me.ID)
+
+			botUser, err := userStore.Resolve(context.Background(), "discord", me.ID, me.Username)
+			if err != nil {
+				logger.Warn("failed to resolve bot user", "error", err)
+			} else {
+				name := me.Username
+				if me.GlobalName != "" {
+					name = me.GlobalName
+				}
+				if botUser.DisplayName != name {
+					if err := userStore.UpdateDisplayName(context.Background(), botUser.ID, name); err != nil {
+						logger.Warn("failed to update bot display name", "error", err)
+					}
+				}
+				logger.Info("bot identity registered", "user_id", botUser.ID, "name", name, "is_bot", botUser.IsBot)
+			}
+		})
+	}
 
 	// Start metrics server.
 	if cfg.Observe.MetricsAddr != "" {

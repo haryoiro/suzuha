@@ -29,6 +29,14 @@ func NewSQLiteStore(db *sql.DB, botPlatformUserIDs ...string) *SQLiteStore {
 	return &SQLiteStore{db: db, botUserIDs: ids}
 }
 
+// AddBotID registers an additional platform user ID as belonging to the bot.
+// This is used when the actual bot ID is only known at runtime (e.g. after Discord connects).
+func (s *SQLiteStore) AddBotID(platformUserID string) {
+	if platformUserID != "" {
+		s.botUserIDs[platformUserID] = true
+	}
+}
+
 func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, platformName string) (*User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -48,6 +56,16 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 		u, err := s.getInTx(ctx, tx, userID)
 		if err != nil {
 			return nil, err
+		}
+		// If this is a known bot ID but the user wasn't marked yet, fix it.
+		if s.botUserIDs[platformUserID] && !u.IsBot {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE users SET is_bot = 1, updated_at = ? WHERE id = ?`,
+				time.Now(), userID,
+			); err != nil {
+				return nil, fmt.Errorf("user: mark bot: %w", err)
+			}
+			u.IsBot = true
 		}
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("user: commit: %w", err)
