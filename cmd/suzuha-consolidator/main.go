@@ -43,7 +43,14 @@ func run() error {
 	// Setup LLM client for consolidation (before memory store so we can wire embedFn).
 	llmClient, err := llm.NewClient(
 		cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey, cfg.LLM.APIBase,
-		cfg.LLM.MaxTokens, cfg.LLM.EmbeddingModel, cfg.LLM.EmbeddingDims,
+		cfg.LLM.MaxTokens,
+		llm.EmbeddingConfig{
+			Provider: cfg.Embedding.Provider,
+			Model:    cfg.Embedding.Model,
+			APIKey:   cfg.Embedding.APIKey,
+			APIBase:  cfg.Embedding.APIBase,
+			Dims:     cfg.Embedding.Dims,
+		},
 		nil, logger,
 	)
 	if err != nil {

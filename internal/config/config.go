@@ -13,6 +13,7 @@ import (
 // Config is the top-level application configuration.
 type Config struct {
 	LLM          LLM          `yaml:"llm"`
+	Embedding    Embedding    `yaml:"embedding"`
 	Discord      Discord      `yaml:"discord"`
 	ToolServers  []ToolServer `yaml:"tool_servers"`
 	Triggers     []Trigger    `yaml:"triggers"`
@@ -25,13 +26,20 @@ type Config struct {
 
 // LLM configures the language model provider.
 type LLM struct {
-	Provider       string `yaml:"provider"`        // "openai", "zhipu", etc.
-	Model          string `yaml:"model"`
-	APIKey         string `yaml:"api_key"`
-	APIBase        string `yaml:"api_base"`        // Custom base URL for OpenAI-compatible providers.
-	MaxTokens      int    `yaml:"max_tokens"`
-	EmbeddingModel string `yaml:"embedding_model"` // e.g. "text-embedding-3-small", "embedding-3"
-	EmbeddingDims  int    `yaml:"embedding_dims"`  // Target dimensions. 0 = model default.
+	Provider  string `yaml:"provider"` // "openai", "zhipu", etc.
+	Model     string `yaml:"model"`
+	APIKey    string `yaml:"api_key"`
+	APIBase   string `yaml:"api_base"`   // Custom base URL for OpenAI-compatible providers.
+	MaxTokens int    `yaml:"max_tokens"`
+}
+
+// Embedding configures the embedding provider (can differ from LLM provider).
+type Embedding struct {
+	Provider string `yaml:"provider"` // "openai", "zhipu", etc. Defaults to llm.provider.
+	Model    string `yaml:"model"`    // e.g. "text-embedding-3-small"
+	APIKey   string `yaml:"api_key"`
+	APIBase  string `yaml:"api_base"`
+	Dims     int    `yaml:"dims"` // Target dimensions. 0 = model default.
 }
 
 // Discord configures the Discord bot connection.
@@ -162,14 +170,27 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("LLM_API_KEY"); v != "" {
 		c.LLM.APIKey = v
 	}
+	if v := os.Getenv("EMBEDDING_API_KEY"); v != "" {
+		c.Embedding.APIKey = v
+	}
 	if v := os.Getenv("DISCORD_TOKEN"); v != "" {
 		c.Discord.Token = v
 	}
 }
 
 func (c *Config) setDefaults() {
-	if c.LLM.EmbeddingDims == 0 {
-		c.LLM.EmbeddingDims = 1024
+	// Embedding defaults: inherit from LLM if not set.
+	if c.Embedding.Provider == "" {
+		c.Embedding.Provider = c.LLM.Provider
+	}
+	if c.Embedding.APIKey == "" {
+		c.Embedding.APIKey = c.LLM.APIKey
+	}
+	if c.Embedding.APIBase == "" && c.Embedding.Provider == c.LLM.Provider {
+		c.Embedding.APIBase = c.LLM.APIBase
+	}
+	if c.Embedding.Dims == 0 {
+		c.Embedding.Dims = 1024
 	}
 	if c.Memory.DBPath == "" {
 		c.Memory.DBPath = "memory.db"

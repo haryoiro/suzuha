@@ -45,47 +45,74 @@ func (r *Response) HasToolCalls() bool {
 
 // Client is a thin wrapper around any-llm-go provider.
 type Client struct {
-	provider       providers.Provider
-	model          string
-	embeddingModel string
-	embeddingDims  int
-	maxCtx         int
-	metrics        *observe.Metrics
-	logger         *slog.Logger
+	provider        providers.Provider
+	model           string
+	embeddingProv   providers.Provider // may differ from provider (e.g. OpenAI for embeddings)
+	embeddingModel  string
+	embeddingDims   int
+	maxCtx          int
+	metrics         *observe.Metrics
+	logger          *slog.Logger
+}
+
+// EmbeddingConfig holds optional embedding provider settings.
+// If Provider is empty, the main LLM provider is reused.
+type EmbeddingConfig struct {
+	Provider string
+	Model    string
+	APIKey   string
+	APIBase  string
+	Dims     int
 }
 
 // NewClient creates a new LLM client.
-// apiBase is optional; if empty, the provider's default base URL is used.
-// embeddingModel is optional; if empty, Embed() returns nil.
-func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, embeddingModel string, embeddingDims int, metrics *observe.Metrics, logger *slog.Logger) (*Client, error) {
-	var p providers.Provider
-	var err error
+func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb EmbeddingConfig, metrics *observe.Metrics, logger *slog.Logger) (*Client, error) {
+	p, err := newProvider(providerName, apiKey, apiBase)
+	if err != nil {
+		return nil, err
+	}
 
+	c := &Client{
+		provider:       p,
+		model:          model,
+		embeddingModel: emb.Model,
+		embeddingDims:  emb.Dims,
+		maxCtx:         maxCtx,
+		metrics:        metrics,
+		logger:         logger,
+	}
+
+	// Build embedding provider: use separate provider if configured, otherwise reuse main.
+	if emb.Model != "" {
+		if emb.Provider != "" && (emb.Provider != providerName || emb.APIKey != apiKey || emb.APIBase != apiBase) {
+			ep, err := newProvider(emb.Provider, emb.APIKey, emb.APIBase)
+			if err != nil {
+				return nil, fmt.Errorf("llm: init embedding provider: %w", err)
+			}
+			c.embeddingProv = ep
+		} else {
+			c.embeddingProv = p
+		}
+	}
+
+	return c, nil
+}
+
+func newProvider(providerName, apiKey, apiBase string) (providers.Provider, error) {
 	opts := []anyllm.Option{anyllm.WithAPIKey(apiKey)}
 	if apiBase != "" {
 		opts = append(opts, anyllm.WithBaseURL(apiBase))
 	}
-
 	switch providerName {
 	case "openai", "zhipu":
-		// ZhiPu and other OpenAI-compatible providers use the same client with a custom base URL.
-		p, err = openai.New(opts...)
+		p, err := openai.New(opts...)
+		if err != nil {
+			return nil, fmt.Errorf("llm: init provider %s: %w", providerName, err)
+		}
+		return p, nil
 	default:
 		return nil, fmt.Errorf("llm: unsupported provider %q", providerName)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("llm: init provider %s: %w", providerName, err)
-	}
-
-	return &Client{
-		provider:       p,
-		model:          model,
-		embeddingModel: embeddingModel,
-		embeddingDims:  embeddingDims,
-		maxCtx:         maxCtx,
-		metrics:        metrics,
-		logger:         logger,
-	}, nil
 }
 
 // MaxContextTokens returns the max context window size.
@@ -223,13 +250,13 @@ func convertTools(tools []tool.Tool) []providers.Tool {
 // Embed generates an embedding vector for the given text.
 // Returns nil, nil if no embedding model is configured.
 func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
-	if c.embeddingModel == "" {
+	if c.embeddingModel == "" || c.embeddingProv == nil {
 		return nil, nil
 	}
 
-	ep, ok := c.provider.(providers.EmbeddingProvider)
+	ep, ok := c.embeddingProv.(providers.EmbeddingProvider)
 	if !ok {
-		return nil, fmt.Errorf("llm: provider %q does not support embeddings", c.provider.Name())
+		return nil, fmt.Errorf("llm: embedding provider %q does not support embeddings", c.embeddingProv.Name())
 	}
 
 	params := providers.EmbeddingParams{
