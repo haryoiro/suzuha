@@ -4,9 +4,9 @@ tmp/
 *.dll
 *.so
 *.dylib
-suzuha-agent
-suzuha-consolidator
-suzuha-admin
+/suzuha-agent
+/suzuha-consolidator
+/suzuha-admin
 
 # Environment
 .env
