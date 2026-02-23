@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -23,10 +25,13 @@ type Config struct {
 
 // LLM configures the language model provider.
 type LLM struct {
-	Provider  string `yaml:"provider"`   // "openai", "anthropic", etc.
-	Model     string `yaml:"model"`
-	APIKey    string `yaml:"api_key"`
-	MaxTokens int    `yaml:"max_tokens"`
+	Provider       string `yaml:"provider"`        // "openai", "zhipu", etc.
+	Model          string `yaml:"model"`
+	APIKey         string `yaml:"api_key"`
+	APIBase        string `yaml:"api_base"`        // Custom base URL for OpenAI-compatible providers.
+	MaxTokens      int    `yaml:"max_tokens"`
+	EmbeddingModel string `yaml:"embedding_model"` // e.g. "text-embedding-3-small", "embedding-3"
+	EmbeddingDims  int    `yaml:"embedding_dims"`  // Target dimensions. 0 = model default.
 }
 
 // Discord configures the Discord bot connection.
@@ -61,14 +66,31 @@ type Memory struct {
 
 // Agent configures agent behavior.
 type Agent struct {
-	SystemPrompt      string  `yaml:"system_prompt"`
+	PromptDir         string  `yaml:"prompt_dir"`
+	SystemPrompt      string  `yaml:"-"` // assembled from PromptDir files
 	InterestThreshold float64 `yaml:"interest_threshold"`
 	ContextWindowPct  float64 `yaml:"context_window_pct"` // trigger compaction at this %
 }
 
 // Consolidator configures the consolidator process connection.
 type Consolidator struct {
-	Address string `yaml:"address"` // gRPC address, e.g. "localhost:50051"
+	Address     string    `yaml:"address"`      // gRPC address, e.g. "localhost:50051"
+	AgentNotify string    `yaml:"agent_notify"` // Agent's notification gRPC address, e.g. "localhost:50052"
+	Scheduler   Scheduler `yaml:"scheduler"`
+}
+
+// Scheduler configures the cron scheduler in the Consolidator process.
+type Scheduler struct {
+	Enabled bool      `yaml:"enabled"`
+	Jobs    []CronJob `yaml:"jobs"`
+}
+
+// CronJob defines a scheduled job. Task must match a registered CronTask.Name().
+type CronJob struct {
+	Name   string         `yaml:"name"`   // human-readable job name
+	Task   string         `yaml:"task"`   // CronTask name to execute
+	Cron   string         `yaml:"cron"`   // cron expression or @every syntax
+	Config map[string]any `yaml:"config"` // task-specific configuration
 }
 
 // Observe configures observability.
@@ -82,6 +104,7 @@ type Admin struct {
 	Addr         string `yaml:"addr"`           // e.g. ":8080"
 	AgentMetrics string `yaml:"agent_metrics"`  // e.g. "http://agent:9090/metrics"
 	AgentLogs    string `yaml:"agent_logs"`     // e.g. "http://agent:9090/internal/logs"
+	AgentContext string `yaml:"agent_context"`  // e.g. "http://agent:9090/internal/context"
 	ConsolLogs   string `yaml:"consol_logs"`    // e.g. "http://consolidator:9090/internal/logs"
 	StaticDir    string `yaml:"static_dir"`     // path to built SPA assets
 }
@@ -100,7 +123,39 @@ func Load(path string) (*Config, error) {
 
 	cfg.setDefaults()
 	cfg.applyEnv()
+
+	configDir := filepath.Dir(path)
+	if err := cfg.loadPromptFiles(configDir); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
+}
+
+// loadPromptFiles reads IDENTITY.md and SOUL.md from Agent.PromptDir
+// and assembles them into Agent.SystemPrompt.
+func (c *Config) loadPromptFiles(configDir string) error {
+	dir := c.Agent.PromptDir
+	if dir == "" {
+		return nil
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(configDir, dir)
+	}
+
+	var parts []string
+	for _, name := range []string{"IDENTITY.md", "SOUL.md"} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("config: read %s: %w", name, err)
+		}
+		parts = append(parts, strings.TrimSpace(string(data)))
+	}
+	c.Agent.SystemPrompt = strings.Join(parts, "\n\n")
+	return nil
 }
 
 func (c *Config) applyEnv() {
@@ -113,6 +168,9 @@ func (c *Config) applyEnv() {
 }
 
 func (c *Config) setDefaults() {
+	if c.LLM.EmbeddingDims == 0 {
+		c.LLM.EmbeddingDims = 1024
+	}
 	if c.Memory.DBPath == "" {
 		c.Memory.DBPath = "memory.db"
 	}
@@ -124,6 +182,9 @@ func (c *Config) setDefaults() {
 	}
 	if c.Consolidator.Address == "" {
 		c.Consolidator.Address = "localhost:50051"
+	}
+	if c.Consolidator.AgentNotify == "" {
+		c.Consolidator.AgentNotify = "localhost:50052"
 	}
 	if c.Observe.LogLevel == "" {
 		c.Observe.LogLevel = "info"
@@ -139,5 +200,8 @@ func (c *Config) setDefaults() {
 	}
 	if c.Admin.AgentLogs == "" {
 		c.Admin.AgentLogs = "http://localhost:9090/internal/logs"
+	}
+	if c.Admin.AgentContext == "" {
+		c.Admin.AgentContext = "http://localhost:9090/internal/context"
 	}
 }
