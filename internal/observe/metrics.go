@@ -12,6 +12,7 @@ type Metrics struct {
 	LLMLatency         prometheus.Histogram
 	LLMTokensIn        prometheus.Counter
 	LLMTokensOut       prometheus.Counter
+	EmbeddingLatency   prometheus.Histogram
 	ContextWindowUsage prometheus.Gauge
 	ToolCallsTotal     *prometheus.CounterVec
 	EventsTotal        *prometheus.CounterVec
@@ -33,6 +34,11 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		LLMTokensOut: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "suzuha_llm_tokens_output_total",
 			Help: "Total output tokens received from LLM",
+		}),
+		EmbeddingLatency: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "suzuha_embedding_latency_seconds",
+			Help:    "Embedding API request latency in seconds",
+			Buckets: prometheus.DefBuckets,
 		}),
 		ContextWindowUsage: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "suzuha_context_window_usage_ratio",
@@ -56,6 +62,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		m.LLMLatency,
 		m.LLMTokensIn,
 		m.LLMTokensOut,
+		m.EmbeddingLatency,
 		m.ContextWindowUsage,
 		m.ToolCallsTotal,
 		m.EventsTotal,
