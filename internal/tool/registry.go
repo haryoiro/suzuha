@@ -1,0 +1,47 @@
+package tool
+
+import "sync"
+
+// Registry is a thread-safe collection of all available tools.
+type Registry struct {
+	mu    sync.RWMutex
+	tools map[string]Tool
+}
+
+// NewRegistry creates an empty tool registry.
+func NewRegistry() *Registry {
+	return &Registry{tools: make(map[string]Tool)}
+}
+
+// Register adds a tool to the registry.
+func (r *Registry) Register(t Tool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tools[t.Name()] = t
+}
+
+// Unregister removes a tool from the registry.
+func (r *Registry) Unregister(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.tools, name)
+}
+
+// Get returns a tool by name.
+func (r *Registry) Get(name string) (Tool, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	t, ok := r.tools[name]
+	return t, ok
+}
+
+// All returns all registered tools.
+func (r *Registry) All() []Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]Tool, 0, len(r.tools))
+	for _, t := range r.tools {
+		out = append(out, t)
+	}
+	return out
+}
