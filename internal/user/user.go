@@ -20,6 +20,7 @@ type User struct {
 	ID          string         `json:"id"`
 	DisplayName string         `json:"display_name"`
 	Role        Role           `json:"role"`
+	IsBot       bool           `json:"is_bot"`
 	Affinity    float64        `json:"affinity"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`

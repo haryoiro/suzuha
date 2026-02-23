@@ -79,7 +79,8 @@ func run() error {
 	bus := event.NewBus(128)
 
 	// Setup user store (shares DB with memory store).
-	userStore := user.NewSQLiteStore(store.DB())
+	// Pass bot's platform user ID so it can be marked as is_bot on creation.
+	userStore := user.NewSQLiteStore(store.DB(), cfg.Discord.BotID)
 
 	// Setup tool registry.
 	registry := tool.NewRegistry()

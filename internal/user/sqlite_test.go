@@ -11,7 +11,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
-func newTestStore(t *testing.T) *SQLiteStore {
+func newTestStore(t *testing.T, botIDs ...string) *SQLiteStore {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
@@ -26,7 +26,7 @@ func newTestStore(t *testing.T) *SQLiteStore {
 		os.Remove(dbPath)
 	})
 
-	return NewSQLiteStore(memStore.DB())
+	return NewSQLiteStore(memStore.DB(), botIDs...)
 }
 
 func TestResolve_AutoCreate(t *testing.T) {
@@ -182,6 +182,30 @@ func TestGetAffinity(t *testing.T) {
 	// Most recent first.
 	if events[0].Reason != "reason2" {
 		t.Errorf("expected reason2 first, got %s", events[0].Reason)
+	}
+}
+
+func TestResolve_BotUser(t *testing.T) {
+	botID := "999888777"
+	store := newTestStore(t, botID)
+	ctx := context.Background()
+
+	u, err := store.Resolve(ctx, "discord", botID, "SuzuhaBot")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	if !u.IsBot {
+		t.Error("expected is_bot=true for bot platform user ID")
+	}
+
+	// Regular user should not be marked as bot.
+	u2, err := store.Resolve(ctx, "discord", "12345", "HumanUser")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if u2.IsBot {
+		t.Error("expected is_bot=false for regular user")
 	}
 }
 

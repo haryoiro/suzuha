@@ -23,6 +23,7 @@ type userJSON struct {
 	ID          string         `json:"id"`
 	DisplayName string         `json:"display_name"`
 	Role        string         `json:"role"`
+	IsBot       bool           `json:"is_bot"`
 	Affinity    float64        `json:"affinity"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   string         `json:"created_at"`
@@ -64,7 +65,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch users.
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, display_name, role, affinity, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, affinity, metadata, created_at, updated_at
 		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		h.logger.Error("list users", "error", err)
@@ -77,7 +78,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u userJSON
 		var metaJSON sql.NullString
-		if err := rows.Scan(&u.ID, &u.DisplayName, &u.Role, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			h.logger.Error("scan user", "error", err)
 			continue
 		}
@@ -107,9 +108,9 @@ func (h *UsersHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var u userJSON
 	var metaJSON sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, display_name, role, affinity, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, affinity, metadata, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &u.Role, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return

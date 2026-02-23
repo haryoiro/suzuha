@@ -12,12 +12,21 @@ import (
 
 // SQLiteStore implements Store using the shared SQLite database.
 type SQLiteStore struct {
-	db *sql.DB
+	db         *sql.DB
+	botUserIDs map[string]bool // platform user IDs that belong to the bot itself
 }
 
 // NewSQLiteStore creates a user store that shares the given database connection.
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
-	return &SQLiteStore{db: db}
+// botPlatformUserIDs are platform user IDs (e.g. Discord user ID) that identify
+// the bot itself. Users resolved with these IDs are marked as is_bot=true.
+func NewSQLiteStore(db *sql.DB, botPlatformUserIDs ...string) *SQLiteStore {
+	ids := make(map[string]bool, len(botPlatformUserIDs))
+	for _, id := range botPlatformUserIDs {
+		if id != "" {
+			ids[id] = true
+		}
+	}
+	return &SQLiteStore{db: db, botUserIDs: ids}
 }
 
 func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, platformName string) (*User, error) {
@@ -50,8 +59,12 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 	}
 
 	// User does not exist — create.
+	isBot := s.botUserIDs[platformUserID]
 	role := RoleMember
-	if platform == "cli" {
+	switch {
+	case isBot:
+		role = RoleMember // bot gets member role, identified by is_bot flag
+	case platform == "cli":
 		role = RoleOwner
 	}
 
@@ -59,15 +72,16 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 	u := &User{
 		ID:        uuid.NewString(),
 		Role:      role,
+		IsBot:     isBot,
 		Affinity:  0,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO users (id, display_name, role, affinity, created_at, updated_at)
-		 VALUES (?, '', ?, 0.0, ?, ?)`,
-		u.ID, string(u.Role), u.CreatedAt, u.UpdatedAt,
+		`INSERT INTO users (id, display_name, role, is_bot, affinity, created_at, updated_at)
+		 VALUES (?, '', ?, ?, 0.0, ?, ?)`,
+		u.ID, string(u.Role), u.IsBot, u.CreatedAt, u.UpdatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("user: insert user: %w", err)
 	}
@@ -105,9 +119,9 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 	var metaJSON sql.NullString
 
 	err := q.QueryRowContext(ctx,
-		`SELECT id, display_name, role, affinity, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, affinity, metadata, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("user: get: %w", err)
 	}

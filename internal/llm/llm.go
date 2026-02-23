@@ -183,12 +183,11 @@ func convertMessages(msgs []Message) []providers.Message {
 	for i, m := range msgs {
 		content := m.Content
 		// Embed message metadata so the LLM can identify channel context.
-		switch {
-		case m.Role == "user" && m.MessageID != "":
+		// Only tag user messages — tagging assistant messages causes the LLM
+		// to mimic the format and include channel IDs in its responses.
+		if m.Role == "user" && m.MessageID != "" {
 			content = fmt.Sprintf("[channel_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
 				m.Channel, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
-		case m.Role == "assistant" && m.Channel != "":
-			content = fmt.Sprintf("[channel_id=%s]\n%s", m.Channel, m.Content)
 		}
 		out[i] = providers.Message{
 			Role:       m.Role,

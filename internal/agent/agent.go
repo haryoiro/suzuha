@@ -120,7 +120,8 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		"channel", msg.Channel, "content", truncate(msg.Content, 100))
 
 	// 2. Resolve user identity (auto-create if not exists).
-	if a.users != nil && msg.UserID != "" {
+	// Skip resolution for the bot's own messages.
+	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
 			a.logger.Warn("user resolve failed", "error", err)
@@ -136,8 +137,8 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 	// 4. Add to context.
 	a.ctx.Add(msg)
 
-	// 5. Inject user profile if not yet in context.
-	if a.users != nil && msg.UserID != "" {
+	// 5. Inject user profile if not yet in context (skip for bot itself).
+	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		a.injectUserProfile(ctx, msg.Source, msg.UserID)
 	}
 
@@ -562,7 +563,10 @@ func (a *Agent) formatChannelHistory(ctx context.Context, channelID, rawJSON, so
 	fmt.Fprintf(&b, "[Recent history for channel=%s]\n", channelID)
 	for _, m := range msgs {
 		name := m.Author
-		if a.users != nil && m.AuthorID != "" {
+		if m.AuthorID == a.botID {
+			// Bot's own messages — label as self without creating a user record.
+			name = "suzuha (self)"
+		} else if a.users != nil && m.AuthorID != "" {
 			if u, err := a.users.Resolve(ctx, source, m.AuthorID, m.Author); err == nil && u.DisplayName != "" {
 				name = u.DisplayName
 			}
