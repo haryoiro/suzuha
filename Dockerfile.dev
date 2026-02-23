@@ -1,0 +1,13 @@
+FROM golang:1.26
+
+# Install Air for hot reloading
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+# Pre-download dependencies (cached layer)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Source code is bind-mounted at runtime
+ENTRYPOINT ["air"]

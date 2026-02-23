@@ -1,0 +1,41 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["-c", ".air.agent.toml"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      - suzuha-data:/data
+    env_file:
+      - .env
+    environment:
+      - SUZUHA_CONFIG=/app/config.yaml
+    stdin_open: true
+    tty: true
+    depends_on:
+      - consolidator
+
+  consolidator:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["-c", ".air.consolidator.toml"]
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      - suzuha-data:/data
+    env_file:
+      - .env
+    environment:
+      - SUZUHA_CONFIG=/app/config.yaml
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
+  suzuha-data:

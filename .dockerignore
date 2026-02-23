@@ -1,0 +1,6 @@
+tmp/
+.git/
+docs/
+memory.db
+.env
+*.db
