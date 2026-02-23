@@ -3,7 +3,7 @@ tmp_dir = "tmp"
 
 [build]
   bin = "./tmp/suzuha-admin"
-  cmd = "CGO_ENABLED=1 go build -tags fts5 -o ./tmp/suzuha-admin ./cmd/suzuha-admin"
+  cmd = "CGO_ENABLED=1 go build -buildvcs=false -tags fts5 -o ./tmp/suzuha-admin ./cmd/suzuha-admin"
   delay = 1000
   exclude_dir = ["tmp", "docs", "vendor", ".git", "web"]
   exclude_regex = ["_test\\.go$"]

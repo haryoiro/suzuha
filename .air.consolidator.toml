@@ -3,7 +3,7 @@ tmp_dir = "tmp"
 
 [build]
   bin = "./tmp/suzuha-consolidator"
-  cmd = "CGO_ENABLED=1 go build -tags fts5 -o ./tmp/suzuha-consolidator ./cmd/suzuha-consolidator"
+  cmd = "CGO_ENABLED=1 go build -buildvcs=false -tags fts5 -o ./tmp/suzuha-consolidator ./cmd/suzuha-consolidator"
   delay = 1000
   exclude_dir = ["tmp", "docs", "vendor", ".git"]
   exclude_regex = ["_test\\.go$"]

@@ -31,4 +31,4 @@ dev-admin-web:
 # 本番ビルド
 build-admin:
 	cd web/admin && pnpm run build
-	CGO_ENABLED=1 go build -tags fts5 -o ./bin/suzuha-admin ./cmd/suzuha-admin
+	CGO_ENABLED=1 go build -buildvcs=false -tags fts5 -o ./bin/suzuha-admin ./cmd/suzuha-admin
