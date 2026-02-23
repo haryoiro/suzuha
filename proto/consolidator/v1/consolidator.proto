@@ -1,0 +1,43 @@
+syntax = "proto3";
+package consolidator.v1;
+
+option go_package = "github.com/haryoiro/suzuha/gen/consolidator/v1;consolidatorv1";
+
+service ConsolidatorService {
+  rpc Compact(CompactRequest) returns (CompactResponse);
+}
+
+message ChatMessage {
+  string role           = 1;
+  string content        = 2;
+  string user_id        = 3;
+  string user_name      = 4;
+  string source         = 5;
+  string channel        = 6;
+  string message_id     = 7;
+  int64  timestamp_unix = 8;
+}
+
+message CompactRequest {
+  repeated ChatMessage messages     = 1;
+  int32                target_count = 2;
+}
+
+message CompactResponse {
+  repeated int32          keep_indices    = 1;
+  repeated ExtractedMemory memories      = 2;
+  repeated AffinityDelta  affinity_deltas = 3;
+}
+
+message ExtractedMemory {
+  string type    = 1;
+  string content = 2;
+}
+
+message AffinityDelta {
+  string         platform_user_id = 1;
+  string         platform         = 2;
+  double         delta            = 3;
+  string         reason           = 4;
+  repeated int32 message_indices  = 5;
+}

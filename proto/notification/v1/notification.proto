@@ -1,0 +1,22 @@
+syntax = "proto3";
+package notification.v1;
+
+option go_package = "github.com/haryoiro/suzuha/gen/notification/v1;notificationv1";
+
+// NotificationService runs on the Agent process.
+// The Consolidator calls it to send messages to Discord channels.
+service NotificationService {
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+}
+
+message SendMessageRequest {
+  string channel_id = 1;  // Discord channel ID
+  string content    = 2;  // Message text (supports Discord markdown)
+  string source     = 3;  // Origin label, e.g. "rss", "todo_reminder"
+}
+
+message SendMessageResponse {
+  bool   ok         = 1;
+  string message_id = 2;  // Discord message ID if successful
+  string error      = 3;
+}

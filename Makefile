@@ -1,4 +1,16 @@
-.PHONY: dev-admin dev-admin-api dev-admin-web build-admin
+.PHONY: dev-admin dev-admin-api dev-admin-web build-admin proto
+
+# gRPC コード生成
+proto:
+	protoc \
+		--go_out=. --go_opt=module=github.com/haryoiro/suzuha \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/haryoiro/suzuha \
+		proto/consolidator/v1/consolidator.proto
+	protoc \
+		--go_out=. --go_opt=module=github.com/haryoiro/suzuha \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/haryoiro/suzuha \
+		proto/notification/v1/notification.proto
+	@echo "Proto generated: gen/consolidator/v1/ gen/notification/v1/"
 
 # 管理画面: Go API + Vite HMR を同時起動
 dev-admin:
