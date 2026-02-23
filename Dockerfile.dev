@@ -1,7 +1,17 @@
 FROM golang:1.26
 
+# Install build dependencies for CGO (sqlite-vec) and protoc
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsqlite3-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Air for hot reloading
 RUN go install github.com/air-verse/air@latest
+
+# Install protoc Go plugins
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 WORKDIR /app
 

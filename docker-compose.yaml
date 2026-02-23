@@ -10,7 +10,8 @@ services:
       - .:/app
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
-      - suzuha-data:/data
+      - ./data:/data
+      - ./.suzuha:/app/.suzuha:ro
     env_file:
       - .env
     environment:
@@ -29,7 +30,7 @@ services:
       - .:/app
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
-      - suzuha-data:/data
+      - ./data:/data
     env_file:
       - .env
     environment:
@@ -46,7 +47,7 @@ services:
       - .:/app
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
-      - suzuha-data:/data
+      - ./data:/data
     env_file:
       - .env
     environment:
@@ -71,5 +72,4 @@ services:
 volumes:
   go-mod-cache:
   go-build-cache:
-  suzuha-data:
   node-modules:
