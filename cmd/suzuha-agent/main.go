@@ -8,8 +8,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/chat/cli"
+	"github.com/haryoiro/suzuha/internal/chat/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
@@ -40,7 +43,8 @@ func run() error {
 	}
 
 	// Setup observability.
-	logger := observe.NewLogger(cfg.Observe.LogLevel)
+	logRing := observe.NewRingBuffer(1000)
+	logger := observe.NewLoggerWithRing(cfg.Observe.LogLevel, logRing)
 	metrics := observe.NewMetrics(prometheus.DefaultRegisterer)
 
 	// Setup memory store with embedding function.
@@ -70,8 +74,22 @@ func run() error {
 	registry := tool.NewRegistry()
 	registry.Register(builtin.NewFetch())
 
-	// Setup chat interface (CLI mode for now).
-	chatIface := cli.New(os.Stdin, os.Stdout, bus)
+	// Setup chat interface: Discord if token is set, otherwise CLI.
+	var chatIface chat.Interface
+	if cfg.Discord.Token != "" {
+		dc := discord.New(cfg.Discord.Token, cfg.Discord.BotID, bus, logger)
+		dc.OnReady(func(s *discordgo.Session) {
+			registry.Register(builtin.NewDiscordReact(s))
+			registry.Register(builtin.NewDiscordReply(s))
+			registry.Register(builtin.NewDiscordGetHistory(s))
+			logger.Info("discord tools registered")
+		})
+		chatIface = dc
+		logger.Info("chat mode: discord")
+	} else {
+		chatIface = cli.New(os.Stdin, os.Stdout, bus)
+		logger.Info("chat mode: cli")
+	}
 
 	// Create agent.
 	ag := agent.New(
@@ -91,6 +109,7 @@ func run() error {
 		go func() {
 			mux := http.NewServeMux()
 			mux.Handle("/metrics", promhttp.Handler())
+			mux.Handle("/internal/logs", observe.LogHandler(logRing))
 			logger.Info("metrics server starting", "addr", cfg.Observe.MetricsAddr)
 			if err := http.ListenAndServe(cfg.Observe.MetricsAddr, mux); err != nil {
 				logger.Error("metrics server failed", "error", err)

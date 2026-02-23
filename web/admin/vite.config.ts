@@ -1,0 +1,21 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// Docker 内: API_URL=http://admin:8080
+// ローカル: デフォルト http://localhost:8080
+const apiTarget = process.env.API_URL ?? 'http://localhost:8080'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    outDir: 'dist',
+  },
+})

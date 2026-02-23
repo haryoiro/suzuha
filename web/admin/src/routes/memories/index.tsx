@@ -1,0 +1,207 @@
+import { useState } from "react";
+import {
+  Table,
+  Input,
+  Select,
+  Button,
+  Space,
+  Tag,
+  Modal,
+  Form,
+  message,
+  Popconfirm,
+} from "antd";
+import {
+  PlusOutlined,
+  SearchOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+} from "@ant-design/icons";
+import { useMemories, useCreateMemory, useDeleteMemory } from "../../hooks/useMemories";
+import type { Memory } from "../../lib/api";
+import type { ColumnsType } from "antd/es/table";
+
+const { TextArea } = Input;
+
+const typeColors: Record<string, string> = {
+  user: "blue",
+  world: "green",
+  tool: "orange",
+};
+
+interface Props {
+  onViewDetail: (id: string) => void;
+}
+
+export function MemoriesPage({ onViewDetail }: Props) {
+  const [offset, setOffset] = useState(0);
+  const [limit] = useState(20);
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [query, setQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form] = Form.useForm();
+
+  const { data, isLoading } = useMemories({
+    offset,
+    limit,
+    type: typeFilter || undefined,
+    q: query || undefined,
+    order: "updated_at",
+    dir: "desc",
+  });
+
+  const createMutation = useCreateMemory();
+  const deleteMutation = useDeleteMemory();
+
+  const columns: ColumnsType<Memory> = [
+    {
+      title: "Type",
+      dataIndex: "type",
+      width: 80,
+      render: (t: string) => <Tag color={typeColors[t]}>{t}</Tag>,
+    },
+    {
+      title: "Content",
+      dataIndex: "content",
+      ellipsis: true,
+    },
+    {
+      title: "Updated",
+      dataIndex: "updated_at",
+      width: 180,
+      render: (v: string) => new Date(v).toLocaleString("ja-JP"),
+    },
+    {
+      title: "Actions",
+      width: 120,
+      render: (_: unknown, record: Memory) => (
+        <Space>
+          <Button
+            type="text"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => onViewDetail(record.id)}
+          />
+          <Popconfirm
+            title="Delete this memory?"
+            onConfirm={() => {
+              deleteMutation.mutate(record.id, {
+                onSuccess: () => message.success("Deleted"),
+              });
+            }}
+          >
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const handleCreate = async () => {
+    try {
+      const values = await form.validateFields();
+      await createMutation.mutateAsync(values);
+      message.success("Created");
+      setCreateOpen(false);
+      form.resetFields();
+    } catch {
+      // validation error
+    }
+  };
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
+      >
+        <Space>
+          <Input
+            placeholder="Search..."
+            prefix={<SearchOutlined />}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onPressEnter={() => {
+              setQuery(searchInput);
+              setOffset(0);
+            }}
+            style={{ width: 240 }}
+            allowClear
+          />
+          <Select
+            placeholder="All types"
+            allowClear
+            style={{ width: 120 }}
+            value={typeFilter || undefined}
+            onChange={(v) => {
+              setTypeFilter(v ?? "");
+              setOffset(0);
+            }}
+            options={[
+              { label: "user", value: "user" },
+              { label: "world", value: "world" },
+              { label: "tool", value: "tool" },
+            ]}
+          />
+        </Space>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setCreateOpen(true)}
+        >
+          New Memory
+        </Button>
+      </div>
+
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={data?.data}
+        loading={isLoading}
+        pagination={{
+          current: Math.floor(offset / limit) + 1,
+          pageSize: limit,
+          total: data?.total ?? 0,
+          showTotal: (total) => `${total} items`,
+          onChange: (page) => setOffset((page - 1) * limit),
+        }}
+        size="small"
+      />
+
+      <Modal
+        title="New Memory"
+        open={createOpen}
+        onOk={handleCreate}
+        onCancel={() => setCreateOpen(false)}
+        confirmLoading={createMutation.isPending}
+      >
+        <Form form={form} layout="vertical" initialValues={{ type: "user" }}>
+          <Form.Item
+            name="type"
+            label="Type"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={[
+                { label: "user", value: "user" },
+                { label: "world", value: "world" },
+                { label: "tool", value: "tool" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            name="content"
+            label="Content"
+            rules={[{ required: true }]}
+          >
+            <TextArea rows={4} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}

@@ -35,7 +35,41 @@ services:
     environment:
       - SUZUHA_CONFIG=/app/config.yaml
 
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["-c", ".air.admin.toml"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      - suzuha-data:/data
+    env_file:
+      - .env
+    environment:
+      - SUZUHA_CONFIG=/app/config.yaml
+    depends_on:
+      - agent
+
+  admin-frontend:
+    image: node:22-slim
+    working_dir: /app/web/admin
+    command: sh -c "corepack enable && pnpm install && pnpm run dev --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - node-modules:/app/web/admin/node_modules
+    environment:
+      - API_URL=http://admin:8080
+    depends_on:
+      - admin
+
 volumes:
   go-mod-cache:
   go-build-cache:
   suzuha-data:
+  node-modules:

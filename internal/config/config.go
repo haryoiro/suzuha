@@ -10,14 +10,15 @@ import (
 
 // Config is the top-level application configuration.
 type Config struct {
-	LLM         LLM          `yaml:"llm"`
-	Discord     Discord      `yaml:"discord"`
-	ToolServers []ToolServer `yaml:"tool_servers"`
-	Triggers    []Trigger    `yaml:"triggers"`
-	Memory      Memory       `yaml:"memory"`
-	Agent       Agent        `yaml:"agent"`
+	LLM          LLM          `yaml:"llm"`
+	Discord      Discord      `yaml:"discord"`
+	ToolServers  []ToolServer `yaml:"tool_servers"`
+	Triggers     []Trigger    `yaml:"triggers"`
+	Memory       Memory       `yaml:"memory"`
+	Agent        Agent        `yaml:"agent"`
 	Consolidator Consolidator `yaml:"consolidator"`
-	Observe     Observe      `yaml:"observe"`
+	Observe      Observe      `yaml:"observe"`
+	Admin        Admin        `yaml:"admin"`
 }
 
 // LLM configures the language model provider.
@@ -76,6 +77,15 @@ type Observe struct {
 	MetricsAddr string `yaml:"metrics_addr"` // e.g. ":9090"
 }
 
+// Admin configures the admin dashboard service.
+type Admin struct {
+	Addr         string `yaml:"addr"`           // e.g. ":8080"
+	AgentMetrics string `yaml:"agent_metrics"`  // e.g. "http://agent:9090/metrics"
+	AgentLogs    string `yaml:"agent_logs"`     // e.g. "http://agent:9090/internal/logs"
+	ConsolLogs   string `yaml:"consol_logs"`    // e.g. "http://consolidator:9090/internal/logs"
+	StaticDir    string `yaml:"static_dir"`     // path to built SPA assets
+}
+
 // Load reads and parses a config file from the given path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -120,5 +130,14 @@ func (c *Config) setDefaults() {
 	}
 	if c.Observe.MetricsAddr == "" {
 		c.Observe.MetricsAddr = ":9090"
+	}
+	if c.Admin.Addr == "" {
+		c.Admin.Addr = ":8080"
+	}
+	if c.Admin.AgentMetrics == "" {
+		c.Admin.AgentMetrics = "http://localhost:9090/metrics"
+	}
+	if c.Admin.AgentLogs == "" {
+		c.Admin.AgentLogs = "http://localhost:9090/internal/logs"
 	}
 }

@@ -42,6 +42,33 @@ type Store interface {
 	Close() error
 }
 
+// AdminStore extends Store with methods needed by the admin dashboard.
+type AdminStore interface {
+	Store
+
+	// List returns memories with pagination and optional filtering.
+	List(ctx context.Context, opts ListOpts) ([]Memory, int, error)
+
+	// Get returns a single memory by ID.
+	Get(ctx context.Context, id string) (*Memory, error)
+
+	// Update updates an existing memory's content, type, and/or metadata.
+	Update(ctx context.Context, mem *Memory) error
+
+	// Delete removes a memory by ID from all tables.
+	Delete(ctx context.Context, id string) error
+}
+
+// ListOpts controls pagination and filtering for List.
+type ListOpts struct {
+	Offset   int
+	Limit    int
+	Type     MemoryType // empty = all types
+	Query    string     // FTS search query, empty = no filter
+	OrderBy  string     // "created_at" | "updated_at", default "updated_at"
+	OrderDir string     // "asc" | "desc", default "desc"
+}
+
 // EmbedFunc generates an embedding vector for the given text.
 // It is injected from outside to avoid circular dependency with the llm package.
 type EmbedFunc func(ctx context.Context, text string) ([]float32, error)
