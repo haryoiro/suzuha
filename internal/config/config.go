@@ -129,8 +129,8 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: parse %s: %w", path, err)
 	}
 
-	cfg.setDefaults()
 	cfg.applyEnv()
+	cfg.setDefaults()
 
 	configDir := filepath.Dir(path)
 	if err := cfg.loadPromptFiles(configDir); err != nil {
