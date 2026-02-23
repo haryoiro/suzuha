@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/consolidator"
@@ -99,6 +100,28 @@ func run() error {
 			logger.Info("scheduler: agent notification connected", "address", cfg.Consolidator.AgentNotify)
 		}
 
+		// Wrap notifier with quiet hours if configured.
+		if cfg.Consolidator.Scheduler.QuietHours.Enabled {
+			loc := time.UTC
+			if tz := cfg.Consolidator.Scheduler.Timezone; tz != "" {
+				if parsed, tzErr := time.LoadLocation(tz); tzErr == nil {
+					loc = parsed
+				} else {
+					logger.Warn("scheduler: invalid timezone, using UTC", "timezone", tz, "error", tzErr)
+				}
+			}
+			notifier = notification.WithQuietHours(notifier, notification.QuietHoursConfig{
+				Start:    cfg.Consolidator.Scheduler.QuietHours.Start,
+				End:      cfg.Consolidator.Scheduler.QuietHours.End,
+				Location: loc,
+			}, logger)
+			logger.Info("scheduler: quiet hours enabled",
+				"start", cfg.Consolidator.Scheduler.QuietHours.Start,
+				"end", cfg.Consolidator.Scheduler.QuietHours.End,
+				"timezone", loc.String(),
+			)
+		}
+
 		// Build CronContext with shared services.
 		cc := &scheduler.CronContext{
 			LLM:      llmClient,
@@ -111,6 +134,7 @@ func run() error {
 		// Create and configure scheduler.
 		taskRegistry := scheduler.NewRegistry()
 		taskRegistry.Register(&tasks.RSSTask{})
+		taskRegistry.Register(&tasks.TopicsTask{})
 
 		sched = scheduler.New(taskRegistry, cc, logger)
 

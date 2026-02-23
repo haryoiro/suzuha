@@ -22,6 +22,26 @@ agent:
 
 consolidator:
   address: "consolidator:50051"  # Docker Compose service name
+  agent_notify: "agent:50052"    # Agent notification gRPC address
+  scheduler:
+    enabled: true
+    timezone: "Asia/Tokyo"         # IANA timezone for quiet hours & cron interpretation
+    quiet_hours:
+      enabled: true
+      start: "23:00"               # Suppress notifications from 23:00
+      end: "08:00"                 # ... until 08:00 (in configured timezone)
+    jobs:
+      # - name: "topics-daily"
+      #   task: "topics"
+      #   cron: "0 10 * * *"          # Every day at 10:00
+      #   config:
+      #     channel_id: "YOUR_CHANNEL_ID"
+      #     prompt_dir: "/data/prompts" # Directory containing IDENTITY.md / SOUL.md
+      #     topics:
+      #       - "最近ハマっていること"
+      #       - "おすすめの技術書・記事"
+      #       - "週末の予定"
+      #       - "最近作ったもの"
 
 observe:
   log_level: "debug"

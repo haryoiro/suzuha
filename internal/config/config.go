@@ -89,8 +89,18 @@ type Consolidator struct {
 
 // Scheduler configures the cron scheduler in the Consolidator process.
 type Scheduler struct {
-	Enabled bool      `yaml:"enabled"`
-	Jobs    []CronJob `yaml:"jobs"`
+	Enabled    bool       `yaml:"enabled"`
+	Timezone   string     `yaml:"timezone"`    // IANA timezone (e.g. "Asia/Tokyo"). Defaults to UTC.
+	QuietHours QuietHours `yaml:"quiet_hours"` // Suppress notifications during these hours.
+	Jobs       []CronJob  `yaml:"jobs"`
+}
+
+// QuietHours defines a time window during which notifications are suppressed.
+// Start and End are in "HH:MM" format (24h) in the configured timezone.
+type QuietHours struct {
+	Enabled bool   `yaml:"enabled"`
+	Start   string `yaml:"start"` // e.g. "23:00"
+	End     string `yaml:"end"`   // e.g. "08:00"
 }
 
 // CronJob defines a scheduled job. Task must match a registered CronTask.Name().

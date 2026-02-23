@@ -140,6 +140,9 @@ func run() error {
 	registry.Register(builtin.NewRSSList(store.DB()))
 	registry.Register(builtin.NewRSSPreference(store))
 
+	// Register mention opt-in tool.
+	registry.Register(builtin.NewMentionOptIn(store.DB()))
+
 	// Register Discord OnReady callback (after agent is created so closure can reference ag).
 	if dc != nil {
 		dc.OnReady(func(s *discordgo.Session) {
