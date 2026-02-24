@@ -100,35 +100,39 @@ func run() error {
 			logger.Info("scheduler: agent notification connected", "address", cfg.Consolidator.AgentNotify)
 		}
 
+		// Resolve scheduler-level timezone.
+		schedulerLoc := time.UTC
+		if tz := cfg.Consolidator.Scheduler.Timezone; tz != "" {
+			if parsed, tzErr := time.LoadLocation(tz); tzErr == nil {
+				schedulerLoc = parsed
+			} else {
+				logger.Warn("scheduler: invalid timezone, using UTC", "timezone", tz, "error", tzErr)
+			}
+		}
+
 		// Wrap notifier with quiet hours if configured.
 		if cfg.Consolidator.Scheduler.QuietHours.Enabled {
-			loc := time.UTC
-			if tz := cfg.Consolidator.Scheduler.Timezone; tz != "" {
-				if parsed, tzErr := time.LoadLocation(tz); tzErr == nil {
-					loc = parsed
-				} else {
-					logger.Warn("scheduler: invalid timezone, using UTC", "timezone", tz, "error", tzErr)
-				}
-			}
 			notifier = notification.WithQuietHours(notifier, notification.QuietHoursConfig{
 				Start:    cfg.Consolidator.Scheduler.QuietHours.Start,
 				End:      cfg.Consolidator.Scheduler.QuietHours.End,
-				Location: loc,
+				Location: schedulerLoc,
 			}, logger)
 			logger.Info("scheduler: quiet hours enabled",
 				"start", cfg.Consolidator.Scheduler.QuietHours.Start,
 				"end", cfg.Consolidator.Scheduler.QuietHours.End,
-				"timezone", loc.String(),
+				"timezone", schedulerLoc.String(),
 			)
 		}
 
 		// Build CronContext with shared services.
 		cc := &scheduler.CronContext{
-			LLM:      llmClient,
-			Memory:   store,
-			Notifier: notifier,
-			DB:       store.DB(),
-			Logger:   logger,
+			LLM:           llmClient,
+			Memory:        store,
+			Notifier:      notifier,
+			ReplyNotifier: notification.NewReplyNotifier(agentConn),
+			DB:            store.DB(),
+			Logger:        logger,
+			Timezone:      schedulerLoc,
 		}
 
 		// Create and configure scheduler.

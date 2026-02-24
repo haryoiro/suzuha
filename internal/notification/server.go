@@ -22,14 +22,36 @@ func NewServer(chatIface chat.Interface, logger *slog.Logger) *Server {
 }
 
 // SendMessage sends a message to a Discord channel via the chat interface.
+// If reply_to_message_id is set and the chat platform supports replies,
+// the message is sent as a reply. Message IDs are returned when available.
 func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageResponse, error) {
 	s.logger.Info("notification: sending message",
 		"channel", req.ChannelId,
 		"source", req.Source,
 		"content_len", len(req.Content),
+		"reply_to", req.ReplyToMessageId,
 	)
 
-	if err := s.chat.Send(ctx, req.ChannelId, req.Content); err != nil {
+	var msgID string
+	var err error
+
+	switch {
+	case req.ReplyToMessageId != "":
+		if r, ok := s.chat.(chat.Replier); ok {
+			msgID, err = r.SendReply(ctx, req.ChannelId, req.Content, req.ReplyToMessageId)
+		} else {
+			// Fallback: send without reply if platform doesn't support it.
+			err = s.chat.Send(ctx, req.ChannelId, req.Content)
+		}
+	default:
+		if idS, ok := s.chat.(chat.IDSender); ok {
+			msgID, err = idS.SendWithID(ctx, req.ChannelId, req.Content)
+		} else {
+			err = s.chat.Send(ctx, req.ChannelId, req.Content)
+		}
+	}
+
+	if err != nil {
 		s.logger.Warn("notification: send failed", "error", err)
 		return &pb.SendMessageResponse{
 			Ok:    false,
@@ -38,6 +60,7 @@ func (s *Server) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*
 	}
 
 	return &pb.SendMessageResponse{
-		Ok: true,
+		Ok:        true,
+		MessageId: msgID,
 	}, nil
 }

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -29,6 +30,7 @@ type Agent struct {
 	bus     *event.Bus
 	chat    chat.Interface
 	consol  consolidator.Client
+	db      *sql.DB // shared DB for channel activity tracking
 	logger  *slog.Logger
 	metrics *observe.Metrics
 
@@ -55,6 +57,7 @@ func New(
 	bus *event.Bus,
 	chatIface chat.Interface,
 	consolClient consolidator.Client,
+	db *sql.DB,
 	logger *slog.Logger,
 	metrics *observe.Metrics,
 ) *Agent {
@@ -78,6 +81,7 @@ func New(
 		bus:              bus,
 		chat:             chatIface,
 		consol:           consolClient,
+		db:               db,
 		logger:           logger,
 		metrics:          metrics,
 		systemPrompt:     cfg.SystemPrompt,
@@ -135,6 +139,14 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 			msg.UserName = u.DisplayName
 			a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role, "affinity", u.Affinity)
 		}
+	}
+
+	// 2.5. Track channel activity for topic backoff (non-bot messages only).
+	if msg.Channel != "" && a.db != nil && msg.UserID != a.botID {
+		_, _ = a.db.ExecContext(ctx,
+			`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES (?, ?)
+			 ON CONFLICT(channel_id) DO UPDATE SET last_user_message_at = excluded.last_user_message_at`,
+			msg.Channel, time.Now())
 	}
 
 	// 3. Bootstrap channel history if this is a new channel.

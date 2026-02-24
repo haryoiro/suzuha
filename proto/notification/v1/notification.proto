@@ -10,9 +10,10 @@ service NotificationService {
 }
 
 message SendMessageRequest {
-  string channel_id = 1;  // Discord channel ID
-  string content    = 2;  // Message text (supports Discord markdown)
-  string source     = 3;  // Origin label, e.g. "rss", "todo_reminder"
+  string channel_id          = 1;  // Discord channel ID
+  string content             = 2;  // Message text (supports Discord markdown)
+  string source              = 3;  // Origin label, e.g. "rss", "todo_reminder"
+  string reply_to_message_id = 4;  // Optional: reply to this platform message ID
 }
 
 message SendMessageResponse {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -33,9 +34,11 @@ type CronTask interface {
 
 // CronContext provides shared services to all CronTask implementations.
 type CronContext struct {
-	LLM      *llm.Client
-	Memory   memory.Store
-	Notifier notification.NotifyFunc
-	DB       *sql.DB
-	Logger   *slog.Logger
+	LLM           *llm.Client
+	Memory        memory.Store
+	Notifier      notification.NotifyFunc
+	ReplyNotifier *notification.ReplyNotifier // Optional: for tasks that need reply/message ID support.
+	DB            *sql.DB
+	Logger        *slog.Logger
+	Timezone      *time.Location // Scheduler-level timezone. Nil defaults to UTC.
 }

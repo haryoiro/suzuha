@@ -9,8 +9,13 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
+	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/event"
 )
+
+// Compile-time checks for optional interfaces.
+var _ chat.Replier  = (*Chat)(nil)
+var _ chat.IDSender = (*Chat)(nil)
 
 // Chat implements chat.Interface for Discord using discordgo.
 type Chat struct {
@@ -112,6 +117,50 @@ func (c *Chat) Send(_ context.Context, channel string, text string) error {
 		}
 	}
 	return nil
+}
+
+// SendWithID sends a message and returns the Discord message ID of the last chunk.
+func (c *Chat) SendWithID(_ context.Context, channel string, text string) (string, error) {
+	if c.session == nil {
+		return "", fmt.Errorf("discord: session not initialized")
+	}
+	chunks := splitMessage(text, 2000)
+	var lastID string
+	for _, chunk := range chunks {
+		msg, err := c.session.ChannelMessageSend(channel, chunk)
+		if err != nil {
+			return "", fmt.Errorf("discord: send: %w", err)
+		}
+		lastID = msg.ID
+	}
+	return lastID, nil
+}
+
+// SendReply sends a reply to replyToID and returns the Discord message ID of the last chunk.
+func (c *Chat) SendReply(_ context.Context, channel, text, replyToID string) (string, error) {
+	if c.session == nil {
+		return "", fmt.Errorf("discord: session not initialized")
+	}
+	chunks := splitMessage(text, 2000)
+	var lastID string
+	for i, chunk := range chunks {
+		var msg *discordgo.Message
+		var err error
+		if i == 0 {
+			// First chunk is a reply to the target message.
+			msg, err = c.session.ChannelMessageSendReply(channel, chunk, &discordgo.MessageReference{
+				MessageID: replyToID,
+				ChannelID: channel,
+			})
+		} else {
+			msg, err = c.session.ChannelMessageSend(channel, chunk)
+		}
+		if err != nil {
+			return "", fmt.Errorf("discord: send reply: %w", err)
+		}
+		lastID = msg.ID
+	}
+	return lastID, nil
 }
 
 // messageToEvent converts a Discord message to an Event.

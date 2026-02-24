@@ -12,3 +12,16 @@ type Interface interface {
 	// Send sends a message to the specified channel.
 	Send(ctx context.Context, channel string, text string) error
 }
+
+// Replier is an optional interface for platforms that support message replies.
+type Replier interface {
+	// SendReply sends a message as a reply to replyToID.
+	// Returns the platform message ID of the sent message.
+	SendReply(ctx context.Context, channel, text, replyToID string) (string, error)
+}
+
+// IDSender is an optional interface for platforms that can return message IDs.
+type IDSender interface {
+	// SendWithID sends a message and returns its platform message ID.
+	SendWithID(ctx context.Context, channel, text string) (string, error)
+}
