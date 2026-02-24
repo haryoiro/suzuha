@@ -2,119 +2,151 @@
 package handler
 
 import (
-	"bufio"
+	"database/sql"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 )
 
-// MetricsHandler proxies and parses Prometheus metrics from the agent.
+// MetricsHandler reads metrics directly from the shared SQLite database.
 type MetricsHandler struct {
-	agentURL string
-	client   *http.Client
-	logger   *slog.Logger
+	db     *sql.DB
+	logger *slog.Logger
 }
 
-// NewMetricsHandler creates a new MetricsHandler.
-func NewMetricsHandler(agentURL string, logger *slog.Logger) *MetricsHandler {
-	return &MetricsHandler{
-		agentURL: agentURL,
-		client:   &http.Client{Timeout: 5 * time.Second},
-		logger:   logger,
-	}
+// NewMetricsHandler creates a new MetricsHandler backed by SQLite.
+func NewMetricsHandler(db *sql.DB, logger *slog.Logger) *MetricsHandler {
+	return &MetricsHandler{db: db, logger: logger}
 }
 
-// Proxy forwards raw Prometheus metrics text from the agent.
-func (h *MetricsHandler) Proxy(w http.ResponseWriter, r *http.Request) {
-	resp, err := h.client.Get(h.agentURL)
-	if err != nil {
-		h.logger.Error("proxy metrics", "error", err)
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
+// metricHelp maps metric names to human-readable descriptions.
+var metricHelp = map[string]string{
+	"suzuha_llm_tokens_input_total":    "Total input tokens sent to LLM",
+	"suzuha_llm_tokens_output_total":   "Total output tokens received from LLM",
+	"suzuha_llm_latency_seconds":       "LLM request latency in seconds",
+	"suzuha_embedding_latency_seconds": "Embedding API request latency in seconds",
+	"suzuha_context_window_usage_ratio": "Current context window usage ratio (0-1)",
+	"suzuha_tool_calls_total":          "Total tool calls by tool name and status",
+	"suzuha_events_total":              "Total events by source and type",
+	"suzuha_memory_writes_total":       "Total writes to long-term memory",
+}
 
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+// metricType maps metric names to their types.
+var metricType = map[string]string{
+	"suzuha_llm_tokens_input_total":     "counter",
+	"suzuha_llm_tokens_output_total":    "counter",
+	"suzuha_llm_latency_seconds":        "histogram",
+	"suzuha_embedding_latency_seconds":  "histogram",
+	"suzuha_context_window_usage_ratio": "gauge",
+	"suzuha_tool_calls_total":           "counter",
+	"suzuha_events_total":               "counter",
+	"suzuha_memory_writes_total":        "counter",
 }
 
 type metricJSON struct {
-	Name   string            `json:"name"`
-	Help   string            `json:"help,omitempty"`
-	Type   string            `json:"type,omitempty"`
-	Value  float64           `json:"value"`
-	Labels map[string]string `json:"labels,omitempty"`
+	Name    string             `json:"name"`
+	Help    string             `json:"help,omitempty"`
+	Type    string             `json:"type,omitempty"`
+	Value   float64            `json:"value"`
+	Labels  map[string]string  `json:"labels,omitempty"`
+	Buckets []bucketJSON       `json:"buckets,omitempty"`
+	Sum     *float64           `json:"sum,omitempty"`
+	Count   *float64           `json:"count,omitempty"`
+}
+
+type bucketJSON struct {
+	Le    float64 `json:"le"`
+	Count int64   `json:"count"`
 }
 
 type metricsResponse struct {
 	Metrics []metricJSON `json:"metrics"`
 }
 
-// ProxyJSON fetches Prometheus metrics and returns suzuha_* metrics as JSON.
-// Parses the text exposition format directly to avoid prometheus/common
-// validation scheme issues.
-func (h *MetricsHandler) ProxyJSON(w http.ResponseWriter, r *http.Request) {
-	resp, err := h.client.Get(h.agentURL)
-	if err != nil {
-		h.logger.Error("proxy metrics json", "error", err)
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	helps := make(map[string]string)
-	types := make(map[string]string)
+// ServeJSON returns all suzuha_* metrics as JSON, read directly from SQLite.
+func (h *MetricsHandler) ServeJSON(w http.ResponseWriter, r *http.Request) {
 	var result []metricJSON
 
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
+	// 1. Read all scalar metrics.
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT name, labels, value FROM metrics WHERE name LIKE 'suzuha_%' ORDER BY name, labels`)
+	if err != nil {
+		h.logger.Error("metrics query", "error", err)
+		http.Error(w, `{"error":"query failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
 
-		// Parse HELP lines.
-		if strings.HasPrefix(line, "# HELP suzuha_") {
-			parts := strings.SplitN(line, " ", 4)
-			if len(parts) >= 4 {
-				helps[parts[2]] = parts[3]
-			}
+	// Track histogram sum/count for assembly.
+	histSums := make(map[string]float64)
+	histCounts := make(map[string]float64)
+
+	for rows.Next() {
+		var name, labelsStr string
+		var value float64
+		if err := rows.Scan(&name, &labelsStr, &value); err != nil {
 			continue
 		}
 
-		// Parse TYPE lines.
-		if strings.HasPrefix(line, "# TYPE suzuha_") {
-			parts := strings.SplitN(line, " ", 4)
-			if len(parts) >= 4 {
-				types[parts[2]] = parts[3]
-			}
+		// Histogram sum/count are stored as separate entries.
+		if strings.HasSuffix(name, "_sum") {
+			baseName := strings.TrimSuffix(name, "_sum")
+			histSums[baseName] = value
 			continue
 		}
-
-		// Skip non-suzuha lines and comments.
-		if !strings.HasPrefix(line, "suzuha_") {
-			continue
-		}
-
-		// Parse metric line: name{labels} value
-		name, labels, valueStr := parseMetricLine(line)
-		if name == "" {
-			continue
-		}
-
-		value, err := strconv.ParseFloat(valueStr, 64)
-		if err != nil {
+		if strings.HasSuffix(name, "_count") {
+			baseName := strings.TrimSuffix(name, "_count")
+			histCounts[baseName] = value
 			continue
 		}
 
 		jm := metricJSON{
-			Name:   name,
-			Help:   helps[name],
-			Type:   types[name],
-			Value:  value,
-			Labels: labels,
+			Name:  name,
+			Help:  metricHelp[name],
+			Type:  metricType[name],
+			Value: value,
+		}
+
+		// Parse labels if not empty.
+		if labelsStr != "{}" {
+			var labels map[string]string
+			if err := json.Unmarshal([]byte(labelsStr), &labels); err == nil && len(labels) > 0 {
+				jm.Labels = labels
+			}
+		}
+
+		result = append(result, jm)
+	}
+
+	// 2. Build histogram entries with buckets.
+	histBuckets := make(map[string][]bucketJSON)
+	bucketRows, err := h.db.QueryContext(r.Context(),
+		`SELECT name, le, count FROM metric_histogram_buckets WHERE name LIKE 'suzuha_%' ORDER BY name, le`)
+	if err == nil {
+		defer bucketRows.Close()
+		for bucketRows.Next() {
+			var name string
+			var le float64
+			var count int64
+			if err := bucketRows.Scan(&name, &le, &count); err != nil {
+				continue
+			}
+			histBuckets[name] = append(histBuckets[name], bucketJSON{Le: le, Count: count})
+		}
+	}
+
+	// 3. Add histogram summary entries.
+	for name, buckets := range histBuckets {
+		sum := histSums[name]
+		count := histCounts[name]
+		jm := metricJSON{
+			Name:    name,
+			Help:    metricHelp[name],
+			Type:    metricType[name],
+			Buckets: buckets,
+			Sum:     &sum,
+			Count:   &count,
 		}
 		result = append(result, jm)
 	}
@@ -125,73 +157,4 @@ func (h *MetricsHandler) ProxyJSON(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(metricsResponse{Metrics: result})
-}
-
-// parseMetricLine parses "name{k1=\"v1\",k2=\"v2\"} value" or "name value".
-func parseMetricLine(line string) (name string, labels map[string]string, value string) {
-	// Split off value (last space-separated token).
-	idx := strings.LastIndex(line, " ")
-	if idx < 0 {
-		return "", nil, ""
-	}
-	value = line[idx+1:]
-	prefix := line[:idx]
-
-	// Check for labels.
-	braceStart := strings.Index(prefix, "{")
-	if braceStart < 0 {
-		return prefix, nil, value
-	}
-
-	name = prefix[:braceStart]
-	labelsStr := prefix[braceStart+1 : len(prefix)-1] // strip { }
-	labels = make(map[string]string)
-
-	for _, pair := range splitLabels(labelsStr) {
-		eqIdx := strings.Index(pair, "=")
-		if eqIdx < 0 {
-			continue
-		}
-		k := pair[:eqIdx]
-		v := strings.Trim(pair[eqIdx+1:], `"`)
-		labels[k] = v
-	}
-
-	return name, labels, value
-}
-
-// splitLabels splits label pairs, respecting quoted values.
-func splitLabels(s string) []string {
-	var parts []string
-	var current strings.Builder
-	inQuote := false
-	escaped := false
-
-	for _, c := range s {
-		if escaped {
-			current.WriteRune(c)
-			escaped = false
-			continue
-		}
-		if c == '\\' && inQuote {
-			escaped = true
-			current.WriteRune(c)
-			continue
-		}
-		if c == '"' {
-			inQuote = !inQuote
-			current.WriteRune(c)
-			continue
-		}
-		if c == ',' && !inQuote {
-			parts = append(parts, current.String())
-			current.Reset()
-			continue
-		}
-		current.WriteRune(c)
-	}
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
-	return parts
 }

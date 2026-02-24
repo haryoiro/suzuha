@@ -27,8 +27,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 )
 
@@ -53,10 +51,24 @@ func run() error {
 	// Setup observability.
 	logRing := observe.NewRingBuffer(1000)
 	logger := observe.NewLoggerWithRing(cfg.Observe.LogLevel, logRing)
-	metrics := observe.NewMetrics(prometheus.DefaultRegisterer)
 
-	// Setup LLM client (before memory store so we can wire embedFn).
-	llmClient, err := llm.NewClient(
+	// Setup memory store first (runs migrations, provides DB for metrics).
+	// embedFn is wired via closure after LLM client is created below.
+	var llmClient *llm.Client
+	embedFn := func(ctx context.Context, text string) ([]float32, error) {
+		return llmClient.Embed(ctx, text)
+	}
+	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, true)
+	if err != nil {
+		return fmt.Errorf("open memory store: %w", err)
+	}
+	defer store.Close()
+
+	// Setup metrics (SQLite-backed, persists across restarts).
+	metrics := observe.NewMetrics(store.DB())
+
+	// Setup LLM client.
+	llmClient, err = llm.NewClient(
 		cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey, cfg.LLM.APIBase,
 		cfg.LLM.MaxTokens,
 		llm.EmbeddingConfig{
@@ -71,16 +83,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create llm client: %w", err)
 	}
-
-	// Setup memory store with embedding function.
-	embedFn := func(ctx context.Context, text string) ([]float32, error) {
-		return llmClient.Embed(ctx, text)
-	}
-	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, true)
-	if err != nil {
-		return fmt.Errorf("open memory store: %w", err)
-	}
-	defer store.Close()
 
 	// Setup event bus.
 	bus := event.NewBus(128)
@@ -125,7 +127,7 @@ func run() error {
 			MaxContextTokens: cfg.LLM.MaxTokens,
 		},
 		llmClient, registry, store, userStore, bus, chatIface,
-		consolClient,
+		consolClient, store.DB(),
 		logger, metrics,
 	)
 
@@ -176,11 +178,10 @@ func run() error {
 		})
 	}
 
-	// Start metrics server.
+	// Start internal HTTP server.
 	if cfg.Observe.MetricsAddr != "" {
 		go func() {
 			mux := http.NewServeMux()
-			mux.Handle("/metrics", promhttp.Handler())
 			mux.Handle("/internal/logs", observe.LogHandler(logRing))
 			mux.HandleFunc("POST /internal/compact", func(w http.ResponseWriter, r *http.Request) {
 				ag.ForceCompact(r.Context())
@@ -199,9 +200,9 @@ func run() error {
 					"max_tokens":       actx.MaxTokens(),
 				})
 			})
-			logger.Info("metrics server starting", "addr", cfg.Observe.MetricsAddr)
+			logger.Info("internal server starting", "addr", cfg.Observe.MetricsAddr)
 			if err := http.ListenAndServe(cfg.Observe.MetricsAddr, mux); err != nil {
-				logger.Error("metrics server failed", "error", err)
+				logger.Error("internal server failed", "error", err)
 			}
 		}()
 	}

@@ -37,10 +37,9 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/memories/vec-stats", memH.VecStats)
 	mux.HandleFunc("GET /api/memories/with-vec", memH.ListWithVec)
 
-	// Metrics proxy.
-	metH := handler.NewMetricsHandler(cfg.AgentMetrics, logger)
-	mux.HandleFunc("GET /api/metrics", metH.Proxy)
-	mux.HandleFunc("GET /api/metrics/json", metH.ProxyJSON)
+	// Metrics (direct SQLite query).
+	metH := handler.NewMetricsHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/metrics/json", metH.ServeJSON)
 
 	// Users.
 	userH := handler.NewUsersHandler(store.DB(), logger)
