@@ -18,10 +18,11 @@ graph LR
 
   agent -- gRPC 圧縮要求 --> consol
   consol -- 保持一覧 --> agent
-  agent -- 読み取り --> db
+  consol -- gRPC 通知 --> agent
+  agent -- 読み書き --> db
   consol -- 読み書き --> db
-  admin -- HTTP プロキシ --> agent
-  admin -- HTTP プロキシ --> consol
+  admin -- 読み取り --> db
+  admin -- HTTP プロキシ (ログ/コンテキスト) --> agent
 ```
 
 ## パッケージ構成
@@ -38,30 +39,34 @@ graph LR
 - `chat` — プラットフォーム抽象 + 実装 (discord, cli)
 - `tool` — ツールインターフェース、Registry、builtin ツール、remote ツール
 - `transport` — リモートツール通信 (WebSocket, MCP)
+- `notification` — 通知パイプライン (gRPC クライアント/サーバー、quiet hours、ReplyNotifier)。詳細は `notification.md`
+- `scheduler` — 定期実行ジョブ (CronTask、RSS、Topics)。Consolidator プロセス内で動作。詳細は `docs/scheduler.md`
 - `admin` — 管理画面バックエンド (REST API + SPA 配信)
 - `event` — EventBus (chan ベース)
 - `config` — YAML 設定ロード
-- `observe` — Prometheus メトリクス、slog、ログストリーミング
+- `observe` — SQLite-backed メトリクス、slog、ログストリーミング。詳細は `observe.md`
 
 ## 依存関係
 
 ```mermaid
 graph TD
-  agent --> llm & memory & chat & tool & user & gen/consolidator
-  consolidator --> llm & memory
+  agent --> llm & memory & chat & tool & user & gen/consolidator & observe
+  consolidator --> llm & memory & notification & scheduler
   admin --> memory & user
+  scheduler --> notification
   llm --> tool
   tool/builtin & tool/remote --> transport
   chat/discord & chat/cli -.-> chat.Interface
+  notification -.-> chat.Interface
 ```
 
-- リーフ: `event`, `config`, `observe`（外部依存なし）
+- リーフ: `event`, `config`（外部依存なし）
 - `memory` は agent と consolidator の両方から使用（同一 DB）
 - embedding 関数は `main.go` でクロージャとして注入（循環依存回避）
 
 ## 主要インターフェース
 
-- `chat.Interface` (`chat/chat.go`) — Run, Send。プラットフォーム抽象
+- `chat.Interface` (`chat/chat.go`) — Run, Send。プラットフォーム抽象。Optional: `Replier`, `IDSender`。詳細は `notification.md`
 - `tool.Tool` (`tool/tool.go`) — Name, Description, InputSchema, Execute。詳細は `tools.md`
 - `memory.Store` (`memory/store.go`) — Save, Search, SearchByType, SearchRecent。詳細は `data.md`
 - `memory.AdminStore` — Store + List, Get, Update, Delete（管理画面用）

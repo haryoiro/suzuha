@@ -20,51 +20,134 @@ suzuha-consolidator
             ▼
        CronTask.Execute(ctx, CronContext, config)
                               │
-                              ├── LLM Client     (LLM 呼び出し)
-                              ├── Memory Store   (長期記憶の読み書き)
-                              ├── NotifyFunc     (Discord 通知)
-                              ├── *sql.DB        (タスク固有テーブル)
+                              ├── LLM Client      (LLM 呼び出し)
+                              ├── Memory Store    (長期記憶の読み書き)
+                              ├── NotifyFunc      (Discord 通知)
+                              ├── ReplyNotifier   (ID 付き通知 + リプライ)
+                              ├── *sql.DB         (タスク固有テーブル)
                               └── Logger
 ```
 
 ### 通知パイプライン
 
-CronTask が Discord にメッセージを送りたい場合、`CronContext.Notifier` を呼ぶ。
-内部的には gRPC で Agent の `NotificationService` を経由し、`chat.Interface.Send()` に委譲される。
+CronTask が Discord にメッセージを送る方法は 2 つ。詳細は `notification.md` を参照。
+
+**NotifyFunc** — シンプルな送信。Quiet Hours ラッパー付き。
 
 ```
-CronTask → Notifier(channelID, text, source)
-  → gRPC SendMessage → Agent NotificationServer
-    → chat.Interface.Send() → Discord API
+CronTask → Notifier(channelID, text, source) → gRPC → Agent → Discord
 ```
 
-Agent が落ちている場合はエラーを返す。タスクはログを残して次の tick で再試行できる。
+**ReplyNotifier** — メッセージ ID 取得 + リプライ対応。
 
-## 現状の機能 (Phase 1)
+```
+CronTask → ReplyNotifier.Notify(channelID, text, source) → (messageID, error)
+CronTask → ReplyNotifier.Reply(channelID, text, replyToID, source) → (messageID, error)
+```
 
-- スケジューラ基盤（ジョブ登録・cron 式スケジューリング・実行・停止）
-- 通知パイプライン（Consolidator → Agent → Discord）
-- CronTask プラグインインターフェース
-- TaskRegistry（`tool.Registry` と同じ設計）
+## 組み込みタスク
 
-**組み込み CronTask はまだない。** Phase 2 以降で RSS 監視、TODO リマインダーなどを追加予定。
+### RSS (`rss`)
 
-## 設定
+RSS/Atom フィードを監視し、ユーザーの興味に合う新着記事を Discord に通知する。
 
-`config.yaml` の `consolidator` セクションに追加する。
+**処理フロー:**
+
+1. `rss_feeds` テーブルから有効なフィードを取得
+2. 各フィードを HTTP で取得し、RSS 2.0 / Atom を自動判定してパース
+3. 未読の記事を `rss_items` に保存し、長期記憶にも Embedding 付きで保存
+4. ユーザーの興味プロファイル（user 型メモリ）を収集
+5. **Phase A**: ベクトル類似度で粗いフィルタ（`vector_threshold`）
+6. **Phase B**: LLM バッチスコアリングでスコアが閾値以上の記事を選別（`notify_threshold`）
+7. LLM で suzuha の口調の通知メッセージを生成し Discord に送信
+
+**設定例:**
 
 ```yaml
 consolidator:
-  address: "localhost:50051"        # 既存: gRPC アドレス
-  agent_notify: "localhost:50052"   # Agent の通知用 gRPC アドレス
   scheduler:
-    enabled: true                   # false でスケジューラ無効
     jobs:
-      - name: "my-job"             # ジョブの表示名（ログに出る）
-        task: "task_name"          # CronTask.Name() と一致させる
-        cron: "*/30 * * * *"       # cron 式
-        config:                    # タスク固有設定（JSON として Execute に渡る）
-          key: "value"
+      - name: "rss-check"
+        task: "rss"
+        cron: "*/30 * * * *"
+        config:
+          vector_threshold: 0.3
+          notify_threshold: 0.6
+          max_articles_per_notify: 5
+```
+
+フィードの登録・管理は `rss_feeds` テーブルを直接操作する（将来の管理画面対応予定）。
+
+### Topics (`topics`)
+
+定期的にチャンネルに話題を投稿する。コンテキスト（最近の会話、過去の話題の反応状況、時間帯）を考慮して LLM が生成する。
+
+**処理フロー:**
+
+1. **バックオフ判定**: 前回の話題に反応がなければ `consecutiveNoResponse` を増やし、次回以降スキップ（最大 `maxBackoff=5` 回）
+2. バックオフ中ならスキップして終了
+3. opt-in ユーザー（`metadata.mention_opt_in = 1`）のリストと記憶を取得
+4. 最近のチャンネル記憶 + 過去の話題投稿を取得
+5. **アクション決定**: LLM に NEW / REPLY / SUPPLEMENT を選ばせる
+   - `NEW`: 新しい話題を投稿
+   - `REPLY`: 過去の話題にリプライして会話を続ける
+   - `SUPPLEMENT`: 過去の話題に「ちなみに〜」で補足
+6. LLM でメッセージ生成（時間帯ヒント、反応履歴、ユーザーコンテキスト付き）
+7. 送信（REPLY/SUPPLEMENT は `ReplyNotifier.Reply` でスレッド返信）
+8. 長期記憶に保存（message_id 付き → 次回の REPLY 対象に）
+
+**バックオフの仕組み:**
+
+```
+反応あり → consecutiveNoResponse = 0, skipCounter = 0
+反応なし → consecutiveNoResponse++, skipCounter = min(consecutiveNoResponse, 5)
+```
+
+`channel_activity` テーブルの `last_user_message_at` で反応有無を判定。
+
+**設定例:**
+
+```yaml
+consolidator:
+  scheduler:
+    jobs:
+      - name: "daily-topic"
+        task: "topics"
+        cron: "0 */2 * * *"
+        config:
+          channel_id: "123456789"
+          topics:
+            - "プログラミング"
+            - "最近のニュース"
+            - "ゲーム"
+          prompt_dir: "prompts/"
+          timezone: "Asia/Tokyo"
+```
+
+## 設定
+
+`config.yaml` の `consolidator` セクション:
+
+```yaml
+consolidator:
+  address: "localhost:50051"
+  agent_notify: "localhost:50052"
+  scheduler:
+    enabled: true
+    timezone: "Asia/Tokyo"         # IANA タイムゾーン。cron 式の評価に使用
+    quiet_hours:
+      enabled: true
+      start: "23:00"               # この時間帯は NotifyFunc 経由の通知を抑制
+      end: "08:00"
+    jobs:
+      - name: "rss-check"
+        task: "rss"
+        cron: "*/30 * * * *"
+        config: { ... }
+      - name: "daily-topic"
+        task: "topics"
+        cron: "0 */2 * * *"
+        config: { ... }
 ```
 
 ### cron 式の書式
@@ -73,7 +156,6 @@ consolidator:
 
 | 書式 | 意味 |
 |------|------|
-| `* * * * *` | 毎分 |
 | `*/30 * * * *` | 30 分ごと |
 | `0 9 * * *` | 毎日 9:00 |
 | `0 9 * * 1-5` | 平日の 9:00 |
@@ -82,16 +164,23 @@ consolidator:
 | `@daily` | 毎日 0:00 |
 | `@hourly` | 毎時 0 分 |
 
-### デフォルト値
+### Quiet Hours
 
-| キー | デフォルト | 説明 |
-|------|-----------|------|
-| `consolidator.agent_notify` | `localhost:50052` | Agent の通知 gRPC アドレス |
-| `consolidator.scheduler.enabled` | `false` | スケジューラを有効にするか |
+`quiet_hours` を有効にすると、指定した時間帯の通知を抑制する。
+日跨ぎ（例: `23:00`〜`08:00`）にも対応。詳細は `notification.md` 参照。
+
+## CronContext で使えるサービス
+
+| フィールド | 型 | 用途 |
+|-----------|-----|------|
+| `LLM` | `*llm.Client` | LLM 呼び出し (Complete, Embed) |
+| `Memory` | `memory.Store` | 長期記憶の検索・保存 |
+| `Notifier` | `NotifyFunc` | Discord チャンネルへの通知送信 |
+| `ReplyNotifier` | `*notification.ReplyNotifier` | ID 付き通知 + リプライ送信 |
+| `DB` | `*sql.DB` | SQLite への直接クエリ（タスク固有テーブル用） |
+| `Logger` | `*slog.Logger` | 構造化ログ |
 
 ## CronTask の実装方法
-
-新しい定期ジョブを追加するには 3 ステップ。
 
 ### 1. CronTask インターフェースを実装
 
@@ -99,46 +188,27 @@ consolidator:
 // internal/scheduler/tasks/example.go
 package tasks
 
-import (
-    "context"
-    "encoding/json"
-    "github.com/haryoiro/suzuha/internal/scheduler"
-)
-
 type ExampleTask struct{}
 
 func (t *ExampleTask) Name() string        { return "example" }
 func (t *ExampleTask) Description() string { return "サンプルタスク" }
 
 func (t *ExampleTask) Setup(ctx context.Context, cc *scheduler.CronContext) error {
-    // テーブル作成やデータ初期化など（不要なら何もしない）
     return nil
 }
 
 func (t *ExampleTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
-    // cfg から設定を読む
     var conf struct {
         ChannelID string `json:"channel_id"`
-        Message   string `json:"message"`
     }
-    if err := json.Unmarshal(cfg, &conf); err != nil {
-        return err
-    }
-
-    // 利用できるサービス:
-    // cc.LLM      — LLM に問い合わせ
-    // cc.Memory   — 長期記憶を検索・保存
-    // cc.Notifier — Discord に通知送信
-    // cc.DB       — SQL を直接実行
-    // cc.Logger   — ログ出力
-
-    return cc.Notifier(ctx, conf.ChannelID, conf.Message, "example")
+    json.Unmarshal(cfg, &conf)
+    return cc.Notifier(ctx, conf.ChannelID, "Hello!", "example")
 }
 ```
 
 ### 2. レジストリに登録
 
-`cmd/suzuha-consolidator/main.go` の `taskRegistry` に追加:
+`cmd/suzuha-consolidator/main.go`:
 
 ```go
 taskRegistry := scheduler.NewRegistry()
@@ -157,18 +227,7 @@ consolidator:
         cron: "@every 1h"
         config:
           channel_id: "123456789"
-          message: "定期お知らせだよ"
 ```
-
-## CronContext で使えるサービス
-
-| フィールド | 型 | 用途 |
-|-----------|-----|------|
-| `LLM` | `*llm.Client` | LLM 呼び出し (Complete, Embed) |
-| `Memory` | `memory.Store` | 長期記憶の検索・保存 |
-| `Notifier` | `NotifyFunc` | Discord チャンネルへの通知送信 |
-| `DB` | `*sql.DB` | SQLite への直接クエリ（タスク固有テーブル用） |
-| `Logger` | `*slog.Logger` | 構造化ログ |
 
 ## ファイル構成
 
@@ -178,18 +237,18 @@ internal/
     task.go          # CronTask interface, CronContext
     registry.go      # TaskRegistry
     scheduler.go     # Scheduler (robfig/cron/v3 ラッパー)
+    tasks/
+      rss.go         # RSSTask
+      rss_store.go   # FeedStore (rss_feeds, rss_items テーブル操作)
+      topics.go      # TopicsTask
 
   notification/
-    client.go        # NotifyFunc, NewGRPCNotifier (Consolidator 側)
-    server.go        # gRPC NotificationServer (Agent 側)
+    client.go          # NotifyFunc, NewGRPCNotifier
+    reply_notifier.go  # ReplyNotifier
+    server.go          # gRPC NotificationServer (Agent 側)
+    quiet.go           # WithQuietHours デコレータ
 
 proto/
   notification/v1/
-    notification.proto  # NotificationService 定義
+    notification.proto
 ```
-
-## 今後の計画
-
-- **Phase 2: RSS 監視** — フィード登録、新着記事の取得、LLM による興味スコアリング、Discord 通知
-- **Phase 3: TODO リマインダー** — ユーザー/チャンネル単位の TODO 管理、期日リマインド、チャットからの自動作成
-- **Phase 4: 管理画面統合** — Admin UI でジョブ状態の確認、RSS フィード管理、TODO 一覧

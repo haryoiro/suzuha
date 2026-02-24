@@ -74,3 +74,68 @@ paths: "internal/memory/**,internal/user/**,internal/consolidator/**"
 ### フォールバック
 
 consolidator 不通時はエージェント側で `TruncateOldest()` により古いメッセージを切り捨て。
+
+## メトリクステーブル
+
+`internal/observe/` が Agent プロセスから書き込み、`internal/admin/handler/` が Admin プロセスから直接読み取る。
+詳細は `observe.md` を参照。
+
+### metrics
+
+| カラム | 型 | 説明 |
+|--------|------|------|
+| name | TEXT PK | メトリクス名（`suzuha_llm_tokens_input_total` 等） |
+| labels | TEXT PK | JSON エンコードされたラベル（`{}` or `{"tool":"fetch","status":"success"}`） |
+| value | REAL | 現在の値 |
+| updated_at | DATETIME | 最終更新日時 |
+
+Counter/Gauge は `labels = '{}'` の 1 行。CounterVec はラベル組み合わせごとに 1 行。
+Histogram の sum/count は `name + "_sum"` / `name + "_count"` として格納。
+
+### metric_histogram_buckets
+
+| カラム | 型 | 説明 |
+|--------|------|------|
+| name | TEXT PK | ヒストグラム名（`suzuha_llm_latency_seconds` 等） |
+| le | REAL PK | バケット上限値 |
+| count | INTEGER | 累積カウント |
+
+## チャンネルアクティビティテーブル
+
+`channel_activity` — Topics タスクのバックオフ判定に使用。Agent がユーザーメッセージを受信するたびに更新。
+
+| カラム | 型 | 説明 |
+|--------|------|------|
+| channel_id | TEXT PK | チャンネル ID |
+| last_user_message_at | DATETIME | 最後のユーザーメッセージ受信時刻 |
+
+Topics タスクは `last_user_message_at > 前回投稿時刻` で反応有無を判定する。
+
+## RSS 関連テーブル
+
+RSS タスクが使用。`internal/scheduler/tasks/rss_store.go` で操作。
+
+### rss_feeds
+
+| カラム | 型 | 説明 |
+|--------|------|------|
+| id | TEXT PK | UUID |
+| name | TEXT | フィード表示名 |
+| url | TEXT | フィード URL |
+| channel_id | TEXT | 通知先チャンネル ID |
+| enabled | BOOLEAN | 有効フラグ |
+| last_polled_at | DATETIME | 最終取得日時 |
+
+### rss_items
+
+| カラム | 型 | 説明 |
+|--------|------|------|
+| id | TEXT PK | UUID |
+| feed_id | TEXT FK | フィード ID |
+| guid | TEXT | 記事の GUID（重複排除用） |
+| title | TEXT | 記事タイトル |
+| link | TEXT | 記事 URL |
+| description | TEXT | 記事概要 |
+| published_at | DATETIME | 公開日時 |
+| memory_id | TEXT | 長期記憶の ID（ベクトル検索用） |
+| notified | BOOLEAN | 通知済みフラグ |
