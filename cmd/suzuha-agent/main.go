@@ -24,6 +24,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/haryoiro/suzuha/internal/rss"
+	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -136,11 +138,18 @@ func run() error {
 		ag.AgentContext().UpdateUserName(userID, newName)
 	}))
 
-	// Register RSS tools.
-	registry.Register(builtin.NewRSSSubscribe(store.DB()))
-	registry.Register(builtin.NewRSSUnsubscribe(store.DB()))
-	registry.Register(builtin.NewRSSList(store.DB()))
-	registry.Register(builtin.NewRSSPreference(store))
+	// Register features (RSS tools, etc.).
+	features := []scheduler.Feature{
+		rss.New(store.DB(), store),
+	}
+	for _, f := range features {
+		if err := f.Setup(context.Background(), store.DB()); err != nil {
+			logger.Error("feature setup failed", "feature", f.Name(), "error", err)
+		}
+		for _, t := range f.Tools() {
+			registry.Register(t)
+		}
+	}
 
 	// Register mention opt-in tool.
 	registry.Register(builtin.NewMentionOptIn(store.DB()))

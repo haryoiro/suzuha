@@ -1,4 +1,4 @@
-package builtin
+package rss
 
 import (
 	"context"
@@ -8,28 +8,27 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/scheduler/tasks"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
 // --- rss_subscribe ---
 
-// RSSSubscribe registers an RSS feed.
-type RSSSubscribe struct {
+// SubscribeTool registers an RSS feed.
+type SubscribeTool struct {
 	db *sql.DB
 }
 
-func NewRSSSubscribe(db *sql.DB) *RSSSubscribe {
-	return &RSSSubscribe{db: db}
+func NewSubscribeTool(db *sql.DB) *SubscribeTool {
+	return &SubscribeTool{db: db}
 }
 
-func (r *RSSSubscribe) Name() string { return "rss_subscribe" }
+func (r *SubscribeTool) Name() string { return "rss_subscribe" }
 
-func (r *RSSSubscribe) Description() string {
+func (r *SubscribeTool) Description() string {
 	return `Register an RSS/Atom feed for monitoring. New articles will be checked periodically and interesting ones will be shared in the channel. Use the channel_id from the message metadata.`
 }
 
-func (r *RSSSubscribe) InputSchema() json.RawMessage {
+func (r *SubscribeTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -49,7 +48,7 @@ type rssSubscribeInput struct {
 	UserID    string `json:"user_id"`
 }
 
-func (r *RSSSubscribe) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+func (r *SubscribeTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in rssSubscribeInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return tool.ErrorResult("invalid input: " + err.Error()), nil
@@ -61,8 +60,8 @@ func (r *RSSSubscribe) Execute(ctx context.Context, input json.RawMessage) (*too
 		in.Name = in.URL
 	}
 
-	store := tasks.NewFeedStore(r.db)
-	feed := &tasks.Feed{
+	store := NewFeedStore(r.db)
+	feed := &Feed{
 		Name:      in.Name,
 		URL:       in.URL,
 		ChannelID: in.ChannelID,
@@ -79,26 +78,26 @@ func (r *RSSSubscribe) Execute(ctx context.Context, input json.RawMessage) (*too
 	return tool.TextResult(fmt.Sprintf("Registered RSS feed %q (%s). New articles will be shared in this channel.", in.Name, in.URL)), nil
 }
 
-var _ tool.Tool = (*RSSSubscribe)(nil)
+var _ tool.Tool = (*SubscribeTool)(nil)
 
 // --- rss_unsubscribe ---
 
-// RSSUnsubscribe removes an RSS feed registration.
-type RSSUnsubscribe struct {
+// UnsubscribeTool removes an RSS feed registration.
+type UnsubscribeTool struct {
 	db *sql.DB
 }
 
-func NewRSSUnsubscribe(db *sql.DB) *RSSUnsubscribe {
-	return &RSSUnsubscribe{db: db}
+func NewUnsubscribeTool(db *sql.DB) *UnsubscribeTool {
+	return &UnsubscribeTool{db: db}
 }
 
-func (r *RSSUnsubscribe) Name() string { return "rss_unsubscribe" }
+func (r *UnsubscribeTool) Name() string { return "rss_unsubscribe" }
 
-func (r *RSSUnsubscribe) Description() string {
+func (r *UnsubscribeTool) Description() string {
 	return `Remove an RSS/Atom feed registration. Accepts a feed name, URL, or ID.`
 }
 
-func (r *RSSUnsubscribe) InputSchema() json.RawMessage {
+func (r *UnsubscribeTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -112,7 +111,7 @@ type rssUnsubscribeInput struct {
 	Identifier string `json:"identifier"`
 }
 
-func (r *RSSUnsubscribe) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+func (r *UnsubscribeTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in rssUnsubscribeInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return tool.ErrorResult("invalid input: " + err.Error()), nil
@@ -121,7 +120,7 @@ func (r *RSSUnsubscribe) Execute(ctx context.Context, input json.RawMessage) (*t
 		return tool.ErrorResult("identifier is required"), nil
 	}
 
-	store := tasks.NewFeedStore(r.db)
+	store := NewFeedStore(r.db)
 	if err := store.RemoveFeed(ctx, in.Identifier); err != nil {
 		return tool.ErrorResult(fmt.Sprintf("Could not remove feed: %v", err)), nil
 	}
@@ -129,34 +128,34 @@ func (r *RSSUnsubscribe) Execute(ctx context.Context, input json.RawMessage) (*t
 	return tool.TextResult(fmt.Sprintf("Removed RSS feed %q.", in.Identifier)), nil
 }
 
-var _ tool.Tool = (*RSSUnsubscribe)(nil)
+var _ tool.Tool = (*UnsubscribeTool)(nil)
 
 // --- rss_list ---
 
-// RSSList shows all registered RSS feeds.
-type RSSList struct {
+// ListTool shows all registered RSS feeds.
+type ListTool struct {
 	db *sql.DB
 }
 
-func NewRSSList(db *sql.DB) *RSSList {
-	return &RSSList{db: db}
+func NewListTool(db *sql.DB) *ListTool {
+	return &ListTool{db: db}
 }
 
-func (r *RSSList) Name() string { return "rss_list" }
+func (r *ListTool) Name() string { return "rss_list" }
 
-func (r *RSSList) Description() string {
+func (r *ListTool) Description() string {
 	return `List all registered RSS/Atom feeds with their status.`
 }
 
-func (r *RSSList) InputSchema() json.RawMessage {
+func (r *ListTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {}
 	}`)
 }
 
-func (r *RSSList) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolResult, error) {
-	store := tasks.NewFeedStore(r.db)
+func (r *ListTool) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolResult, error) {
+	store := NewFeedStore(r.db)
 	feeds, err := store.ListAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("rss_list: %w", err)
@@ -184,26 +183,26 @@ func (r *RSSList) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolRes
 	return tool.TextResult(sb.String()), nil
 }
 
-var _ tool.Tool = (*RSSList)(nil)
+var _ tool.Tool = (*ListTool)(nil)
 
 // --- rss_preference ---
 
-// RSSPreference saves a user's RSS notification preference.
-type RSSPreference struct {
+// PreferenceTool saves a user's RSS notification preference.
+type PreferenceTool struct {
 	memStore memory.Store
 }
 
-func NewRSSPreference(memStore memory.Store) *RSSPreference {
-	return &RSSPreference{memStore: memStore}
+func NewPreferenceTool(memStore memory.Store) *PreferenceTool {
+	return &PreferenceTool{memStore: memStore}
 }
 
-func (r *RSSPreference) Name() string { return "rss_preference" }
+func (r *PreferenceTool) Name() string { return "rss_preference" }
 
-func (r *RSSPreference) Description() string {
+func (r *PreferenceTool) Description() string {
 	return `Save a user's RSS notification preference (e.g. exclusions, interests). The preference is stored as a user memory and will be considered when scoring articles. Examples: "言語のチェンジログはいらない", "英語の記事だけ送って", "初心者向けの記事がいい"`
 }
 
-func (r *RSSPreference) InputSchema() json.RawMessage {
+func (r *PreferenceTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -219,7 +218,7 @@ type rssPreferenceInput struct {
 	Preference string `json:"preference"`
 }
 
-func (r *RSSPreference) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+func (r *PreferenceTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in rssPreferenceInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return tool.ErrorResult("invalid input: " + err.Error()), nil
@@ -244,4 +243,4 @@ func (r *RSSPreference) Execute(ctx context.Context, input json.RawMessage) (*to
 	return tool.TextResult(fmt.Sprintf("Saved RSS preference: %q", in.Preference)), nil
 }
 
-var _ tool.Tool = (*RSSPreference)(nil)
+var _ tool.Tool = (*PreferenceTool)(nil)

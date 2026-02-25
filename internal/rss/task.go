@@ -1,4 +1,4 @@
-package tasks
+package rss
 
 import (
 	"context"
@@ -18,18 +18,16 @@ import (
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
-// RSSTask implements scheduler.CronTask for RSS feed monitoring and notification.
-type RSSTask struct{}
+// Task implements scheduler.CronTask for RSS feed monitoring and notification.
+type Task struct{}
 
-var _ scheduler.CronTask = (*RSSTask)(nil)
+var _ scheduler.CronTask = (*Task)(nil)
 
-func (t *RSSTask) Name() string        { return "rss" }
-func (t *RSSTask) Description() string { return "RSS フィード監視・通知" }
+func (t *Task) Name() string        { return "rss" }
+func (t *Task) Description() string { return "RSS フィード監視・通知" }
 
-func (t *RSSTask) Setup(ctx context.Context, cc *scheduler.CronContext) error {
-	store := NewFeedStore(cc.DB)
-	return store.Setup(ctx)
-}
+// Setup is a no-op because table creation is handled by Feature.Setup.
+func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
 
 // rssConfig holds task-specific configuration from config.yaml.
 type rssConfig struct {
@@ -46,7 +44,7 @@ func defaultRSSConfig() rssConfig {
 	}
 }
 
-func (t *RSSTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
+func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	rc := defaultRSSConfig()
 	if len(cfg) > 0 {
 		_ = json.Unmarshal(cfg, &rc)
@@ -439,7 +437,7 @@ func notifyChannel(ctx context.Context, cc *scheduler.CronContext, channelID str
 		message = formatSimpleNotification(items)
 	}
 
-	if err := cc.Notifier(ctx, channelID, message, "rss"); err != nil {
+	if _, err := cc.Notifier.Send(ctx, channelID, message, "rss"); err != nil {
 		return fmt.Errorf("notify: %w", err)
 	}
 
@@ -520,18 +518,18 @@ type rssItem struct {
 
 // Atom structs
 type atomFeed struct {
-	XMLName xml.Name   `xml:"feed"`
+	XMLName xml.Name    `xml:"feed"`
 	Entries []atomEntry `xml:"entry"`
 }
 
 type atomEntry struct {
-	Title     string     `xml:"title"`
-	Links     []atomLink `xml:"link"`
-	ID        string     `xml:"id"`
-	Summary   string     `xml:"summary"`
+	Title     string      `xml:"title"`
+	Links     []atomLink  `xml:"link"`
+	ID        string      `xml:"id"`
+	Summary   string      `xml:"summary"`
 	Content   atomContent `xml:"content"`
-	Published string     `xml:"published"`
-	Updated   string     `xml:"updated"`
+	Published string      `xml:"published"`
+	Updated   string      `xml:"updated"`
 }
 
 type atomLink struct {
@@ -666,7 +664,3 @@ func truncate(s string, maxRunes int) string {
 	}
 	return string(runes[:maxRunes]) + "..."
 }
-
-// Ensure RSSTask satisfies the llm.Client dependency at compile time.
-var _ scheduler.CronTask = (*RSSTask)(nil)
-

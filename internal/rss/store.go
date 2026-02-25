@@ -1,4 +1,4 @@
-package tasks
+package rss
 
 import (
 	"context"
@@ -223,6 +223,88 @@ func (s *FeedStore) UnnotifiedItems(ctx context.Context, feedIDs []string) ([]It
 		items = append(items, it)
 	}
 	return items, rows.Err()
+}
+
+// GetFeed returns a single feed by ID.
+func (s *FeedStore) GetFeed(ctx context.Context, id string) (*Feed, error) {
+	var f Feed
+	var lastPolled sql.NullTime
+	var createdBy sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, name, url, channel_id, created_by, enabled, last_polled, created_at, updated_at
+		 FROM rss_feeds WHERE id = ?`, id).
+		Scan(&f.ID, &f.Name, &f.URL, &f.ChannelID, &createdBy, &f.Enabled, &lastPolled, &f.CreatedAt, &f.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if lastPolled.Valid {
+		f.LastPolled = &lastPolled.Time
+	}
+	if createdBy.Valid {
+		f.CreatedBy = createdBy.String
+	}
+	return &f, nil
+}
+
+// UpdateFeed updates a feed's name, url, channel_id, and enabled status.
+func (s *FeedStore) UpdateFeed(ctx context.Context, f *Feed) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE rss_feeds SET name = ?, url = ?, channel_id = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ?`,
+		f.Name, f.URL, f.ChannelID, f.Enabled, f.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("feed not found: %s", f.ID)
+	}
+	return nil
+}
+
+// ListItems returns items for a feed with pagination. Returns items and total count.
+func (s *FeedStore) ListItems(ctx context.Context, feedID string, offset, limit int) ([]Item, int, error) {
+	var total int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM rss_items WHERE feed_id = ?`, feedID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, feed_id, guid, title, link, description, published_at, memory_id, notified, created_at
+		 FROM rss_items WHERE feed_id = ?
+		 ORDER BY created_at DESC LIMIT ? OFFSET ?`, feedID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var items []Item
+	for rows.Next() {
+		var it Item
+		var pubAt sql.NullTime
+		var memID sql.NullString
+		if err := rows.Scan(&it.ID, &it.FeedID, &it.GUID, &it.Title, &it.Link, &it.Description,
+			&pubAt, &memID, &it.Notified, &it.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		if pubAt.Valid {
+			it.PublishedAt = &pubAt.Time
+		}
+		if memID.Valid {
+			it.MemoryID = memID.String
+		}
+		items = append(items, it)
+	}
+	return items, total, rows.Err()
+}
+
+// CountFeeds returns total and enabled feed counts.
+func (s *FeedStore) CountFeeds(ctx context.Context) (total, enabled int, err error) {
+	err = s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END), 0) FROM rss_feeds`).
+		Scan(&total, &enabled)
+	return
 }
 
 // MarkNotified marks items as notified.

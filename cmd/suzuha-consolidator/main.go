@@ -15,8 +15,9 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/haryoiro/suzuha/internal/rss"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/scheduler/tasks"
+	"github.com/haryoiro/suzuha/internal/topics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -86,14 +87,14 @@ func run() error {
 	var sched *scheduler.Scheduler
 	if cfg.Consolidator.Scheduler.Enabled {
 		// Connect to agent notification service.
-		var notifier notification.NotifyFunc
+		var notifier notification.Notifier
 		agentConn, dialErr := grpc.NewClient(
 			cfg.Consolidator.AgentNotify,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if dialErr != nil {
 			logger.Warn("scheduler: agent notification unavailable, notifications disabled", "error", dialErr)
-			notifier = notification.Nop()
+			notifier = notification.NopNotifier{}
 		} else {
 			defer agentConn.Close()
 			notifier = notification.NewGRPCNotifier(agentConn)
@@ -110,13 +111,13 @@ func run() error {
 			}
 		}
 
-		// Wrap notifier with quiet hours if configured.
+		// Wrap notifier with quiet hours middleware if configured.
 		if cfg.Consolidator.Scheduler.QuietHours.Enabled {
-			notifier = notification.WithQuietHours(notifier, notification.QuietHoursConfig{
+			notifier = notification.WithQuietHours(notification.QuietHoursConfig{
 				Start:    cfg.Consolidator.Scheduler.QuietHours.Start,
 				End:      cfg.Consolidator.Scheduler.QuietHours.End,
 				Location: schedulerLoc,
-			}, logger)
+			}, logger)(notifier)
 			logger.Info("scheduler: quiet hours enabled",
 				"start", cfg.Consolidator.Scheduler.QuietHours.Start,
 				"end", cfg.Consolidator.Scheduler.QuietHours.End,
@@ -124,21 +125,32 @@ func run() error {
 			)
 		}
 
-		// Build CronContext with shared services.
-		cc := &scheduler.CronContext{
-			LLM:           llmClient,
-			Memory:        store,
-			Notifier:      notifier,
-			ReplyNotifier: notification.NewReplyNotifier(agentConn),
-			DB:            store.DB(),
-			Logger:        logger,
-			Timezone:      schedulerLoc,
+		// Register features.
+		features := []scheduler.Feature{
+			rss.New(store.DB(), store),
+			topics.New(),
 		}
 
-		// Create and configure scheduler.
 		taskRegistry := scheduler.NewRegistry()
-		taskRegistry.Register(&tasks.RSSTask{})
-		taskRegistry.Register(&tasks.TopicsTask{})
+		for _, f := range features {
+			if setupErr := f.Setup(ctx, store.DB()); setupErr != nil {
+				return fmt.Errorf("feature %s setup: %w", f.Name(), setupErr)
+			}
+			for _, t := range f.Tasks() {
+				taskRegistry.Register(t)
+			}
+		}
+
+		// Build CronContext with shared services.
+		cc := &scheduler.CronContext{
+			LLM:          llmClient,
+			Memory:       store,
+			Notifier:     notifier,
+			DB:           store.DB(),
+			Logger:       logger,
+			Timezone:     schedulerLoc,
+			SystemPrompt: cfg.Agent.SystemPrompt,
+		}
 
 		sched = scheduler.New(taskRegistry, cc, logger)
 

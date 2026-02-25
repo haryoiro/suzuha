@@ -32,13 +32,16 @@ type CronTask interface {
 	Execute(ctx context.Context, cc *CronContext, cfg json.RawMessage) error
 }
 
-// CronContext provides shared services to all CronTask implementations.
+// CronContext provides shared services and environment to all CronTask implementations.
 type CronContext struct {
-	LLM           *llm.Client
-	Memory        memory.Store
-	Notifier      notification.NotifyFunc
-	ReplyNotifier *notification.ReplyNotifier // Optional: for tasks that need reply/message ID support.
-	DB            *sql.DB
-	Logger        *slog.Logger
-	Timezone      *time.Location // Scheduler-level timezone. Nil defaults to UTC.
+	// Services
+	LLM      *llm.Client
+	Memory   memory.Store
+	Notifier notification.Notifier // Unified notifier (Send + Reply).
+	DB       *sql.DB
+	Logger   *slog.Logger
+
+	// Environment
+	Timezone     *time.Location // Scheduler-level timezone. Nil defaults to UTC.
+	SystemPrompt string         // Loaded from IDENTITY.md + SOUL.md. Empty if not configured.
 }

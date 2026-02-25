@@ -1,4 +1,4 @@
-package tasks
+package topics
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -31,8 +29,8 @@ const (
 	actionSupplement topicAction = "SUPPLEMENT"
 )
 
-// TopicsTask implements scheduler.CronTask for periodic topic posting with opt-in mentions.
-type TopicsTask struct {
+// Task implements scheduler.CronTask for periodic topic posting with opt-in mentions.
+type Task struct {
 	mu                    sync.Mutex
 	consecutiveNoResponse int
 	skipCounter           int
@@ -41,16 +39,16 @@ type TopicsTask struct {
 	nowFunc func() time.Time
 }
 
-var _ scheduler.CronTask = (*TopicsTask)(nil)
+var _ scheduler.CronTask = (*Task)(nil)
 
-func (t *TopicsTask) Name() string        { return "topics" }
-func (t *TopicsTask) Description() string { return "定期的に話題を提供・メンション" }
+func (t *Task) Name() string        { return "topics" }
+func (t *Task) Description() string { return "定期的に話題を提供・メンション" }
 
-func (t *TopicsTask) Setup(_ context.Context, _ *scheduler.CronContext) error {
+func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error {
 	return nil
 }
 
-func (t *TopicsTask) now() time.Time {
+func (t *Task) now() time.Time {
 	if t.nowFunc != nil {
 		return t.nowFunc()
 	}
@@ -61,8 +59,6 @@ func (t *TopicsTask) now() time.Time {
 type topicsConfig struct {
 	ChannelID string   `json:"channel_id"`
 	Topics    []string `json:"topics"`
-	PromptDir string   `json:"prompt_dir"`
-	Timezone  string   `json:"timezone"` // IANA timezone for time-aware prompts.
 }
 
 // optInUser holds a user who opted in to mentions along with their Discord ID.
@@ -86,7 +82,7 @@ type actionDecision struct {
 	ReplyTarget *previousTopic // non-nil for REPLY and SUPPLEMENT
 }
 
-func (t *TopicsTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
+func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	var tc topicsConfig
 	if len(cfg) > 0 {
 		_ = json.Unmarshal(cfg, &tc)
@@ -133,8 +129,8 @@ func (t *TopicsTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg
 	t.skipCounter = backoff
 	t.mu.Unlock()
 
-	// 1. Load system prompt from IDENTITY.md / SOUL.md.
-	systemPrompt := loadPromptFiles(tc.PromptDir)
+	// 1. System prompt from CronContext (loaded at startup from IDENTITY.md + SOUL.md).
+	systemPrompt := cc.SystemPrompt
 
 	// 2. Get opt-in users.
 	users, err := getOptInUsers(ctx, cc.DB)
@@ -156,9 +152,9 @@ func (t *TopicsTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg
 	}
 
 	// 6. Resolve timezone and build time hint.
-	loc := resolveTimezone(tc.Timezone)
-	if tc.Timezone == "" && cc.Timezone != nil {
-		loc = cc.Timezone
+	loc := cc.Timezone
+	if loc == nil {
+		loc = time.UTC
 	}
 	now := t.now().In(loc)
 	timeHint := buildTimeHint(now)
@@ -171,34 +167,36 @@ func (t *TopicsTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg
 
 	// 9. Generate message via LLM.
 	message, err := generateTopicMessageV2(ctx, cc, generateTopicParams{
-		SystemPrompt:    systemPrompt,
-		Action:          decision.Action,
-		TopicSeed:       topicSeed,
-		ReplyTarget:     decision.ReplyTarget,
-		UserContexts:    userContexts,
-		RecentMemories:  recentMemories,
-		PreviousTopics:  previousTopics,
-		TimeHint:        timeHint,
-		Now:             now,
+		SystemPrompt:   systemPrompt,
+		Action:         decision.Action,
+		TopicSeed:      topicSeed,
+		ReplyTarget:    decision.ReplyTarget,
+		UserContexts:   userContexts,
+		RecentMemories: recentMemories,
+		PreviousTopics: previousTopics,
+		TimeHint:       timeHint,
+		Now:            now,
 	})
 	if err != nil {
 		cc.Logger.Error("topics: generate message", "error", err)
 		return nil
 	}
 
-	// 10. Send notification.
+	// 10. Send notification via unified Notifier.
 	var messageID string
 	replyTo := ""
 	if decision.ReplyTarget != nil {
 		replyTo = decision.ReplyTarget.MessageID
 	}
 
-	if cc.ReplyNotifier != nil && replyTo != "" {
-		messageID, err = cc.ReplyNotifier.Reply(ctx, tc.ChannelID, message, replyTo, "topics")
-	} else if cc.ReplyNotifier != nil {
-		messageID, err = cc.ReplyNotifier.Notify(ctx, tc.ChannelID, message, "topics")
+	if replyTo != "" {
+		result, sendErr := cc.Notifier.Reply(ctx, tc.ChannelID, message, replyTo, "topics")
+		messageID = result.MessageID
+		err = sendErr
 	} else {
-		err = cc.Notifier(ctx, tc.ChannelID, message, "topics")
+		result, sendErr := cc.Notifier.Send(ctx, tc.ChannelID, message, "topics")
+		messageID = result.MessageID
+		err = sendErr
 	}
 	if err != nil {
 		cc.Logger.Error("topics: notify", "error", err)
@@ -247,22 +245,6 @@ func hasChannelActivity(ctx context.Context, db *sql.DB, channelID string, since
 		channelID, since,
 	).Scan(&exists)
 	return err == nil && exists == 1
-}
-
-// loadPromptFiles reads IDENTITY.md and SOUL.md from the given directory.
-func loadPromptFiles(dir string) string {
-	if dir == "" {
-		return ""
-	}
-	var parts []string
-	for _, name := range []string{"IDENTITY.md", "SOUL.md"} {
-		data, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			continue
-		}
-		parts = append(parts, strings.TrimSpace(string(data)))
-	}
-	return strings.Join(parts, "\n\n")
 }
 
 // getOptInUsers queries users who have opted in to mentions.
@@ -368,18 +350,6 @@ func markTopicResponse(ctx context.Context, cc *scheduler.CronContext, pt *previ
 			cc.Logger.Debug("topics: update topic response status", "error", err)
 		}
 	}
-}
-
-// resolveTimezone parses a timezone string, falling back to UTC.
-func resolveTimezone(tz string) *time.Location {
-	if tz == "" {
-		return time.UTC
-	}
-	loc, err := time.LoadLocation(tz)
-	if err != nil {
-		return time.UTC
-	}
-	return loc
 }
 
 // buildTimeHint returns a time-of-day hint for the LLM prompt.
