@@ -52,6 +52,16 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	agentH := handler.NewAgentHandler(agentBase, logger)
 	mux.HandleFunc("POST /api/agent/compact", agentH.Compact)
 
+	// RSS feeds CRUD.
+	rssH := handler.NewRSSHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/feeds", rssH.List)
+	mux.HandleFunc("POST /api/feeds", rssH.Create)
+	mux.HandleFunc("GET /api/feeds/stats", rssH.Stats)
+	mux.HandleFunc("GET /api/feeds/{id}", rssH.Get)
+	mux.HandleFunc("PUT /api/feeds/{id}", rssH.Update)
+	mux.HandleFunc("DELETE /api/feeds/{id}", rssH.Delete)
+	mux.HandleFunc("GET /api/feeds/{id}/items", rssH.ListItems)
+
 	// Agent context proxy.
 	ctxH := handler.NewContextHandler(cfg.AgentContext, logger)
 	mux.HandleFunc("GET /api/context", ctxH.Proxy)
