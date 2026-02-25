@@ -113,7 +113,7 @@ Topics タスクは `last_user_message_at > 前回投稿時刻` で反応有無�
 
 ## RSS 関連テーブル
 
-RSS タスクが使用。`internal/scheduler/tasks/rss_store.go` で操作。
+RSS Feature が使用。`internal/rss/store.go` で操作。
 
 ### rss_feeds
 

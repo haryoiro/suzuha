@@ -22,32 +22,51 @@ suzuha-consolidator
                               │
                               ├── LLM Client      (LLM 呼び出し)
                               ├── Memory Store    (長期記憶の読み書き)
-                              ├── NotifyFunc      (Discord 通知)
-                              ├── ReplyNotifier   (ID 付き通知 + リプライ)
+                              ├── Notifier        (統一通知: Send + Reply)
                               ├── *sql.DB         (タスク固有テーブル)
-                              └── Logger
+                              ├── Logger
+                              ├── Timezone        (スケジューラレベル TZ)
+                              └── SystemPrompt    (IDENTITY.md + SOUL.md)
 ```
 
 ### 通知パイプライン
 
-CronTask が Discord にメッセージを送る方法は 2 つ。詳細は `notification.md` を参照。
-
-**NotifyFunc** — シンプルな送信。Quiet Hours ラッパー付き。
+CronTask が Discord にメッセージを送るには統一 `Notifier` インターフェースを使う。詳細は `notification.md` を参照。
 
 ```
-CronTask → Notifier(channelID, text, source) → gRPC → Agent → Discord
+CronTask → cc.Notifier.Send(ctx, channelID, text, source) → (SendResult, error)
+CronTask → cc.Notifier.Reply(ctx, channelID, text, replyToID, source) → (SendResult, error)
 ```
 
-**ReplyNotifier** — メッセージ ID 取得 + リプライ対応。
+Quiet Hours Middleware は Send と Reply の両方を抑制する。
 
+## Feature パターン
+
+各機能（RSS、Topics 等）は `scheduler.Feature` を実装し、ツール・タスク・DB セットアップを1つのパッケージにまとめる。
+
+```go
+// scheduler/feature.go
+type Feature interface {
+    Name() string
+    Setup(ctx context.Context, db *sql.DB) error
+    Tools() []tool.Tool
+    Tasks() []CronTask
+}
 ```
-CronTask → ReplyNotifier.Notify(channelID, text, source) → (messageID, error)
-CronTask → ReplyNotifier.Reply(channelID, text, replyToID, source) → (messageID, error)
+
+main.go で Feature 配列をループして登録:
+
+```go
+features := []scheduler.Feature{rss.New(db, mem), topics.New()}
+for _, f := range features {
+    f.Setup(ctx, db)
+    for _, t := range f.Tasks() { taskRegistry.Register(t) }
+}
 ```
 
 ## 組み込みタスク
 
-### RSS (`rss`)
+### RSS (`internal/rss/`)
 
 RSS/Atom フィードを監視し、ユーザーの興味に合う新着記事を Discord に通知する。
 
@@ -59,7 +78,14 @@ RSS/Atom フィードを監視し、ユーザーの興味に合う新着記事�
 4. ユーザーの興味プロファイル（user 型メモリ）を収集
 5. **Phase A**: ベクトル類似度で粗いフィルタ（`vector_threshold`）
 6. **Phase B**: LLM バッチスコアリングでスコアが閾値以上の記事を選別（`notify_threshold`）
-7. LLM で suzuha の口調の通知メッセージを生成し Discord に送信
+7. LLM で suzuha の口調の通知メッセージを生成し `cc.Notifier.Send` で Discord に送信
+
+**Agent 側ツール:**
+
+- `rss_subscribe` — フィード登録
+- `rss_unsubscribe` — フィード削除
+- `rss_list` — フィード一覧
+- `rss_preference` — ユーザーの通知設定
 
 **設定例:**
 
@@ -76,9 +102,7 @@ consolidator:
           max_articles_per_notify: 5
 ```
 
-フィードの登録・管理は `rss_feeds` テーブルを直接操作する（将来の管理画面対応予定）。
-
-### Topics (`topics`)
+### Topics (`internal/topics/`)
 
 定期的にチャンネルに話題を投稿する。コンテキスト（最近の会話、過去の話題の反応状況、時間帯）を考慮して LLM が生成する。
 
@@ -93,7 +117,7 @@ consolidator:
    - `REPLY`: 過去の話題にリプライして会話を続ける
    - `SUPPLEMENT`: 過去の話題に「ちなみに〜」で補足
 6. LLM でメッセージ生成（時間帯ヒント、反応履歴、ユーザーコンテキスト付き）
-7. 送信（REPLY/SUPPLEMENT は `ReplyNotifier.Reply` でスレッド返信）
+7. 送信（REPLY/SUPPLEMENT は `cc.Notifier.Reply` でスレッド返信、NEW は `cc.Notifier.Send`）
 8. 長期記憶に保存（message_id 付き → 次回の REPLY 対象に）
 
 **バックオフの仕組み:**
@@ -120,9 +144,9 @@ consolidator:
             - "プログラミング"
             - "最近のニュース"
             - "ゲーム"
-          prompt_dir: "prompts/"
-          timezone: "Asia/Tokyo"
 ```
+
+`timezone` と `prompt_dir` はタスク config ではなく、`CronContext.Timezone` と `CronContext.SystemPrompt` から取得する。
 
 ## 設定
 
@@ -134,10 +158,10 @@ consolidator:
   agent_notify: "localhost:50052"
   scheduler:
     enabled: true
-    timezone: "Asia/Tokyo"         # IANA タイムゾーン。cron 式の評価に使用
+    timezone: "Asia/Tokyo"         # IANA タイムゾーン。cron 式の評価 + CronContext.Timezone に使用
     quiet_hours:
       enabled: true
-      start: "23:00"               # この時間帯は NotifyFunc 経由の通知を抑制
+      start: "23:00"               # この時間帯は全通知（Send + Reply）を抑制
       end: "08:00"
     jobs:
       - name: "rss-check"
@@ -166,7 +190,7 @@ consolidator:
 
 ### Quiet Hours
 
-`quiet_hours` を有効にすると、指定した時間帯の通知を抑制する。
+`quiet_hours` を有効にすると、指定した時間帯の通知を抑制する（Send と Reply の両方）。
 日跨ぎ（例: `23:00`〜`08:00`）にも対応。詳細は `notification.md` 参照。
 
 ## CronContext で使えるサービス
@@ -175,55 +199,70 @@ consolidator:
 |-----------|-----|------|
 | `LLM` | `*llm.Client` | LLM 呼び出し (Complete, Embed) |
 | `Memory` | `memory.Store` | 長期記憶の検索・保存 |
-| `Notifier` | `NotifyFunc` | Discord チャンネルへの通知送信 |
-| `ReplyNotifier` | `*notification.ReplyNotifier` | ID 付き通知 + リプライ送信 |
+| `Notifier` | `notification.Notifier` | 統一通知（Send + Reply → SendResult） |
 | `DB` | `*sql.DB` | SQLite への直接クエリ（タスク固有テーブル用） |
 | `Logger` | `*slog.Logger` | 構造化ログ |
+| `Timezone` | `*time.Location` | スケジューラレベルのタイムゾーン |
+| `SystemPrompt` | `string` | IDENTITY.md + SOUL.md から読み込み済み |
 
-## CronTask の実装方法
+## 新機能の追加方法
 
-### 1. CronTask インターフェースを実装
+### 1. Feature パッケージを作成
 
 ```go
-// internal/scheduler/tasks/example.go
-package tasks
+// internal/myfeature/feature.go
+package myfeature
 
-type ExampleTask struct{}
+type Feature struct{}
 
-func (t *ExampleTask) Name() string        { return "example" }
-func (t *ExampleTask) Description() string { return "サンプルタスク" }
+func New() *Feature { return &Feature{} }
+func (f *Feature) Name() string { return "myfeature" }
+func (f *Feature) Setup(ctx context.Context, db *sql.DB) error { return nil }
+func (f *Feature) Tools() []tool.Tool { return nil }
+func (f *Feature) Tasks() []scheduler.CronTask { return []scheduler.CronTask{&Task{}} }
+```
 
-func (t *ExampleTask) Setup(ctx context.Context, cc *scheduler.CronContext) error {
-    return nil
-}
+### 2. CronTask を実装
 
-func (t *ExampleTask) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
+```go
+// internal/myfeature/task.go
+package myfeature
+
+type Task struct{}
+
+func (t *Task) Name() string        { return "myfeature" }
+func (t *Task) Description() string { return "サンプルタスク" }
+func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
+
+func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
     var conf struct {
         ChannelID string `json:"channel_id"`
     }
     json.Unmarshal(cfg, &conf)
-    return cc.Notifier(ctx, conf.ChannelID, "Hello!", "example")
+    _, err := cc.Notifier.Send(ctx, conf.ChannelID, "Hello!", "myfeature")
+    return err
 }
 ```
 
-### 2. レジストリに登録
-
-`cmd/suzuha-consolidator/main.go`:
+### 3. main.go の features 配列に追加
 
 ```go
-taskRegistry := scheduler.NewRegistry()
-taskRegistry.Register(&tasks.ExampleTask{})
+features := []scheduler.Feature{
+    rss.New(db, mem),
+    topics.New(),
+    myfeature.New(),  // ← 追加
+}
 ```
 
-### 3. config.yaml にジョブ定義
+### 4. config.yaml にジョブ定義
 
 ```yaml
 consolidator:
   scheduler:
     enabled: true
     jobs:
-      - name: "example-notify"
-        task: "example"
+      - name: "myfeature-notify"
+        task: "myfeature"
         cron: "@every 1h"
         config:
           channel_id: "123456789"
@@ -234,19 +273,26 @@ consolidator:
 ```
 internal/
   scheduler/
+    feature.go       # Feature インターフェース
     task.go          # CronTask interface, CronContext
     registry.go      # TaskRegistry
     scheduler.go     # Scheduler (robfig/cron/v3 ラッパー)
-    tasks/
-      rss.go         # RSSTask
-      rss_store.go   # FeedStore (rss_feeds, rss_items テーブル操作)
-      topics.go      # TopicsTask
+
+  rss/               # Feature: RSS フィード監視
+    feature.go       # Feature 実装
+    task.go          # RSSTask (フィード取得 + スコアリング + 通知)
+    tools.go         # Agent ツール (subscribe, unsubscribe, list, preference)
+    store.go         # FeedStore (rss_feeds, rss_items テーブル操作)
+
+  topics/            # Feature: 話題提供
+    feature.go       # Feature 実装
+    task.go          # TopicsTask (コンテキスト対応話題生成)
 
   notification/
-    client.go          # NotifyFunc, NewGRPCNotifier
-    reply_notifier.go  # ReplyNotifier
-    server.go          # gRPC NotificationServer (Agent 側)
-    quiet.go           # WithQuietHours デコレータ
+    notifier.go      # Notifier インターフェース, SendResult, NopNotifier
+    grpc_notifier.go # GRPCNotifier
+    middleware.go    # Middleware, Chain, WithQuietHours
+    server.go        # gRPC NotificationServer (Agent 側)
 
 proto/
   notification/v1/

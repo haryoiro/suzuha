@@ -11,29 +11,53 @@ Consolidator プロセスから Agent プロセスを経由して Discord にメ
 スケジューラのタスク（RSS、Topics 等）が Discord チャンネルにメッセージを投稿する際に使う。
 
 ```
-CronTask ─── NotifyFunc ──→ gRPC ──→ Agent NotificationServer ──→ chat.Interface ──→ Discord
-         └── ReplyNotifier ─┘
+CronTask ─── Notifier.Send/Reply ──→ gRPC ──→ Agent NotificationServer ──→ chat.Interface ──→ Discord
 ```
 
-## 二つの送信経路
+## 統一 Notifier インターフェース
 
-### NotifyFunc（基本経路）
+```go
+// notification/notifier.go
+type SendResult struct {
+    MessageID string
+}
 
-`func(ctx, channelID, content, source string) error`
+type Notifier interface {
+    Send(ctx, channelID, content, source string) (SendResult, error)
+    Reply(ctx, channelID, content, replyToID, source string) (SendResult, error)
+}
+```
 
-- 戻り値はエラーのみ。メッセージ ID は返さない
-- Quiet Hours ラッパーで深夜帯の通知を抑制可能
-- RSS タスクなどメッセージ ID が不要なタスクが使う
+- `Send`: 通常のメッセージ送信。メッセージ ID を返す
+- `Reply`: 既存メッセージへのリプライ。プラットフォームが非対応なら通常送信にフォールバック
+- 全タスクがこの単一インターフェースを使う（RSS は Send、Topics は Send + Reply）
 
-### ReplyNotifier（拡張経路）
+## Middleware パターン
 
-`Notify(ctx, channelID, content, source) → (messageID, error)`
-`Reply(ctx, channelID, content, replyToID, source) → (messageID, error)`
+```go
+// notification/middleware.go
+type Middleware func(Notifier) Notifier
 
-- メッセージ ID を返す → 後から Reply で参照できる
-- Topics タスクが使う: 話題投稿の ID を記憶に保存し、次回 REPLY アクション時にリプライ先として指定
+func Chain(mws ...Middleware) Middleware
+func WithQuietHours(cfg QuietHoursConfig, logger *slog.Logger) Middleware
+```
 
-両方とも内部では同じ gRPC `SendMessage` を呼ぶ。違いは `reply_to_message_id` フィールドの有無とレスポンスの `message_id` を呼び出し元に返すかどうか。
+Middleware は `Notifier` をラップして追加の振る舞いを付与する。
+`Chain(a, b)(notifier)` = `a(b(notifier))`（最初が最外層）。
+
+### Quiet Hours
+
+```go
+notifier = WithQuietHours(QuietHoursConfig{
+    Start:    "23:00",
+    End:      "08:00",
+    Location: loc,
+}, logger)(notifier)
+```
+
+- Send と Reply の両方を抑制（旧実装では NotifyFunc のみだった）
+- `Start` > `End`（日跨ぎ）にも対応。分単位で比較
+- 設定は `config.yaml` の `consolidator.scheduler.quiet_hours`
 
 ## gRPC プロトコル
 
@@ -94,29 +118,13 @@ type IDSender interface {
 
 Discord 実装はこの 3 つすべてを満たす。CLI 実装は Interface のみ。型アサーション `chat.(Replier)` で能力を判定する。
 
-## Quiet Hours
-
-`notification/quiet.go` — NotifyFunc をラップして深夜帯の通知を抑制するデコレータ。
-
-```go
-notifier = WithQuietHours(notifier, QuietHoursConfig{
-    Start:    "23:00",
-    End:      "08:00",
-    Location: loc,
-}, logger)
-```
-
-- `Start` > `End`（日跨ぎ）にも対応。分単位で比較
-- 設定は `config.yaml` の `consolidator.scheduler.quiet_hours`
-- **NotifyFunc のみに適用**。ReplyNotifier には適用されない（必要に応じて別途ラップ）
-
 ## ファイル構成
 
 ```
 internal/notification/
-  client.go          # NotifyFunc, NewGRPCNotifier
-  reply_notifier.go  # ReplyNotifier（ID 付き送信 + リプライ）
+  notifier.go        # Notifier インターフェース, SendResult, NopNotifier
+  grpc_notifier.go   # GRPCNotifier（gRPC 経由の Notifier 実装）
+  middleware.go       # Middleware, Chain, WithQuietHours
   server.go          # gRPC サーバー（Agent 側、chat.Interface に委譲）
-  quiet.go           # WithQuietHours デコレータ
   server_test.go     # サーバーのルーティングテスト
 ```

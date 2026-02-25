@@ -39,8 +39,10 @@ graph LR
 - `chat` — プラットフォーム抽象 + 実装 (discord, cli)
 - `tool` — ツールインターフェース、Registry、builtin ツール、remote ツール
 - `transport` — リモートツール通信 (WebSocket, MCP)
-- `notification` — 通知パイプライン (gRPC クライアント/サーバー、quiet hours、ReplyNotifier)。詳細は `notification.md`
-- `scheduler` — 定期実行ジョブ (CronTask、RSS、Topics)。Consolidator プロセス内で動作。詳細は `docs/scheduler.md`
+- `notification` — 統一 Notifier インターフェース + Middleware パターン。詳細は `notification.md`
+- `scheduler` — 定期実行ジョブ (CronTask, CronContext, Feature, Registry)。Consolidator プロセス内で動作。詳細は `docs/scheduler.md`
+- `rss` — Feature: RSS フィード監視（ツール + タスク + DB ストア）
+- `topics` — Feature: 定期的な話題提供（タスクのみ）
 - `admin` — 管理画面バックエンド (REST API + SPA 配信)
 - `event` — EventBus (chan ベース)
 - `config` — YAML 設定ロード
@@ -54,6 +56,8 @@ graph TD
   consolidator --> llm & memory & notification & scheduler
   admin --> memory & user
   scheduler --> notification
+  rss --> scheduler & tool & memory
+  topics --> scheduler & memory
   llm --> tool
   tool/builtin & tool/remote --> transport
   chat/discord & chat/cli -.-> chat.Interface
@@ -64,8 +68,35 @@ graph TD
 - `memory` は agent と consolidator の両方から使用（同一 DB）
 - embedding 関数は `main.go` でクロージャとして注入（循環依存回避）
 
+## Feature パターン
+
+機能単位のパッケージ分離。各 Feature は `scheduler.Feature` を実装し、
+ツール・タスク・DB セットアップを1つのパッケージにまとめる。
+
+```go
+// scheduler/feature.go
+type Feature interface {
+    Name() string
+    Setup(ctx context.Context, db *sql.DB) error  // スキーマ作成等（冪等）
+    Tools() []tool.Tool                            // agent 用。なければ nil
+    Tasks() []CronTask                             // consolidator 用。なければ nil
+}
+```
+
+main.go で Feature 配列をループして Setup → Tools/Tasks を登録:
+```go
+features := []scheduler.Feature{rss.New(db, mem), topics.New()}
+for _, f := range features {
+    f.Setup(ctx, db)
+    for _, t := range f.Tools() { registry.Register(t) }
+    for _, t := range f.Tasks() { taskRegistry.Register(t) }
+}
+```
+
 ## 主要インターフェース
 
+- `scheduler.Feature` (`scheduler/feature.go`) — Name, Setup, Tools, Tasks。機能単位パッケージの抽象
+- `notification.Notifier` (`notification/notifier.go`) — Send, Reply。統一通知インターフェース。詳細は `notification.md`
 - `chat.Interface` (`chat/chat.go`) — Run, Send。プラットフォーム抽象。Optional: `Replier`, `IDSender`。詳細は `notification.md`
 - `tool.Tool` (`tool/tool.go`) — Name, Description, InputSchema, Execute。詳細は `tools.md`
 - `memory.Store` (`memory/store.go`) — Save, Search, SearchByType, SearchRecent。詳細は `data.md`
