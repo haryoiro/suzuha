@@ -15,6 +15,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/haryoiro/suzuha/internal/explore"
 	"github.com/haryoiro/suzuha/internal/rss"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/topics"
@@ -129,6 +130,7 @@ func run() error {
 		features := []scheduler.Feature{
 			rss.New(store.DB(), store),
 			topics.New(),
+			explore.New(),
 		}
 
 		taskRegistry := scheduler.NewRegistry()
