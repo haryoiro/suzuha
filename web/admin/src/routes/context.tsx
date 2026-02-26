@@ -32,8 +32,8 @@ function MessageRow({ msg }: { msg: ContextMessage }) {
         style={{
           color: "rgba(255,255,255,0.5)",
           flexShrink: 0,
-          minWidth: 80,
           fontWeight: 500,
+          fontSize: 12,
         }}
       >
         {msg.user_name ?? ""}
@@ -91,20 +91,22 @@ export function ContextPage() {
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: 12,
+          flexWrap: "wrap",
+          gap: 8,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>Context</h2>
           <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-            {data.count} messages
+            {data.count} msgs
           </span>
           <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-            ~{data.estimated_tokens.toLocaleString()} tokens
+            ~{data.estimated_tokens.toLocaleString()} tok
           </span>
           <Progress
             percent={usagePct}
             size="small"
-            style={{ width: 120, margin: 0 }}
+            style={{ width: 100, margin: 0 }}
             strokeColor={usagePct > 80 ? "#f5222d" : usagePct > 60 ? "#faad14" : "#52c41a"}
             format={(pct) => `${pct}%`}
           />

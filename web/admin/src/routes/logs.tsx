@@ -35,7 +35,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
         fontSize: 12,
         borderBottom: "1px solid rgba(255,255,255,0.06)",
         alignItems: "baseline",
-        whiteSpace: "nowrap",
+        flexWrap: "wrap",
       }}
     >
       <span style={{ color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>
@@ -84,6 +84,8 @@ export function LogsPage() {
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: 12,
+          flexWrap: "wrap",
+          gap: 8,
         }}
       >
         <Space>

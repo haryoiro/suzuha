@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ConfigProvider, Layout, Menu, theme } from "antd";
+import { ConfigProvider, Layout, Menu, theme, Drawer, Button, Grid } from "antd";
 import {
   DashboardOutlined,
   DatabaseOutlined,
@@ -8,6 +8,7 @@ import {
   TeamOutlined,
   MessageOutlined,
   WifiOutlined,
+  MenuOutlined,
 } from "@ant-design/icons";
 import { DashboardPage } from "./routes/index";
 import { MemoriesPage } from "./routes/memories/index";
@@ -18,7 +19,8 @@ import { UsersPage } from "./routes/users/index";
 import { ContextPage } from "./routes/context";
 import { FeedsPage } from "./routes/feeds/index";
 
-const { Sider, Content } = Layout;
+const { Sider, Header, Content } = Layout;
+const { useBreakpoint } = Grid;
 
 type Page =
   | { key: "dashboard" }
@@ -32,6 +34,9 @@ type Page =
 
 export function App() {
   const [page, setPage] = useState<Page>({ key: "dashboard" });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
 
   const menuItems = [
     { key: "dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
@@ -68,6 +73,17 @@ export function App() {
     }
   }
 
+  const menuProps = {
+    theme: "dark" as const,
+    mode: "inline" as const,
+    selectedKeys: [page.key === "memory-detail" ? "memories" : page.key],
+    items: menuItems,
+    onClick: ({ key }: { key: string }) => {
+      setPage({ key } as Page);
+      setDrawerOpen(false);
+    },
+  };
+
   return (
     <ConfigProvider
       theme={{
@@ -79,30 +95,77 @@ export function App() {
       }}
     >
       <Layout style={{ minHeight: "100vh" }}>
-        <Sider width={200} theme="dark">
-          <div
-            style={{
-              padding: "16px",
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "#fff",
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
-            }}
+        {!isMobile && (
+          <Sider width={200} theme="dark">
+            <div
+              style={{
+                padding: "16px",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "#fff",
+                borderBottom: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              suzuha admin
+            </div>
+            <Menu {...menuProps} />
+          </Sider>
+        )}
+
+        {isMobile && (
+          <Drawer
+            placement="left"
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            width={240}
+            styles={{ body: { padding: 0, background: "#001529" } }}
           >
-            suzuha admin
-          </div>
-          <Menu
-            theme="dark"
-            mode="inline"
-            selectedKeys={[
-              page.key === "memory-detail" ? "memories" : page.key,
-            ]}
-            items={menuItems}
-            onClick={({ key }) => setPage({ key } as Page)}
-          />
-        </Sider>
+            <div
+              style={{
+                padding: "16px",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "#fff",
+                borderBottom: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              suzuha admin
+            </div>
+            <Menu {...menuProps} />
+          </Drawer>
+        )}
+
         <Layout>
-          <Content style={{ padding: 24, overflow: "auto" }}>
+          {isMobile && (
+            <Header
+              style={{
+                padding: "0 12px",
+                background: "#001529",
+                display: "flex",
+                alignItems: "center",
+                height: 48,
+                lineHeight: "48px",
+              }}
+            >
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={() => setDrawerOpen(true)}
+                style={{ color: "#fff", fontSize: 18 }}
+              />
+              <span
+                style={{
+                  color: "#fff",
+                  fontWeight: 700,
+                  marginLeft: 12,
+                  fontSize: 15,
+                }}
+              >
+                suzuha admin
+              </span>
+            </Header>
+          )}
+          <Content style={{ padding: isMobile ? 12 : 24, overflow: "auto" }}>
             {renderPage()}
           </Content>
         </Layout>

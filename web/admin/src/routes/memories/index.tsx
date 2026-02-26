@@ -80,6 +80,7 @@ export function MemoriesPage({ onViewDetail }: Props) {
       title: "Updated",
       dataIndex: "updated_at",
       width: 180,
+      responsive: ["md"],
       render: (v: string) => new Date(v).toLocaleString("ja-JP"),
     },
     {
@@ -163,9 +164,11 @@ export function MemoriesPage({ onViewDetail }: Props) {
           display: "flex",
           justifyContent: "space-between",
           marginBottom: 16,
+          flexWrap: "wrap",
+          gap: 8,
         }}
       >
-        <Space>
+        <Space wrap>
           <Input
             placeholder="Search..."
             prefix={<SearchOutlined />}
@@ -175,7 +178,7 @@ export function MemoriesPage({ onViewDetail }: Props) {
               setQuery(searchInput);
               setOffset(0);
             }}
-            style={{ width: 240 }}
+            style={{ width: 200 }}
             allowClear
           />
           <Select
@@ -208,6 +211,7 @@ export function MemoriesPage({ onViewDetail }: Props) {
         columns={columns}
         dataSource={data?.data}
         loading={isLoading}
+        scroll={{ x: 500 }}
         pagination={{
           current: Math.floor(offset / limit) + 1,
           pageSize: limit,

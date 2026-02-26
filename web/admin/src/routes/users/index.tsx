@@ -49,6 +49,7 @@ export function UsersPage() {
       title: "Platforms",
       dataIndex: "platforms",
       key: "platforms",
+      responsive: ["md"],
       render: (platforms?: PlatformLink[]) =>
         platforms?.map((p) => (
           <Tag key={`${p.platform}-${p.platform_user_id}`}>
@@ -61,6 +62,7 @@ export function UsersPage() {
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
+      responsive: ["md"],
       render: (v: string) => new Date(v).toLocaleString(),
     },
   ];
@@ -79,7 +81,7 @@ export function UsersPage() {
             setOffset(0);
           }}
           allowClear
-          style={{ width: 300 }}
+          style={{ width: "100%", maxWidth: 300 }}
         />
       </Space>
 
@@ -88,6 +90,7 @@ export function UsersPage() {
         dataSource={data?.data ?? []}
         rowKey="id"
         loading={isLoading}
+        scroll={{ x: 400 }}
         pagination={{
           total: data?.total ?? 0,
           current: Math.floor(offset / limit) + 1,
@@ -124,12 +127,13 @@ function UserDetailModal({
       open={!!userId}
       onCancel={onClose}
       footer={null}
-      width={700}
+      width="90vw"
+      style={{ maxWidth: 700 }}
     >
       {user && (
         <Space direction="vertical" style={{ width: "100%" }} size="large">
           <Card size="small">
-            <Descriptions column={2} size="small">
+            <Descriptions column={1} size="small">
               <Descriptions.Item label="ID">
                 <Text code copyable>{user.id}</Text>
               </Descriptions.Item>

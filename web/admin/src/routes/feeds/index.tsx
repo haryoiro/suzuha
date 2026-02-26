@@ -106,6 +106,7 @@ export function FeedsPage() {
       dataIndex: "channel_id",
       key: "channel_id",
       width: 180,
+      responsive: ["lg"],
       render: (v: string) => <Text code copyable>{v}</Text>,
     },
     {
@@ -113,6 +114,7 @@ export function FeedsPage() {
       dataIndex: "last_polled",
       key: "last_polled",
       width: 180,
+      responsive: ["lg"],
       render: (v?: string) =>
         v ? new Date(v).toLocaleString() : <Text type="secondary">Never</Text>,
     },
@@ -137,8 +139,8 @@ export function FeedsPage() {
     <div>
       <Title level={3}>RSS Feeds</Title>
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={8}>
           <Card size="small">
             <Statistic
               title="Total Feeds"
@@ -147,7 +149,7 @@ export function FeedsPage() {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={8}>
           <Card size="small">
             <Statistic
               title="Enabled"
@@ -156,7 +158,7 @@ export function FeedsPage() {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={8}>
           <Card size="small">
             <Statistic
               title="Disabled"
@@ -183,6 +185,7 @@ export function FeedsPage() {
         rowKey="id"
         loading={isLoading}
         pagination={false}
+        scroll={{ x: 500 }}
       />
 
       <Modal
@@ -288,7 +291,8 @@ function FeedItemsModal({
       open={!!feedId}
       onCancel={onClose}
       footer={null}
-      width={900}
+      width="90vw"
+      style={{ maxWidth: 900 }}
     >
       <Table<FeedItem>
         columns={columns}
