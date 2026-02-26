@@ -42,7 +42,7 @@ graph LR
 - `notification` — 統一 Notifier インターフェース + Middleware パターン。詳細は `notification.md`
 - `scheduler` — 定期実行ジョブ (CronTask, CronContext, Feature, Registry)。Consolidator プロセス内で動作。詳細は `docs/scheduler.md`
 - `rss` — Feature: RSS フィード監視（ツール + タスク + DB ストア）
-- `topics` — Feature: 定期的な話題提供（タスクのみ）
+- `topics` — Feature: 定期的な独り言（タスクのみ）
 - `admin` — 管理画面バックエンド (REST API + SPA 配信)
 - `event` — EventBus (chan ベース)
 - `config` — YAML 設定ロード

@@ -102,32 +102,31 @@ consolidator:
           max_articles_per_notify: 5
 ```
 
-### Topics (`internal/topics/`)
+### Topics / 独り言 (`internal/topics/`)
 
-定期的にチャンネルに話題を投稿する。コンテキスト（最近の会話、過去の話題の反応状況、時間帯）を考慮して LLM が生成する。
+定期的にチャンネルに独り言をつぶやく。時間帯・最近の会話・過去のつぶやきを参考に、LLM が1〜2文の短い独り言を生成する。
+
+**設計思想:** 「話題提供」ではなく「独り言」。誰かに向けた発言ではなく、ふと思ったことをぽろっとつぶやく。質問しない、メンションしない、具体的すぎる事柄を捏造しない。
+
+**退屈システム:**
+
+バックオフ（反応なし→頻度を下げる）を廃止し、退屈度ベースの投稿判定に置き換えた。
+
+- 退屈度 = 最後のユーザーメッセージからの経過時間 × `boredomRate`（1時間あたり 8）
+- 退屈度 < 20（≒2.5時間以内） → 投稿しない
+- 退屈度 20–100 → 退屈度に比例した確率で投稿（最大 85%）
+- 退屈度が高いほど「暇そうな」トーンの独り言になる（LLM プロンプトに退屈度を注入）
+- `channel_activity.last_user_message_at` をインタラクション時刻として使用
 
 **処理フロー:**
 
-1. **バックオフ判定**: 前回の話題に反応がなければ `consecutiveNoResponse` を増やし、次回以降スキップ（最大 `maxBackoff=5` 回）
-2. バックオフ中ならスキップして終了
-3. opt-in ユーザー（`metadata.mention_opt_in = 1`）のリストと記憶を取得
-4. 最近のチャンネル記憶 + 過去の話題投稿を取得
-5. **アクション決定**: LLM に NEW / REPLY / SUPPLEMENT を選ばせる
-   - `NEW`: 新しい話題を投稿
-   - `REPLY`: 過去の話題にリプライして会話を続ける
-   - `SUPPLEMENT`: 過去の話題に「ちなみに〜」で補足
-6. LLM でメッセージ生成（時間帯ヒント、反応履歴、ユーザーコンテキスト付き）
-7. 送信（REPLY/SUPPLEMENT は `cc.Notifier.Reply` でスレッド返信、NEW は `cc.Notifier.Send`）
-8. 長期記憶に保存（message_id 付き → 次回の REPLY 対象に）
-
-**バックオフの仕組み:**
-
-```
-反応あり → consecutiveNoResponse = 0, skipCounter = 0
-反応なし → consecutiveNoResponse++, skipCounter = min(consecutiveNoResponse, 5)
-```
-
-`channel_activity` テーブルの `last_user_message_at` で反応有無を判定。
+1. `channel_activity` から最後のインタラクション時刻を取得
+2. 退屈度を計算（経過時間 × rate、上限 100）
+3. 退屈度に基づく確率判定で投稿するか決定
+4. 最近のチャンネル記憶 + 過去のつぶやきを取得（重複回避用）
+5. LLM でつぶやき生成（時間帯ヒント + 退屈度付き、1回の LLM 呼び出し）
+6. `cc.Notifier.Send` で送信
+7. 長期記憶に保存
 
 **設定例:**
 
@@ -135,18 +134,43 @@ consolidator:
 consolidator:
   scheduler:
     jobs:
-      - name: "daily-topic"
+      - name: "topics-hourly"
         task: "topics"
-        cron: "0 */2 * * *"
+        cron: "0 * * * *"
         config:
           channel_id: "123456789"
-          topics:
-            - "プログラミング"
-            - "最近のニュース"
-            - "ゲーム"
 ```
 
-`timezone` と `prompt_dir` はタスク config ではなく、`CronContext.Timezone` と `CronContext.SystemPrompt` から取得する。
+### Explore / 自律探索 (`internal/explore/`)
+
+定期的にネットを自律的に探索し、面白いものを記憶に保存するタスク。
+
+**設計思想:** のの自身の好奇心でネットを駆け回る。Wikipedia ランダム記事を入り口に、気になったキーワードを SearXNG で検索し、WebFetch でページを読んで連想的に探索を続ける。面白かったものは長期記憶に保存され、独り言や会話に自然に反映される。
+
+**処理フロー:**
+
+1. 起点を決める（未探索の興味があればそれ、なければ Wikipedia ランダム記事）
+2. LLM（のの視点）が記事を評価: 感想・覚えるか・次に調べたいキーワード
+3. 覚える価値あり → `MemoryTypeWorld`（`source="explore"`）に保存
+4. 次のキーワードあり → SearXNG で検索 → 結果から気になるものを選ぶ → 読む → 2 に戻る
+5. 満足 or 深さ上限（デフォルト 4 ホップ）→ 探索まとめを記憶に保存
+6. 辿れなかったキーワードは `unexplored_interests` として次回の起点候補に保存
+
+**依存:** SearXNG（セルフホスト検索エンジン）が `searxng_url` で指定したアドレスで動作している必要がある。
+
+**設定例:**
+
+```yaml
+consolidator:
+  scheduler:
+    jobs:
+      - name: "explore"
+        task: "explore"
+        cron: "0 */3 * * *"
+        config:
+          searxng_url: "http://localhost:8888"
+          max_depth: 4
+```
 
 ## 設定
 
@@ -284,9 +308,15 @@ internal/
     tools.go         # Agent ツール (subscribe, unsubscribe, list, preference)
     store.go         # FeedStore (rss_feeds, rss_items テーブル操作)
 
-  topics/            # Feature: 話題提供
+  topics/            # Feature: 独り言（退屈システム）
     feature.go       # Feature 実装
-    task.go          # TopicsTask (コンテキスト対応話題生成)
+    task.go          # TopicsTask (退屈度ベース独り言生成)
+
+  explore/           # Feature: 自律探索
+    feature.go       # Feature 実装
+    task.go          # ExploreTask (Wikipedia + SearXNG 連想探索)
+    searxng.go       # SearXNG クライアント
+    wikipedia.go     # Wikipedia ランダム記事取得
 
   notification/
     notifier.go      # Notifier インターフェース, SendResult, NopNotifier
