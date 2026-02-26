@@ -5,6 +5,7 @@ import {
   DatabaseOutlined,
   BarChartOutlined,
   FileTextOutlined,
+  EditOutlined,
   TeamOutlined,
   MessageOutlined,
   WifiOutlined,
@@ -18,6 +19,7 @@ import { LogsPage } from "./routes/logs";
 import { UsersPage } from "./routes/users/index";
 import { ContextPage } from "./routes/context";
 import { FeedsPage } from "./routes/feeds/index";
+import { PromptsPage } from "./routes/prompts";
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -28,6 +30,7 @@ type Page =
   | { key: "memory-detail"; id: string }
   | { key: "feeds" }
   | { key: "users" }
+  | { key: "prompts" }
   | { key: "metrics" }
   | { key: "context" }
   | { key: "logs" };
@@ -43,6 +46,7 @@ export function App() {
     { key: "memories", icon: <DatabaseOutlined />, label: "Memories" },
     { key: "feeds", icon: <WifiOutlined />, label: "Feeds" },
     { key: "users", icon: <TeamOutlined />, label: "Users" },
+    { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
     { key: "logs", icon: <FileTextOutlined />, label: "Logs" },
@@ -64,6 +68,8 @@ export function App() {
         return <FeedsPage />;
       case "users":
         return <UsersPage />;
+      case "prompts":
+        return <PromptsPage />;
       case "metrics":
         return <MetricsPage />;
       case "context":

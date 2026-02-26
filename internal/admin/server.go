@@ -62,6 +62,12 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("DELETE /api/feeds/{id}", rssH.Delete)
 	mux.HandleFunc("GET /api/feeds/{id}/items", rssH.ListItems)
 
+	// Prompt files.
+	promptH := handler.NewPromptHandler(cfg.PromptDir, agentBase, logger)
+	mux.HandleFunc("GET /api/prompts", promptH.List)
+	mux.HandleFunc("GET /api/prompts/{name}", promptH.Get)
+	mux.HandleFunc("PUT /api/prompts/{name}", promptH.Update)
+
 	// Agent context proxy.
 	ctxH := handler.NewContextHandler(cfg.AgentContext, logger)
 	mux.HandleFunc("GET /api/context", ctxH.Proxy)

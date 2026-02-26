@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"net"
@@ -25,6 +27,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/rss"
+	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
@@ -141,6 +144,7 @@ func run() error {
 	// Register features (RSS tools, etc.).
 	features := []scheduler.Feature{
 		rss.New(store.DB(), store),
+		schedule.New(store.DB()),
 	}
 	for _, f := range features {
 		if err := f.Setup(context.Background(), store.DB()); err != nil {
@@ -217,7 +221,31 @@ func run() error {
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprintf(w, `{"ok":true,"message_count":%d}`, ag.AgentContext().Len())
 			})
-			mux.HandleFunc("GET /internal/context", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("POST /internal/reload-prompt", func(w http.ResponseWriter, r *http.Request) {
+			// Re-read prompt files from disk and update agent's system prompt.
+			dir := cfg.Agent.PromptDir
+			if dir != "" && !filepath.IsAbs(dir) {
+				dir = filepath.Join(filepath.Dir(cfgPath), dir)
+			}
+			var parts []string
+			for _, name := range []string{"IDENTITY.md", "SOUL.md"} {
+				data, err := os.ReadFile(filepath.Join(dir, name))
+				if err != nil {
+					if os.IsNotExist(err) {
+						continue
+					}
+					logger.Error("reload-prompt read", "name", name, "error", err)
+					http.Error(w, `{"error":"read failed"}`, http.StatusInternalServerError)
+					return
+				}
+				parts = append(parts, strings.TrimSpace(string(data)))
+			}
+			newPrompt := strings.Join(parts, "\n\n")
+			ag.ReloadPrompt(newPrompt)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"ok":true,"length":%d}`, len(newPrompt))
+		})
+		mux.HandleFunc("GET /internal/context", func(w http.ResponseWriter, r *http.Request) {
 				actx := ag.AgentContext()
 				msgs := actx.Messages()
 				w.Header().Set("Content-Type", "application/json")

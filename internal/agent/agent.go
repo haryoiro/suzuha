@@ -344,6 +344,19 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	return nil, fmt.Errorf("agent: tool loop exceeded %d iterations", maxIter)
 }
 
+// ReloadPrompt updates the system prompt in the context's first message.
+// Called when prompt files are edited via the admin dashboard.
+func (a *Agent) ReloadPrompt(newPrompt string) {
+	a.systemPrompt = newPrompt
+	a.ctx.mu.Lock()
+	defer a.ctx.mu.Unlock()
+	if len(a.ctx.messages) > 0 && a.ctx.messages[0].Role == "system" {
+		a.ctx.messages[0].Content = newPrompt
+		a.ctx.messages[0].Timestamp = time.Now()
+	}
+	a.logger.Info("system prompt reloaded", "length", len(newPrompt))
+}
+
 // ForceCompact triggers context compaction externally (e.g. from admin API).
 func (a *Agent) ForceCompact(ctx context.Context) {
 	a.compact(ctx)

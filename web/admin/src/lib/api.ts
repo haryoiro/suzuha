@@ -237,6 +237,23 @@ export const contextApi = {
   get: () => fetchJSON<ContextResponse>("/api/context"),
 };
 
+// Prompts API
+export interface PromptFile {
+  name: string;
+  content: string;
+  updated_at?: string;
+}
+
+export const promptsApi = {
+  list: () => fetchJSON<PromptFile[]>("/api/prompts"),
+  get: (name: string) => fetchJSON<PromptFile>(`/api/prompts/${name}`),
+  update: (name: string, content: string) =>
+    fetchJSON<{ ok: boolean; reloaded: boolean }>(`/api/prompts/${name}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    }),
+};
+
 // Log stream (SSE)
 export function connectLogStream(params?: {
   level?: string;

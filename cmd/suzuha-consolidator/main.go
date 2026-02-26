@@ -17,6 +17,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/explore"
 	"github.com/haryoiro/suzuha/internal/rss"
+	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/topics"
 	"google.golang.org/grpc"
@@ -131,6 +132,7 @@ func run() error {
 			rss.New(store.DB(), store),
 			topics.New(),
 			explore.New(),
+			schedule.New(store.DB()),
 		}
 
 		taskRegistry := scheduler.NewRegistry()
