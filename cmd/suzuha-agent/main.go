@@ -162,6 +162,26 @@ func run() error {
 			registry.Register(builtin.NewDiscordReply(s))
 			registry.Register(builtin.NewDiscordGetHistory(s))
 			registry.Register(builtin.NewDiscordSendDM(s))
+			// Channel management
+			registry.Register(builtin.NewDiscordCreateChannel(s))
+			registry.Register(builtin.NewDiscordEditChannel(s))
+			registry.Register(builtin.NewDiscordDeleteChannel(s))
+			registry.Register(builtin.NewDiscordListChannels(s))
+			// Member management
+			registry.Register(builtin.NewDiscordKickMember(s))
+			registry.Register(builtin.NewDiscordBanMember(s))
+			registry.Register(builtin.NewDiscordTimeoutMember(s))
+			registry.Register(builtin.NewDiscordListMembers(s))
+			// Message management
+			registry.Register(builtin.NewDiscordDeleteMessage(s))
+			registry.Register(builtin.NewDiscordPinMessage(s))
+			// Role management
+			registry.Register(builtin.NewDiscordAddRole(s))
+			registry.Register(builtin.NewDiscordRemoveRole(s))
+			registry.Register(builtin.NewDiscordListRoles(s))
+			// Server & threads
+			registry.Register(builtin.NewDiscordServerInfo(s))
+			registry.Register(builtin.NewDiscordCreateThread(s))
 			logger.Info("discord tools registered")
 
 			// Fetch bot's own identity from Discord and register in Users.
