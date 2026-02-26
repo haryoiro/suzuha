@@ -63,8 +63,17 @@ func New(
 ) *Agent {
 	agentCtx := NewContext(cfg.MaxContextTokens)
 
-	// Inject system prompt as first message.
-	if cfg.SystemPrompt != "" {
+	// Try to restore context from previous session.
+	if saved := loadContext(db, logger); len(saved) > 0 {
+		// Update system prompt in case it changed since last run.
+		if len(saved) > 0 && saved[0].Role == "system" {
+			saved[0].Content = cfg.SystemPrompt
+			saved[0].Timestamp = time.Now()
+		}
+		agentCtx.ReplaceAll(saved)
+		logger.Info("context restored from db", "messages", len(saved))
+	} else if cfg.SystemPrompt != "" {
+		// Fresh start — inject system prompt.
 		agentCtx.Add(llm.Message{
 			Role:      "system",
 			Content:   cfg.SystemPrompt,
@@ -209,6 +218,9 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 			return fmt.Errorf("agent: send: %w", err)
 		}
 	}
+
+	// 12. Persist context to DB (survives restarts).
+	persistContext(ctx, a.db, a.ctx, a.logger)
 
 	return nil
 }
@@ -361,6 +373,9 @@ func (a *Agent) compact(ctx context.Context) {
 		if err != nil {
 			a.logger.Warn("consolidator compact failed, falling back to truncation", "error", err)
 			a.ctx.TruncateOldest(len(nonSystemMsgs) / 2)
+			a.ctx.ResetInjectedUsers()
+			a.ctx.ResetSeenChannels()
+			persistContext(ctx, a.db, a.ctx, a.logger)
 			return
 		}
 
@@ -375,6 +390,7 @@ func (a *Agent) compact(ctx context.Context) {
 		a.ctx.ReplaceAll(kept)
 		a.ctx.ResetInjectedUsers()
 		a.ctx.ResetSeenChannels()
+		persistContext(ctx, a.db, a.ctx, a.logger)
 
 		// Map keep indices back to original indices for affinity deltas.
 		a.applyAffinityDeltas(ctx, result.AffinityDeltas, nonSystemMsgs)
@@ -385,6 +401,7 @@ func (a *Agent) compact(ctx context.Context) {
 	a.ctx.TruncateOldest(len(nonSystemMsgs) / 2)
 	a.ctx.ResetInjectedUsers()
 	a.ctx.ResetSeenChannels()
+	persistContext(ctx, a.db, a.ctx, a.logger)
 }
 
 // applyAffinityDeltas records affinity changes and updates user scores.
