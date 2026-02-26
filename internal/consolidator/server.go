@@ -65,28 +65,30 @@ const compactSystemPrompt = `You are a memory consolidation agent. Your job is t
 2. Extract key information that should be stored as long-term memories.
 3. Assess affinity changes based on the emotional tone and content of interactions.
 
+IMPORTANT: Write all MEMORIES content in Japanese (日本語). The conversation is in Japanese, and memories must also be in Japanese.
+
 Respond in this exact format:
 
 KEEP: 0,2,5,7 (comma-separated message indices to keep)
 
 MEMORIES:
-- [user user_id=<platform_user_id>] Information about that specific user's preferences or facts
-- [world] General world knowledge or facts discussed
-- [tool] Tool usage patterns or results worth remembering
+- [user user_id=<platform_user_id>] そのユーザーに関する情報や好み
+- [world] 会話で出た一般的な知識や事実
+- [tool] ツールの使用パターンや覚えておくべき結果
 
 IMPORTANT: For [user] memories, always include the user_id of the person the fact is about.
 The user_id can be found in message metadata (user_id=... in the message header).
 If the fact is about a user whose user_id is not clear, omit the user_id.
 
 AFFINITY:
-- [delta] user_id=<platform_user_id> platform=<platform> delta=<+/-float> messages=<comma-separated indices> reason=<brief explanation>
+- [delta] user_id=<platform_user_id> platform=<platform> delta=<+/-float> messages=<comma-separated indices> reason=<日本語で簡潔に>
 
 Rules for AFFINITY:
 - Positive interactions (gratitude, enjoyment, warmth, shared interests) increase affinity (+0.1 to +1.0)
 - Negative interactions (hostility, rudeness, disrespect) decrease affinity (-0.1 to -1.0)
 - Neutral interactions have no affinity entry (omit them)
 - Group temporally close positive interactions from the same user into a single delta
-- The reason should be concise (under 50 chars)
+- The reason should be concise (under 50 chars, in Japanese)
 - Each user who participated should have at most one affinity entry
 - The context may include "[User profile: ...]" system messages with affinity history.
   Use this history to detect behavioral contradictions:
