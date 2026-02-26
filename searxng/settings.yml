@@ -1,0 +1,31 @@
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+  default_lang: "ja"
+
+server:
+  limiter: false
+  image_proxy: false
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "suzuha-searxng-secret-key-2024"
+
+ui:
+  static_use_hash: true
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false

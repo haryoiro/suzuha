@@ -55,6 +55,14 @@ services:
     depends_on:
       - agent
 
+  searxng:
+    image: searxng/searxng:latest
+    volumes:
+      - ./searxng:/etc/searxng
+    environment:
+      - SEARXNG_SECRET=suzuha-searxng-secret-key-2024
+    restart: unless-stopped
+
   admin-frontend:
     image: node:22-slim
     working_dir: /app/web/admin
