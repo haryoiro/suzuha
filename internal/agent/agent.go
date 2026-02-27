@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/channel"
+	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/event"
@@ -32,7 +32,7 @@ type Agent struct {
 	chat    chat.Interface
 	consol  consolidator.Client
 	db              *sql.DB // shared DB for channel activity tracking
-	channelSettings *channel.Store
+	channelSettings *channelpkg.Store
 	logger          *slog.Logger
 	metrics         *observe.Metrics
 
@@ -60,7 +60,7 @@ func New(
 	chatIface chat.Interface,
 	consolClient consolidator.Client,
 	db *sql.DB,
-	channelSettings *channel.Store,
+	channelSettings *channelpkg.Store,
 	logger *slog.Logger,
 	metrics *observe.Metrics,
 ) *Agent {
@@ -213,7 +213,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		for _, evt := range batch {
 			chID, _ := evt.Payload["channel"].(string)
 			isDM, _ := evt.Payload["is_dm"].(bool)
-			if chID != "" && !isDM && a.channelSettings.GetMode(chID) == channel.ModeDisabled {
+			if chID != "" && !isDM && a.channelSettings.GetMode(chID) == channelpkg.ModeDisabled {
 				a.logger.Debug("skipping disabled channel", "channel", chID)
 				continue
 			}
@@ -267,7 +267,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	isDM, _ := lastEvt.Payload["is_dm"].(bool)
 	if a.channelSettings != nil && respondChannel != "" && !isDM {
 		mode := a.channelSettings.GetMode(respondChannel)
-		if mode == channel.ModeListen {
+		if mode == channelpkg.ModeListen {
 			a.logger.Info("listen mode: ingesting without response", "channel", respondChannel)
 			persistContext(ctx, a.db, a.ctx, a.logger)
 			return nil
@@ -315,6 +315,10 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	if isSilentResponse(text) {
 		a.logger.Info("skipping response (silent)",
 			"raw_text", truncate(resp.Text, 100))
+	} else if a.channelSettings != nil && respondChannel != "" && !isDM &&
+		a.channelSettings.GetMode(respondChannel) != channelpkg.ModeActive {
+		a.logger.Info("suppressing send to non-active channel",
+			"channel", respondChannel, "mode", string(a.channelSettings.GetMode(respondChannel)))
 	} else {
 		a.logger.Info("sending response",
 			"channel", channel,
