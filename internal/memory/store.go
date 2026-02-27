@@ -44,6 +44,9 @@ type Store interface {
 	// SearchRecent performs hybrid search but only returns memories created after since.
 	SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]Memory, error)
 
+	// ListByUser returns user-type memories for a specific user ID (from metadata).
+	ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error)
+
 	// Close releases database resources.
 	Close() error
 }

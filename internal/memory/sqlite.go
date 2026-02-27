@@ -491,6 +491,23 @@ func scanMemories(rows *sql.Rows) ([]Memory, error) {
 	return results, rows.Err()
 }
 
+func (s *SQLiteStore) ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, type, content, metadata, created_at, updated_at
+		 FROM memories
+		 WHERE type = ? AND json_extract(metadata, '$.user_id') = ?
+		 ORDER BY updated_at DESC
+		 LIMIT ?`,
+		string(MemoryTypeUser), userID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("memory: list by user: %w", err)
+	}
+	defer rows.Close()
+
+	return scanMemories(rows)
+}
+
 func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 20

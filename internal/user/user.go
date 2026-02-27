@@ -49,6 +49,15 @@ type AffinityEvent struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// UserGuild represents a guild+channel association for a user.
+type UserGuild struct {
+	GuildID     string    `json:"guild_id"`
+	GuildName   string    `json:"guild_name"`
+	ChannelID   string    `json:"channel_id"`
+	ChannelName string    `json:"channel_name"`
+	LastSeenAt  time.Time `json:"last_seen_at"`
+}
+
 // Store is the user storage interface.
 type Store interface {
 	// Resolve looks up an internal user by platform + platform_user_id.
@@ -67,6 +76,12 @@ type Store interface {
 
 	// GetAffinity returns recent affinity events for a user.
 	GetAffinity(ctx context.Context, userID string, limit int) ([]AffinityEvent, error)
+
+	// TrackGuildChannel records that a user was seen in a guild+channel.
+	TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error
+
+	// GetUserGuilds returns guilds and channels a user has been seen in.
+	GetUserGuilds(ctx context.Context, userID string) ([]UserGuild, error)
 
 	// Close releases resources.
 	Close() error

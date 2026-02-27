@@ -238,6 +238,59 @@ func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int)
 	return events, rows.Err()
 }
 
+func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error {
+	if guildID == "" || channelID == "" {
+		return nil
+	}
+	now := time.Now()
+
+	// Upsert guild name.
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO guilds (id, name, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
+		guildID, guildName, now,
+	); err != nil {
+		return fmt.Errorf("user: upsert guild: %w", err)
+	}
+
+	// Upsert user-guild-channel association.
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO user_guild_channels (user_id, guild_id, channel_id, channel_name, last_seen_at)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(user_id, guild_id, channel_id) DO UPDATE SET
+		   channel_name = excluded.channel_name, last_seen_at = excluded.last_seen_at`,
+		userID, guildID, channelID, channelName, now,
+	); err != nil {
+		return fmt.Errorf("user: upsert user guild channel: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserGuild, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT ugc.guild_id, g.name, ugc.channel_id, ugc.channel_name, ugc.last_seen_at
+		 FROM user_guild_channels ugc
+		 JOIN guilds g ON g.id = ugc.guild_id
+		 WHERE ugc.user_id = ?
+		 ORDER BY ugc.last_seen_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("user: get user guilds: %w", err)
+	}
+	defer rows.Close()
+
+	var result []UserGuild
+	for rows.Next() {
+		var ug UserGuild
+		if err := rows.Scan(&ug.GuildID, &ug.GuildName, &ug.ChannelID, &ug.ChannelName, &ug.LastSeenAt); err != nil {
+			return nil, fmt.Errorf("user: scan user guild: %w", err)
+		}
+		result = append(result, ug)
+	}
+	return result, rows.Err()
+}
+
 func (s *SQLiteStore) Close() error {
 	// DB is shared — don't close it here.
 	return nil
