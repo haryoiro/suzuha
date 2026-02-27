@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Typography, Card, Tabs, Input, Button, Space, App, Spin, Tag } from "antd";
 import { SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import { usePrompts, useUpdatePrompt } from "../hooks/usePrompts";
+import { formatJST } from "../lib/date";
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -73,7 +74,7 @@ export function PromptsPage() {
       <div>
         <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 12 }}>
-            {f.updated_at ? `Last updated: ${new Date(f.updated_at).toLocaleString()}` : "New file"}
+            {f.updated_at ? `Last updated: ${formatJST(f.updated_at)}` : "New file"}
           </span>
           <Space>
             <Button

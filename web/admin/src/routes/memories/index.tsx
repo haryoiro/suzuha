@@ -24,6 +24,7 @@ import { useMemories, useCreateMemory, useDeleteMemory } from "../../hooks/useMe
 import { memoriesApi } from "../../lib/api";
 import type { Memory } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
+import { formatJST } from "../../lib/date";
 
 const { TextArea } = Input;
 
@@ -81,7 +82,7 @@ export function MemoriesPage({ onViewDetail }: Props) {
       dataIndex: "updated_at",
       width: 180,
       responsive: ["md"],
-      render: (v: string) => new Date(v).toLocaleString("ja-JP"),
+      render: (v: string) => formatJST(v),
     },
     {
       title: "Actions",

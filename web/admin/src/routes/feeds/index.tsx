@@ -32,6 +32,7 @@ import {
   useFeedStats,
 } from "../../hooks/useFeeds";
 import type { Feed, FeedItem } from "../../lib/api";
+import { formatJST } from "../../lib/date";
 
 const { Title, Text } = Typography;
 
@@ -116,7 +117,7 @@ export function FeedsPage() {
       width: 180,
       responsive: ["lg"],
       render: (v?: string) =>
-        v ? new Date(v).toLocaleString() : <Text type="secondary">Never</Text>,
+        v ? formatJST(v) : <Text type="secondary">Never</Text>,
     },
     {
       title: "Actions",
@@ -265,7 +266,7 @@ function FeedItemsModal({
       key: "published_at",
       width: 180,
       render: (v?: string) =>
-        v ? new Date(v).toLocaleString() : "-",
+        v ? formatJST(v) : "-",
     },
     {
       title: "Notified",

@@ -12,6 +12,7 @@ import {
 } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useMemory, useUpdateMemory, useDeleteMemory } from "../../hooks/useMemories";
+import { formatJST } from "../../lib/date";
 
 const { TextArea } = Input;
 
@@ -94,10 +95,10 @@ export function MemoryDetailPage({ id, onBack }: Props) {
       <Card title={`Memory: ${id.slice(0, 8)}...`}>
         <Descriptions size="small" column={2} style={{ marginBottom: 24 }}>
           <Descriptions.Item label="Created">
-            {new Date(memory.created_at).toLocaleString("ja-JP")}
+            {formatJST(memory.created_at)}
           </Descriptions.Item>
           <Descriptions.Item label="Updated">
-            {new Date(memory.updated_at).toLocaleString("ja-JP")}
+            {formatJST(memory.updated_at)}
           </Descriptions.Item>
           <Descriptions.Item label="ID">{memory.id}</Descriptions.Item>
         </Descriptions>

@@ -3,6 +3,7 @@ import { Select, Space, Tag, Button, Switch } from "antd";
 import { ClearOutlined } from "@ant-design/icons";
 import { useLogStream } from "../hooks/useLogStream";
 import type { LogEntry } from "../lib/api";
+import { formatJST } from "../lib/date";
 
 const levelColors: Record<string, string> = {
   DEBUG: "default",
@@ -18,10 +19,7 @@ function formatValue(v: unknown): string {
 }
 
 function LogRow({ entry }: { entry: LogEntry }) {
-  const time = new Date(entry.time).toLocaleTimeString("ja-JP", {
-    hour12: false,
-    fractionalSecondDigits: 3,
-  });
+  const time = formatJST(entry.time, "HH:mm:ss.SSS");
 
   const attrs = entry.attrs ? Object.entries(entry.attrs) : [];
 
