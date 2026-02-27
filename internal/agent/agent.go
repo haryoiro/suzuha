@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
@@ -40,10 +39,6 @@ type Agent struct {
 	systemPrompt     string
 	botID            string
 	contextWindowPct float64
-
-	compactMu   sync.Mutex
-	compacting  bool
-	compactDone chan struct{} // closed when the in-flight compact finishes
 }
 
 // Config holds agent configuration.
@@ -479,33 +474,11 @@ func (a *Agent) ReloadPrompt(newPrompt string) {
 }
 
 // ForceCompact triggers context compaction externally (e.g. from admin API).
-// Uses singleflight: concurrent callers share one in-flight compact.
 func (a *Agent) ForceCompact(ctx context.Context) {
 	a.compact(ctx)
 }
 
 func (a *Agent) compact(ctx context.Context) {
-	// Singleflight: if a compact is already in progress, wait for it.
-	a.compactMu.Lock()
-	if a.compacting {
-		ch := a.compactDone
-		a.compactMu.Unlock()
-		a.logger.Info("compact already in progress, waiting")
-		select {
-		case <-ch:
-		case <-ctx.Done():
-		}
-		return
-	}
-	a.compacting = true
-	a.compactDone = make(chan struct{})
-	a.compactMu.Unlock()
-	defer func() {
-		a.compactMu.Lock()
-		a.compacting = false
-		close(a.compactDone)
-		a.compactMu.Unlock()
-	}()
 	// System prompt is stored separately and immune to compaction.
 	// Only conversation messages are subject to compaction.
 	msgs := a.ctx.Messages()
