@@ -873,24 +873,26 @@ func responseDirective(evt event.Event, botID string, closeness, interest float6
 		"（テキストに絵文字を書くのではなく、ツールを呼んで相手のメッセージにリアクションを付ける）。" +
 		"何も付けなくてもいいけど、共感・面白い・なるほど等の気持ちがあるなら付けてから `[SKIP]`。"
 
+	const skipDefault = "基本は `[SKIP]` してください。あなたが発言しなくても会話は成り立ちます。"
+
 	// interest drives engagement tendency; closeness drives warmth.
 	switch {
 	case closeness >= 3.0:
-		return "[LISTEN] 仲の良い人の会話です。気になったら気軽に混ざって。" +
-			"一言だけ相槌（「わかる」「それな」「草」くらい）でもOK。" +
+		return "[LISTEN] 仲の良い人の会話です。" + skipDefault +
+			"本当に一言言いたいときだけ短く返して。相槌だけの返答はしない。" +
 			reactHint +
 			noEmoji
 	case interest >= 2.0:
-		return "[LISTEN] 気になる人の会話です。話題が面白そうなら積極的に混ざって。" +
+		return "[LISTEN] 気になる人の会話です。" + skipDefault +
+			"自分が詳しい話題や強い意見があるときだけ返して。" +
 			reactHint +
 			noEmoji
 	case closeness <= -1.0:
-		return "[LISTEN] チャンネルの会話です。特に自分に関係なければスルーでいい。" +
-			"`[SKIP]` とだけ返してください。" +
+		return "[LISTEN] チャンネルの会話です。`[SKIP]` とだけ返してください。" +
 			noEmoji
 	default:
-		return "[LISTEN] チャンネルの会話です。会話に混ざりたいときは返答し、" +
-			"そうでなければスキップ。" +
+		return "[LISTEN] チャンネルの会話です。" + skipDefault +
+			"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
 			reactHint +
 			noEmoji
 	}
