@@ -221,6 +221,33 @@ export const guildsApi = {
     fetchJSON<{ data: ChannelEntry[] }>("/api/channels"),
 };
 
+// Channel Settings API
+export interface ChannelSetting {
+  channel_id: string;
+  channel_name: string;
+  guild_id: string;
+  guild_name: string;
+  user_count: number;
+  mode: "active" | "listen" | "disabled";
+  use_identity: boolean;
+  last_user_message_at?: string;
+  settings_updated_at?: string;
+}
+
+export const channelSettingsApi = {
+  list: (guildId?: string) =>
+    fetchJSON<{ data: ChannelSetting[] }>(
+      `/api/channel-settings${guildId ? `?guild_id=${guildId}` : ""}`
+    ),
+  upsert: (channelId: string, body: { mode: string; use_identity: boolean; guild_id?: string }) =>
+    fetchJSON<{ ok: boolean }>(`/api/channel-settings/${channelId}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  delete: (channelId: string) =>
+    fetch(`${BASE_URL}/api/channel-settings/${channelId}`, { method: "DELETE" }),
+};
+
 // Scheduled Actions API
 export interface ScheduledAction {
   id: string;

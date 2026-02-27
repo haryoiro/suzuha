@@ -11,6 +11,7 @@ import {
   WifiOutlined,
   ClockCircleOutlined,
   MenuOutlined,
+  ApiOutlined,
 } from "@ant-design/icons";
 import { DashboardPage } from "./routes/index";
 import { MemoriesPage } from "./routes/memories/index";
@@ -20,6 +21,7 @@ import { LogsPage } from "./routes/logs";
 import { UsersPage } from "./routes/users/index";
 import { ContextPage } from "./routes/context";
 import { FeedsPage } from "./routes/feeds/index";
+import { DiscordPage } from "./routes/discord/index";
 import { PromptsPage } from "./routes/prompts";
 import { ActionsPage } from "./routes/actions";
 
@@ -31,6 +33,7 @@ type Page =
   | { key: "memories" }
   | { key: "memory-detail"; id: string }
   | { key: "feeds" }
+  | { key: "discord" }
   | { key: "users" }
   | { key: "actions" }
   | { key: "prompts" }
@@ -45,7 +48,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "feeds", "users", "actions", "prompts", "metrics", "context", "logs"];
+  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "prompts", "metrics", "context", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -72,6 +75,7 @@ export function App() {
     { key: "dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
     { key: "memories", icon: <DatabaseOutlined />, label: "Memories" },
     { key: "feeds", icon: <WifiOutlined />, label: "Feeds" },
+    { key: "discord", icon: <ApiOutlined />, label: "Discord" },
     { key: "users", icon: <TeamOutlined />, label: "Users" },
     { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
@@ -94,6 +98,8 @@ export function App() {
         return <MemoryDetailPage id={page.id} onBack={navigateBack} />;
       case "feeds":
         return <FeedsPage />;
+      case "discord":
+        return <DiscordPage />;
       case "users":
         return <UsersPage />;
       case "actions":

@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
@@ -116,4 +117,49 @@ func parseHHMM(s string) (int, int, error) {
 		return 0, 0, fmt.Errorf("expected HH:MM format: %w", err)
 	}
 	return t.Hour(), t.Minute(), nil
+}
+
+// WithChannelSettings returns middleware that suppresses notifications to
+// channels configured as "disabled" or "listen" in the channel_settings table.
+func WithChannelSettings(db *sql.DB, logger *slog.Logger) Middleware {
+	return func(inner Notifier) Notifier {
+		return &channelSettingsNotifier{inner: inner, db: db, logger: logger}
+	}
+}
+
+type channelSettingsNotifier struct {
+	inner  Notifier
+	db     *sql.DB
+	logger *slog.Logger
+}
+
+func (n *channelSettingsNotifier) Send(ctx context.Context, channelID, content, source string) (SendResult, error) {
+	if n.suppressed(ctx, channelID, source) {
+		return SendResult{}, nil
+	}
+	return n.inner.Send(ctx, channelID, content, source)
+}
+
+func (n *channelSettingsNotifier) Reply(ctx context.Context, channelID, content, replyToID, source string) (SendResult, error) {
+	if n.suppressed(ctx, channelID, source) {
+		return SendResult{}, nil
+	}
+	return n.inner.Reply(ctx, channelID, content, replyToID, source)
+}
+
+func (n *channelSettingsNotifier) suppressed(ctx context.Context, channelID, source string) bool {
+	var mode string
+	err := n.db.QueryRowContext(ctx,
+		`SELECT mode FROM channel_settings WHERE channel_id = ?`, channelID,
+	).Scan(&mode)
+	if err != nil {
+		// No row means default (active) — allow.
+		return false
+	}
+	if mode == "disabled" || mode == "listen" {
+		n.logger.Info("channel_settings: notification suppressed",
+			"channel", channelID, "mode", mode, "source", source)
+		return true
+	}
+	return false
 }

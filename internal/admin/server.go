@@ -57,6 +57,12 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/channels", guildH.AllChannels)
 	mux.HandleFunc("GET /api/guilds/{id}/channels", guildH.Channels)
 
+	// Channel settings.
+	chSettingsH := handler.NewChannelSettingsHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/channel-settings", chSettingsH.List)
+	mux.HandleFunc("PUT /api/channel-settings/{channelId}", chSettingsH.Upsert)
+	mux.HandleFunc("DELETE /api/channel-settings/{channelId}", chSettingsH.Delete)
+
 	// Scheduled actions.
 	actionsH := handler.NewActionsHandler(store.DB(), logger)
 	mux.HandleFunc("GET /api/scheduled-actions", actionsH.List)

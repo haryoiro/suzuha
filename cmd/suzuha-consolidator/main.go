@@ -128,6 +128,9 @@ func run() error {
 			)
 		}
 
+		// Wrap notifier with channel settings middleware.
+		notifier = notification.WithChannelSettings(store.DB(), logger)(notifier)
+
 		// Register features.
 		features := []scheduler.Feature{
 			rss.New(store.DB(), store),

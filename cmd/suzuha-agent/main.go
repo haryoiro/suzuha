@@ -10,12 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"net"
 
 	"github.com/bwmarrin/discordgo"
 	pb "github.com/haryoiro/suzuha/gen/notification/v1"
 	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/chat/cli"
 	"github.com/haryoiro/suzuha/internal/chat/discord"
@@ -96,6 +98,12 @@ func run() error {
 	// Pass bot's platform user ID so it can be marked as is_bot on creation.
 	userStore := user.NewSQLiteStore(store.DB(), cfg.Discord.BotID)
 
+	// Setup channel settings store.
+	channelStore := channel.NewStore(store.DB())
+	if err := channelStore.Reload(context.Background()); err != nil {
+		logger.Warn("channel settings reload failed", "error", err)
+	}
+
 	// Setup tool registry.
 	registry := tool.NewRegistry()
 	registry.Register(builtin.NewFetch())
@@ -132,7 +140,7 @@ func run() error {
 			MaxContextTokens: cfg.LLM.MaxTokens,
 		},
 		llmClient, registry, store, userStore, bus, chatIface,
-		consolClient, store.DB(),
+		consolClient, store.DB(), channelStore,
 		logger, metrics,
 	)
 
@@ -242,6 +250,14 @@ func run() error {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"ok":true,"length":%d}`, len(newPrompt))
 		})
+		mux.HandleFunc("POST /internal/reload-channel-settings", func(w http.ResponseWriter, r *http.Request) {
+				if err := channelStore.Reload(r.Context()); err != nil {
+					http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"ok":true}`)
+			})
 		mux.HandleFunc("GET /internal/context", func(w http.ResponseWriter, r *http.Request) {
 				actx := ag.AgentContext()
 				msgs := actx.MessagesWithSystem()
@@ -283,6 +299,22 @@ func run() error {
 	// Context with signal handling.
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// Periodic reload of channel settings (picks up admin changes).
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := channelStore.Reload(context.Background()); err != nil {
+					logger.Warn("channel settings periodic reload failed", "error", err)
+				}
+			}
+		}
+	}()
 
 	// Start chat interface in background.
 	go func() {

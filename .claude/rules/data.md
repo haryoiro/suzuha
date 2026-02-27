@@ -38,9 +38,9 @@ paths: "internal/memory/**,internal/user/**,internal/consolidator/**"
 
 `internal/user/`
 
-- `User` 型: ID, DisplayName, Role (`owner`/`member`/`guest`), Affinity(`float64`), Metadata, PlatformLinks, timestamps
+- `User` 型: ID, DisplayName, Role (`owner`/`member`/`guest`), Affinity(`float64`), Closeness/Trust/Interest(`float64`), Metadata, PlatformLinks, timestamps
 - `PlatformLink`: Platform, PlatformUserID, PlatformName → 内部ユーザーに紐付け
-- `AffinityEvent`: UserID, Delta, Reason, MessageIndices, CreatedAt — consolidator が抽出
+- `AffinityEvent`: UserID, Delta, Axis(`closeness`/`trust`/`interest`), Reason, MessageIndices, CreatedAt — consolidator が抽出
 
 ### Store インターフェース
 
@@ -112,6 +112,21 @@ Histogram の sum/count は `name + "_sum"` / `name + "_count"` として格納�
 | last_user_message_at | DATETIME | 最後のユーザーメッセージ受信時刻 |
 
 Topics タスクは `last_user_message_at > 前回投稿時刻` で反応有無を判定する。
+
+## チャンネル設定テーブル
+
+`channel_settings` — チャンネルごとのボット動作モードを管理。`internal/channel/settings.go` の Store がキャッシュ付きで操作。
+
+| カラム | 型 | 説明 |
+|--------|------|------|
+| channel_id | TEXT PK | チャンネル ID |
+| guild_id | TEXT | ギルド ID（クエリ用に非正規化） |
+| mode | TEXT | `active`（読み書き）/ `listen`（閲覧のみ）/ `disabled`（無視） |
+| use_identity | BOOLEAN | 自分の名前を使っていいチャンネル |
+| updated_at | DATETIME | 最終更新日時 |
+
+行が無いチャンネルはデフォルト `active`。Agent は起動時にキャッシュし 5 分周期でリロード。
+Admin から変更時は `/internal/reload-channel-settings` で即時反映可能。
 
 ## RSS 関連テーブル
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/event"
@@ -30,9 +31,10 @@ type Agent struct {
 	bus     *event.Bus
 	chat    chat.Interface
 	consol  consolidator.Client
-	db      *sql.DB // shared DB for channel activity tracking
-	logger  *slog.Logger
-	metrics *observe.Metrics
+	db              *sql.DB // shared DB for channel activity tracking
+	channelSettings *channel.Store
+	logger          *slog.Logger
+	metrics         *observe.Metrics
 
 	systemPrompt     string
 	botID            string
@@ -58,6 +60,7 @@ func New(
 	chatIface chat.Interface,
 	consolClient consolidator.Client,
 	db *sql.DB,
+	channelSettings *channel.Store,
 	logger *slog.Logger,
 	metrics *observe.Metrics,
 ) *Agent {
@@ -86,6 +89,7 @@ func New(
 		chat:             chatIface,
 		consol:           consolClient,
 		db:               db,
+		channelSettings:  channelSettings,
 		logger:           logger,
 		metrics:          metrics,
 		systemPrompt:     cfg.SystemPrompt,
@@ -203,6 +207,24 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 // response. If any event in the batch is directly addressed, [RESPOND] is used;
 // otherwise the directive is based on the last event's affinity.
 func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
+	// 0. Filter out disabled channels.
+	if a.channelSettings != nil {
+		var filtered []event.Event
+		for _, evt := range batch {
+			chID, _ := evt.Payload["channel"].(string)
+			isDM, _ := evt.Payload["is_dm"].(bool)
+			if chID != "" && !isDM && a.channelSettings.GetMode(chID) == channel.ModeDisabled {
+				a.logger.Debug("skipping disabled channel", "channel", chID)
+				continue
+			}
+			filtered = append(filtered, evt)
+		}
+		if len(filtered) == 0 {
+			return nil
+		}
+		batch = filtered
+	}
+
 	// 1. Ingest all events into context.
 	var lastMsg llm.Message
 	var lastEvt event.Event
@@ -240,7 +262,27 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		ephemeral = append(ephemeral, profiles...)
 	}
 
-	// 4. Determine response directive.
+	// 4. Check listen mode — ingest into context but skip LLM response.
+	respondChannel, _ := lastEvt.Payload["channel"].(string)
+	isDM, _ := lastEvt.Payload["is_dm"].(bool)
+	if a.channelSettings != nil && respondChannel != "" && !isDM {
+		mode := a.channelSettings.GetMode(respondChannel)
+		if mode == channel.ModeListen {
+			a.logger.Info("listen mode: ingesting without response", "channel", respondChannel)
+			persistContext(ctx, a.db, a.ctx, a.logger)
+			return nil
+		}
+		// Inject identity hint for channels that allow it.
+		if a.channelSettings.Get(respondChannel).UseIdentity {
+			ephemeral = append(ephemeral, llm.Message{
+				Role:      "system",
+				Content:   "このチャンネルでは自分の名前（のの）を使っていい。普段は名前を隠しているけど、ここでは素の自分でいられる。",
+				Timestamp: time.Now(),
+			})
+		}
+	}
+
+	// 5. Determine response directive.
 	// If any event in the batch was directly addressed, force RESPOND
 	// regardless of which event was last.
 	var directive string
@@ -252,14 +294,14 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	a.logger.Info("llm request", "message_count", len(a.ctx.Messages()),
 		"ephemeral_count", len(ephemeral), "directive", directive, "batch_size", len(batch))
 
-	// 5. LLM completion with tool loop.
+	// 6. LLM completion with tool loop.
 	channel, _ := lastEvt.Payload["channel"].(string)
 	resp, err := a.completeWithTools(ctx, directive, channel, ephemeral)
 	if err != nil {
 		return fmt.Errorf("agent: complete: %w", err)
 	}
 
-	// 6. Add assistant response to context.
+	// 7. Add assistant response to context.
 	a.ctx.Add(llm.Message{
 		Role:      "assistant",
 		Content:   resp.Text,
@@ -268,7 +310,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		ToolCalls: resp.ToolCalls,
 	})
 
-	// 7. Send response (strip LLM thinking tags, directive tags, and silent markers).
+	// 8. Send response (strip LLM thinking tags, directive tags, and silent markers).
 	text := stripDirectiveTags(stripThinkTags(resp.Text))
 	if isSilentResponse(text) {
 		a.logger.Info("skipping response (silent)",
@@ -283,7 +325,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		}
 	}
 
-	// 8. Persist context to DB (survives restarts).
+	// 9. Persist context to DB (survives restarts).
 	persistContext(ctx, a.db, a.ctx, a.logger)
 
 	return nil
