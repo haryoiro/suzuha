@@ -1,9 +1,12 @@
 FROM golang:1.26
 
-# Install build dependencies for CGO (sqlite-vec) and protoc
+# Install build dependencies for CGO (sqlite-vec), protoc, and Node.js (for MCP servers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     protobuf-compiler \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Air for hot reloading

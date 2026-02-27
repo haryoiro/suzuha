@@ -12,6 +12,7 @@ services:
       - go-build-cache:/root/.cache/go-build
       - ./data:/data
       - ./.suzuha:/app/.suzuha:ro
+      - npm-cache:/root/.npm
     env_file:
       - .env
     environment:
@@ -81,3 +82,4 @@ volumes:
   go-mod-cache:
   go-build-cache:
   node-modules:
+  npm-cache:

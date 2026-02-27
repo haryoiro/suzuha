@@ -155,9 +155,6 @@ func run() error {
 		}
 	}
 
-	// Register mention opt-in tool.
-	registry.Register(builtin.NewMentionOptIn(store.DB()))
-
 	// Register Discord OnReady callback (after agent is created so closure can reference ag).
 	if dc != nil {
 		dc.OnReady(func(s *discordgo.Session) {
@@ -247,7 +244,7 @@ func run() error {
 		})
 		mux.HandleFunc("GET /internal/context", func(w http.ResponseWriter, r *http.Request) {
 				actx := ag.AgentContext()
-				msgs := actx.Messages()
+				msgs := actx.MessagesWithSystem()
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]any{
 					"messages":         msgs,

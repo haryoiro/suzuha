@@ -29,7 +29,20 @@ const (
 
 	// postProbabilityMax is the posting probability at maximum boredom.
 	postProbabilityMax = 0.85
+
+	// mentionBoredomMin is the minimum boredom level to consider mentioning someone.
+	mentionBoredomMin = 50.0
+
+	// mentionProbabilityMax is the mention probability at maximum boredom.
+	mentionProbabilityMax = 0.40
 )
+
+// mentionableUser holds a user eligible for proactive mentions.
+type mentionableUser struct {
+	DisplayName   string
+	DiscordUserID string
+	Affinity      float64
+}
 
 // persistedState is the JSON-serializable state saved to task_state table.
 type persistedState struct {
@@ -119,11 +132,22 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	recentMemories := fetchRecentContext(ctx, cc, 8)
 	pastMutterings := fetchPastMutterings(ctx, cc, 8)
 
+	// 3.5. Check for mentionable users (affinity-based).
+	mentionTarget := selectMentionTarget(boredom, fetchMentionableUsers(ctx, cc.DB))
+
 	// 4. Generate muttering via LLM (boredom-aware).
-	message, err := generateMuttering(ctx, cc, systemPrompt, localNow, timeHint, boredom, recentMemories, pastMutterings)
+	message, err := generateMuttering(ctx, cc, systemPrompt, localNow, timeHint, boredom, recentMemories, pastMutterings, mentionTarget)
 	if err != nil {
 		cc.Logger.Error("topics: generate muttering", "error", err)
 		return nil
+	}
+
+	// 4.5. Prepend Discord mention tag if targeting a user.
+	if mentionTarget != nil {
+		mention := fmt.Sprintf("<@%s>", mentionTarget.DiscordUserID)
+		if !strings.Contains(message, mention) {
+			message = mention + " " + message
+		}
 	}
 
 	// 5. Send.
@@ -145,6 +169,10 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 	if result.MessageID != "" {
 		mem.Metadata["message_id"] = result.MessageID
+	}
+	if mentionTarget != nil {
+		mem.Metadata["mentioned_discord_id"] = mentionTarget.DiscordUserID
+		mem.Metadata["mentioned_name"] = mentionTarget.DisplayName
 	}
 	if saveErr := cc.Memory.Save(ctx, mem); saveErr != nil {
 		cc.Logger.Error("topics: save memory", "error", saveErr)
@@ -291,10 +319,15 @@ func generateMuttering(
 	boredom float64,
 	recentMemories []memory.Memory,
 	pastMutterings []memory.Memory,
+	mentionTarget *mentionableUser,
 ) (string, error) {
 	var sb strings.Builder
 
-	sb.WriteString("独り言をひとつつぶやいて。誰かに話しかけるんじゃなくて、ふと頭に浮かんだことをそのままぽろっと。\n\n")
+	if mentionTarget != nil {
+		fmt.Fprintf(&sb, "%sさんにちょっと話しかけて。気軽に、ふと思いついたことを共有する感じで。\n\n", mentionTarget.DisplayName)
+	} else {
+		sb.WriteString("独り言をひとつつぶやいて。誰かに話しかけるんじゃなくて、ふと頭に浮かんだことをそのままぽろっと。\n\n")
+	}
 
 	fmt.Fprintf(&sb, "今: %s（%s）\n", now.Format("15:04"), timeHint)
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
@@ -316,13 +349,16 @@ func generateMuttering(
 	}
 
 	sb.WriteString("ルール:\n")
-	sb.WriteString("- 完全な独り言。誰にも向けてない\n")
-	sb.WriteString("- ふと思ったこと、感じたこと、気づいたこと\n")
+	if mentionTarget != nil {
+		fmt.Fprintf(&sb, "- %sさんに向けた一言。軽い話しかけ、共有、ツッコミなど\n", mentionTarget.DisplayName)
+		sb.WriteString("- メンションタグは付けなくていい（自動で付く）\n")
+	} else {
+		sb.WriteString("- 完全な独り言。誰にも向けてない\n")
+		sb.WriteString("- メンションしない\n")
+	}
 	sb.WriteString("- 1文。長くても2文。短いほどいい\n")
-	sb.WriteString("- 質問しない。返事を期待しない\n")
-	sb.WriteString("- メンションしない\n")
 	sb.WriteString("- 架空の具体的事柄（作品名、人名、商品名等）を捏造しない\n")
-	sb.WriteString("- 感覚的なこと。気分、天気、時間の感覚、ぼんやりした感想、どうでもいい気づき\n")
+	sb.WriteString("- 自然体で。かしこまらない\n")
 	sb.WriteString("- つぶやきだけを出力。前置きや説明は不要\n")
 
 	messages := []providers.Message{
@@ -337,6 +373,57 @@ func generateMuttering(
 		return "", fmt.Errorf("llm: %w", err)
 	}
 	return strings.TrimSpace(resp.Text), nil
+}
+
+// fetchMentionableUsers queries non-bot users with positive affinity.
+func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
+	if db == nil {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT u.display_name, pl.platform_user_id, u.affinity
+		FROM users u
+		JOIN platform_links pl ON pl.user_id = u.id AND pl.platform = 'discord'
+		WHERE u.is_bot = 0 AND u.affinity > 0
+		ORDER BY u.affinity DESC`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var users []mentionableUser
+	for rows.Next() {
+		var mu mentionableUser
+		if err := rows.Scan(&mu.DisplayName, &mu.DiscordUserID, &mu.Affinity); err != nil {
+			continue
+		}
+		users = append(users, mu)
+	}
+	return users
+}
+
+// selectMentionTarget probabilistically picks a user to mention based on boredom.
+func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableUser {
+	if len(users) == 0 || boredom < mentionBoredomMin {
+		return nil
+	}
+	prob := (boredom - mentionBoredomMin) / (boredomMax - mentionBoredomMin) * mentionProbabilityMax
+	if rand.Float64() >= prob {
+		return nil
+	}
+	// Weighted random: use affinity as weight.
+	var totalWeight float64
+	for _, u := range users {
+		totalWeight += u.Affinity
+	}
+	r := rand.Float64() * totalWeight
+	for _, u := range users {
+		r -= u.Affinity
+		if r <= 0 {
+			return &u
+		}
+	}
+	return &users[0]
 }
 
 // truncateStr shortens a string to maxRunes runes.
