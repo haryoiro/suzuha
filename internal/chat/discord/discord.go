@@ -46,7 +46,7 @@ func (c *Chat) Run(ctx context.Context) error {
 	}
 	c.session = session
 
-	session.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
+	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// Ignore own messages.
@@ -64,9 +64,11 @@ func (c *Chat) Run(ctx context.Context) error {
 
 		// Resolve mention tags to readable names.
 		// Bot's own mention is stripped entirely; other users become @DisplayName.
+		// Discord uses both <@ID> and <@!ID> (nickname mention) formats.
 		content := m.Content
 		if isMention {
 			content = strings.ReplaceAll(content, "<@"+s.State.User.ID+">", "")
+			content = strings.ReplaceAll(content, "<@!"+s.State.User.ID+">", "")
 		}
 		for _, u := range m.Mentions {
 			if u.ID == s.State.User.ID {
@@ -77,13 +79,25 @@ func (c *Chat) Run(ctx context.Context) error {
 				displayName = u.GlobalName
 			}
 			content = strings.ReplaceAll(content, "<@"+u.ID+">", "@"+displayName)
+			content = strings.ReplaceAll(content, "<@!"+u.ID+">", "@"+displayName)
 		}
 		content = strings.TrimSpace(content)
 
 		// Detect DM (no guild = direct message).
 		isDM := m.GuildID == ""
 
-		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM)
+		// Resolve guild and channel names from session state cache.
+		var guildName, channelName string
+		if m.GuildID != "" {
+			if g, err := s.State.Guild(m.GuildID); err == nil {
+				guildName = g.Name
+			}
+		}
+		if ch, err := s.State.Channel(m.ChannelID); err == nil {
+			channelName = ch.Name
+		}
+
+		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM, m.GuildID, guildName, channelName)
 		c.bus.Publish(evt)
 	})
 
@@ -164,19 +178,22 @@ func (c *Chat) SendReply(_ context.Context, channel, text, replyToID string) (st
 }
 
 // messageToEvent converts a Discord message to an Event.
-func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM bool) event.Event {
+func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM bool, guildID, guildName, channelName string) event.Event {
 	return event.Event{
 		ID:     uuid.NewString(),
 		Source: "discord",
 		Type:   "message",
 		Payload: map[string]any{
-			"content":    content,
-			"channel":    channel,
-			"message_id": messageID,
-			"user_id":    userID,
-			"user_name":  userName,
-			"is_mention": isMention,
-			"is_dm":      isDM,
+			"content":      content,
+			"channel":      channel,
+			"message_id":   messageID,
+			"user_id":      userID,
+			"user_name":    userName,
+			"is_mention":   isMention,
+			"is_dm":        isDM,
+			"guild_id":     guildID,
+			"guild_name":   guildName,
+			"channel_name": channelName,
 		},
 		Timestamp: time.Now(),
 	}

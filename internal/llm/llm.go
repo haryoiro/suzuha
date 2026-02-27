@@ -20,9 +20,12 @@ type Message struct {
 	Content    string    `json:"content"`
 	UserID     string    `json:"user_id,omitempty"`
 	UserName   string    `json:"user_name,omitempty"`
-	Source     string    `json:"source,omitempty"` // "discord", "cli"
-	Channel    string    `json:"channel,omitempty"`
-	MessageID  string    `json:"message_id,omitempty"`
+	Source      string    `json:"source,omitempty"` // "discord", "cli"
+	Channel     string    `json:"channel,omitempty"`
+	ChannelName string    `json:"channel_name,omitempty"`
+	GuildID     string    `json:"guild_id,omitempty"`
+	GuildName   string    `json:"guild_name,omitempty"`
+	MessageID   string    `json:"message_id,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
 	ToolCallID string    `json:"tool_call_id,omitempty"`
 
@@ -213,8 +216,8 @@ func convertMessages(msgs []Message) []providers.Message {
 		// Only tag user messages — tagging assistant messages causes the LLM
 		// to mimic the format and include channel IDs in its responses.
 		if m.Role == "user" && m.MessageID != "" {
-			content = fmt.Sprintf("[channel_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
-				m.Channel, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
+			content = fmt.Sprintf("[server=%s channel=#%s channel_id=%s guild_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
+				m.GuildName, m.ChannelName, m.Channel, m.GuildID, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
 		}
 		out[i] = providers.Message{
 			Role:       m.Role,
