@@ -222,7 +222,11 @@ func run() error {
 			mux := http.NewServeMux()
 			mux.Handle("/internal/logs", observe.LogHandler(logRing))
 			mux.HandleFunc("POST /internal/compact", func(w http.ResponseWriter, r *http.Request) {
-				ag.ForceCompact(r.Context())
+				// Use a detached context so the compact won't be canceled
+				// when the HTTP request finishes or the admin proxy times out.
+				compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+				ag.ForceCompact(compactCtx)
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprintf(w, `{"ok":true,"message_count":%d}`, ag.AgentContext().Len())
 			})

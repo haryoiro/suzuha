@@ -18,7 +18,7 @@ type AgentHandler struct {
 func NewAgentHandler(baseURL string, logger *slog.Logger) *AgentHandler {
 	return &AgentHandler{
 		baseURL: baseURL,
-		client:  &http.Client{Timeout: 60 * time.Second},
+		client:  &http.Client{Timeout: 5 * time.Minute},
 		logger:  logger,
 	}
 }
