@@ -98,8 +98,12 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	if len(cfg) > 0 {
 		_ = json.Unmarshal(cfg, &mc)
 	}
+	// If no channel_id in config, look for a home channel.
 	if mc.ChannelID == "" {
-		cc.Logger.Warn("topics: no channel_id configured, skipping")
+		mc.ChannelID = findHomeChannel(ctx, cc.DB)
+	}
+	if mc.ChannelID == "" {
+		cc.Logger.Warn("topics: no channel_id configured and no home channel, skipping")
 		return nil
 	}
 
@@ -491,6 +495,18 @@ func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableU
 		}
 	}
 	return &users[0]
+}
+
+// findHomeChannel looks up the home channel from channel_settings.
+func findHomeChannel(ctx context.Context, db *sql.DB) string {
+	var channelID string
+	err := db.QueryRowContext(ctx,
+		`SELECT channel_id FROM channel_settings WHERE home = 1 LIMIT 1`,
+	).Scan(&channelID)
+	if err != nil {
+		return ""
+	}
+	return channelID
 }
 
 // truncateStr shortens a string to maxRunes runes.

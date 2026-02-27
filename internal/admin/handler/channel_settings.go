@@ -26,7 +26,7 @@ type channelSettingJSON struct {
 	GuildName          string  `json:"guild_name"`
 	UserCount          int     `json:"user_count"`
 	Mode               string  `json:"mode"`
-	UseIdentity        bool    `json:"use_identity"`
+	Home        bool    `json:"home"`
 	LastUserMessageAt  *string `json:"last_user_message_at"`
 	SettingsUpdatedAt  *string `json:"settings_updated_at"`
 }
@@ -41,7 +41,7 @@ func (h *ChannelSettingsHandler) List(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(g.name, '') AS guild_name,
 		       COUNT(DISTINCT ugc.user_id) AS user_count,
 		       COALESCE(cs.mode, 'active') AS mode,
-		       COALESCE(cs.use_identity, 0) AS use_identity,
+		       COALESCE(cs.home, 0) AS home,
 		       ca.last_user_message_at,
 		       cs.updated_at AS settings_updated_at
 		FROM user_guild_channels ugc
@@ -71,7 +71,7 @@ func (h *ChannelSettingsHandler) List(w http.ResponseWriter, r *http.Request) {
 		var e channelSettingJSON
 		var lastMsg, settingsUpdated sql.NullString
 		if err := rows.Scan(&e.ChannelID, &e.ChannelName, &e.GuildID, &e.GuildName,
-			&e.UserCount, &e.Mode, &e.UseIdentity, &lastMsg, &settingsUpdated); err != nil {
+			&e.UserCount, &e.Mode, &e.Home, &lastMsg, &settingsUpdated); err != nil {
 			h.logger.Error("scan channel setting", "error", err)
 			continue
 		}
@@ -99,7 +99,7 @@ func (h *ChannelSettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) 
 
 	var body struct {
 		Mode        string `json:"mode"`
-		UseIdentity bool   `json:"use_identity"`
+		Home bool   `json:"home"`
 		GuildID     string `json:"guild_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -118,14 +118,14 @@ func (h *ChannelSettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) 
 
 	now := time.Now()
 	_, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO channel_settings (channel_id, guild_id, mode, use_identity, updated_at)
+		`INSERT INTO channel_settings (channel_id, guild_id, mode, home, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(channel_id) DO UPDATE SET
 		   guild_id = excluded.guild_id,
 		   mode = excluded.mode,
-		   use_identity = excluded.use_identity,
+		   home = excluded.home,
 		   updated_at = excluded.updated_at`,
-		channelID, body.GuildID, body.Mode, body.UseIdentity, now)
+		channelID, body.GuildID, body.Mode, body.Home, now)
 	if err != nil {
 		h.logger.Error("upsert channel setting", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)

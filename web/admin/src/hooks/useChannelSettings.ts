@@ -24,7 +24,7 @@ export function useUpsertChannelSetting() {
     }: {
       channelId: string;
       mode: string;
-      use_identity: boolean;
+      home: boolean;
       guild_id?: string;
     }) => channelSettingsApi.upsert(channelId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["channel-settings"] }),

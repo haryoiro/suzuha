@@ -61,25 +61,25 @@ export function DiscordPage() {
       {
         channelId: record.channel_id,
         mode,
-        use_identity: record.use_identity,
+        home: record.home,
         guild_id: record.guild_id,
       },
       { onSuccess: () => message.success(`${record.channel_name}: ${mode}`) }
     );
   };
 
-  const handleIdentityChange = (record: ChannelSetting, checked: boolean) => {
+  const handleHomeChange = (record: ChannelSetting, checked: boolean) => {
     upsertMutation.mutate(
       {
         channelId: record.channel_id,
         mode: record.mode,
-        use_identity: checked,
+        home: checked,
         guild_id: record.guild_id,
       },
       {
         onSuccess: () =>
           message.success(
-            `${record.channel_name}: identity ${checked ? "ON" : "OFF"}`
+            `${record.channel_name}: home ${checked ? "ON" : "OFF"}`
           ),
       }
     );
@@ -152,15 +152,15 @@ export function DiscordPage() {
       ),
     },
     {
-      title: "Identity",
-      dataIndex: "use_identity",
-      key: "use_identity",
+      title: "Home",
+      dataIndex: "home",
+      key: "home",
       width: 90,
       render: (_: boolean, record: ChannelSetting) => (
         <Switch
           size="small"
-          checked={record.use_identity}
-          onChange={(checked) => handleIdentityChange(record, checked)}
+          checked={record.home}
+          onChange={(checked) => handleHomeChange(record, checked)}
         />
       ),
     },

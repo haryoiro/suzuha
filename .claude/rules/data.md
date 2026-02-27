@@ -122,7 +122,7 @@ Topics タスクは `last_user_message_at > 前回投稿時刻` で反応有無�
 | channel_id | TEXT PK | チャンネル ID |
 | guild_id | TEXT | ギルド ID（クエリ用に非正規化） |
 | mode | TEXT | `active`（読み書き）/ `listen`（閲覧のみ）/ `disabled`（無視） |
-| use_identity | BOOLEAN | 自分の名前を使っていいチャンネル |
+| home | BOOLEAN | 住処チャンネル（独り言を投稿する場所） |
 | updated_at | DATETIME | 最終更新日時 |
 
 行が無いチャンネルはデフォルト `active`。Agent は起動時にキャッシュし 5 分周期でリロード。

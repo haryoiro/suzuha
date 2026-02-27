@@ -229,7 +229,7 @@ export interface ChannelSetting {
   guild_name: string;
   user_count: number;
   mode: "active" | "listen" | "disabled";
-  use_identity: boolean;
+  home: boolean;
   last_user_message_at?: string;
   settings_updated_at?: string;
 }
@@ -239,7 +239,7 @@ export const channelSettingsApi = {
     fetchJSON<{ data: ChannelSetting[] }>(
       `/api/channel-settings${guildId ? `?guild_id=${guildId}` : ""}`
     ),
-  upsert: (channelId: string, body: { mode: string; use_identity: boolean; guild_id?: string }) =>
+  upsert: (channelId: string, body: { mode: string; home: boolean; guild_id?: string }) =>
     fetchJSON<{ ok: boolean }>(`/api/channel-settings/${channelId}`, {
       method: "PUT",
       body: JSON.stringify(body),

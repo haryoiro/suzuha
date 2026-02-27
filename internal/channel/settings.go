@@ -21,7 +21,7 @@ type Settings struct {
 	ChannelID   string    `json:"channel_id"`
 	GuildID     string    `json:"guild_id"`
 	Mode        Mode      `json:"mode"`
-	UseIdentity bool      `json:"use_identity"`
+	Home        bool      `json:"home"` // bot's home channel — posts monologues here
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
@@ -63,14 +63,14 @@ func (s *Store) Set(ctx context.Context, cs *Settings) error {
 	}
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO channel_settings (channel_id, guild_id, mode, use_identity, updated_at)
+		`INSERT INTO channel_settings (channel_id, guild_id, mode, home, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(channel_id) DO UPDATE SET
 		   guild_id = excluded.guild_id,
 		   mode = excluded.mode,
-		   use_identity = excluded.use_identity,
+		   home = excluded.home,
 		   updated_at = excluded.updated_at`,
-		cs.ChannelID, cs.GuildID, string(cs.Mode), cs.UseIdentity, now)
+		cs.ChannelID, cs.GuildID, string(cs.Mode), cs.Home, now)
 	if err != nil {
 		return err
 	}
@@ -101,11 +101,11 @@ func (s *Store) List(ctx context.Context, guildID string) ([]Settings, error) {
 	var err error
 	if guildID != "" {
 		rows, err = s.db.QueryContext(ctx,
-			`SELECT channel_id, guild_id, mode, use_identity, updated_at
+			`SELECT channel_id, guild_id, mode, home, updated_at
 			 FROM channel_settings WHERE guild_id = ? ORDER BY updated_at DESC`, guildID)
 	} else {
 		rows, err = s.db.QueryContext(ctx,
-			`SELECT channel_id, guild_id, mode, use_identity, updated_at
+			`SELECT channel_id, guild_id, mode, home, updated_at
 			 FROM channel_settings ORDER BY updated_at DESC`)
 	}
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *Store) List(ctx context.Context, guildID string) ([]Settings, error) {
 	for rows.Next() {
 		var cs Settings
 		var mode string
-		if err := rows.Scan(&cs.ChannelID, &cs.GuildID, &mode, &cs.UseIdentity, &cs.UpdatedAt); err != nil {
+		if err := rows.Scan(&cs.ChannelID, &cs.GuildID, &mode, &cs.Home, &cs.UpdatedAt); err != nil {
 			continue
 		}
 		cs.Mode = Mode(mode)
@@ -126,10 +126,22 @@ func (s *Store) List(ctx context.Context, guildID string) ([]Settings, error) {
 	return result, nil
 }
 
+// HomeChannelID returns the channel ID marked as home, or "" if none.
+func (s *Store) HomeChannelID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, cs := range s.cache {
+		if cs.Home {
+			return cs.ChannelID
+		}
+	}
+	return ""
+}
+
 // Reload refreshes the in-memory cache from the database.
 func (s *Store) Reload(ctx context.Context) error {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT channel_id, guild_id, mode, use_identity, updated_at
+		`SELECT channel_id, guild_id, mode, home, updated_at
 		 FROM channel_settings`)
 	if err != nil {
 		return err
@@ -140,7 +152,7 @@ func (s *Store) Reload(ctx context.Context) error {
 	for rows.Next() {
 		var cs Settings
 		var mode string
-		if err := rows.Scan(&cs.ChannelID, &cs.GuildID, &mode, &cs.UseIdentity, &cs.UpdatedAt); err != nil {
+		if err := rows.Scan(&cs.ChannelID, &cs.GuildID, &mode, &cs.Home, &cs.UpdatedAt); err != nil {
 			continue
 		}
 		cs.Mode = Mode(mode)

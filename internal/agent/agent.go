@@ -272,11 +272,11 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 			persistContext(ctx, a.db, a.ctx, a.logger)
 			return nil
 		}
-		// Inject identity hint for channels that allow it.
-		if a.channelSettings.Get(respondChannel).UseIdentity {
+		// Home channel: the bot's own space — feel free to be yourself.
+		if a.channelSettings.Get(respondChannel).Home {
 			ephemeral = append(ephemeral, llm.Message{
 				Role:      "system",
-				Content:   "このチャンネルでは自分の名前（のの）を使っていい。普段は名前を隠しているけど、ここでは素の自分でいられる。",
+				Content:   "ここは自分の住処チャンネルです。リラックスして自由に話して。",
 				Timestamp: time.Now(),
 			})
 		}
