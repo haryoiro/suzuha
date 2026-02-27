@@ -112,6 +112,7 @@ export interface User {
   id: string;
   display_name: string;
   role: string;
+  is_bot: boolean;
   affinity: number;
   metadata?: Record<string, unknown>;
   created_at: string;
@@ -133,15 +134,106 @@ export interface AffinityEvent {
   created_at: string;
 }
 
+export interface UserGuildChannel {
+  guild_id: string;
+  guild_name: string;
+  channel_id: string;
+  channel_name: string;
+  last_seen_at: string;
+}
+
+export interface UserMemory {
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const usersApi = {
   list: (params: ListParams) =>
     fetchJSON<{ data: User[]; total: number }>(`/api/users${toQuery(params)}`),
   get: (id: string) =>
     fetchJSON<{ data: User }>(`/api/users/${id}`),
+  update: (id: string, body: { display_name?: string; role?: string; is_bot?: boolean }) =>
+    fetchJSON<{ ok: boolean }>(`/api/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   affinityEvents: (id: string, limit?: number) =>
     fetchJSON<{ data: AffinityEvent[] }>(
       `/api/users/${id}/affinity${limit ? `?limit=${limit}` : ""}`
     ),
+  guilds: (id: string) =>
+    fetchJSON<{ data: UserGuildChannel[] }>(`/api/users/${id}/guilds`),
+  memories: (id: string, limit?: number) =>
+    fetchJSON<{ data: UserMemory[] }>(
+      `/api/users/${id}/memories${limit ? `?limit=${limit}` : ""}`
+    ),
+};
+
+// Guilds API
+export interface Guild {
+  id: string;
+  name: string;
+  updated_at: string;
+  member_count: number;
+  channel_count: number;
+}
+
+export interface GuildChannel {
+  channel_id: string;
+  channel_name: string;
+  user_count: number;
+  last_seen_at: string;
+  last_user_message_at?: string;
+}
+
+export interface ChannelEntry {
+  channel_id: string;
+  channel_name: string;
+  guild_id: string;
+  guild_name: string;
+}
+
+export const guildsApi = {
+  list: () =>
+    fetchJSON<{ data: Guild[] }>("/api/guilds"),
+  channels: (id: string) =>
+    fetchJSON<{ data: GuildChannel[] }>(`/api/guilds/${id}/channels`),
+  allChannels: () =>
+    fetchJSON<{ data: ChannelEntry[] }>("/api/channels"),
+};
+
+// Scheduled Actions API
+export interface ScheduledAction {
+  id: string;
+  channel_id: string;
+  content: string;
+  scheduled_at: string;
+  cron_expr?: string;
+  created_by?: string;
+  status: string;
+  executed_at?: string;
+  created_at: string;
+}
+
+export const actionsApi = {
+  list: (status?: string) =>
+    fetchJSON<{ data: ScheduledAction[] }>(
+      `/api/scheduled-actions${status ? `?status=${status}` : ""}`
+    ),
+  create: (body: { channel_id: string; content: string; scheduled_at: string; cron_expr?: string }) =>
+    fetchJSON<{ data: { id: string } }>("/api/scheduled-actions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  update: (id: string, body: { channel_id?: string; content?: string; scheduled_at?: string; cron_expr?: string; status?: string }) =>
+    fetchJSON<{ ok: boolean }>(`/api/scheduled-actions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  delete: (id: string) =>
+    fetch(`${BASE_URL}/api/scheduled-actions/${id}`, { method: "DELETE" }),
 };
 
 // Feeds API

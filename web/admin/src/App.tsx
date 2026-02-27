@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ConfigProvider, Layout, Menu, theme, Drawer, Button, Grid } from "antd";
 import {
   DashboardOutlined,
@@ -9,6 +9,7 @@ import {
   TeamOutlined,
   MessageOutlined,
   WifiOutlined,
+  ClockCircleOutlined,
   MenuOutlined,
 } from "@ant-design/icons";
 import { DashboardPage } from "./routes/index";
@@ -20,6 +21,7 @@ import { UsersPage } from "./routes/users/index";
 import { ContextPage } from "./routes/context";
 import { FeedsPage } from "./routes/feeds/index";
 import { PromptsPage } from "./routes/prompts";
+import { ActionsPage } from "./routes/actions";
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -30,22 +32,48 @@ type Page =
   | { key: "memory-detail"; id: string }
   | { key: "feeds" }
   | { key: "users" }
+  | { key: "actions" }
   | { key: "prompts" }
   | { key: "metrics" }
   | { key: "context" }
   | { key: "logs" };
 
+/** Parse location hash into a Page. */
+function parseHash(): Page {
+  const hash = window.location.hash.replace("#", "");
+  if (!hash) return { key: "dashboard" };
+  if (hash.startsWith("memory/")) {
+    return { key: "memory-detail", id: hash.slice("memory/".length) };
+  }
+  const valid = ["dashboard", "memories", "feeds", "users", "actions", "prompts", "metrics", "context", "logs"];
+  if (valid.includes(hash)) return { key: hash } as Page;
+  return { key: "dashboard" };
+}
+
 export function App() {
-  const [page, setPage] = useState<Page>({ key: "dashboard" });
+  const [page, setPageState] = useState<Page>(parseHash);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+
+  const setPage = useCallback((p: Page) => {
+    const hash = p.key === "memory-detail" ? `memory/${p.id}` : p.key === "dashboard" ? "" : p.key;
+    window.location.hash = hash;
+    setPageState(p);
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => setPageState(parseHash());
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const menuItems = [
     { key: "dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
     { key: "memories", icon: <DatabaseOutlined />, label: "Memories" },
     { key: "feeds", icon: <WifiOutlined />, label: "Feeds" },
     { key: "users", icon: <TeamOutlined />, label: "Users" },
+    { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
@@ -68,6 +96,8 @@ export function App() {
         return <FeedsPage />;
       case "users":
         return <UsersPage />;
+      case "actions":
+        return <ActionsPage />;
       case "prompts":
         return <PromptsPage />;
       case "metrics":

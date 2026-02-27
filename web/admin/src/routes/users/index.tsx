@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Table, Tag, Input, Space, Typography, Card, Descriptions, Modal, List } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import { Table, Tag, Input, Space, Typography, Card, Descriptions, Modal, List, Button, Form, Switch, Select, message } from "antd";
+import { SearchOutlined, RobotOutlined, EditOutlined } from "@ant-design/icons";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
-import { useUsers, useUser, useAffinityEvents } from "../../hooks/useUsers";
-import type { User, PlatformLink } from "../../lib/api";
+import { useUsers, useUser, useAffinityEvents, useUserGuilds, useUserMemories } from "../../hooks/useUsers";
+import { usersApi, type User, type PlatformLink, type UserGuildChannel } from "../../lib/api";
+import { formatJST } from "../../lib/date";
 
 const { Title, Text } = Typography;
 
@@ -21,7 +23,10 @@ export function UsersPage() {
       dataIndex: "display_name",
       key: "display_name",
       render: (name: string, record: User) => (
-        <a onClick={() => setSelectedUserId(record.id)}>{name || "(unnamed)"}</a>
+        <Space>
+          <a onClick={() => setSelectedUserId(record.id)}>{name || "(unnamed)"}</a>
+          {record.is_bot && <Tag icon={<RobotOutlined />} color="purple">BOT</Tag>}
+        </Space>
       ),
     },
     {
@@ -30,7 +35,7 @@ export function UsersPage() {
       key: "role",
       width: 120,
       render: (role: string) => {
-        const color = role === "admin" ? "red" : role === "moderator" ? "orange" : "blue";
+        const color = role === "owner" ? "red" : role === "admin" ? "orange" : "blue";
         return <Tag color={color}>{role}</Tag>;
       },
     },
@@ -63,7 +68,7 @@ export function UsersPage() {
       key: "updated_at",
       width: 180,
       responsive: ["md"],
-      render: (v: string) => new Date(v).toLocaleString(),
+      render: (v: string) => formatJST(v),
     },
   ];
 
@@ -108,6 +113,20 @@ export function UsersPage() {
   );
 }
 
+/** Group guild-channel entries by guild for display. */
+function groupByGuild(entries: UserGuildChannel[]) {
+  const map = new Map<string, { name: string; channels: { id: string; name: string; lastSeen: string }[] }>();
+  for (const e of entries) {
+    let guild = map.get(e.guild_id);
+    if (!guild) {
+      guild = { name: e.guild_name, channels: [] };
+      map.set(e.guild_id, guild);
+    }
+    guild.channels.push({ id: e.channel_id, name: e.channel_name, lastSeen: e.last_seen_at });
+  }
+  return Array.from(map.entries());
+}
+
 function UserDetailModal({
   userId,
   onClose,
@@ -115,64 +134,156 @@ function UserDetailModal({
   userId: string | null;
   onClose: () => void;
 }) {
+  const queryClient = useQueryClient();
   const { data: userData } = useUser(userId ?? "");
   const { data: eventsData } = useAffinityEvents(userId ?? "", 20);
+  const { data: guildsData } = useUserGuilds(userId ?? "");
+  const { data: memoriesData } = useUserMemories(userId ?? "", 20);
+  const [editing, setEditing] = useState(false);
 
   const user = userData?.data;
   const events = eventsData?.data ?? [];
+  const guildEntries = guildsData?.data ?? [];
+  const memories = memoriesData?.data ?? [];
+
+  const handleSave = async (values: { display_name: string; role: string; is_bot: boolean }) => {
+    if (!userId) return;
+    try {
+      await usersApi.update(userId, values);
+      message.success("Updated");
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch {
+      message.error("Update failed");
+    }
+  };
 
   return (
     <Modal
-      title={user?.display_name || "User Detail"}
+      title={
+        <Space>
+          {user?.display_name || "User Detail"}
+          {user?.is_bot && <Tag icon={<RobotOutlined />} color="purple">BOT</Tag>}
+        </Space>
+      }
       open={!!userId}
-      onCancel={onClose}
+      onCancel={() => { setEditing(false); onClose(); }}
       footer={null}
       width="90vw"
       style={{ maxWidth: 700 }}
     >
       {user && (
         <Space direction="vertical" style={{ width: "100%" }} size="large">
-          <Card size="small">
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="ID">
-                <Text code copyable>{user.id}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Display Name">
-                {user.display_name}
-              </Descriptions.Item>
-              <Descriptions.Item label="Role">
-                <Tag>{user.role}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Affinity">
-                <Text
-                  style={{
-                    color:
-                      user.affinity > 0
-                        ? "#52c41a"
-                        : user.affinity < 0
-                          ? "#ff4d4f"
-                          : "#8c8c8c",
-                  }}
-                >
-                  {user.affinity.toFixed(1)}
-                </Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Created">
-                {new Date(user.created_at).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="Updated">
-                {new Date(user.updated_at).toLocaleString()}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
+          {editing ? (
+            <Card size="small" title="Edit User">
+              <Form
+                layout="vertical"
+                initialValues={{ display_name: user.display_name, role: user.role, is_bot: user.is_bot }}
+                onFinish={handleSave}
+              >
+                <Form.Item label="Display Name" name="display_name">
+                  <Input />
+                </Form.Item>
+                <Form.Item label="Role" name="role">
+                  <Select options={[
+                    { value: "owner", label: "owner" },
+                    { value: "member", label: "member" },
+                    { value: "guest", label: "guest" },
+                  ]} />
+                </Form.Item>
+                <Form.Item label="Bot" name="is_bot" valuePropName="checked">
+                  <Switch />
+                </Form.Item>
+                <Space>
+                  <Button type="primary" htmlType="submit">Save</Button>
+                  <Button onClick={() => setEditing(false)}>Cancel</Button>
+                </Space>
+              </Form>
+            </Card>
+          ) : (
+            <Card size="small" extra={<Button icon={<EditOutlined />} size="small" onClick={() => setEditing(true)}>Edit</Button>}>
+              <Descriptions column={1} size="small">
+                <Descriptions.Item label="ID">
+                  <Text code copyable>{user.id}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="Display Name">
+                  {user.display_name || <Text type="secondary">(unnamed)</Text>}
+                </Descriptions.Item>
+                <Descriptions.Item label="Role">
+                  <Tag>{user.role}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Affinity">
+                  <Text
+                    style={{
+                      color:
+                        user.affinity > 0
+                          ? "#52c41a"
+                          : user.affinity < 0
+                            ? "#ff4d4f"
+                            : "#8c8c8c",
+                    }}
+                  >
+                    {user.affinity.toFixed(1)}
+                  </Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="Created">
+                  {formatJST(user.created_at)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Updated">
+                  {formatJST(user.updated_at)}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+          )}
 
           {user.platforms && user.platforms.length > 0 && (
             <Card title="Platform Links" size="small">
-              {user.platforms.map((p) => (
-                <Tag key={`${p.platform}-${p.platform_user_id}`}>
-                  {p.platform}: {p.platform_name || p.platform_user_id}
-                </Tag>
+              <List
+                size="small"
+                dataSource={user.platforms}
+                renderItem={(p) => (
+                  <List.Item>
+                    <Space>
+                      <Tag color="blue">{p.platform}</Tag>
+                      <Text>{p.platform_name || "(no name)"}</Text>
+                      <Text code copyable style={{ fontSize: 12 }}>{p.platform_user_id}</Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </Card>
+          )}
+
+          {guildEntries.length > 0 && (
+            <Card title="Servers" size="small">
+              {groupByGuild(guildEntries).map(([guildId, guild]) => (
+                <div key={guildId} style={{ marginBottom: 8 }}>
+                  <Text strong>{guild.name || guildId}</Text>
+                  <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>{guildId}</Text>
+                  <div style={{ marginLeft: 16, marginTop: 4 }}>
+                    {guild.channels.map((ch) => (
+                      <Tag key={ch.id} style={{ marginBottom: 4 }}>
+                        #{ch.name || ch.id}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
               ))}
+            </Card>
+          )}
+
+          {memories.length > 0 && (
+            <Card title="Known Facts" size="small">
+              <List
+                size="small"
+                dataSource={memories}
+                renderItem={(m) => (
+                  <List.Item>
+                    <Text>{m.content}</Text>
+                  </List.Item>
+                )}
+              />
             </Card>
           )}
 
@@ -196,7 +307,7 @@ function UserDetailModal({
                       </Text>
                       <Text type="secondary">{e.reason}</Text>
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        {new Date(e.created_at).toLocaleString()}
+                        {formatJST(e.created_at)}
                       </Text>
                     </Space>
                   </List.Item>
