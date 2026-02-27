@@ -63,22 +63,17 @@ func New(
 ) *Agent {
 	agentCtx := NewContext(cfg.MaxContextTokens)
 
+	// System prompt is stored separately — immune to compaction/truncation.
+	agentCtx.SetSystemPrompt(cfg.SystemPrompt)
+
 	// Try to restore context from previous session.
 	if saved := loadContext(db, logger); len(saved) > 0 {
-		// Update system prompt in case it changed since last run.
-		if len(saved) > 0 && saved[0].Role == "system" {
-			saved[0].Content = cfg.SystemPrompt
-			saved[0].Timestamp = time.Now()
+		// Backward compat: strip system prompt from messages if present.
+		if saved[0].Role == "system" {
+			saved = saved[1:]
 		}
 		agentCtx.ReplaceAll(saved)
 		logger.Info("context restored from db", "messages", len(saved))
-	} else if cfg.SystemPrompt != "" {
-		// Fresh start — inject system prompt.
-		agentCtx.Add(llm.Message{
-			Role:      "system",
-			Content:   cfg.SystemPrompt,
-			Timestamp: time.Now(),
-		})
 	}
 
 	return &Agent{
@@ -144,9 +139,20 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
 			a.logger.Warn("user resolve failed", "error", err)
-		} else if u.DisplayName != "" {
-			msg.UserName = u.DisplayName
-			a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role, "affinity", u.Affinity)
+		} else {
+			if u.DisplayName != "" {
+				msg.UserName = u.DisplayName
+				a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role, "affinity", u.Affinity)
+			}
+			// 2.1. Track user's guild/channel association.
+			guildID, _ := evt.Payload["guild_id"].(string)
+			guildName, _ := evt.Payload["guild_name"].(string)
+			channelName, _ := evt.Payload["channel_name"].(string)
+			if guildID != "" {
+				if err := a.users.TrackGuildChannel(ctx, u.ID, guildID, guildName, msg.Channel, channelName); err != nil {
+					a.logger.Warn("track guild channel failed", "error", err)
+				}
+			}
 		}
 	}
 
@@ -204,8 +210,8 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		ToolCalls: resp.ToolCalls,
 	})
 
-	// 11. Send response (strip LLM thinking tags and silent markers).
-	text := stripThinkTags(resp.Text)
+	// 11. Send response (strip LLM thinking tags, directive tags, and silent markers).
+	text := stripDirectiveTags(stripThinkTags(resp.Text))
 	if isSilentResponse(text) {
 		a.logger.Info("skipping response (silent)",
 			"raw_text", truncate(resp.Text, 100))
@@ -233,7 +239,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	maxIter := 10
 
 	for iter := range maxIter {
-		msgs := a.ctx.Messages()
+		msgs := a.ctx.MessagesWithSystem()
 		// Inject directive only on the first iteration (before any tool calls).
 		if iter == 0 && directive != "" {
 			msgs = append(msgs, llm.Message{
@@ -344,16 +350,11 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	return nil, fmt.Errorf("agent: tool loop exceeded %d iterations", maxIter)
 }
 
-// ReloadPrompt updates the system prompt in the context's first message.
+// ReloadPrompt updates the system prompt.
 // Called when prompt files are edited via the admin dashboard.
 func (a *Agent) ReloadPrompt(newPrompt string) {
 	a.systemPrompt = newPrompt
-	a.ctx.mu.Lock()
-	defer a.ctx.mu.Unlock()
-	if len(a.ctx.messages) > 0 && a.ctx.messages[0].Role == "system" {
-		a.ctx.messages[0].Content = newPrompt
-		a.ctx.messages[0].Timestamp = time.Now()
-	}
+	a.ctx.SetSystemPrompt(newPrompt)
 	a.logger.Info("system prompt reloaded", "length", len(newPrompt))
 }
 
@@ -363,41 +364,29 @@ func (a *Agent) ForceCompact(ctx context.Context) {
 }
 
 func (a *Agent) compact(ctx context.Context) {
+	// System prompt is stored separately and immune to compaction.
+	// Only conversation messages are subject to compaction.
 	msgs := a.ctx.Messages()
-
-	// Separate system messages (always kept) from non-system messages (compactable).
-	var systemMsgs []llm.Message
-	var nonSystemMsgs []llm.Message
-	for _, m := range msgs {
-		if m.Role == "system" {
-			systemMsgs = append(systemMsgs, m)
-		} else {
-			nonSystemMsgs = append(nonSystemMsgs, m)
-		}
-	}
-
-	target := len(nonSystemMsgs) / 2
+	target := len(msgs) / 2
 
 	if a.consol != nil {
 		result, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
-			Messages:    nonSystemMsgs,
+			Messages:    msgs,
 			TargetCount: target,
 		})
 		if err != nil {
 			a.logger.Warn("consolidator compact failed, falling back to truncation", "error", err)
-			a.ctx.TruncateOldest(len(nonSystemMsgs) / 2)
+			a.ctx.TruncateOldest(len(msgs) / 2)
 			a.ctx.ResetInjectedUsers()
 			a.ctx.ResetSeenChannels()
 			persistContext(ctx, a.db, a.ctx, a.logger)
 			return
 		}
 
-		// Rebuild: system messages + kept non-system messages.
 		var kept []llm.Message
-		kept = append(kept, systemMsgs...)
 		for _, idx := range result.KeepIndices {
-			if idx >= 0 && idx < len(nonSystemMsgs) {
-				kept = append(kept, nonSystemMsgs[idx])
+			if idx >= 0 && idx < len(msgs) {
+				kept = append(kept, msgs[idx])
 			}
 		}
 		a.ctx.ReplaceAll(kept)
@@ -405,13 +394,12 @@ func (a *Agent) compact(ctx context.Context) {
 		a.ctx.ResetSeenChannels()
 		persistContext(ctx, a.db, a.ctx, a.logger)
 
-		// Map keep indices back to original indices for affinity deltas.
-		a.applyAffinityDeltas(ctx, result.AffinityDeltas, nonSystemMsgs)
+		a.applyAffinityDeltas(ctx, result.AffinityDeltas, msgs)
 		return
 	}
 
-	// No consolidator available — simple truncation fallback (keep system + recent).
-	a.ctx.TruncateOldest(len(nonSystemMsgs) / 2)
+	// No consolidator available — simple truncation fallback.
+	a.ctx.TruncateOldest(len(msgs) / 2)
 	a.ctx.ResetInjectedUsers()
 	a.ctx.ResetSeenChannels()
 	persistContext(ctx, a.db, a.ctx, a.logger)
@@ -491,9 +479,9 @@ func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID 
 		}
 	}
 
-	// Fetch user-type memories.
+	// Fetch user-type memories by user ID.
 	if a.memory != nil {
-		memories, err := a.memory.SearchByType(ctx, u.DisplayName, memory.MemoryTypeUser, 3)
+		memories, err := a.memory.ListByUser(ctx, u.ID, 5)
 		if err != nil {
 			a.logger.Debug("user memory search failed", "error", err)
 		}
@@ -502,6 +490,42 @@ func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID 
 			for _, m := range memories {
 				content += fmt.Sprintf("  - %s\n", m.Content)
 			}
+		}
+	}
+
+	// Fetch guild/channel associations.
+	guilds, err := a.users.GetUserGuilds(ctx, u.ID)
+	if err != nil {
+		a.logger.Debug("user guild lookup failed", "error", err)
+	}
+	if len(guilds) > 0 {
+		type guildInfo struct {
+			name     string
+			channels []string
+		}
+		guildMap := make(map[string]*guildInfo)
+		var guildOrder []string
+		for _, g := range guilds {
+			gi, ok := guildMap[g.GuildID]
+			if !ok {
+				gi = &guildInfo{name: g.GuildName}
+				guildMap[g.GuildID] = gi
+				guildOrder = append(guildOrder, g.GuildID)
+			}
+			chLabel := g.ChannelName
+			if chLabel == "" {
+				chLabel = g.ChannelID
+			}
+			gi.channels = append(gi.channels, chLabel)
+		}
+		content += "Servers:\n"
+		for _, gid := range guildOrder {
+			gi := guildMap[gid]
+			label := gi.name
+			if label == "" {
+				label = gid
+			}
+			content += fmt.Sprintf("  %s: %s\n", label, strings.Join(gi.channels, ", "))
 		}
 	}
 
@@ -637,13 +661,22 @@ func stripThinkTags(text string) string {
 	return strings.TrimSpace(text)
 }
 
+// stripDirectiveTags removes [RESPOND], [LISTEN], [SKIP] tags that the LLM
+// may echo back in its response.
+func stripDirectiveTags(text string) string {
+	for _, tag := range []string{"[RESPOND]", "[LISTEN]", "[SKIP]"} {
+		text = strings.ReplaceAll(text, tag, "")
+	}
+	return strings.TrimSpace(text)
+}
+
 // responseDirective returns a system instruction telling the LLM whether
 // it must respond or may stay silent, based on the event type.
 func responseDirective(evt event.Event, botID string) string {
 	if isDirectlyAddressed(evt, botID) {
 		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。"
 	}
-	return "[LISTEN] チャンネルの会話です。会話に混ざりたいときだけ返答してください。返答しない場合は `[SKIP]` とだけ返してください。それ以外の説明・省略表現（「…」等）は不要です。"
+	return "[LISTEN] チャンネルの会話です。会話に混ざりたいときは返答し、そうでなければ `[SKIP]` とだけ返してください。"
 }
 
 // isSilentResponse returns true if the LLM chose not to respond.
@@ -666,16 +699,22 @@ func eventToMessage(evt event.Event) llm.Message {
 	userID, _ := evt.Payload["user_id"].(string)
 	userName, _ := evt.Payload["user_name"].(string)
 	channel, _ := evt.Payload["channel"].(string)
+	channelName, _ := evt.Payload["channel_name"].(string)
 	messageID, _ := evt.Payload["message_id"].(string)
+	guildID, _ := evt.Payload["guild_id"].(string)
+	guildName, _ := evt.Payload["guild_name"].(string)
 
 	return llm.Message{
-		Role:      "user",
-		Content:   content,
-		UserID:    userID,
-		UserName:  userName,
-		Source:    evt.Source,
-		Channel:   channel,
-		MessageID: messageID,
-		Timestamp: evt.Timestamp,
+		Role:        "user",
+		Content:     content,
+		UserID:      userID,
+		UserName:    userName,
+		Source:      evt.Source,
+		Channel:     channel,
+		ChannelName: channelName,
+		GuildID:     guildID,
+		GuildName:   guildName,
+		MessageID:   messageID,
+		Timestamp:   evt.Timestamp,
 	}
 }
