@@ -36,6 +36,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("DELETE /api/memories/{id}", memH.Delete)
 	mux.HandleFunc("GET /api/memories/vec-stats", memH.VecStats)
 	mux.HandleFunc("GET /api/memories/with-vec", memH.ListWithVec)
+	mux.HandleFunc("GET /api/memories/duplicates", memH.Duplicates)
 
 	// Metrics (direct SQLite query).
 	metH := handler.NewMetricsHandler(store.DB(), logger)

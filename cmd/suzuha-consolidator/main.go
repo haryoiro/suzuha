@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/affinity"
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -133,6 +134,7 @@ func run() error {
 			topics.New(),
 			explore.New(),
 			schedule.New(store.DB()),
+			affinity.New(),
 		}
 
 		taskRegistry := scheduler.NewRegistry()

@@ -12,15 +12,22 @@ import {
   Popconfirm,
   Statistic,
   Progress,
+  Segmented,
+  Card,
+  List,
+  Slider,
+  Spin,
+  Empty,
 } from "antd";
 import {
   PlusOutlined,
   SearchOutlined,
   DeleteOutlined,
   EyeOutlined,
+  CopyOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMemories, useCreateMemory, useDeleteMemory } from "../../hooks/useMemories";
+import { useMemories, useCreateMemory, useDeleteMemory, useDuplicates } from "../../hooks/useMemories";
 import { memoriesApi } from "../../lib/api";
 import type { Memory } from "../../lib/api";
 import type { ColumnsType } from "antd/es/table";
@@ -39,6 +46,7 @@ interface Props {
 }
 
 export function MemoriesPage({ onViewDetail }: Props) {
+  const [view, setView] = useState<"list" | "duplicates">("list");
   const [offset, setOffset] = useState(0);
   const [limit] = useState(20);
   const [typeFilter, setTypeFilter] = useState<string>("");
@@ -160,68 +168,85 @@ export function MemoriesPage({ onViewDetail }: Props) {
         </Space>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 16,
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        <Space wrap>
-          <Input
-            placeholder="Search..."
-            prefix={<SearchOutlined />}
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onPressEnter={() => {
-              setQuery(searchInput);
-              setOffset(0);
-            }}
-            style={{ width: 200 }}
-            allowClear
-          />
-          <Select
-            placeholder="All types"
-            allowClear
-            style={{ width: 120 }}
-            value={typeFilter || undefined}
-            onChange={(v) => {
-              setTypeFilter(v ?? "");
-              setOffset(0);
-            }}
-            options={[
-              { label: "user", value: "user" },
-              { label: "world", value: "world" },
-              { label: "tool", value: "tool" },
-            ]}
-          />
-        </Space>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setCreateOpen(true)}
-        >
-          New Memory
-        </Button>
-      </div>
-
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={data?.data}
-        loading={isLoading}
-        scroll={{ x: 500 }}
-        pagination={{
-          current: Math.floor(offset / limit) + 1,
-          pageSize: limit,
-          total: data?.total ?? 0,
-          showTotal: (total) => `${total} items`,
-          onChange: (page) => setOffset((page - 1) * limit),
-        }}
-        size="small"
+      <Segmented
+        value={view}
+        onChange={(v) => setView(v as "list" | "duplicates")}
+        options={[
+          { label: "List", value: "list" },
+          { label: "Duplicates", value: "duplicates", icon: <CopyOutlined /> },
+        ]}
+        style={{ marginBottom: 16 }}
       />
+
+      {view === "list" ? (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: 16,
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <Space wrap>
+              <Input
+                placeholder="Search..."
+                prefix={<SearchOutlined />}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onPressEnter={() => {
+                  setQuery(searchInput);
+                  setOffset(0);
+                }}
+                style={{ width: 200 }}
+                allowClear
+              />
+              <Select
+                placeholder="All types"
+                allowClear
+                style={{ width: 120 }}
+                value={typeFilter || undefined}
+                onChange={(v) => {
+                  setTypeFilter(v ?? "");
+                  setOffset(0);
+                }}
+                options={[
+                  { label: "user", value: "user" },
+                  { label: "world", value: "world" },
+                  { label: "tool", value: "tool" },
+                  { label: "episode", value: "episode" },
+                ]}
+              />
+            </Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateOpen(true)}
+            >
+              New Memory
+            </Button>
+          </div>
+
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={data?.data}
+            loading={isLoading}
+            scroll={{ x: 500 }}
+            pagination={{
+              current: Math.floor(offset / limit) + 1,
+              pageSize: limit,
+              total: data?.total ?? 0,
+              showTotal: (total) => `${total} items`,
+              onChange: (page) => setOffset((page - 1) * limit),
+            }}
+            size="small"
+          />
+        </>
+      ) : (
+        <DuplicatesView onViewDetail={onViewDetail} />
+      )}
 
       <Modal
         title="New Memory"
@@ -253,6 +278,109 @@ export function MemoriesPage({ onViewDetail }: Props) {
           </Form.Item>
         </Form>
       </Modal>
+    </div>
+  );
+}
+
+function DuplicatesView({ onViewDetail }: { onViewDetail: (id: string) => void }) {
+  const [threshold, setThreshold] = useState(0.2);
+  const { data, isLoading, refetch } = useDuplicates(threshold);
+  const deleteMutation = useDeleteMemory();
+
+  if (isLoading) {
+    return <Spin tip="Scanning for duplicates..." style={{ display: "block", marginTop: 48 }} />;
+  }
+
+  const groups = data?.data ?? [];
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+        <span style={{ whiteSpace: "nowrap", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
+          Distance threshold:
+        </span>
+        <Slider
+          min={0.05}
+          max={0.5}
+          step={0.05}
+          value={threshold}
+          onChange={setThreshold}
+          style={{ width: 200 }}
+          tooltip={{ formatter: (v) => `${v}` }}
+        />
+        <Button size="small" onClick={() => refetch()}>Refresh</Button>
+      </div>
+
+      {groups.length === 0 ? (
+        <Empty description="No duplicate groups found" />
+      ) : (
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>
+          {groups.length} duplicate group{groups.length > 1 ? "s" : ""} found
+        </div>
+      )}
+
+      {groups.map((group, gi) => (
+        <Card
+          key={gi}
+          size="small"
+          title={
+            <Space>
+              <Tag color={typeColors[group.memories[0]?.type]}>{group.memories[0]?.type}</Tag>
+              <span>{group.memories.length} similar memories</span>
+            </Space>
+          }
+          style={{ marginBottom: 12 }}
+        >
+          <List
+            size="small"
+            dataSource={group.memories}
+            renderItem={(mem, mi) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="view"
+                    type="text"
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => onViewDetail(mem.id)}
+                  />,
+                  mi > 0 ? (
+                    <Popconfirm
+                      key="del"
+                      title="Delete this duplicate?"
+                      onConfirm={() => {
+                        deleteMutation.mutate(mem.id, {
+                          onSuccess: () => {
+                            message.success("Deleted");
+                            refetch();
+                          },
+                        });
+                      }}
+                    >
+                      <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  ) : (
+                    <Tag key="keep" color="green">keep</Tag>
+                  ),
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+                      {mem.id.slice(0, 8)}... | {formatJST(mem.updated_at)}
+                    </span>
+                  }
+                  description={
+                    <span style={{ color: "rgba(255,255,255,0.85)" }}>
+                      {mem.content}
+                    </span>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      ))}
     </div>
   );
 }

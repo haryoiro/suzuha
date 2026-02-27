@@ -128,15 +128,16 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	localNow := now.In(loc)
 	timeHint := buildTimeHint(localNow)
 
-	// 3. Fetch recent context and past mutterings for diversity.
+	// 3. Fetch recent context, past mutterings, and RSS discoveries.
 	recentMemories := fetchRecentContext(ctx, cc, 8)
 	pastMutterings := fetchPastMutterings(ctx, cc, 8)
+	rssDiscoveries := fetchRecentRSS(ctx, cc.DB, 5)
 
 	// 3.5. Check for mentionable users (affinity-based).
 	mentionTarget := selectMentionTarget(boredom, fetchMentionableUsers(ctx, cc.DB))
 
 	// 4. Generate muttering via LLM (boredom-aware).
-	message, err := generateMuttering(ctx, cc, systemPrompt, localNow, timeHint, boredom, recentMemories, pastMutterings, mentionTarget)
+	message, err := generateMuttering(ctx, cc, systemPrompt, localNow, timeHint, boredom, recentMemories, pastMutterings, rssDiscoveries, mentionTarget)
 	if err != nil {
 		cc.Logger.Error("topics: generate muttering", "error", err)
 		return nil
@@ -319,6 +320,7 @@ func generateMuttering(
 	boredom float64,
 	recentMemories []memory.Memory,
 	pastMutterings []memory.Memory,
+	rssDiscoveries []string,
 	mentionTarget *mentionableUser,
 ) (string, error) {
 	var sb strings.Builder
@@ -336,6 +338,14 @@ func generateMuttering(
 		sb.WriteString("最近チャンネルであった話題（参考程度に。無視してもいい）:\n")
 		for _, m := range recentMemories {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(rssDiscoveries) > 0 {
+		sb.WriteString("最近見つけた面白い記事（気になったら話題にしてもいい）:\n")
+		for _, content := range rssDiscoveries {
+			fmt.Fprintf(&sb, "- %s\n", truncateStr(content, 120))
 		}
 		sb.WriteString("\n")
 	}
@@ -375,6 +385,33 @@ func generateMuttering(
 	return strings.TrimSpace(resp.Text), nil
 }
 
+// fetchRecentRSS queries recent RSS memories from the last 24 hours.
+func fetchRecentRSS(ctx context.Context, db *sql.DB, limit int) []string {
+	if db == nil {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT content FROM memories
+		WHERE type = 'rss'
+		  AND created_at > datetime('now', '-24 hours')
+		ORDER BY created_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var items []string
+	for rows.Next() {
+		var content string
+		if err := rows.Scan(&content); err != nil {
+			continue
+		}
+		items = append(items, content)
+	}
+	return items
+}
+
 // fetchMentionableUsers queries non-bot users with positive affinity.
 func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
 	if db == nil {
@@ -403,11 +440,30 @@ func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
 }
 
 // selectMentionTarget probabilistically picks a user to mention based on boredom.
+// The boredom threshold is lowered when high-affinity users are available.
 func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableUser {
-	if len(users) == 0 || boredom < mentionBoredomMin {
+	if len(users) == 0 {
 		return nil
 	}
-	prob := (boredom - mentionBoredomMin) / (boredomMax - mentionBoredomMin) * mentionProbabilityMax
+	// Find the highest affinity among mentionable users.
+	var maxAffinity float64
+	for _, u := range users {
+		if u.Affinity > maxAffinity {
+			maxAffinity = u.Affinity
+		}
+	}
+	// Lower the boredom threshold for high-affinity users.
+	threshold := mentionBoredomMin
+	switch {
+	case maxAffinity >= 5.0:
+		threshold = 30.0
+	case maxAffinity >= 3.0:
+		threshold = 40.0
+	}
+	if boredom < threshold {
+		return nil
+	}
+	prob := (boredom - threshold) / (boredomMax - threshold) * mentionProbabilityMax
 	if rand.Float64() >= prob {
 		return nil
 	}

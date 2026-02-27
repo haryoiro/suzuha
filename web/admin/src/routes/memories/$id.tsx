@@ -110,6 +110,7 @@ export function MemoryDetailPage({ id, onBack }: Props) {
                 { label: "user", value: "user" },
                 { label: "world", value: "world" },
                 { label: "tool", value: "tool" },
+                { label: "episode", value: "episode" },
               ]}
             />
           </Form.Item>

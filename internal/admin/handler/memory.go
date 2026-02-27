@@ -238,6 +238,100 @@ func (h *MemoryHandler) ListWithVec(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": result, "total": total})
 }
 
+// Duplicates handles GET /api/memories/duplicates.
+// Finds groups of semantically similar memories using vector distance.
+func (h *MemoryHandler) Duplicates(w http.ResponseWriter, r *http.Request) {
+	db := h.store.DB()
+	ctx := r.Context()
+
+	threshold := 0.20 // max distance to consider duplicate
+	if t := r.URL.Query().Get("threshold"); t != "" {
+		if v, err := strconv.ParseFloat(t, 64); err == nil {
+			threshold = v
+		}
+	}
+
+	// Get all memory IDs and embeddings from vec table.
+	rows, err := db.QueryContext(ctx,
+		`SELECT v.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
+		 FROM memories_vec v JOIN memories m ON m.id = v.id
+		 ORDER BY m.type, m.updated_at DESC`)
+	if err != nil {
+		h.logger.Error("duplicates: list", "error", err)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type memEntry struct {
+		memory.Memory
+		visited bool
+	}
+	var all []memEntry
+	for rows.Next() {
+		var e memEntry
+		var metaJSON string
+		if err := rows.Scan(&e.ID, &e.Type, &e.Content, &metaJSON, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			continue
+		}
+		if metaJSON != "" {
+			json.Unmarshal([]byte(metaJSON), &e.Metadata)
+		}
+		all = append(all, e)
+	}
+
+	// For each memory, find neighbours with small distance.
+	type dupGroup struct {
+		Memories []memory.Memory `json:"memories"`
+	}
+	var groups []dupGroup
+
+	for i := range all {
+		if all[i].visited {
+			continue
+		}
+		// KNN search for this memory's vector.
+		neighRows, err := db.QueryContext(ctx,
+			`SELECT v2.id, v2.distance
+			 FROM memories_vec v1
+			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = 10
+			 WHERE v1.id = ?`,
+			all[i].ID)
+		if err != nil {
+			continue
+		}
+
+		group := []memory.Memory{all[i].Memory}
+		all[i].visited = true
+
+		for neighRows.Next() {
+			var nid string
+			var dist float32
+			if err := neighRows.Scan(&nid, &dist); err != nil {
+				continue
+			}
+			if nid == all[i].ID || float64(dist) >= threshold {
+				continue
+			}
+			// Must be same type.
+			for j := range all {
+				if all[j].ID == nid && !all[j].visited && all[j].Type == all[i].Type {
+					group = append(group, all[j].Memory)
+					all[j].visited = true
+					break
+				}
+			}
+		}
+		neighRows.Close()
+
+		if len(group) > 1 {
+			groups = append(groups, dupGroup{Memories: group})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": groups, "total": len(groups)})
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

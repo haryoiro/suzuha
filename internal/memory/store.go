@@ -11,10 +11,11 @@ type MemoryType string
 
 // Memory type constants categorize long-term memory entries.
 const (
-	MemoryTypeUser  MemoryType = "user"
-	MemoryTypeWorld MemoryType = "world"
-	MemoryTypeTool  MemoryType = "tool"
-	MemoryTypeRSS   MemoryType = "rss"
+	MemoryTypeUser    MemoryType = "user"
+	MemoryTypeWorld   MemoryType = "world"
+	MemoryTypeTool    MemoryType = "tool"
+	MemoryTypeRSS     MemoryType = "rss"
+	MemoryTypeEpisode MemoryType = "episode"
 )
 
 // Memory is a single long-term memory entry.
@@ -46,6 +47,10 @@ type Store interface {
 
 	// ListByUser returns user-type memories for a specific user ID (from metadata).
 	ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error)
+
+	// IsDuplicate checks if a very similar memory already exists.
+	// Returns the existing memory ID if found, or empty string if no duplicate.
+	IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, error)
 
 	// Close releases database resources.
 	Close() error

@@ -49,9 +49,13 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 
 	result := parseCompactResponse(resp.Text, len(req.Messages))
 
-	// Save extracted memories to long-term store.
+	// Save extracted memories to long-term store (skip duplicates).
 	for i := range result.Memories {
 		mem := &result.Memories[i]
+		if dupID, _ := s.store.IsDuplicate(ctx, mem.Content, mem.Type); dupID != "" {
+			s.logger.Debug("consolidator: skip duplicate memory", "existing_id", dupID, "content", mem.Content)
+			continue
+		}
 		if err := s.store.Save(ctx, mem); err != nil {
 			s.logger.Warn("consolidator: save memory failed", "error", err)
 		}
@@ -75,6 +79,13 @@ MEMORIES:
 - [user user_id=<platform_user_id>] そのユーザーに関する情報や好み
 - [world] 会話で出た一般的な知識や事実
 - [tool] ツールの使用パターンや覚えておくべき結果
+- [episode participants=<id1>,<id2> tone=<感情>] 出来事の要約
+
+[episode] の使い分け:
+- 複数人が関わった会話イベント（盛り上がった話題、一緒に何かした体験）→ episode
+- 個人の属性・好み → user
+- 出来事のコンテンツには参加者のIDも含めること（検索用）
+- 例: [episode participants=123,456 tone=楽しい] 123と456がアニメの話で盛り上がった
 
 IMPORTANT: For [user] memories, always include the user_id of the person the fact is about.
 The user_id can be found in message metadata (user_id=... in the message header).
@@ -184,6 +195,25 @@ func parseMemoryLine(content string) (memory.Memory, bool) {
 			userID = strings.TrimSpace(userID)
 			if userID != "" {
 				metadata = map[string]any{"user_id": userID}
+			}
+		}
+	case strings.HasPrefix(content, "[episode"):
+		memType = memory.MemoryTypeEpisode
+		endBracket := strings.Index(content, "]")
+		if endBracket < 0 {
+			return memory.Memory{}, false
+		}
+		tag := content[len("[episode"):endBracket]
+		content = content[endBracket+1:]
+		metadata = map[string]any{}
+		for _, part := range strings.Fields(tag) {
+			if k, v, ok := strings.Cut(part, "="); ok {
+				switch k {
+				case "participants":
+					metadata["participants"] = strings.Split(v, ",")
+				case "tone":
+					metadata["emotional_tone"] = v
+				}
 			}
 		}
 	case strings.HasPrefix(content, "[world]"):

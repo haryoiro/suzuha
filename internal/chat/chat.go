@@ -25,3 +25,9 @@ type IDSender interface {
 	// SendWithID sends a message and returns its platform message ID.
 	SendWithID(ctx context.Context, channel, text string) (string, error)
 }
+
+// Typer is an optional interface for platforms that support typing indicators.
+type Typer interface {
+	// Typing sends a typing indicator to the specified channel.
+	Typing(ctx context.Context, channel string)
+}

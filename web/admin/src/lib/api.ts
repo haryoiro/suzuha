@@ -89,6 +89,10 @@ export const memoriesApi = {
     fetchJSON<VecStatsResponse>("/api/memories/vec-stats"),
   listWithVec: (params: ListParams) =>
     fetchJSON<ListWithVecResponse>(`/api/memories/with-vec${toQuery(params)}`),
+  duplicates: (threshold?: number) =>
+    fetchJSON<DuplicatesResponse>(
+      `/api/memories/duplicates${threshold != null ? `?threshold=${threshold}` : ""}`
+    ),
 };
 
 export interface VecStatsResponse {
@@ -104,6 +108,15 @@ export interface MemoryWithVec extends Memory {
 
 export interface ListWithVecResponse {
   data: MemoryWithVec[];
+  total: number;
+}
+
+export interface DuplicateGroup {
+  memories: Memory[];
+}
+
+export interface DuplicatesResponse {
+  data: DuplicateGroup[];
   total: number;
 }
 

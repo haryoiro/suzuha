@@ -9,7 +9,8 @@ paths: "internal/memory/**,internal/user/**,internal/consolidator/**"
 
 `internal/memory/`
 
-- `Memory` 型: ID, Type (`user`/`world`/`tool`), Content, Embedding(`[]float32`), Metadata(`map[string]any`), CreatedAt, UpdatedAt
+- `Memory` 型: ID, Type (`user`/`world`/`tool`/`rss`/`episode`), Content, Embedding(`[]float32`), Metadata(`map[string]any`), CreatedAt, UpdatedAt
+- `episode` 型の Metadata: `participants`([]string), `emotional_tone`(string) — Consolidator が会話の出来事を記録
 - `EmbedFunc` — embedding 生成関数。`main.go` でクロージャとして注入（循環依存回避）
 
 ### Store インターフェース

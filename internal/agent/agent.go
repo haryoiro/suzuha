@@ -106,6 +106,9 @@ func (a *Agent) SetBotID(id string) {
 }
 
 // Run starts the agent event loop. Blocks until ctx is canceled.
+// When multiple events arrive while the LLM is processing, they are drained
+// from the buffer and processed as a batch: all messages are ingested into
+// context, but only one LLM response is generated for the entire batch.
 func (a *Agent) Run(ctx context.Context) error {
 	events := a.bus.Subscribe()
 
@@ -114,18 +117,39 @@ func (a *Agent) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case evt := <-events:
-			if a.metrics != nil {
-				a.metrics.EventsTotal.WithLabelValues(evt.Source, evt.Type).Inc()
+			// Drain any buffered events to process as a batch.
+			batch := []event.Event{evt}
+		drain:
+			for {
+				select {
+				case e := <-events:
+					batch = append(batch, e)
+				default:
+					break drain
+				}
 			}
-			if err := a.handleEvent(ctx, evt); err != nil {
-				a.logger.Error("handle event failed", "event_id", evt.ID, "error", err)
+
+			if a.metrics != nil {
+				for _, e := range batch {
+					a.metrics.EventsTotal.WithLabelValues(e.Source, e.Type).Inc()
+				}
+			}
+
+			if len(batch) > 1 {
+				a.logger.Info("batch processing", "batch_size", len(batch))
+			}
+
+			if err := a.handleBatch(ctx, batch); err != nil {
+				a.logger.Error("handle event failed", "error", err)
 			}
 		}
 	}
 }
 
-func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
-	// 1. Convert event to message.
+// ingestEvent processes a single event: resolves the user, adds the message
+// to context, and injects user profile. It does NOT trigger LLM completion.
+// Returns the message and the user's affinity score.
+func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, float64) {
 	msg := eventToMessage(evt)
 
 	a.logger.Info("event received",
@@ -133,8 +157,8 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		"user", msg.UserName, "user_id", msg.UserID,
 		"channel", msg.Channel, "content", truncate(msg.Content, 100))
 
-	// 2. Resolve user identity (auto-create if not exists).
-	// Skip resolution for the bot's own messages.
+	// Resolve user identity (auto-create if not exists).
+	var userAffinity float64
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
@@ -144,7 +168,7 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 				msg.UserName = u.DisplayName
 				a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role, "affinity", u.Affinity)
 			}
-			// 2.1. Track user's guild/channel association.
+			userAffinity = u.Affinity
 			guildID, _ := evt.Payload["guild_id"].(string)
 			guildName, _ := evt.Payload["guild_name"].(string)
 			channelName, _ := evt.Payload["channel_name"].(string)
@@ -156,7 +180,7 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		}
 	}
 
-	// 2.5. Track channel activity for topic backoff (non-bot messages only).
+	// Track channel activity for topic backoff (non-bot messages only).
 	if msg.Channel != "" && a.db != nil && msg.UserID != a.botID {
 		_, _ = a.db.ExecContext(ctx,
 			`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES (?, ?)
@@ -164,18 +188,40 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 			msg.Channel, time.Now())
 	}
 
-	// 3. Bootstrap channel history if this is a new channel.
+	// Bootstrap channel history if this is a new channel.
 	a.injectChannelHistory(ctx, msg.Channel, msg.Content, msg.Source)
 
-	// 4. Add to context.
+	// Add to context.
 	a.ctx.Add(msg)
 
-	// 5. Inject user profile if not yet in context (skip for bot itself).
+	// Inject user profile if not yet in context (skip for bot itself).
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		a.injectUserProfile(ctx, msg.Source, msg.UserID)
 	}
 
-	// 6. Check context window usage — compact if needed.
+	return msg, userAffinity
+}
+
+// handleBatch ingests all events in the batch, then generates a single LLM
+// response. If any event in the batch is directly addressed, [RESPOND] is used;
+// otherwise the directive is based on the last event's affinity.
+func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
+	// 1. Ingest all events into context.
+	var lastMsg llm.Message
+	var lastEvt event.Event
+	var userAffinity float64
+	var directlyAddressed bool
+	for _, evt := range batch {
+		msg, aff := a.ingestEvent(ctx, evt)
+		lastMsg = msg
+		lastEvt = evt
+		userAffinity = aff
+		if isDirectlyAddressed(evt, a.botID) {
+			directlyAddressed = true
+		}
+	}
+
+	// 2. Check context window usage — compact if needed.
 	ratio := a.ctx.UsageRatio()
 	a.logger.Debug("context window", "usage_ratio", fmt.Sprintf("%.2f", ratio), "message_count", len(a.ctx.Messages()))
 	if a.contextWindowPct > 0 && ratio > a.contextWindowPct {
@@ -183,25 +229,30 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		a.compact(ctx)
 	}
 
-	// 7. Retrieve relevant long-term memories.
+	// 3. Retrieve relevant long-term memories.
 	if a.memory != nil {
-		a.injectMemories(ctx, msg.Content)
+		a.injectMemories(ctx, lastMsg.Content)
 	}
 
-	// 8. Determine response directive based on message type.
-	directive := responseDirective(evt, a.botID)
-	a.logger.Info("llm request", "message_count", len(a.ctx.Messages()), "directive", directive)
+	// 4. Determine response directive.
+	// If any event in the batch was directly addressed, force RESPOND
+	// regardless of which event was last.
+	var directive string
+	if directlyAddressed {
+		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。"
+	} else {
+		directive = responseDirective(lastEvt, a.botID, userAffinity)
+	}
+	a.logger.Info("llm request", "message_count", len(a.ctx.Messages()), "directive", directive, "batch_size", len(batch))
 
-	// 9. LLM completion with tool loop.
-	// The directive is injected as a transient system message visible to the LLM
-	// but not persisted in the conversation history.
-	channel, _ := evt.Payload["channel"].(string)
+	// 5. LLM completion with tool loop.
+	channel, _ := lastEvt.Payload["channel"].(string)
 	resp, err := a.completeWithTools(ctx, directive, channel)
 	if err != nil {
 		return fmt.Errorf("agent: complete: %w", err)
 	}
 
-	// 10. Add assistant response to context.
+	// 6. Add assistant response to context.
 	a.ctx.Add(llm.Message{
 		Role:      "assistant",
 		Content:   resp.Text,
@@ -210,7 +261,7 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		ToolCalls: resp.ToolCalls,
 	})
 
-	// 11. Send response (strip LLM thinking tags, directive tags, and silent markers).
+	// 7. Send response (strip LLM thinking tags, directive tags, and silent markers).
 	text := stripDirectiveTags(stripThinkTags(resp.Text))
 	if isSilentResponse(text) {
 		a.logger.Info("skipping response (silent)",
@@ -225,7 +276,7 @@ func (a *Agent) handleEvent(ctx context.Context, evt event.Event) error {
 		}
 	}
 
-	// 12. Persist context to DB (survives restarts).
+	// 8. Persist context to DB (survives restarts).
 	persistContext(ctx, a.db, a.ctx, a.logger)
 
 	return nil
@@ -239,6 +290,13 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	maxIter := 10
 
 	for iter := range maxIter {
+		// Send typing indicator on each iteration (Discord typing expires after ~10s).
+		if channel != "" {
+			if typer, ok := a.chat.(chat.Typer); ok {
+				typer.Typing(ctx, channel)
+			}
+		}
+
 		msgs := a.ctx.MessagesWithSystem()
 		// Inject directive only on the first iteration (before any tool calls).
 		if iter == 0 && directive != "" {
@@ -491,6 +549,18 @@ func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID 
 				content += fmt.Sprintf("  - %s\n", m.Content)
 			}
 		}
+
+		// Fetch episode memories involving this user (content contains participant IDs).
+		episodes, err := a.memory.SearchByType(ctx, platformUserID, memory.MemoryTypeEpisode, 3)
+		if err != nil {
+			a.logger.Debug("episode memory search failed", "error", err)
+		}
+		if len(episodes) > 0 {
+			content += "Shared episodes:\n"
+			for _, e := range episodes {
+				content += fmt.Sprintf("  - %s (%s)\n", e.Content, e.CreatedAt.Format("2006-01-02"))
+			}
+		}
 	}
 
 	// Fetch guild/channel associations.
@@ -671,12 +741,33 @@ func stripDirectiveTags(text string) string {
 }
 
 // responseDirective returns a system instruction telling the LLM whether
-// it must respond or may stay silent, based on the event type.
-func responseDirective(evt event.Event, botID string) string {
+// it must respond or may stay silent, based on the event type and affinity.
+func responseDirective(evt event.Event, botID string, affinity float64) string {
 	if isDirectlyAddressed(evt, botID) {
 		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。"
 	}
-	return "[LISTEN] チャンネルの会話です。会話に混ざりたいときは返答し、そうでなければ `[SKIP]` とだけ返してください。"
+	const noEmoji = "※テキストに絵文字・顔文字は絶対に入れないで。"
+
+	const reactHint = "スキップする前に、相手のメッセージに discord_react でリアクションを付けることを検討して" +
+		"（テキストに絵文字を書くのではなく、ツールを呼んで相手のメッセージにリアクションを付ける）。" +
+		"何も付けなくてもいいけど、共感・面白い・なるほど等の気持ちがあるなら付けてから `[SKIP]`。"
+
+	switch {
+	case affinity >= 3.0:
+		return "[LISTEN] 仲の良い人の会話です。気になったら気軽に混ざって。" +
+			"一言だけ相槌（「わかる」「それな」「草」くらい）でもOK。" +
+			reactHint +
+			noEmoji
+	case affinity <= -1.0:
+		return "[LISTEN] チャンネルの会話です。特に自分に関係なければスルーでいい。" +
+			"`[SKIP]` とだけ返してください。" +
+			noEmoji
+	default:
+		return "[LISTEN] チャンネルの会話です。会話に混ざりたいときは返答し、" +
+			"そうでなければスキップ。" +
+			reactHint +
+			noEmoji
+	}
 }
 
 // isSilentResponse returns true if the LLM chose not to respond.

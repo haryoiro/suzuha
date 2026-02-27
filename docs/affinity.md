@@ -172,10 +172,29 @@ User message → Agent context に追加
                     - user.UpdateAffinity(deltas)
 ```
 
-## 将来的な利用
+## 行動への反映
 
-好感度スコアは現時点では蓄積のみ。将来的に以下での利用を想定：
+好感度スコアは以下の場面で行動に影響する。
 
-- 応答トーンの調整（高好感度のユーザーにはより親しく）
-- システムプロンプトへの注入（「このユーザーとは親しい関係」等）
-- Admin ダッシュボードでの可視化
+### 応答ディレクティブ
+
+`responseDirective()` が affinity に基づいてディレクティブを変える:
+- affinity >= 3.0: 仲の良い人の発言として、リアクションや相槌を含む多段階の反応を促す
+- affinity <= -1.0: スルー寄りのディレクティブ
+- その他: 標準的な `[LISTEN]` ディレクティブ
+
+### 口調・距離感
+
+SOUL.md に affinity 値域ごとの振る舞いガイドラインを記載。LLM が User profile の affinity スコアを見て口調を自然に調整する。
+
+### Topics メンション
+
+`selectMentionTarget()` が affinity に基づいてメンション閾値を動的に調整:
+- affinity >= 5.0 → boredom 30 からメンション可能（通常は 50）
+- affinity >= 3.0 → boredom 40 からメンション可能
+
+### 軽量評価タスク
+
+`affinity_eval` CronTask が短い会話（Compact 未到達）でも好感度を評価する:
+- チャンネル非活性を検知 → context_snapshot から直近の会話を取得 → LLM で軽量評価
+- 設定: `inactivity_minutes`（デフォルト 15 分）

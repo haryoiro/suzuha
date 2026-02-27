@@ -16,6 +16,7 @@ import (
 // Compile-time checks for optional interfaces.
 var _ chat.Replier  = (*Chat)(nil)
 var _ chat.IDSender = (*Chat)(nil)
+var _ chat.Typer    = (*Chat)(nil)
 
 // Chat implements chat.Interface for Discord using discordgo.
 type Chat struct {
@@ -175,6 +176,14 @@ func (c *Chat) SendReply(_ context.Context, channel, text, replyToID string) (st
 		lastID = msg.ID
 	}
 	return lastID, nil
+}
+
+// Typing sends a typing indicator to the specified channel.
+func (c *Chat) Typing(_ context.Context, channel string) {
+	if c.session == nil {
+		return
+	}
+	_ = c.session.ChannelTyping(channel)
 }
 
 // messageToEvent converts a Discord message to an Event.

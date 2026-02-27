@@ -508,6 +508,50 @@ func (s *SQLiteStore) ListByUser(ctx context.Context, userID string, limit int) 
 	return scanMemories(rows)
 }
 
+// dupDistanceThreshold is the max vector distance for two memories to be
+// considered duplicates. Lower = stricter. Cosine distance typically ranges 0–2.
+const dupDistanceThreshold = 0.15
+
+func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, error) {
+	if s.embedFn == nil {
+		return "", nil
+	}
+	embedding, err := s.embedFn(ctx, content)
+	if err != nil || len(embedding) == 0 {
+		return "", nil // can't check, assume not duplicate
+	}
+
+	blob, err := sqlite_vec.SerializeFloat32(embedding)
+	if err != nil {
+		return "", nil
+	}
+
+	// KNN search for nearest neighbour, then check type and distance.
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT v.id, v.distance, m.type FROM memories_vec v
+		 JOIN memories m ON m.id = v.id
+		 WHERE v.embedding MATCH ? AND k = 5`,
+		blob,
+	)
+	if err != nil {
+		return "", nil // non-fatal
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		var distance float32
+		var typ string
+		if err := rows.Scan(&id, &distance, &typ); err != nil {
+			continue
+		}
+		if MemoryType(typ) == memType && distance < dupDistanceThreshold {
+			return id, nil
+		}
+	}
+	return "", nil
+}
+
 func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 20
