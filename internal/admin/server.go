@@ -45,7 +45,23 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	userH := handler.NewUsersHandler(store.DB(), logger)
 	mux.HandleFunc("GET /api/users", userH.List)
 	mux.HandleFunc("GET /api/users/{id}", userH.Get)
+	mux.HandleFunc("PUT /api/users/{id}", userH.Update)
 	mux.HandleFunc("GET /api/users/{id}/affinity", userH.AffinityEvents)
+	mux.HandleFunc("GET /api/users/{id}/guilds", userH.Guilds)
+	mux.HandleFunc("GET /api/users/{id}/memories", userH.Memories)
+
+	// Guilds & channels.
+	guildH := handler.NewGuildsHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/guilds", guildH.List)
+	mux.HandleFunc("GET /api/channels", guildH.AllChannels)
+	mux.HandleFunc("GET /api/guilds/{id}/channels", guildH.Channels)
+
+	// Scheduled actions.
+	actionsH := handler.NewActionsHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/scheduled-actions", actionsH.List)
+	mux.HandleFunc("POST /api/scheduled-actions", actionsH.Create)
+	mux.HandleFunc("PUT /api/scheduled-actions/{id}", actionsH.Update)
+	mux.HandleFunc("DELETE /api/scheduled-actions/{id}", actionsH.Delete)
 
 	// Agent operations (compact, etc.).
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
