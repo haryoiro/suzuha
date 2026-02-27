@@ -137,9 +137,11 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 	var metaJSON sql.NullString
 
 	err := q.QueryRowContext(ctx,
-		`SELECT id, display_name, role, is_bot, affinity, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity,
+		&u.Closeness, &u.Trust, &u.Interest,
+		&metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("user: get: %w", err)
 	}
@@ -172,6 +174,9 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 	if evt.CreatedAt.IsZero() {
 		evt.CreatedAt = time.Now()
 	}
+	if evt.Axis == "" {
+		evt.Axis = AxisCloseness
+	}
 
 	interactionJSON, _ := json.Marshal(evt.InteractionIDs)
 
@@ -181,11 +186,11 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 	}
 	defer tx.Rollback()
 
-	// Insert the affinity event.
+	// Insert the affinity event with axis.
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO affinity_events (id, user_id, delta, reason, interaction_ids, group_start, group_end, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		evt.ID, evt.UserID, evt.Delta, evt.Reason,
+		`INSERT INTO affinity_events (id, user_id, delta, axis, reason, interaction_ids, group_start, group_end, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		evt.ID, evt.UserID, evt.Delta, string(evt.Axis), evt.Reason,
 		string(interactionJSON),
 		nullTime(evt.GroupStart), nullTime(evt.GroupEnd),
 		evt.CreatedAt,
@@ -193,11 +198,20 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 		return fmt.Errorf("user: insert affinity event: %w", err)
 	}
 
-	// Update the user's running affinity total.
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE users SET affinity = affinity + ?, updated_at = ? WHERE id = ?`,
-		evt.Delta, time.Now(), evt.UserID,
-	); err != nil {
+	// Update the user's running totals: axis-specific column + legacy affinity.
+	now := time.Now()
+	axisCol := "closeness"
+	switch evt.Axis {
+	case AxisTrust:
+		axisCol = "trust"
+	case AxisInterest:
+		axisCol = "interest"
+	}
+	query := fmt.Sprintf(
+		`UPDATE users SET %s = %s + ?, affinity = affinity + ?, updated_at = ? WHERE id = ?`,
+		axisCol, axisCol,
+	)
+	if _, err := tx.ExecContext(ctx, query, evt.Delta, evt.Delta, now, evt.UserID); err != nil {
 		return fmt.Errorf("user: update affinity: %w", err)
 	}
 
@@ -206,7 +220,7 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 
 func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int) ([]AffinityEvent, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, user_id, delta, reason, interaction_ids, group_start, group_end, created_at
+		`SELECT id, user_id, delta, axis, reason, interaction_ids, group_start, group_end, created_at
 		 FROM affinity_events WHERE user_id = ?
 		 ORDER BY created_at DESC LIMIT ?`,
 		userID, limit,
@@ -219,11 +233,13 @@ func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int)
 	var events []AffinityEvent
 	for rows.Next() {
 		var e AffinityEvent
+		var axisStr string
 		var idsJSON sql.NullString
 		var groupStart, groupEnd sql.NullTime
-		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &e.Reason, &idsJSON, &groupStart, &groupEnd, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &axisStr, &e.Reason, &idsJSON, &groupStart, &groupEnd, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("user: scan affinity: %w", err)
 		}
+		e.Axis = AffinityAxis(axisStr)
 		if idsJSON.Valid {
 			_ = json.Unmarshal([]byte(idsJSON.String), &e.InteractionIDs)
 		}

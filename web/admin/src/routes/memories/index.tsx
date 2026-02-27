@@ -39,6 +39,8 @@ const typeColors: Record<string, string> = {
   user: "blue",
   world: "green",
   tool: "orange",
+  episode: "purple",
+  self: "cyan",
 };
 
 interface Props {
@@ -216,6 +218,7 @@ export function MemoriesPage({ onViewDetail }: Props) {
                   { label: "world", value: "world" },
                   { label: "tool", value: "tool" },
                   { label: "episode", value: "episode" },
+                  { label: "self", value: "self" },
                 ]}
               />
             </Space>

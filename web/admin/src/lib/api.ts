@@ -14,7 +14,7 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 // Types
 export interface Memory {
   id: string;
-  type: "user" | "world" | "tool";
+  type: "user" | "world" | "tool" | "rss" | "episode" | "self";
   content: string;
   metadata?: Record<string, unknown>;
   created_at: string;
@@ -127,6 +127,9 @@ export interface User {
   role: string;
   is_bot: boolean;
   affinity: number;
+  closeness: number;
+  trust: number;
+  interest: number;
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -143,6 +146,7 @@ export interface AffinityEvent {
   id: string;
   user_id: string;
   delta: number;
+  axis: string;
   reason: string;
   created_at: string;
 }

@@ -42,6 +42,8 @@ type mentionableUser struct {
 	DisplayName   string
 	DiscordUserID string
 	Affinity      float64
+	Closeness     float64
+	Interest      float64
 }
 
 // persistedState is the JSON-serializable state saved to task_state table.
@@ -418,11 +420,11 @@ func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
 		return nil
 	}
 	rows, err := db.QueryContext(ctx, `
-		SELECT u.display_name, pl.platform_user_id, u.affinity
+		SELECT u.display_name, pl.platform_user_id, u.affinity, u.closeness, u.interest
 		FROM users u
 		JOIN platform_links pl ON pl.user_id = u.id AND pl.platform = 'discord'
 		WHERE u.is_bot = 0 AND u.affinity > 0
-		ORDER BY u.affinity DESC`)
+		ORDER BY u.interest DESC, u.closeness DESC`)
 	if err != nil {
 		return nil
 	}
@@ -431,7 +433,7 @@ func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
 	var users []mentionableUser
 	for rows.Next() {
 		var mu mentionableUser
-		if err := rows.Scan(&mu.DisplayName, &mu.DiscordUserID, &mu.Affinity); err != nil {
+		if err := rows.Scan(&mu.DisplayName, &mu.DiscordUserID, &mu.Affinity, &mu.Closeness, &mu.Interest); err != nil {
 			continue
 		}
 		users = append(users, mu)
@@ -440,24 +442,25 @@ func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
 }
 
 // selectMentionTarget probabilistically picks a user to mention based on boredom.
-// The boredom threshold is lowered when high-affinity users are available.
+// The boredom threshold is lowered when high-interest users are available.
+// Selection is weighted by interest (who we want to talk to).
 func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableUser {
 	if len(users) == 0 {
 		return nil
 	}
-	// Find the highest affinity among mentionable users.
-	var maxAffinity float64
+	// Find the highest interest among mentionable users.
+	var maxInterest float64
 	for _, u := range users {
-		if u.Affinity > maxAffinity {
-			maxAffinity = u.Affinity
+		if u.Interest > maxInterest {
+			maxInterest = u.Interest
 		}
 	}
-	// Lower the boredom threshold for high-affinity users.
+	// Lower the boredom threshold for high-interest users.
 	threshold := mentionBoredomMin
 	switch {
-	case maxAffinity >= 5.0:
+	case maxInterest >= 5.0:
 		threshold = 30.0
-	case maxAffinity >= 3.0:
+	case maxInterest >= 3.0:
 		threshold = 40.0
 	}
 	if boredom < threshold {
@@ -467,14 +470,22 @@ func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableU
 	if rand.Float64() >= prob {
 		return nil
 	}
-	// Weighted random: use affinity as weight.
+	// Weighted random: use interest as weight (minimum 0.1 to give everyone a chance).
 	var totalWeight float64
 	for _, u := range users {
-		totalWeight += u.Affinity
+		w := u.Interest
+		if w < 0.1 {
+			w = 0.1
+		}
+		totalWeight += w
 	}
 	r := rand.Float64() * totalWeight
 	for _, u := range users {
-		r -= u.Affinity
+		w := u.Interest
+		if w < 0.1 {
+			w = 0.1
+		}
+		r -= w
 		if r <= 0 {
 			return &u
 		}

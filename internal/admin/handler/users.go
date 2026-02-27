@@ -26,6 +26,9 @@ type userJSON struct {
 	Role        string         `json:"role"`
 	IsBot       bool           `json:"is_bot"`
 	Affinity    float64        `json:"affinity"`
+	Closeness   float64        `json:"closeness"`
+	Trust       float64        `json:"trust"`
+	Interest    float64        `json:"interest"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
@@ -43,6 +46,7 @@ type affinityEventJSON struct {
 	ID        string  `json:"id"`
 	UserID    string  `json:"user_id"`
 	Delta     float64 `json:"delta"`
+	Axis      string  `json:"axis"`
 	Reason    string  `json:"reason"`
 	CreatedAt string  `json:"created_at"`
 }
@@ -66,7 +70,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch users.
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, display_name, role, is_bot, affinity, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
 		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		h.logger.Error("list users", "error", err)
@@ -79,7 +83,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u userJSON
 		var metaJSON sql.NullString
-		if err := rows.Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &u.Closeness, &u.Trust, &u.Interest, &metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			h.logger.Error("scan user", "error", err)
 			continue
 		}
@@ -109,9 +113,9 @@ func (h *UsersHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var u userJSON
 	var metaJSON sql.NullString
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, display_name, role, is_bot, affinity, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &u.Closeness, &u.Trust, &u.Interest, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -201,7 +205,7 @@ func (h *UsersHandler) AffinityEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, user_id, delta, reason, created_at
+		`SELECT id, user_id, delta, axis, reason, created_at
 		 FROM affinity_events WHERE user_id = ?
 		 ORDER BY created_at DESC LIMIT ?`, id, limit)
 	if err != nil {
@@ -214,7 +218,7 @@ func (h *UsersHandler) AffinityEvents(w http.ResponseWriter, r *http.Request) {
 	var events []affinityEventJSON
 	for rows.Next() {
 		var e affinityEventJSON
-		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &e.Reason, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &e.Axis, &e.Reason, &e.CreatedAt); err != nil {
 			continue
 		}
 		events = append(events, e)

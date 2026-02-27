@@ -24,6 +24,7 @@ type CompactResult struct {
 type AffinityDelta struct {
 	PlatformUserID string
 	Platform       string
+	Axis           string  // "closeness" | "trust" | "interest"
 	Delta          float64
 	Reason         string
 	MessageIndices []int // which message indices contributed to this assessment

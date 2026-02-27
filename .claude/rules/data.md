@@ -9,8 +9,9 @@ paths: "internal/memory/**,internal/user/**,internal/consolidator/**"
 
 `internal/memory/`
 
-- `Memory` 型: ID, Type (`user`/`world`/`tool`/`rss`/`episode`), Content, Embedding(`[]float32`), Metadata(`map[string]any`), CreatedAt, UpdatedAt
+- `Memory` 型: ID, Type (`user`/`world`/`tool`/`rss`/`episode`/`self`), Content, Embedding(`[]float32`), Metadata(`map[string]any`), CreatedAt, UpdatedAt
 - `episode` 型の Metadata: `participants`([]string), `emotional_tone`(string) — Consolidator が会話の出来事を記録
+- `self` 型: のの自身の自己認識（行動パターン、好み、苦手なもの等）— Consolidator が新しい自己発見があった時に生成
 - `EmbedFunc` — embedding 生成関数。`main.go` でクロージャとして注入（循環依存回避）
 
 ### Store インターフェース

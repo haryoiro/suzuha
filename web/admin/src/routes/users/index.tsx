@@ -40,11 +40,33 @@ export function UsersPage() {
       },
     },
     {
-      title: "Affinity",
-      dataIndex: "affinity",
-      key: "affinity",
-      width: 100,
-      sorter: (a: User, b: User) => a.affinity - b.affinity,
+      title: "Closeness",
+      dataIndex: "closeness",
+      key: "closeness",
+      width: 90,
+      sorter: (a: User, b: User) => a.closeness - b.closeness,
+      render: (val: number) => {
+        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
+        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
+      },
+    },
+    {
+      title: "Trust",
+      dataIndex: "trust",
+      key: "trust",
+      width: 80,
+      sorter: (a: User, b: User) => a.trust - b.trust,
+      render: (val: number) => {
+        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
+        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
+      },
+    },
+    {
+      title: "Interest",
+      dataIndex: "interest",
+      key: "interest",
+      width: 80,
+      sorter: (a: User, b: User) => a.interest - b.interest,
       render: (val: number) => {
         const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
         return <Text style={{ color }}>{val.toFixed(1)}</Text>;
@@ -213,18 +235,19 @@ function UserDetailModal({
                 <Descriptions.Item label="Role">
                   <Tag>{user.role}</Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="Affinity">
-                  <Text
-                    style={{
-                      color:
-                        user.affinity > 0
-                          ? "#52c41a"
-                          : user.affinity < 0
-                            ? "#ff4d4f"
-                            : "#8c8c8c",
-                    }}
-                  >
-                    {user.affinity.toFixed(1)}
+                <Descriptions.Item label="Closeness">
+                  <Text style={{ color: user.closeness > 0 ? "#52c41a" : user.closeness < 0 ? "#ff4d4f" : "#8c8c8c" }}>
+                    {user.closeness.toFixed(1)}
+                  </Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="Trust">
+                  <Text style={{ color: user.trust > 0 ? "#52c41a" : user.trust < 0 ? "#ff4d4f" : "#8c8c8c" }}>
+                    {user.trust.toFixed(1)}
+                  </Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="Interest">
+                  <Text style={{ color: user.interest > 0 ? "#52c41a" : user.interest < 0 ? "#ff4d4f" : "#8c8c8c" }}>
+                    {user.interest.toFixed(1)}
                   </Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="Created">
@@ -295,6 +318,9 @@ function UserDetailModal({
                 renderItem={(e) => (
                   <List.Item>
                     <Space>
+                      <Tag color={e.axis === "trust" ? "orange" : e.axis === "interest" ? "purple" : "blue"}>
+                        {e.axis || "closeness"}
+                      </Tag>
                       <Text
                         style={{
                           color: e.delta > 0 ? "#52c41a" : "#ff4d4f",

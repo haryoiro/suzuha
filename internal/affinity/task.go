@@ -154,6 +154,7 @@ func loadContextMessages(db *sql.DB) ([]llm.Message, error) {
 type affinityDelta struct {
 	platformUserID string
 	platform       string
+	axis           string // "closeness" | "trust" | "interest"
 	delta          float64
 	reason         string
 }
@@ -161,12 +162,18 @@ type affinityDelta struct {
 const evalPrompt = `以下の短い会話から、各ユーザーに対する好感度の変化を評価してください。
 
 フォーマット:
-- [delta] user_id=<id> platform=<platform> delta=<+/-float> reason=<日本語で簡潔に>
+- [delta] user_id=<id> platform=<platform> axis=<closeness|trust|interest> delta=<+/-float> reason=<(感情) 日本語で簡潔に>
+
+各軸の意味:
+- closeness: 親密度。日常的なやり取り、共有体験で変動
+- trust: 信頼度。秘密の共有、約束を守る/裏切りで変動
+- interest: 関心度。面白い話題、知的刺激で変動
 
 ルール:
-- ポジティブなやり取り（感謝、楽しさ、共感）→ +0.1 〜 +1.0
-- ネガティブなやり取り（敵意、無礼）→ -0.1 〜 -1.0
+- ポジティブなやり取り → +0.1 〜 +1.0
+- ネガティブなやり取り → -0.1 〜 -1.0
 - 事務的・中立的な会話 → 変化なし
+- 1ユーザーにつき変動した軸のみ記載。複数軸が変動した場合は軸ごとに1行
 - 変化がなければ「変化なし」とだけ返してください
 
 会話:`
@@ -208,7 +215,7 @@ func parseDeltas(text string) []affinityDelta {
 		line = strings.TrimPrefix(line, "[delta]")
 		line = strings.TrimSpace(line)
 
-		var d affinityDelta
+		d := affinityDelta{axis: "closeness"} // default axis
 		parts := strings.Fields(line)
 		for i, part := range parts {
 			switch {
@@ -216,6 +223,12 @@ func parseDeltas(text string) []affinityDelta {
 				d.platformUserID = strings.TrimPrefix(part, "user_id=")
 			case strings.HasPrefix(part, "platform="):
 				d.platform = strings.TrimPrefix(part, "platform=")
+			case strings.HasPrefix(part, "axis="):
+				axis := strings.TrimPrefix(part, "axis=")
+				switch axis {
+				case "closeness", "trust", "interest":
+					d.axis = axis
+				}
 			case strings.HasPrefix(part, "delta="):
 				if f, err := strconv.ParseFloat(strings.TrimPrefix(part, "delta="), 64); err == nil {
 					d.delta = f
@@ -223,9 +236,10 @@ func parseDeltas(text string) []affinityDelta {
 			case strings.HasPrefix(part, "reason="):
 				reasonParts := append([]string{strings.TrimPrefix(part, "reason=")}, parts[i+1:]...)
 				d.reason = strings.Join(reasonParts, " ")
-				break
+				goto done
 			}
 		}
+	done:
 		if d.platformUserID != "" && d.delta != 0 {
 			deltas = append(deltas, d)
 		}
@@ -245,7 +259,12 @@ func applyDelta(ctx context.Context, db *sql.DB, d affinityDelta) error {
 		return fmt.Errorf("resolve user %s/%s: %w", d.platform, d.platformUserID, err)
 	}
 
-	// Atomic: insert event + update affinity.
+	axis := d.axis
+	if axis == "" {
+		axis = "closeness"
+	}
+
+	// Atomic: insert event + update axis-specific column + legacy affinity.
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -256,16 +275,25 @@ func applyDelta(ctx context.Context, db *sql.DB, d affinityDelta) error {
 	now := time.Now()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO affinity_events (id, user_id, delta, reason, created_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		eventID, userID, d.delta, d.reason, now)
+		`INSERT INTO affinity_events (id, user_id, delta, axis, reason, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		eventID, userID, d.delta, axis, d.reason, now)
 	if err != nil {
 		return fmt.Errorf("insert event: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx,
-		`UPDATE users SET affinity = affinity + ?, updated_at = ? WHERE id = ?`,
-		d.delta, now, userID)
+	axisCol := "closeness"
+	switch axis {
+	case "trust":
+		axisCol = "trust"
+	case "interest":
+		axisCol = "interest"
+	}
+	query := fmt.Sprintf(
+		`UPDATE users SET %s = %s + ?, affinity = affinity + ?, updated_at = ? WHERE id = ?`,
+		axisCol, axisCol,
+	)
+	_, err = tx.ExecContext(ctx, query, d.delta, d.delta, now, userID)
 	if err != nil {
 		return fmt.Errorf("update affinity: %w", err)
 	}

@@ -179,6 +179,99 @@ func TestParseMemoryLine_WorldAndTool(t *testing.T) {
 	}
 }
 
+func TestParseAffinityDelta_WithAxis(t *testing.T) {
+	d, ok := parseAffinityDelta("[delta] user_id=abc123 platform=discord axis=trust delta=+0.5 messages=1 reason=(感) 秘密を打ち明けた")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if d.Axis != "trust" {
+		t.Errorf("axis: expected trust, got %s", d.Axis)
+	}
+	if d.Delta != 0.5 {
+		t.Errorf("delta: got %f", d.Delta)
+	}
+	if d.Reason != "(感) 秘密を打ち明けた" {
+		t.Errorf("reason: got %q", d.Reason)
+	}
+}
+
+func TestParseAffinityDelta_DefaultAxis(t *testing.T) {
+	d, ok := parseAffinityDelta("[delta] user_id=abc platform=discord delta=+0.1 reason=test")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if d.Axis != "closeness" {
+		t.Errorf("axis: expected closeness (default), got %s", d.Axis)
+	}
+}
+
+func TestParseAffinityDelta_InvalidAxis(t *testing.T) {
+	d, ok := parseAffinityDelta("[delta] user_id=abc platform=discord axis=bogus delta=+0.1 reason=test")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	// Invalid axis should keep default
+	if d.Axis != "closeness" {
+		t.Errorf("axis: expected closeness (default for invalid), got %s", d.Axis)
+	}
+}
+
+func TestParseMemoryLine_Episode(t *testing.T) {
+	mem, ok := parseMemoryLine("[episode participants=123,456 tone=楽しい] アニメの話で盛り上がった")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if mem.Type != memory.MemoryTypeEpisode {
+		t.Errorf("expected episode type, got %s", mem.Type)
+	}
+	if mem.Content != "アニメの話で盛り上がった" {
+		t.Errorf("content: got %q", mem.Content)
+	}
+	participants, ok := mem.Metadata["participants"].([]string)
+	if !ok || len(participants) != 2 {
+		t.Errorf("participants: got %v", mem.Metadata["participants"])
+	}
+	if mem.Metadata["emotional_tone"] != "楽しい" {
+		t.Errorf("tone: got %v", mem.Metadata["emotional_tone"])
+	}
+}
+
+func TestParseMemoryLine_Self(t *testing.T) {
+	mem, ok := parseMemoryLine("[self] プログラミングの話になると饒舌になる")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if mem.Type != memory.MemoryTypeSelf {
+		t.Errorf("expected self type, got %s", mem.Type)
+	}
+	if mem.Content != "プログラミングの話になると饒舌になる" {
+		t.Errorf("content: got %q", mem.Content)
+	}
+}
+
+func TestParseCompactResponse_MultiAxisAffinity(t *testing.T) {
+	input := `KEEP: 0, 1
+
+MEMORIES:
+- [user user_id=123] Likes anime
+
+AFFINITY:
+- [delta] user_id=123 platform=discord axis=closeness delta=+0.3 messages=1 reason=(楽) 楽しく会話した
+- [delta] user_id=123 platform=discord axis=interest delta=+0.5 messages=1 reason=(興) 面白い話題を提供`
+
+	result := parseCompactResponse(input, 5)
+
+	if len(result.AffinityDeltas) != 2 {
+		t.Fatalf("expected 2 deltas, got %d", len(result.AffinityDeltas))
+	}
+	if result.AffinityDeltas[0].Axis != "closeness" {
+		t.Errorf("delta[0] axis: got %s", result.AffinityDeltas[0].Axis)
+	}
+	if result.AffinityDeltas[1].Axis != "interest" {
+		t.Errorf("delta[1] axis: got %s", result.AffinityDeltas[1].Axis)
+	}
+}
+
 func TestParseCompactResponse_UserMemoriesWithUserID(t *testing.T) {
 	input := `KEEP: 0, 1
 

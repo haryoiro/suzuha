@@ -21,11 +21,23 @@ type User struct {
 	DisplayName string         `json:"display_name"`
 	Role        Role           `json:"role"`
 	IsBot       bool           `json:"is_bot"`
-	Affinity    float64        `json:"affinity"`
+	Affinity    float64        `json:"affinity"`   // legacy: sum of all axes
+	Closeness   float64        `json:"closeness"`  // 親密度
+	Trust       float64        `json:"trust"`      // 信頼度
+	Interest    float64        `json:"interest"`   // 関心度
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
+
+// AffinityAxis represents an affinity dimension.
+type AffinityAxis string
+
+const (
+	AxisCloseness AffinityAxis = "closeness"
+	AxisTrust     AffinityAxis = "trust"
+	AxisInterest  AffinityAxis = "interest"
+)
 
 // PlatformLink connects an internal user to a platform identity.
 type PlatformLink struct {
@@ -39,14 +51,15 @@ type PlatformLink struct {
 
 // AffinityEvent records a single affinity change from consolidation.
 type AffinityEvent struct {
-	ID             string    `json:"id"`
-	UserID         string    `json:"user_id"`
-	Delta          float64   `json:"delta"`
-	Reason         string    `json:"reason"`
-	InteractionIDs []string  `json:"interaction_ids,omitempty"`
-	GroupStart     time.Time `json:"group_start"`
-	GroupEnd       time.Time `json:"group_end"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             string       `json:"id"`
+	UserID         string       `json:"user_id"`
+	Delta          float64      `json:"delta"`
+	Axis           AffinityAxis `json:"axis"` // "closeness" | "trust" | "interest"
+	Reason         string       `json:"reason"`
+	InteractionIDs []string     `json:"interaction_ids,omitempty"`
+	GroupStart     time.Time    `json:"group_start"`
+	GroupEnd       time.Time    `json:"group_end"`
+	CreatedAt      time.Time    `json:"created_at"`
 }
 
 // UserGuild represents a guild+channel association for a user.

@@ -16,6 +16,7 @@ const (
 	MemoryTypeTool    MemoryType = "tool"
 	MemoryTypeRSS     MemoryType = "rss"
 	MemoryTypeEpisode MemoryType = "episode"
+	MemoryTypeSelf    MemoryType = "self"
 )
 
 // Memory is a single long-term memory entry.

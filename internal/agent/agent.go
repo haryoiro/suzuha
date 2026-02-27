@@ -149,7 +149,7 @@ func (a *Agent) Run(ctx context.Context) error {
 // ingestEvent processes a single event: resolves the user, adds the message
 // to context, and injects user profile. It does NOT trigger LLM completion.
 // Returns the message and the user's affinity score.
-func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, float64) {
+func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, float64, float64) {
 	msg := eventToMessage(evt)
 
 	a.logger.Info("event received",
@@ -158,7 +158,7 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 		"channel", msg.Channel, "content", truncate(msg.Content, 100))
 
 	// Resolve user identity (auto-create if not exists).
-	var userAffinity float64
+	var userCloseness, userInterest float64
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
@@ -166,9 +166,11 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 		} else {
 			if u.DisplayName != "" {
 				msg.UserName = u.DisplayName
-				a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role, "affinity", u.Affinity)
+				a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role,
+					"closeness", u.Closeness, "trust", u.Trust, "interest", u.Interest)
 			}
-			userAffinity = u.Affinity
+			userCloseness = u.Closeness
+			userInterest = u.Interest
 			guildID, _ := evt.Payload["guild_id"].(string)
 			guildName, _ := evt.Payload["guild_name"].(string)
 			channelName, _ := evt.Payload["channel_name"].(string)
@@ -194,12 +196,7 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 	// Add to context.
 	a.ctx.Add(msg)
 
-	// Inject user profile if not yet in context (skip for bot itself).
-	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
-		a.injectUserProfile(ctx, msg.Source, msg.UserID)
-	}
-
-	return msg, userAffinity
+	return msg, userCloseness, userInterest
 }
 
 // handleBatch ingests all events in the batch, then generates a single LLM
@@ -209,13 +206,14 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	// 1. Ingest all events into context.
 	var lastMsg llm.Message
 	var lastEvt event.Event
-	var userAffinity float64
+	var userCloseness, userInterest float64
 	var directlyAddressed bool
 	for _, evt := range batch {
-		msg, aff := a.ingestEvent(ctx, evt)
+		msg, closeness, interest := a.ingestEvent(ctx, evt)
 		lastMsg = msg
 		lastEvt = evt
-		userAffinity = aff
+		userCloseness = closeness
+		userInterest = interest
 		if isDirectlyAddressed(evt, a.botID) {
 			directlyAddressed = true
 		}
@@ -229,9 +227,17 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		a.compact(ctx)
 	}
 
-	// 3. Retrieve relevant long-term memories.
+	// 3. Build ephemeral context (memories + profiles — not persisted).
+	var ephemeral []llm.Message
 	if a.memory != nil {
-		a.injectMemories(ctx, lastMsg.Content)
+		if mem := a.buildMemoryContext(ctx, lastMsg.Content); mem != "" {
+			ephemeral = append(ephemeral, llm.Message{
+				Role: "system", Content: mem, Timestamp: time.Now(),
+			})
+		}
+	}
+	if profiles := a.buildUserProfiles(ctx); len(profiles) > 0 {
+		ephemeral = append(ephemeral, profiles...)
 	}
 
 	// 4. Determine response directive.
@@ -241,13 +247,14 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	if directlyAddressed {
 		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。"
 	} else {
-		directive = responseDirective(lastEvt, a.botID, userAffinity)
+		directive = responseDirective(lastEvt, a.botID, userCloseness, userInterest)
 	}
-	a.logger.Info("llm request", "message_count", len(a.ctx.Messages()), "directive", directive, "batch_size", len(batch))
+	a.logger.Info("llm request", "message_count", len(a.ctx.Messages()),
+		"ephemeral_count", len(ephemeral), "directive", directive, "batch_size", len(batch))
 
 	// 5. LLM completion with tool loop.
 	channel, _ := lastEvt.Payload["channel"].(string)
-	resp, err := a.completeWithTools(ctx, directive, channel)
+	resp, err := a.completeWithTools(ctx, directive, channel, ephemeral)
 	if err != nil {
 		return fmt.Errorf("agent: complete: %w", err)
 	}
@@ -283,9 +290,10 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 }
 
 // completeWithTools runs the LLM and executes tool calls in a loop.
-// The directive is appended as a transient system message at the end of the
-// message list for the first LLM call only; it is not persisted in context.
-func (a *Agent) completeWithTools(ctx context.Context, directive, channel string) (*llm.Response, error) {
+// The directive and ephemeral messages are appended as transient system messages
+// at the end of the message list for the first LLM call only; they are not
+// persisted in context.
+func (a *Agent) completeWithTools(ctx context.Context, directive, channel string, ephemeral []llm.Message) (*llm.Response, error) {
 	allTools := a.tools.All()
 	maxIter := 10
 
@@ -298,13 +306,16 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		}
 
 		msgs := a.ctx.MessagesWithSystem()
-		// Inject directive only on the first iteration (before any tool calls).
-		if iter == 0 && directive != "" {
-			msgs = append(msgs, llm.Message{
-				Role:      "system",
-				Content:   directive,
-				Timestamp: time.Now(),
-			})
+		// Inject ephemeral context + directive only on the first iteration.
+		if iter == 0 {
+			msgs = append(msgs, ephemeral...)
+			if directive != "" {
+				msgs = append(msgs, llm.Message{
+					Role:      "system",
+					Content:   directive,
+					Timestamp: time.Now(),
+				})
+			}
 		}
 		resp, err := a.llm.Complete(ctx, msgs, allTools)
 		if err != nil {
@@ -496,6 +507,7 @@ func (a *Agent) applyAffinityDeltas(ctx context.Context, deltas []consolidator.A
 		evt := &user.AffinityEvent{
 			UserID:         u.ID,
 			Delta:          d.Delta,
+			Axis:           user.AffinityAxis(d.Axis),
 			Reason:         d.Reason,
 			InteractionIDs: interactionIDs,
 			GroupStart:     groupStart,
@@ -507,23 +519,67 @@ func (a *Agent) applyAffinityDeltas(ctx context.Context, deltas []consolidator.A
 	}
 }
 
-// injectUserProfile loads a user's profile and affinity history into the context
-// if it hasn't been injected yet in this context window.
-func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID string) {
-	if a.ctx.HasUserProfile(platformUserID) {
-		return
+// buildUserProfiles collects ephemeral profile messages for all users
+// seen in the current context who haven't been profiled yet.
+// Returns system messages that are NOT persisted in context.
+func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
+	if a.users == nil {
+		return nil
 	}
 
+	// Collect unique (platform, userID) pairs from recent context messages.
+	type userKey struct{ platform, userID string }
+	seen := make(map[userKey]bool)
+	var keys []userKey
+	for _, m := range a.ctx.Messages() {
+		if m.UserID == "" || m.UserID == a.botID || m.Role != "user" {
+			continue
+		}
+		k := userKey{m.Source, m.UserID}
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+
+	var msgs []llm.Message
+	for _, k := range keys {
+		content := a.buildUserProfile(ctx, k.platform, k.userID)
+		if content != "" {
+			msgs = append(msgs, llm.Message{
+				Role: "system", Content: content, Timestamp: time.Now(),
+			})
+		}
+	}
+
+	// Also include self-reflection memories (not user-specific).
+	if a.memory != nil {
+		selfMems, err := a.memory.SearchByType(ctx, "", memory.MemoryTypeSelf, 3)
+		if err == nil && len(selfMems) > 0 {
+			var sb strings.Builder
+			sb.WriteString("Self-awareness:\n")
+			for _, m := range selfMems {
+				fmt.Fprintf(&sb, "  - %s\n", m.Content)
+			}
+			msgs = append(msgs, llm.Message{
+				Role: "system", Content: sb.String(), Timestamp: time.Now(),
+			})
+		}
+	}
+	return msgs
+}
+
+// buildUserProfile builds a profile summary string for a single user.
+// Returns "" if the user cannot be resolved.
+func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID string) string {
 	u, err := a.users.Resolve(ctx, platform, platformUserID, "")
 	if err != nil {
 		a.logger.Debug("user profile lookup failed", "error", err)
-		return
+		return ""
 	}
 
-	// Build profile summary.
-	var content string
-	content = fmt.Sprintf("[User profile: %s (ID=%s) role=%s affinity=%.2f]\n",
-		u.DisplayName, u.ID, u.Role, u.Affinity)
+	content := fmt.Sprintf("[User profile: %s (ID=%s) role=%s closeness=%.2f trust=%.2f interest=%.2f]\n",
+		u.DisplayName, u.ID, u.Role, u.Closeness, u.Trust, u.Interest)
 
 	// Fetch recent affinity history.
 	events, err := a.users.GetAffinity(ctx, u.ID, 5)
@@ -533,11 +589,11 @@ func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID 
 	if len(events) > 0 {
 		content += "Recent affinity history:\n"
 		for _, e := range events {
-			content += fmt.Sprintf("  %+.1f: %s (%s)\n", e.Delta, e.Reason, e.GroupEnd.Format("2006-01-02"))
+			content += fmt.Sprintf("  %+.1f (%s): %s (%s)\n", e.Delta, e.Axis, e.Reason, e.GroupEnd.Format("2006-01-02"))
 		}
 	}
 
-	// Fetch user-type memories by user ID.
+	// Fetch user-type memories.
 	if a.memory != nil {
 		memories, err := a.memory.ListByUser(ctx, u.ID, 5)
 		if err != nil {
@@ -550,7 +606,7 @@ func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID 
 			}
 		}
 
-		// Fetch episode memories involving this user (content contains participant IDs).
+		// Fetch episode memories involving this user.
 		episodes, err := a.memory.SearchByType(ctx, platformUserID, memory.MemoryTypeEpisode, 3)
 		if err != nil {
 			a.logger.Debug("episode memory search failed", "error", err)
@@ -599,36 +655,27 @@ func (a *Agent) injectUserProfile(ctx context.Context, platform, platformUserID 
 		}
 	}
 
-	a.ctx.Add(llm.Message{
-		Role:      "system",
-		Content:   content,
-		Timestamp: time.Now(),
-	})
-	a.ctx.MarkUserProfileInjected(platformUserID)
+	return content
 }
 
-// injectMemories searches long-term memory and injects relevant results.
-func (a *Agent) injectMemories(ctx context.Context, query string) {
+// buildMemoryContext searches long-term memory and returns relevant results
+// as a string. Returns "" if no relevant memories found.
+// The result is used as an ephemeral message (not persisted in context).
+func (a *Agent) buildMemoryContext(ctx context.Context, query string) string {
 	memories, err := a.memory.Search(ctx, query, 3)
 	if err != nil {
 		a.logger.Debug("memory search failed", "error", err)
-		return
+		return ""
 	}
-
 	if len(memories) == 0 {
-		return
+		return ""
 	}
 
 	content := "Relevant memories:\n"
 	for _, m := range memories {
 		content += fmt.Sprintf("- [%s] %s\n", m.Type, m.Content)
 	}
-
-	a.ctx.Add(llm.Message{
-		Role:      "system",
-		Content:   content,
-		Timestamp: time.Now(),
-	})
+	return content
 }
 
 // injectChannelHistory fetches recent messages for a channel not yet seen
@@ -741,8 +788,9 @@ func stripDirectiveTags(text string) string {
 }
 
 // responseDirective returns a system instruction telling the LLM whether
-// it must respond or may stay silent, based on the event type and affinity.
-func responseDirective(evt event.Event, botID string, affinity float64) string {
+// it must respond or may stay silent, based on the event type and affinity axes.
+// closeness controls warmth of response; interest controls eagerness to engage.
+func responseDirective(evt event.Event, botID string, closeness, interest float64) string {
 	if isDirectlyAddressed(evt, botID) {
 		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。"
 	}
@@ -752,13 +800,18 @@ func responseDirective(evt event.Event, botID string, affinity float64) string {
 		"（テキストに絵文字を書くのではなく、ツールを呼んで相手のメッセージにリアクションを付ける）。" +
 		"何も付けなくてもいいけど、共感・面白い・なるほど等の気持ちがあるなら付けてから `[SKIP]`。"
 
+	// interest drives engagement tendency; closeness drives warmth.
 	switch {
-	case affinity >= 3.0:
+	case closeness >= 3.0:
 		return "[LISTEN] 仲の良い人の会話です。気になったら気軽に混ざって。" +
 			"一言だけ相槌（「わかる」「それな」「草」くらい）でもOK。" +
 			reactHint +
 			noEmoji
-	case affinity <= -1.0:
+	case interest >= 2.0:
+		return "[LISTEN] 気になる人の会話です。話題が面白そうなら積極的に混ざって。" +
+			reactHint +
+			noEmoji
+	case closeness <= -1.0:
 		return "[LISTEN] チャンネルの会話です。特に自分に関係なければスルーでいい。" +
 			"`[SKIP]` とだけ返してください。" +
 			noEmoji
