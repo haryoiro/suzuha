@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
@@ -250,15 +252,34 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	}
 
 	// 3. Build ephemeral context (memories + profiles — not persisted).
-	var ephemeral []llm.Message
+	//    Run memory search and user profile building in parallel to reduce
+	//    the total latency from sequential embedding API calls.
+	var (
+		memMsg   string
+		profiles []llm.Message
+		wg       sync.WaitGroup
+	)
 	if a.memory != nil {
-		if mem := a.buildMemoryContext(ctx, lastMsg.Content); mem != "" {
-			ephemeral = append(ephemeral, llm.Message{
-				Role: "system", Content: mem, Timestamp: time.Now(),
-			})
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			memMsg = a.buildMemoryContext(ctx, lastMsg.Content)
+		}()
 	}
-	if profiles := a.buildUserProfiles(ctx); len(profiles) > 0 {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		profiles = a.buildUserProfiles(ctx)
+	}()
+	wg.Wait()
+
+	var ephemeral []llm.Message
+	if memMsg != "" {
+		ephemeral = append(ephemeral, llm.Message{
+			Role: "system", Content: memMsg, Timestamp: time.Now(),
+		})
+	}
+	if len(profiles) > 0 {
 		ephemeral = append(ephemeral, profiles...)
 	}
 
@@ -588,29 +609,57 @@ func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
 		}
 	}
 
-	var msgs []llm.Message
-	for _, k := range keys {
-		content := a.buildUserProfile(ctx, k.platform, k.userID)
-		if content != "" {
-			msgs = append(msgs, llm.Message{
-				Role: "system", Content: content, Timestamp: time.Now(),
-			})
-		}
+	// Build all user profiles + self-reflection in parallel.
+	// Each profile may call embedding API, so parallelism reduces total latency.
+	type indexedMsg struct {
+		index   int
+		content string
+	}
+	results := make([]indexedMsg, 0, len(keys)+1)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i, k := range keys {
+		wg.Add(1)
+		go func(idx int, platform, userID string) {
+			defer wg.Done()
+			content := a.buildUserProfile(ctx, platform, userID)
+			if content != "" {
+				mu.Lock()
+				results = append(results, indexedMsg{idx, content})
+				mu.Unlock()
+			}
+		}(i, k.platform, k.userID)
 	}
 
-	// Also include self-reflection memories (not user-specific).
+	// Self-reflection memories (also uses embedding).
 	if a.memory != nil {
-		selfMems, err := a.memory.SearchByType(ctx, "", memory.MemoryTypeSelf, 3)
-		if err == nil && len(selfMems) > 0 {
-			var sb strings.Builder
-			sb.WriteString("Self-awareness:\n")
-			for _, m := range selfMems {
-				fmt.Fprintf(&sb, "  - %s\n", m.Content)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			selfMems, err := a.memory.SearchByType(ctx, "", memory.MemoryTypeSelf, 3)
+			if err == nil && len(selfMems) > 0 {
+				var sb strings.Builder
+				sb.WriteString("Self-awareness:\n")
+				for _, m := range selfMems {
+					fmt.Fprintf(&sb, "  - %s\n", m.Content)
+				}
+				mu.Lock()
+				results = append(results, indexedMsg{len(keys), sb.String()})
+				mu.Unlock()
 			}
-			msgs = append(msgs, llm.Message{
-				Role: "system", Content: sb.String(), Timestamp: time.Now(),
-			})
-		}
+		}()
+	}
+	wg.Wait()
+
+	// Sort by original index to keep stable ordering.
+	slices.SortFunc(results, func(a, b indexedMsg) int { return a.index - b.index })
+
+	msgs := make([]llm.Message, 0, len(results))
+	for _, r := range results {
+		msgs = append(msgs, llm.Message{
+			Role: "system", Content: r.content, Timestamp: time.Now(),
+		})
 	}
 	return msgs
 }
