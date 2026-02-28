@@ -12,6 +12,12 @@ function findMetric(
   );
 }
 
+/** Compute average from a histogram metric's sum/count. */
+function avgFromHistogram(m: MetricItem | undefined): number {
+  if (!m || !m.sum || !m.count || m.count === 0) return 0;
+  return m.sum / m.count;
+}
+
 function findMetrics(
   metrics: MetricItem[] | undefined,
   name: string
@@ -103,7 +109,7 @@ export function MetricsPage() {
           <Card>
             <Statistic
               title="Avg Latency"
-              value={latency?.value ?? 0}
+              value={avgFromHistogram(latency)}
               precision={3}
               suffix="s"
             />

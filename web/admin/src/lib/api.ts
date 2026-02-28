@@ -347,6 +347,19 @@ export const agentApi = {
     }),
 };
 
+// Boredom API
+export interface BoredomStatus {
+  boredom: number;
+  last_interaction: string | null;
+  last_channel?: string;
+  last_posted_at: string | null;
+  post_threshold: number;
+}
+
+export const boredomApi = {
+  get: () => fetchJSON<BoredomStatus>("/api/boredom"),
+};
+
 // Context API
 export interface ContextMessage {
   role: string;

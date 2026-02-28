@@ -58,7 +58,8 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/guilds/{id}/channels", guildH.Channels)
 
 	// Channel settings.
-	chSettingsH := handler.NewChannelSettingsHandler(store.DB(), logger)
+	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
+	chSettingsH := handler.NewChannelSettingsHandler(store.DB(), agentBase, logger)
 	mux.HandleFunc("GET /api/channel-settings", chSettingsH.List)
 	mux.HandleFunc("PUT /api/channel-settings/{channelId}", chSettingsH.Upsert)
 	mux.HandleFunc("DELETE /api/channel-settings/{channelId}", chSettingsH.Delete)
@@ -71,9 +72,12 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("DELETE /api/scheduled-actions/{id}", actionsH.Delete)
 
 	// Agent operations (compact, etc.).
-	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 	agentH := handler.NewAgentHandler(agentBase, logger)
 	mux.HandleFunc("POST /api/agent/compact", agentH.Compact)
+
+	// Boredom status.
+	boredomH := handler.NewBoredomHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/boredom", boredomH.Get)
 
 	// RSS feeds CRUD.
 	rssH := handler.NewRSSHandler(store.DB(), logger)
