@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -26,9 +27,11 @@ func (t *CreateTool) Name() string { return "schedule_create" }
 
 func (t *CreateTool) Description() string {
 	return `Schedule a message to be sent to a Discord channel at a specified time.
-Use the channel_id from the message metadata. The scheduled_at must be in RFC3339 format (e.g. "2025-01-15T10:00:00+09:00").
+Use the channel_id from the message metadata.
 For recurring schedules, provide a cron_expr in standard 5-field cron format (minute hour day month weekday).
-Examples: "0 9 * * *" = every day at 9:00, "0 9 * * 1-5" = weekdays at 9:00, "*/30 * * * *" = every 30 minutes.`
+If scheduled_at is omitted, the next occurrence is automatically calculated from cron_expr.
+Use random_minutes to add a random offset (0 to N minutes) to each occurrence — useful for natural-feeling recurring messages.
+Examples: cron_expr "0 8 * * *" with random_minutes 240 = every day at a random time between 8:00-12:00 UTC.`
 }
 
 func (t *CreateTool) InputSchema() json.RawMessage {
@@ -37,20 +40,22 @@ func (t *CreateTool) InputSchema() json.RawMessage {
 		"properties": {
 			"channel_id":   {"type": "string", "description": "Target channel ID (from message metadata)."},
 			"content":      {"type": "string", "description": "Message content to send (max 2000 chars)."},
-			"scheduled_at": {"type": "string", "description": "When to send, in RFC3339 format (e.g. 2025-01-15T10:00:00+09:00)."},
-			"cron_expr":    {"type": "string", "description": "Optional: 5-field cron expression for recurring schedule. If set, scheduled_at is the first occurrence."},
-			"created_by":   {"type": "string", "description": "Optional: user ID who requested this (from message metadata)."}
+			"scheduled_at": {"type": "string", "description": "Optional: when to send, in RFC3339 format (e.g. 2025-01-15T10:00:00+09:00). If omitted and cron_expr is set, the next cron occurrence is used automatically."},
+			"cron_expr":      {"type": "string", "description": "Optional: 5-field cron expression for recurring schedule (e.g. '0 8 * * *' = daily at 8:00). If scheduled_at is omitted, the first occurrence is auto-calculated from the cron expression."},
+			"random_minutes": {"type": "integer", "description": "Optional: add a random offset of 0 to N minutes to each scheduled time. E.g. cron '0 8 * * *' + random_minutes 240 = daily random between 8:00-12:00."},
+			"created_by":     {"type": "string", "description": "Optional: user ID who requested this (from message metadata)."}
 		},
-		"required": ["channel_id", "content", "scheduled_at"]
+		"required": ["channel_id", "content"]
 	}`)
 }
 
 type createInput struct {
-	ChannelID   string `json:"channel_id"`
-	Content     string `json:"content"`
-	ScheduledAt string `json:"scheduled_at"`
-	CronExpr    string `json:"cron_expr"`
-	CreatedBy   string `json:"created_by"`
+	ChannelID     string `json:"channel_id"`
+	Content       string `json:"content"`
+	ScheduledAt   string `json:"scheduled_at"`
+	CronExpr      string `json:"cron_expr"`
+	RandomMinutes int    `json:"random_minutes"`
+	CreatedBy     string `json:"created_by"`
 }
 
 func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
@@ -69,28 +74,47 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return tool.ErrorResult("content must be 2000 characters or less"), nil
 	}
 
-	scheduledAt, err := time.Parse(time.RFC3339, in.ScheduledAt)
-	if err != nil {
-		return tool.ErrorResult("scheduled_at must be RFC3339 format (e.g. 2025-01-15T10:00:00+09:00): " + err.Error()), nil
-	}
-	if time.Until(scheduledAt) < time.Minute {
-		return tool.ErrorResult("scheduled_at must be at least 1 minute in the future"), nil
-	}
-
 	// Validate cron expression if provided.
+	var cronSchedule cron.Schedule
 	if in.CronExpr != "" {
 		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-		if _, parseErr := parser.Parse(in.CronExpr); parseErr != nil {
+		var parseErr error
+		cronSchedule, parseErr = parser.Parse(in.CronExpr)
+		if parseErr != nil {
 			return tool.ErrorResult("invalid cron_expr: " + parseErr.Error()), nil
 		}
 	}
 
+	var scheduledAt time.Time
+	if in.ScheduledAt != "" {
+		var err error
+		scheduledAt, err = time.Parse(time.RFC3339, in.ScheduledAt)
+		if err != nil {
+			return tool.ErrorResult("scheduled_at must be RFC3339 format (e.g. 2025-01-15T10:00:00+09:00): " + err.Error()), nil
+		}
+		if time.Until(scheduledAt) < time.Minute {
+			return tool.ErrorResult("scheduled_at must be at least 1 minute in the future"), nil
+		}
+	} else if cronSchedule != nil {
+		// Auto-calculate the next occurrence from the cron expression.
+		scheduledAt = cronSchedule.Next(time.Now())
+	} else {
+		return tool.ErrorResult("either scheduled_at or cron_expr is required"), nil
+	}
+
+	// Apply random offset.
+	if in.RandomMinutes > 0 {
+		offset := time.Duration(rand.IntN(in.RandomMinutes)) * time.Minute
+		scheduledAt = scheduledAt.Add(offset)
+	}
+
 	action := &Action{
-		ChannelID:   in.ChannelID,
-		Content:     in.Content,
-		ScheduledAt: scheduledAt,
-		CronExpr:    in.CronExpr,
-		CreatedBy:   in.CreatedBy,
+		ChannelID:     in.ChannelID,
+		Content:       in.Content,
+		ScheduledAt:   scheduledAt,
+		CronExpr:      in.CronExpr,
+		RandomMinutes: in.RandomMinutes,
+		CreatedBy:     in.CreatedBy,
 	}
 	if err := t.store.Create(ctx, action); err != nil {
 		return nil, fmt.Errorf("schedule_create: %w", err)
