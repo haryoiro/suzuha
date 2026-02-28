@@ -14,6 +14,7 @@ import (
 type Config struct {
 	LLM          LLM          `yaml:"llm"`
 	Embedding    Embedding    `yaml:"embedding"`
+	Vision       Vision       `yaml:"vision"`
 	Discord      Discord      `yaml:"discord"`
 	ToolServers  []ToolServer `yaml:"tool_servers"`
 	Triggers     []Trigger    `yaml:"triggers"`
@@ -46,6 +47,14 @@ type Embedding struct {
 type Discord struct {
 	Token string `yaml:"token"`
 	BotID string `yaml:"bot_id"`
+}
+
+// Vision configures the vision language model for image understanding.
+type Vision struct {
+	Provider string `yaml:"provider"` // Defaults to llm.provider.
+	Model    string `yaml:"model"`    // e.g. "glm-4.6v-flash"
+	APIKey   string `yaml:"api_key"`
+	APIBase  string `yaml:"api_base"`
 }
 
 // ToolServer configures a remote tool server connection.
@@ -202,6 +211,16 @@ func (c *Config) setDefaults() {
 	}
 	if c.Embedding.Dims == 0 {
 		c.Embedding.Dims = 1024
+	}
+	// Vision defaults: inherit from LLM if not set.
+	if c.Vision.Provider == "" {
+		c.Vision.Provider = c.LLM.Provider
+	}
+	if c.Vision.APIKey == "" {
+		c.Vision.APIKey = c.LLM.APIKey
+	}
+	if c.Vision.APIBase == "" && c.Vision.Provider == c.LLM.Provider {
+		c.Vision.APIBase = c.LLM.APIBase
 	}
 	if c.Memory.DBPath == "" {
 		c.Memory.DBPath = "memory.db"

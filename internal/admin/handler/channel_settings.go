@@ -8,15 +8,33 @@ import (
 	"time"
 )
 
+// notifyAgentReload tells the agent to reload channel settings cache.
+func (h *ChannelSettingsHandler) notifyAgentReload(r *http.Request) {
+	if h.agentBase == "" {
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, h.agentBase+"/internal/reload-channel-settings", nil)
+	if err != nil {
+		return
+	}
+	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+	if err != nil {
+		h.logger.Warn("reload-channel-settings proxy", "error", err)
+		return
+	}
+	resp.Body.Close()
+}
+
 // ChannelSettingsHandler provides HTTP handlers for channel settings.
 type ChannelSettingsHandler struct {
-	db     *sql.DB
-	logger *slog.Logger
+	db        *sql.DB
+	agentBase string // agent internal HTTP base URL for cache reload
+	logger    *slog.Logger
 }
 
 // NewChannelSettingsHandler creates a new ChannelSettingsHandler.
-func NewChannelSettingsHandler(db *sql.DB, logger *slog.Logger) *ChannelSettingsHandler {
-	return &ChannelSettingsHandler{db: db, logger: logger}
+func NewChannelSettingsHandler(db *sql.DB, agentBase string, logger *slog.Logger) *ChannelSettingsHandler {
+	return &ChannelSettingsHandler{db: db, agentBase: agentBase, logger: logger}
 }
 
 type channelSettingJSON struct {
@@ -132,6 +150,7 @@ func (h *ChannelSettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	h.notifyAgentReload(r)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -152,5 +171,6 @@ func (h *ChannelSettingsHandler) Delete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	h.notifyAgentReload(r)
 	w.WriteHeader(http.StatusNoContent)
 }

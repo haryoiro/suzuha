@@ -56,6 +56,7 @@ func run() error {
 			APIBase:  cfg.Embedding.APIBase,
 			Dims:     cfg.Embedding.Dims,
 		},
+		llm.VisionConfig{}, // Consolidator does not use vision.
 		nil, logger,
 	)
 	if err != nil {
@@ -71,6 +72,9 @@ func run() error {
 		return fmt.Errorf("open memory store: %w", err)
 	}
 	defer store.Close()
+
+	memWritesCounter := observe.NewSQLCounter(store.DB(), "suzuha_memory_writes_total")
+	store.SetOnSave(memWritesCounter.Inc)
 
 	srv := consolidator.NewServer(llmClient, store, logger)
 

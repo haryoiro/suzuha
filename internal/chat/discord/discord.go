@@ -98,7 +98,15 @@ func (c *Chat) Run(ctx context.Context) error {
 			channelName = ch.Name
 		}
 
-		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM, m.GuildID, guildName, channelName)
+		// Extract image attachment URLs.
+		var imageURLs []string
+		for _, att := range m.Attachments {
+			if strings.HasPrefix(att.ContentType, "image/") {
+				imageURLs = append(imageURLs, att.URL)
+			}
+		}
+
+		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM, m.GuildID, guildName, channelName, imageURLs)
 		c.bus.Publish(evt)
 	})
 
@@ -187,23 +195,27 @@ func (c *Chat) Typing(_ context.Context, channel string) {
 }
 
 // messageToEvent converts a Discord message to an Event.
-func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM bool, guildID, guildName, channelName string) event.Event {
+func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM bool, guildID, guildName, channelName string, imageURLs []string) event.Event {
+	payload := map[string]any{
+		"content":      content,
+		"channel":      channel,
+		"message_id":   messageID,
+		"user_id":      userID,
+		"user_name":    userName,
+		"is_mention":   isMention,
+		"is_dm":        isDM,
+		"guild_id":     guildID,
+		"guild_name":   guildName,
+		"channel_name": channelName,
+	}
+	if len(imageURLs) > 0 {
+		payload["image_urls"] = imageURLs
+	}
 	return event.Event{
-		ID:     uuid.NewString(),
-		Source: "discord",
-		Type:   "message",
-		Payload: map[string]any{
-			"content":      content,
-			"channel":      channel,
-			"message_id":   messageID,
-			"user_id":      userID,
-			"user_name":    userName,
-			"is_mention":   isMention,
-			"is_dm":        isDM,
-			"guild_id":     guildID,
-			"guild_name":   guildName,
-			"channel_name": channelName,
-		},
+		ID:        uuid.NewString(),
+		Source:    "discord",
+		Type:      "message",
+		Payload:   payload,
 		Timestamp: time.Now(),
 	}
 }

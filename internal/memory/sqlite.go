@@ -22,6 +22,7 @@ func init() {
 type SQLiteStore struct {
 	db      *sql.DB
 	embedFn EmbedFunc
+	onSave  func() // optional hook called on successful Save
 }
 
 // NewSQLiteStore opens or creates a SQLite database at dbPath.
@@ -48,6 +49,9 @@ func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool) (*SQLi
 
 	return &SQLiteStore{db: db, embedFn: embedFn}, nil
 }
+
+// SetOnSave registers a callback invoked after each successful Save.
+func (s *SQLiteStore) SetOnSave(fn func()) { s.onSave = fn }
 
 func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 	if mem.ID == "" {
@@ -110,7 +114,13 @@ func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if s.onSave != nil {
+		s.onSave()
+	}
+	return nil
 }
 
 func (s *SQLiteStore) Search(ctx context.Context, query string, limit int) ([]Memory, error) {

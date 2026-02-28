@@ -18,8 +18,17 @@ require (
 )
 
 require (
+	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/segmentio/asm v1.2.1 // indirect
+	github.com/segmentio/encoding v0.5.3 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	golang.org/x/oauth2 v0.34.0 // indirect
+)
+
+require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/modelcontextprotocol/go-sdk v1.4.0
 	github.com/openai/openai-go v1.12.0 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect

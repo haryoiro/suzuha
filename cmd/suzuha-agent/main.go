@@ -25,6 +25,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/mcpbridge"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
@@ -73,6 +74,7 @@ func run() error {
 
 	// Setup metrics (SQLite-backed, persists across restarts).
 	metrics := observe.NewMetrics(store.DB())
+	store.SetOnSave(metrics.MemoryWritesTotal.Inc)
 
 	// Setup LLM client.
 	llmClient, err = llm.NewClient(
@@ -84,6 +86,12 @@ func run() error {
 			APIKey:   cfg.Embedding.APIKey,
 			APIBase:  cfg.Embedding.APIBase,
 			Dims:     cfg.Embedding.Dims,
+		},
+		llm.VisionConfig{
+			Provider: cfg.Vision.Provider,
+			Model:    cfg.Vision.Model,
+			APIKey:   cfg.Vision.APIKey,
+			APIBase:  cfg.Vision.APIBase,
 		},
 		metrics, logger,
 	)
@@ -107,6 +115,13 @@ func run() error {
 	// Setup tool registry.
 	registry := tool.NewRegistry()
 	registry.Register(builtin.NewFetch())
+
+	// Connect MCP tool servers.
+	mcpMgr := mcpbridge.New(logger)
+	startCtx, startCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	mcpMgr.Start(startCtx, cfg.ToolServers, registry)
+	startCancel()
+	defer mcpMgr.Close()
 
 	// Setup chat interface: Discord if token is set, otherwise CLI.
 	var chatIface chat.Interface

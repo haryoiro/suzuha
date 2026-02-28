@@ -53,6 +53,8 @@ type Client struct {
 	embeddingProv   providers.Provider // may differ from provider (e.g. OpenAI for embeddings)
 	embeddingModel  string
 	embeddingDims   int
+	visionProv      providers.Provider
+	visionModel     string
 	maxCtx          int
 	metrics         *observe.Metrics
 	logger          *slog.Logger
@@ -68,8 +70,17 @@ type EmbeddingConfig struct {
 	Dims     int
 }
 
+// VisionConfig holds optional vision model settings.
+// If Provider is empty, vision is disabled.
+type VisionConfig struct {
+	Provider string
+	Model    string
+	APIKey   string
+	APIBase  string
+}
+
 // NewClient creates a new LLM client.
-func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb EmbeddingConfig, metrics *observe.Metrics, logger *slog.Logger) (*Client, error) {
+func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb EmbeddingConfig, vis VisionConfig, metrics *observe.Metrics, logger *slog.Logger) (*Client, error) {
 	p, err := newProvider(providerName, apiKey, apiBase)
 	if err != nil {
 		return nil, err
@@ -96,6 +107,21 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		} else {
 			c.embeddingProv = p
 		}
+	}
+
+	// Build vision provider: use separate provider if configured.
+	if vis.Model != "" {
+		c.visionModel = vis.Model
+		if vis.Provider != "" && (vis.Provider != providerName || vis.APIKey != apiKey || vis.APIBase != apiBase) {
+			vp, err := newProvider(vis.Provider, vis.APIKey, vis.APIBase)
+			if err != nil {
+				return nil, fmt.Errorf("llm: init vision provider: %w", err)
+			}
+			c.visionProv = vp
+		} else {
+			c.visionProv = p
+		}
+		logger.Info("vision model enabled", "model", vis.Model)
 	}
 
 	return c, nil
@@ -300,4 +326,48 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 
 	c.logger.Debug("embedding done", "model", c.embeddingModel, "dims", len(result), "elapsed_ms", elapsed.Milliseconds())
 	return result, nil
+}
+
+// HasVision returns true if a vision model is configured.
+func (c *Client) HasVision() bool {
+	return c.visionModel != "" && c.visionProv != nil
+}
+
+// DescribeImage sends an image URL to the vision model and returns a text description.
+func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, error) {
+	if !c.HasVision() {
+		return "", fmt.Errorf("llm: vision model not configured")
+	}
+
+	params := providers.CompletionParams{
+		Model: c.visionModel,
+		Messages: []providers.Message{
+			{
+				Role: "user",
+				Content: []providers.ContentPart{
+					{Type: "text", Text: "この画像の内容を簡潔に描写してください。"},
+					{Type: "image_url", ImageURL: &providers.ImageURL{URL: imageURL}},
+				},
+			},
+		},
+	}
+
+	c.logger.Debug("vision request", "model", c.visionModel, "url", imageURL)
+
+	start := time.Now()
+	resp, err := c.visionProv.Completion(ctx, params)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		c.logger.Error("vision completion failed", "model", c.visionModel, "elapsed_ms", elapsed.Milliseconds(), "error", err)
+		return "", fmt.Errorf("llm: vision: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("llm: vision: empty response")
+	}
+
+	text := resp.Choices[0].Message.ContentString()
+	c.logger.Info("vision completion", "model", c.visionModel, "elapsed_ms", elapsed.Milliseconds(), "description_length", len(text))
+	return text, nil
 }

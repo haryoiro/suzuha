@@ -196,6 +196,16 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 			msg.Channel, time.Now())
 	}
 
+	// Describe attached images via VLM (if configured).
+	if a.llm.HasVision() {
+		if urls := extractImageURLs(evt); len(urls) > 0 {
+			descriptions := a.describeImages(ctx, urls)
+			if descriptions != "" {
+				msg.Content += "\n" + descriptions
+			}
+		}
+	}
+
 	// Bootstrap channel history if this is a new channel.
 	a.injectChannelHistory(ctx, msg.Channel, msg.Content, msg.Source)
 
@@ -245,6 +255,9 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 
 	// 2. Check context window usage — compact if needed.
 	ratio := a.ctx.UsageRatio()
+	if a.metrics != nil {
+		a.metrics.ContextWindowUsage.Set(ratio)
+	}
 	a.logger.Debug("context window", "usage_ratio", fmt.Sprintf("%.2f", ratio), "message_count", len(a.ctx.Messages()))
 	if a.contextWindowPct > 0 && ratio > a.contextWindowPct {
 		a.logger.Info("context compaction triggered", "ratio", fmt.Sprintf("%.2f", ratio))
@@ -848,8 +861,13 @@ func (a *Agent) formatChannelHistory(ctx context.Context, channelID, rawJSON, so
 	for _, m := range msgs {
 		name := m.Author
 		if m.AuthorID == a.botID {
-			// Bot's own messages — label as self without creating a user record.
-			name = "suzuha (self)"
+			// Bot's own messages — resolve display name, label as self.
+			if a.users != nil {
+				if u, err := a.users.Resolve(ctx, source, m.AuthorID, m.Author); err == nil && u.DisplayName != "" {
+					name = u.DisplayName
+				}
+			}
+			name += " (self)"
 		} else if a.users != nil && m.AuthorID != "" {
 			if u, err := a.users.Resolve(ctx, source, m.AuthorID, m.Author); err == nil && u.DisplayName != "" {
 				name = u.DisplayName
@@ -958,4 +976,45 @@ func eventToMessage(evt event.Event) llm.Message {
 		MessageID:   messageID,
 		Timestamp:   evt.Timestamp,
 	}
+}
+
+// extractImageURLs pulls image URLs from an event payload.
+func extractImageURLs(evt event.Event) []string {
+	raw, ok := evt.Payload["image_urls"]
+	if !ok {
+		return nil
+	}
+	// Payload stores []string, but map[string]any interface yields []any after JSON round-trip.
+	switch v := raw.(type) {
+	case []string:
+		return v
+	case []any:
+		urls := make([]string, 0, len(v))
+		for _, u := range v {
+			if s, ok := u.(string); ok {
+				urls = append(urls, s)
+			}
+		}
+		return urls
+	}
+	return nil
+}
+
+// describeImages calls the VLM for each image URL and returns a combined description.
+func (a *Agent) describeImages(ctx context.Context, urls []string) string {
+	const maxImages = 4
+	if len(urls) > maxImages {
+		urls = urls[:maxImages]
+	}
+
+	var parts []string
+	for i, u := range urls {
+		desc, err := a.llm.DescribeImage(ctx, u)
+		if err != nil {
+			a.logger.Warn("vision: image description failed", "url", u, "error", err)
+			desc = "画像の読み取りに失敗しました"
+		}
+		parts = append(parts, fmt.Sprintf("[添付画像%d: %s]", i+1, desc))
+	}
+	return strings.Join(parts, "\n")
 }
