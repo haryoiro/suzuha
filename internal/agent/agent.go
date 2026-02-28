@@ -238,6 +238,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	}
 
 	// 1. Ingest all events into context.
+	turnStartIdx := a.ctx.Len() // track where this turn's messages begin
 	var lastMsg llm.Message
 	var lastEvt event.Event
 	var userCloseness, userInterest float64
@@ -336,13 +337,16 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	}
 
 	// 7. Add assistant response to context.
-	a.ctx.Add(llm.Message{
-		Role:      "assistant",
-		Content:   resp.Text,
-		Channel:   channel,
-		Timestamp: time.Now(),
-		ToolCalls: resp.ToolCalls,
-	})
+	// When the response has tool calls, the assistant message was already added
+	// inside completeWithTools (before executing the tools). Skip to avoid duplication.
+	if !resp.HasToolCalls() {
+		a.ctx.Add(llm.Message{
+			Role:      "assistant",
+			Content:   resp.Text,
+			Channel:   channel,
+			Timestamp: time.Now(),
+		})
+	}
 
 	// 8. Send response (strip LLM thinking tags, directive tags, and silent markers).
 	text := stripDirectiveTags(stripThinkTags(resp.Text))
@@ -363,7 +367,12 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		}
 	}
 
-	// 9. Persist context to DB (survives restarts).
+	// 9. Log conversation turn for fine-tuning data collection.
+	if channel != "" {
+		a.logConversationTurn(ctx, turnStartIdx, channel)
+	}
+
+	// 10. Persist context to DB (survives restarts).
 	persistContext(ctx, a.db, a.ctx, a.logger)
 
 	return nil
@@ -425,6 +434,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		})
 
 		// Execute each tool call.
+		allStopAfter := true
 		for _, tc := range resp.ToolCalls {
 			a.logger.Info("tool call",
 				"iteration", iter,
@@ -441,6 +451,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 					ToolCallID: tc.ID,
 					Timestamp:  time.Now(),
 				})
+				allStopAfter = false
 				continue
 			}
 
@@ -464,7 +475,12 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 					ToolCallID: tc.ID,
 					Timestamp:  time.Now(),
 				})
+				allStopAfter = false
 				continue
+			}
+
+			if !result.StopAfter {
+				allStopAfter = false
 			}
 
 			if a.metrics != nil {
@@ -493,6 +509,14 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 				ToolCallID: tc.ID,
 				Timestamp:  time.Now(),
 			})
+		}
+
+		// If all tools signaled StopAfter, skip the next LLM call.
+		// The assistant text (if any) from this iteration is already in context;
+		// return the current response so handleEvent can send it.
+		if allStopAfter {
+			a.logger.Info("all tools returned StopAfter, ending tool loop", "iteration", iter)
+			return resp, nil
 		}
 	}
 
