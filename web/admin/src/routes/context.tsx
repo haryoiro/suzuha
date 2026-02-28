@@ -120,7 +120,7 @@ export function ContextPage() {
         style={{
           flex: 1,
           overflow: "auto",
-          background: "rgba(0,0,0,0.3)",
+          background: "rgba(0,0,0,0.25)",
           borderRadius: 6,
         }}
       >

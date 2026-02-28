@@ -131,26 +131,95 @@ export function App() {
       theme={{
         algorithm: theme.darkAlgorithm,
         token: {
-          colorPrimary: "#7c3aed",
-          borderRadius: 6,
+          colorPrimary: "#06b6d4",
+          colorInfo: "#0ea5e9",
+          colorLink: "#22d3ee",
+          borderRadius: 8,
+          colorBgContainer: "#111827",
+          colorBgElevated: "#1a2332",
+          colorBgLayout: "#0b1120",
+          colorBorder: "rgba(255,255,255,0.08)",
+          colorBorderSecondary: "rgba(255,255,255,0.05)",
+        },
+        components: {
+          Menu: {
+            darkItemBg: "transparent",
+            darkSubMenuItemBg: "transparent",
+            darkItemSelectedBg: "rgba(6,182,212,0.15)",
+            darkItemHoverBg: "rgba(255,255,255,0.06)",
+            darkItemSelectedColor: "#22d3ee",
+            itemMarginInline: 8,
+            itemBorderRadius: 8,
+          },
+          Card: {
+            colorBgContainer: "rgba(255,255,255,0.03)",
+            colorBorderSecondary: "rgba(255,255,255,0.06)",
+          },
+          Table: {
+            colorBgContainer: "transparent",
+            headerBg: "rgba(255,255,255,0.03)",
+            rowHoverBg: "rgba(6,182,212,0.06)",
+            borderColor: "rgba(255,255,255,0.06)",
+          },
+          Modal: {
+            contentBg: "#1a2332",
+            headerBg: "#1a2332",
+          },
+          Input: {
+            colorBgContainer: "rgba(255,255,255,0.04)",
+            activeBorderColor: "#06b6d4",
+          },
+          Select: {
+            colorBgContainer: "rgba(255,255,255,0.04)",
+          },
+          Statistic: {
+            titleFontSize: 13,
+          },
         },
       }}
     >
-      <Layout style={{ minHeight: "100vh" }}>
+      <Layout style={{ minHeight: "100vh", background: "#0b1120" }}>
         {!isMobile && (
-          <Sider width={200} theme="dark">
+          <Sider
+            width={220}
+            style={{
+              background: "linear-gradient(180deg, #0d1526 0%, #091018 100%)",
+              borderRight: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
             <div
               style={{
-                padding: "16px",
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#fff",
-                borderBottom: "1px solid rgba(255,255,255,0.1)",
+                padding: "20px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
               }}
             >
-              suzuha admin
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: "linear-gradient(135deg, #06b6d4, #0ea5e9)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
+              >
+                S
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.9)", letterSpacing: "0.02em" }}>
+                suzuha admin
+              </span>
             </div>
-            <Menu {...menuProps} />
+            <div style={{ padding: "8px 0" }}>
+              <Menu {...menuProps} />
+            </div>
           </Sider>
         )}
 
@@ -159,46 +228,74 @@ export function App() {
             placement="left"
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
-            width={240}
-            styles={{ body: { padding: 0, background: "#001529" } }}
+            width={260}
+            styles={{
+              body: {
+                padding: 0,
+                background: "linear-gradient(180deg, #0d1526 0%, #091018 100%)",
+              },
+            }}
           >
             <div
               style={{
-                padding: "16px",
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#fff",
-                borderBottom: "1px solid rgba(255,255,255,0.1)",
+                padding: "20px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
               }}
             >
-              suzuha admin
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: "linear-gradient(135deg, #06b6d4, #0ea5e9)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
+              >
+                S
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.9)", letterSpacing: "0.02em" }}>
+                suzuha admin
+              </span>
             </div>
-            <Menu {...menuProps} />
+            <div style={{ padding: "8px 0" }}>
+              <Menu {...menuProps} />
+            </div>
           </Drawer>
         )}
 
-        <Layout>
+        <Layout style={{ background: "#0b1120" }}>
           {isMobile && (
             <Header
               style={{
-                padding: "0 12px",
-                background: "#001529",
+                padding: "0 16px",
+                background: "rgba(13,21,38,0.95)",
+                backdropFilter: "blur(8px)",
                 display: "flex",
                 alignItems: "center",
                 height: 48,
                 lineHeight: "48px",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
               }}
             >
               <Button
                 type="text"
                 icon={<MenuOutlined />}
                 onClick={() => setDrawerOpen(true)}
-                style={{ color: "#fff", fontSize: 18 }}
+                style={{ color: "rgba(255,255,255,0.8)", fontSize: 18 }}
               />
               <span
                 style={{
-                  color: "#fff",
-                  fontWeight: 700,
+                  color: "rgba(255,255,255,0.9)",
+                  fontWeight: 600,
                   marginLeft: 12,
                   fontSize: 15,
                 }}
