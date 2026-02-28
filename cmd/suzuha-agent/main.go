@@ -27,6 +27,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/mcpbridge"
 	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/dyntools"
+	"github.com/haryoiro/suzuha/internal/mcpapps"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/rss"
@@ -117,9 +119,9 @@ func run() error {
 	registry.Register(builtin.NewFetch())
 
 	// Connect MCP tool servers.
-	mcpMgr := mcpbridge.New(logger)
+	mcpMgr := mcpbridge.New(logger, registry)
 	startCtx, startCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	mcpMgr.Start(startCtx, cfg.ToolServers, registry)
+	mcpMgr.Start(startCtx, cfg.ToolServers)
 	startCancel()
 	defer mcpMgr.Close()
 
@@ -164,10 +166,12 @@ func run() error {
 		ag.AgentContext().UpdateUserName(userID, newName)
 	}))
 
-	// Register features (RSS tools, etc.).
+	// Register features (RSS tools, dynamic tools, etc.).
 	features := []scheduler.Feature{
 		rss.New(store.DB(), store),
 		schedule.New(store.DB()),
+		dyntools.New("/data/tools", registry, logger),
+		mcpapps.New(mcpMgr, logger),
 	}
 	for _, f := range features {
 		if err := f.Setup(context.Background(), store.DB()); err != nil {
@@ -228,6 +232,92 @@ func run() error {
 				}
 				logger.Info("bot identity registered", "user_id", botUser.ID, "name", name, "is_bot", botUser.IsBot)
 			}
+
+			// Register /affinity slash command (ephemeral, invisible to agent).
+			affinityCmd, cmdErr := s.ApplicationCommandCreate(s.State.User.ID, "", &discordgo.ApplicationCommand{
+				Name:        "affinity",
+				Description: "あなたへの好感度を表示します（本人のみ表示）",
+			})
+			if cmdErr != nil {
+				logger.Error("failed to register /affinity command", "error", cmdErr)
+			} else {
+				logger.Info("registered /affinity command", "id", affinityCmd.ID)
+			}
+
+			// Handle /affinity interaction.
+			s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+				if i.Type != discordgo.InteractionApplicationCommand {
+					return
+				}
+				if i.ApplicationCommandData().Name != "affinity" {
+					return
+				}
+
+				// Extract Discord user (Member in guilds, User in DMs).
+				var discordUser *discordgo.User
+				if i.Member != nil {
+					discordUser = i.Member.User
+				} else {
+					discordUser = i.User
+				}
+				if discordUser == nil {
+					return
+				}
+
+				u, resolveErr := userStore.Resolve(context.Background(), "discord", discordUser.ID, discordUser.Username)
+				if resolveErr != nil {
+					logger.Error("affinity command: resolve user", "error", resolveErr)
+					_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Content: "ユーザー情報の取得に失敗しました。",
+							Flags:   discordgo.MessageFlagsEphemeral,
+						},
+					})
+					return
+				}
+
+				events, _ := userStore.GetAffinity(context.Background(), u.ID, 10)
+
+				displayName := u.DisplayName
+				if displayName == "" {
+					displayName = discordUser.Username
+					if discordUser.GlobalName != "" {
+						displayName = discordUser.GlobalName
+					}
+				}
+
+				var sb strings.Builder
+				fmt.Fprintf(&sb, "**%s の好感度**\n\n", displayName)
+				fmt.Fprintf(&sb, "親密度: **%.1f**\n", u.Closeness)
+				fmt.Fprintf(&sb, "信頼度: **%.1f**\n", u.Trust)
+				fmt.Fprintf(&sb, "関心度: **%.1f**\n", u.Interest)
+
+				if len(events) > 0 {
+					sb.WriteString("\n**最近の変動**\n")
+					axisNames := map[user.AffinityAxis]string{
+						user.AxisCloseness: "親密",
+						user.AxisTrust:     "信頼",
+						user.AxisInterest:  "関心",
+					}
+					for _, e := range events {
+						sign := "+"
+						if e.Delta < 0 {
+							sign = ""
+						}
+						fmt.Fprintf(&sb, "%s%.1f (%s) %s — %s\n",
+							sign, e.Delta, axisNames[e.Axis], e.Reason, e.CreatedAt.Format("01/02"))
+					}
+				}
+
+				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: sb.String(),
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+			})
 		})
 	}
 
