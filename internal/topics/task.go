@@ -109,7 +109,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	// --- Boredom-based posting decision ---
 	now := t.now()
-	lastInteraction := getLastInteraction(ctx, cc.DB, mc.ChannelID)
+	lastInteraction := getLastInteractionGlobal(ctx, cc.DB)
 	boredom := calcBoredom(now, lastInteraction)
 
 	cc.Logger.Info("topics: boredom check",
@@ -164,6 +164,14 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		return fmt.Errorf("topics: notify: %w", err)
 	}
 
+	// If the message was suppressed (e.g. channel disabled/listen, quiet hours),
+	// skip saving to memory to avoid accumulating unposted entries.
+	if result.MessageID == "" {
+		cc.Logger.Warn("topics: message suppressed (no message_id returned), skipping memory save",
+			"channel_id", mc.ChannelID)
+		return nil
+	}
+
 	// 6. Save to memory for history / diversity.
 	mem := &memory.Memory{
 		Type:    memory.MemoryTypeWorld,
@@ -172,10 +180,8 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 			"source":     "topics",
 			"channel_id": mc.ChannelID,
 			"boredom":    boredom,
+			"message_id": result.MessageID,
 		},
-	}
-	if result.MessageID != "" {
-		mem.Metadata["message_id"] = result.MessageID
 	}
 	if mentionTarget != nil {
 		mem.Metadata["mentioned_discord_id"] = mentionTarget.DiscordUserID
@@ -213,15 +219,14 @@ func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
 	}
 }
 
-// getLastInteraction queries the last user message time for the channel.
-func getLastInteraction(ctx context.Context, db *sql.DB, channelID string) time.Time {
+// getLastInteractionGlobal queries the most recent user message time across all channels.
+func getLastInteractionGlobal(ctx context.Context, db *sql.DB) time.Time {
 	if db == nil {
 		return time.Time{}
 	}
 	var lastMsg time.Time
 	err := db.QueryRowContext(ctx,
-		`SELECT last_user_message_at FROM channel_activity WHERE channel_id = ?`,
-		channelID,
+		`SELECT MAX(last_user_message_at) FROM channel_activity WHERE last_user_message_at IS NOT NULL`,
 	).Scan(&lastMsg)
 	if err != nil {
 		return time.Time{} // no activity → maximum boredom
@@ -498,10 +503,11 @@ func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableU
 }
 
 // findHomeChannel looks up the home channel from channel_settings.
+// Only returns channels with active mode (not disabled/listen).
 func findHomeChannel(ctx context.Context, db *sql.DB) string {
 	var channelID string
 	err := db.QueryRowContext(ctx,
-		`SELECT channel_id FROM channel_settings WHERE home = 1 LIMIT 1`,
+		`SELECT channel_id FROM channel_settings WHERE home = 1 AND (mode = 'active' OR mode = '') LIMIT 1`,
 	).Scan(&channelID)
 	if err != nil {
 		return ""
