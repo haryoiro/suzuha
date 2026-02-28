@@ -13,6 +13,7 @@ services:
       - ./data:/data
       - ./.suzuha:/app/.suzuha:ro
       - npm-cache:/root/.npm
+      - ~/.claude:/root/.claude
     env_file:
       - .env
     environment:

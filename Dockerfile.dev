@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Claude Code CLI (for dynamic tool generation)
+RUN npm install -g @anthropic-ai/claude-code
+
 # Install Air for hot reloading
 RUN go install github.com/air-verse/air@latest
 
