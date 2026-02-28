@@ -1,57 +1,109 @@
 package mcpbridge
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// serverEntry holds a connected MCP server session and its registered tool names.
+type serverEntry struct {
+	session   *mcp.ClientSession
+	toolNames []string // prefixed names: ["server.tool1", "server.tool2"]
+}
+
 // Manager manages MCP server connections and registers discovered tools.
 type Manager struct {
+	mu       sync.Mutex
 	logger   *slog.Logger
-	sessions []*mcp.ClientSession
+	registry *tool.Registry
+	servers  map[string]*serverEntry
 }
 
 // New creates a new MCP bridge Manager.
-func New(logger *slog.Logger) *Manager {
-	return &Manager{logger: logger}
+func New(logger *slog.Logger, registry *tool.Registry) *Manager {
+	return &Manager{
+		logger:   logger,
+		registry: registry,
+		servers:  make(map[string]*serverEntry),
+	}
 }
 
 // Start connects to each configured MCP server and registers discovered tools.
 // Failures are logged but do not prevent other servers from connecting.
-func (m *Manager) Start(ctx context.Context, servers []config.ToolServer, registry *tool.Registry) {
+func (m *Manager) Start(ctx context.Context, servers []config.ToolServer) {
 	for _, srv := range servers {
 		if srv.Type != "mcp" {
 			continue
 		}
-		if err := m.connectServer(ctx, srv, registry); err != nil {
+		if _, err := m.ConnectServer(ctx, srv); err != nil {
 			m.logger.Warn("mcp server connection failed, skipping",
 				"name", srv.Name, "error", err)
 		}
 	}
 }
 
-func (m *Manager) connectServer(ctx context.Context, srv config.ToolServer, registry *tool.Registry) error {
+// ConnectServer connects to an MCP server and registers its tools.
+// Returns the list of registered tool names.
+func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.servers[srv.Name]; exists {
+		return nil, fmt.Errorf("server %q already connected", srv.Name)
+	}
+
 	if srv.Command == "" {
-		return fmt.Errorf("mcp server %q: command is required", srv.Name)
+		return nil, fmt.Errorf("mcp server %q: command is required", srv.Name)
 	}
 
 	cmd := exec.Command(srv.Command, srv.Args...)
 	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, "NO_COLOR=1", "FORCE_COLOR=0", "NODE_NO_WARNINGS=1")
 	for k, v := range srv.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-	// Pipe stderr to our logger so MCP server errors are visible.
 	cmd.Stderr = &logWriter{logger: m.logger, name: srv.Name}
 
-	transport := &mcp.CommandTransport{Command: cmd}
+	// Create pipes manually so we can filter non-JSON lines from stdout.
+	// Some MCP servers incorrectly write log messages to stdout, which
+	// corrupts the JSON-RPC stream.
+	stdinPipe, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdin pipe: %w", err)
+	}
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start command: %w", err)
+	}
+
+	// Wrap stdout with a filter that only passes JSON lines.
+	filteredReader := &jsonLineReader{
+		r:      bufio.NewReader(stdoutPipe),
+		closer: stdoutPipe,
+		logger: m.logger,
+		name:   srv.Name,
+	}
+
+	transport := &mcp.IOTransport{
+		Reader: filteredReader,
+		Writer: stdinPipe,
+	}
 
 	client := mcp.NewClient(&mcp.Implementation{
 		Name:    "suzuha-agent",
@@ -60,17 +112,18 @@ func (m *Manager) connectServer(ctx context.Context, srv config.ToolServer, regi
 
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
-		return fmt.Errorf("connect: %w", err)
+		cmd.Process.Kill()
+		return nil, fmt.Errorf("connect: %w", err)
 	}
-	m.sessions = append(m.sessions, session)
 
 	// Discover and register tools.
 	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
 	if err != nil {
 		session.Close()
-		return fmt.Errorf("list tools: %w", err)
+		return nil, fmt.Errorf("list tools: %w", err)
 	}
 
+	var toolNames []string
 	for _, t := range result.Tools {
 		prefixedName := srv.Name + "." + t.Name
 		schema, err := json.Marshal(t.InputSchema)
@@ -87,22 +140,112 @@ func (m *Manager) connectServer(ctx context.Context, srv config.ToolServer, regi
 			inputSchema: schema,
 			session:     session,
 		}
-		registry.Register(mcpTool)
+		m.registry.Register(mcpTool)
+		toolNames = append(toolNames, prefixedName)
 		m.logger.Info("mcp tool registered",
 			"server", srv.Name, "tool", prefixedName)
 	}
 
+	m.servers[srv.Name] = &serverEntry{
+		session:   session,
+		toolNames: toolNames,
+	}
+
 	m.logger.Info("mcp server connected",
-		"name", srv.Name, "tools", len(result.Tools))
+		"name", srv.Name, "tools", len(toolNames))
+	return toolNames, nil
+}
+
+// DisconnectServer stops an MCP server and unregisters its tools.
+func (m *Manager) DisconnectServer(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	entry, ok := m.servers[name]
+	if !ok {
+		return fmt.Errorf("server %q not connected", name)
+	}
+
+	entry.session.Close()
+	for _, toolName := range entry.toolNames {
+		m.registry.Unregister(toolName)
+	}
+	delete(m.servers, name)
+
+	m.logger.Info("mcp server disconnected", "name", name)
 	return nil
+}
+
+// ServerToolNames returns the registered tool names for a connected server.
+func (m *Manager) ServerToolNames(name string) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	entry, ok := m.servers[name]
+	if !ok {
+		return nil
+	}
+	out := make([]string, len(entry.toolNames))
+	copy(out, entry.toolNames)
+	return out
+}
+
+// IsConnected returns true if the named server is connected.
+func (m *Manager) IsConnected(name string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.servers[name]
+	return ok
 }
 
 // Close terminates all MCP sessions and their subprocesses.
 func (m *Manager) Close() {
-	for _, s := range m.sessions {
-		s.Close()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for name, entry := range m.servers {
+		entry.session.Close()
+		for _, toolName := range entry.toolNames {
+			m.registry.Unregister(toolName)
+		}
+		delete(m.servers, name)
 	}
-	m.sessions = nil
+}
+
+// jsonLineReader filters an io.Reader to only pass through lines that start
+// with '{' or '[' (JSON-RPC messages). Non-JSON lines (log output, ANSI codes)
+// are silently discarded.
+type jsonLineReader struct {
+	r      *bufio.Reader
+	closer io.Closer
+	buf    bytes.Buffer
+	logger *slog.Logger
+	name   string
+}
+
+func (f *jsonLineReader) Read(p []byte) (int, error) {
+	for f.buf.Len() == 0 {
+		line, err := f.r.ReadBytes('\n')
+		if len(line) > 0 {
+			trimmed := bytes.TrimSpace(line)
+			if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+				f.buf.Write(line)
+			} else if len(trimmed) > 0 {
+				f.logger.Debug("mcp stdout filtered", "server", f.name, "line", string(trimmed))
+			}
+		}
+		if err != nil {
+			if f.buf.Len() > 0 {
+				break
+			}
+			return 0, err
+		}
+	}
+	return f.buf.Read(p)
+}
+
+func (f *jsonLineReader) Close() error {
+	return f.closer.Close()
 }
 
 // MCPTool adapts an MCP server tool to the tool.Tool interface.
