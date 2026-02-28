@@ -15,8 +15,9 @@ type Tool interface {
 
 // ToolResult is the result of a tool execution.
 type ToolResult struct {
-	Content []Content `json:"content"`
-	IsError bool      `json:"isError"`
+	Content   []Content `json:"content"`
+	IsError   bool      `json:"isError"`
+	StopAfter bool      `json:"-"` // If true, stop the tool loop without making another LLM call.
 }
 
 // Content is a single piece of content in a tool result.
@@ -29,6 +30,16 @@ type Content struct {
 func TextResult(text string) *ToolResult {
 	return &ToolResult{
 		Content: []Content{{Type: "text", Text: text}},
+	}
+}
+
+// StopResult creates a successful result that stops the tool loop.
+// Use this for side-effect-only tools (e.g. reactions) where no further
+// LLM response is needed after execution.
+func StopResult(text string) *ToolResult {
+	return &ToolResult{
+		Content:   []Content{{Type: "text", Text: text}},
+		StopAfter: true,
 	}
 }
 

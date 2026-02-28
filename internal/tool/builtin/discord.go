@@ -50,7 +50,7 @@ func (d *DiscordReact) Execute(_ context.Context, input json.RawMessage) (*tool.
 	if err := d.session.MessageReactionAdd(in.ChannelID, in.MessageID, in.Emoji); err != nil {
 		return tool.ErrorResult("react failed: " + err.Error()), nil
 	}
-	return tool.TextResult("reacted with " + in.Emoji), nil
+	return tool.StopResult("reacted with " + in.Emoji), nil
 }
 
 var _ tool.Tool = (*DiscordReact)(nil)
