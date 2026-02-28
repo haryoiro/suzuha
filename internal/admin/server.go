@@ -71,6 +71,11 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("PUT /api/scheduled-actions/{id}", actionsH.Update)
 	mux.HandleFunc("DELETE /api/scheduled-actions/{id}", actionsH.Delete)
 
+	// Conversation logs (fine-tuning data).
+	convH := handler.NewConversationLogsHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/conversation-logs", convH.List)
+	mux.HandleFunc("GET /api/conversation-logs/export", convH.Export)
+
 	// Agent operations (compact, etc.).
 	agentH := handler.NewAgentHandler(agentBase, logger)
 	mux.HandleFunc("POST /api/agent/compact", agentH.Compact)
