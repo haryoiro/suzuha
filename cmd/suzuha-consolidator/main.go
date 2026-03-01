@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +19,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/explore"
+	"github.com/haryoiro/suzuha/internal/forget"
 	"github.com/haryoiro/suzuha/internal/rss"
 	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -142,6 +145,7 @@ func run() error {
 			explore.New(),
 			schedule.New(store.DB()),
 			affinity.New(),
+			forget.New(),
 		}
 
 		taskRegistry := scheduler.NewRegistry()
@@ -187,6 +191,47 @@ func run() error {
 
 		sched.Start()
 		logger.Info("scheduler started", "jobs", len(cfg.Consolidator.Scheduler.Jobs))
+
+		// Start HTTP trigger server alongside gRPC.
+		triggerMux := http.NewServeMux()
+		triggerMux.HandleFunc("POST /api/trigger/{task}", func(w http.ResponseWriter, r *http.Request) {
+			taskName := r.PathValue("task")
+
+			// Read optional config from request body.
+			var reqBody struct {
+				Config map[string]any `json:"config"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
+			var taskCfg json.RawMessage
+			if reqBody.Config != nil {
+				taskCfg, _ = json.Marshal(reqBody.Config)
+			} else {
+				// Look up default config from jobs.
+				for _, j := range cfg.Consolidator.Scheduler.Jobs {
+					if j.Task == taskName {
+						taskCfg, _ = json.Marshal(j.Config)
+						break
+					}
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := sched.TriggerTask(r.Context(), taskName, taskCfg); err != nil {
+				logger.Error("trigger: task failed", "task", taskName, "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		})
+
+		go func() {
+			logger.Info("trigger API starting", "addr", cfg.Consolidator.APIAddr)
+			if err := http.ListenAndServe(cfg.Consolidator.APIAddr, triggerMux); err != nil && err != http.ErrServerClosed {
+				logger.Error("trigger API error", "error", err)
+			}
+		}()
 	}
 
 	go func() {
