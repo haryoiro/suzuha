@@ -16,6 +16,7 @@ type Action struct {
 	ID            string
 	ChannelID     string
 	Content       string
+	Mode          string // "direct" (post as-is) or "prompt" (LLM generates response)
 	ScheduledAt   time.Time
 	CronExpr      string // empty for one-shot
 	RandomMinutes int    // random offset window in minutes (0 = disabled)
@@ -51,8 +52,9 @@ func (s *Store) Setup(ctx context.Context) error {
 			created_at     DATETIME NOT NULL DEFAULT (datetime('now'))
 		)`)
 	if err == nil {
-		// Add column if upgrading from older schema (idempotent).
+		// Add columns if upgrading from older schema (idempotent).
 		s.db.ExecContext(ctx, `ALTER TABLE scheduled_actions ADD COLUMN random_minutes INTEGER NOT NULL DEFAULT 0`)
+		s.db.ExecContext(ctx, `ALTER TABLE scheduled_actions ADD COLUMN mode TEXT NOT NULL DEFAULT 'direct'`)
 	}
 	if err != nil {
 		return fmt.Errorf("create scheduled_actions: %w", err)
@@ -69,10 +71,14 @@ func (s *Store) Create(ctx context.Context, a *Action) error {
 	if a.ID == "" {
 		a.ID = uuid.NewString()
 	}
+	mode := a.Mode
+	if mode == "" {
+		mode = "direct"
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO scheduled_actions (id, channel_id, content, scheduled_at, cron_expr, random_minutes, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.ChannelID, a.Content, a.ScheduledAt.UTC(), nullString(a.CronExpr), a.RandomMinutes, nullString(a.CreatedBy),
+		INSERT INTO scheduled_actions (id, channel_id, content, scheduled_at, cron_expr, random_minutes, created_by, mode)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.ChannelID, a.Content, a.ScheduledAt.UTC().Format(time.RFC3339), nullString(a.CronExpr), a.RandomMinutes, nullString(a.CreatedBy), mode,
 	)
 	return err
 }
@@ -80,7 +86,7 @@ func (s *Store) Create(ctx context.Context, a *Action) error {
 // ListPending returns all pending actions ordered by scheduled_at ASC.
 func (s *Store) ListPending(ctx context.Context) ([]Action, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, channel_id, content, scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
+		SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
 		FROM scheduled_actions
 		WHERE status = 'pending'
 		ORDER BY scheduled_at ASC`)
@@ -94,7 +100,7 @@ func (s *Store) ListPending(ctx context.Context) ([]Action, error) {
 // ListPendingByCreator returns pending actions filtered by created_by.
 func (s *Store) ListPendingByCreator(ctx context.Context, createdBy string) ([]Action, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, channel_id, content, scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
+		SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
 		FROM scheduled_actions
 		WHERE status = 'pending' AND created_by = ?
 		ORDER BY scheduled_at ASC`, createdBy)
@@ -118,12 +124,14 @@ func (s *Store) Cancel(ctx context.Context, id string) (bool, error) {
 }
 
 // FetchDue returns pending actions whose scheduled_at <= now.
+// Uses strftime to normalize both sides, avoiding format mismatch
+// (e.g. ISO "T" separator vs Go space separator) in lexicographic comparison.
 func (s *Store) FetchDue(ctx context.Context, now time.Time) ([]Action, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, channel_id, content, scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
+		SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
 		FROM scheduled_actions
-		WHERE status = 'pending' AND scheduled_at <= ?
-		ORDER BY scheduled_at ASC`, now.UTC())
+		WHERE status = 'pending' AND strftime('%s', scheduled_at) <= strftime('%s', ?)
+		ORDER BY scheduled_at ASC`, now.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +167,7 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 		}
 		_, err = s.db.ExecContext(ctx, `
 			UPDATE scheduled_actions SET scheduled_at = ?, executed_at = ?
-			WHERE id = ?`, next.UTC(), now.UTC(), id)
+			WHERE id = ?`, next.UTC().Format(time.RFC3339), now.UTC().Format(time.RFC3339), id)
 		return err
 	}
 
@@ -169,7 +177,7 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 func (s *Store) markDone(ctx context.Context, id string, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE scheduled_actions SET status = 'executed', executed_at = ?
-		WHERE id = ?`, now.UTC(), id)
+		WHERE id = ?`, now.UTC().Format(time.RFC3339), id)
 	return err
 }
 
@@ -187,7 +195,7 @@ func scanActions(rows *sql.Rows) ([]Action, error) {
 	var actions []Action
 	for rows.Next() {
 		var a Action
-		if err := rows.Scan(&a.ID, &a.ChannelID, &a.Content, &a.ScheduledAt, &a.CronExpr, &a.RandomMinutes, &a.CreatedBy, &a.Status, &a.ExecutedAt, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.ChannelID, &a.Content, &a.Mode, &a.ScheduledAt, &a.CronExpr, &a.RandomMinutes, &a.CreatedBy, &a.Status, &a.ExecutedAt, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		actions = append(actions, a)

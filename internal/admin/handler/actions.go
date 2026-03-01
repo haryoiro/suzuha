@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 )
 
 // ActionsHandler provides HTTP handlers for scheduled actions.
@@ -25,6 +27,7 @@ type actionJSON struct {
 	ID          string  `json:"id"`
 	ChannelID   string  `json:"channel_id"`
 	Content     string  `json:"content"`
+	Mode        string  `json:"mode"`
 	ScheduledAt string  `json:"scheduled_at"`
 	CronExpr    *string `json:"cron_expr"`
 	CreatedBy   *string `json:"created_by"`
@@ -42,7 +45,7 @@ func (h *ActionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	status := q.Get("status")
 
-	query := `SELECT id, channel_id, content, scheduled_at, cron_expr, created_by, status, executed_at, created_at
+	query := `SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, cron_expr, created_by, status, executed_at, created_at
 	          FROM scheduled_actions`
 	var args []any
 	if status != "" {
@@ -69,6 +72,7 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ChannelID   string  `json:"channel_id"`
 		Content     string  `json:"content"`
+		Mode        string  `json:"mode"`
 		ScheduledAt string  `json:"scheduled_at"`
 		CronExpr    *string `json:"cron_expr"`
 	}
@@ -76,8 +80,30 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
-	if body.ChannelID == "" || body.Content == "" || body.ScheduledAt == "" {
-		http.Error(w, `{"error":"channel_id, content, and scheduled_at are required"}`, http.StatusBadRequest)
+	if body.ChannelID == "" || body.Content == "" {
+		http.Error(w, `{"error":"channel_id and content are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Resolve scheduled_at: explicit value, or auto-calculate from cron_expr.
+	var scheduledAt time.Time
+	if body.ScheduledAt != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, body.ScheduledAt)
+		if parseErr != nil {
+			http.Error(w, `{"error":"scheduled_at must be RFC3339 format"}`, http.StatusBadRequest)
+			return
+		}
+		scheduledAt = parsed.UTC()
+	} else if body.CronExpr != nil && *body.CronExpr != "" {
+		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+		sched, parseErr := parser.Parse(*body.CronExpr)
+		if parseErr != nil {
+			http.Error(w, `{"error":"invalid cron_expr: `+parseErr.Error()+`"}`, http.StatusBadRequest)
+			return
+		}
+		scheduledAt = sched.Next(time.Now()).UTC()
+	} else {
+		http.Error(w, `{"error":"either scheduled_at or cron_expr is required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -87,10 +113,15 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		cronExpr = *body.CronExpr
 	}
 
+	mode := body.Mode
+	if mode == "" {
+		mode = "direct"
+	}
+
 	_, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO scheduled_actions (id, channel_id, content, scheduled_at, cron_expr, created_by, status)
-		 VALUES (?, ?, ?, ?, ?, 'admin', 'pending')`,
-		id, body.ChannelID, body.Content, body.ScheduledAt, cronExpr)
+		`INSERT INTO scheduled_actions (id, channel_id, content, mode, scheduled_at, cron_expr, created_by, status)
+		 VALUES (?, ?, ?, ?, ?, ?, 'admin', 'pending')`,
+		id, body.ChannelID, body.Content, mode, scheduledAt.Format(time.RFC3339), cronExpr)
 	if err != nil {
 		h.logger.Error("create action", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
@@ -106,6 +137,7 @@ func (h *ActionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ChannelID   *string `json:"channel_id"`
 		Content     *string `json:"content"`
+		Mode        *string `json:"mode"`
 		ScheduledAt *string `json:"scheduled_at"`
 		CronExpr    *string `json:"cron_expr"`
 		Status      *string `json:"status"`
@@ -124,6 +156,10 @@ func (h *ActionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if body.Content != nil {
 		sets = append(sets, "content = ?")
 		args = append(args, *body.Content)
+	}
+	if body.Mode != nil {
+		sets = append(sets, "mode = ?")
+		args = append(args, *body.Mode)
 	}
 	if body.ScheduledAt != nil {
 		sets = append(sets, "scheduled_at = ?")
@@ -188,7 +224,7 @@ func (h *ActionsHandler) scanActions(rows *sql.Rows) []actionJSON {
 	for rows.Next() {
 		var a actionJSON
 		var cronExpr, createdBy, executedAt sql.NullString
-		if err := rows.Scan(&a.ID, &a.ChannelID, &a.Content, &a.ScheduledAt,
+		if err := rows.Scan(&a.ID, &a.ChannelID, &a.Content, &a.Mode, &a.ScheduledAt,
 			&cronExpr, &createdBy, &a.Status, &executedAt, &a.CreatedAt); err != nil {
 			continue
 		}
