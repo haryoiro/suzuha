@@ -80,17 +80,17 @@ func (c *Context) Len() int {
 	return len(c.messages)
 }
 
-// EstimatedTokens returns a rough token count (4 chars ≈ 1 token).
+// EstimatedTokens returns a rough token count using Unicode-aware heuristics.
 // Includes the pinned system prompt.
 func (c *Context) EstimatedTokens() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	total := 0
 	if c.systemPrompt != "" {
-		total += len(c.systemPrompt)/4 + 4
+		total += estimateStringTokens(c.systemPrompt) + 4
 	}
 	for _, m := range c.messages {
-		total += len(m.Content)/4 + 4 // +4 for role overhead
+		total += estimateStringTokens(m.Content) + 4 // +4 for role overhead
 	}
 	return total
 }
@@ -101,6 +101,33 @@ func (c *Context) UsageRatio() float64 {
 		return 0
 	}
 	return float64(c.EstimatedTokens()) / float64(c.maxTokens)
+}
+
+// estimateStringTokens returns a rough token count using rune-based heuristics
+// with different weights per Unicode character class, for mixed Japanese/English text.
+func estimateStringTokens(s string) int {
+	var total float64
+	for _, r := range s {
+		switch {
+		case r <= 0x007F:
+			total += 0.25
+		case r >= 0x4E00 && r <= 0x9FFF,
+			r >= 0x3400 && r <= 0x4DBF,
+			r >= 0xF900 && r <= 0xFAFF,
+			r >= 0x20000 && r <= 0x2A6DF:
+			total += 1.5
+		case r >= 0x3040 && r <= 0x309F:
+			total += 1.0
+		case r >= 0x30A0 && r <= 0x30FF:
+			total += 1.0
+		case r >= 0x3000 && r <= 0x303F,
+			r >= 0xFF00 && r <= 0xFFEF:
+			total += 1.0
+		default:
+			total += 1.5
+		}
+	}
+	return int(total + 0.5)
 }
 
 // KeepOnly retains only the messages at the given indices.

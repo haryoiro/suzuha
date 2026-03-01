@@ -17,7 +17,7 @@ func newTestStore(t *testing.T, botIDs ...string) *SQLiteStore {
 	dbPath := filepath.Join(dir, "test.db")
 
 	// Use memory package to open DB and run migrations (creates all tables).
-	memStore, err := memory.NewSQLiteStore(dbPath, nil, true)
+	memStore, err := memory.NewSQLiteStore(dbPath, nil, true, nil)
 	if err != nil {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}

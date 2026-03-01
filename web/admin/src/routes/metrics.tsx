@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, Col, Row, Statistic, Table, Spin, Tag } from "antd";
 import { useMetrics } from "../hooks/useMetrics";
 import type { MetricItem } from "../lib/api";
@@ -25,7 +26,7 @@ function findMetrics(
   return (metrics ?? []).filter((m) => m.name === name);
 }
 
-export function MetricsPage() {
+export const MetricsPage = memo(function MetricsPage() {
   const { data, isLoading } = useMetrics();
   const metrics = data?.metrics;
 
@@ -193,4 +194,6 @@ export function MetricsPage() {
       </Row>
     </div>
   );
-}
+});
+
+export default MetricsPage;

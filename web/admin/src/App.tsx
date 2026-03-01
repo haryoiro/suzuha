@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { ConfigProvider, Layout, Menu, theme, Drawer, Button, Grid } from "antd";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { ConfigProvider, Layout, Menu, theme, Drawer, Button, Grid, Spin } from "antd";
 import {
   DashboardOutlined,
   DatabaseOutlined,
@@ -13,17 +13,19 @@ import {
   MenuOutlined,
   ApiOutlined,
 } from "@ant-design/icons";
-import { DashboardPage } from "./routes/index";
-import { MemoriesPage } from "./routes/memories/index";
-import { MemoryDetailPage } from "./routes/memories/$id";
-import { MetricsPage } from "./routes/metrics";
-import { LogsPage } from "./routes/logs";
-import { UsersPage } from "./routes/users/index";
-import { ContextPage } from "./routes/context";
-import { FeedsPage } from "./routes/feeds/index";
-import { DiscordPage } from "./routes/discord/index";
-import { PromptsPage } from "./routes/prompts";
-import { ActionsPage } from "./routes/actions";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+const DashboardPage = lazy(() => import("./routes/index"));
+const MemoriesPage = lazy(() => import("./routes/memories/index"));
+const MemoryDetailPage = lazy(() => import("./routes/memories/$id"));
+const MetricsPage = lazy(() => import("./routes/metrics"));
+const LogsPage = lazy(() => import("./routes/logs"));
+const UsersPage = lazy(() => import("./routes/users/index"));
+const ContextPage = lazy(() => import("./routes/context"));
+const FeedsPage = lazy(() => import("./routes/feeds/index"));
+const DiscordPage = lazy(() => import("./routes/discord/index"));
+const PromptsPage = lazy(() => import("./routes/prompts"));
+const ActionsPage = lazy(() => import("./routes/actions"));
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -305,7 +307,11 @@ export function App() {
             </Header>
           )}
           <Content style={{ padding: isMobile ? 12 : 24, overflow: "auto" }}>
-            {renderPage()}
+            <ErrorBoundary key={page.key}>
+              <Suspense fallback={<Spin style={{ display: "block", margin: "80px auto" }} />}>
+                {renderPage()}
+              </Suspense>
+            </ErrorBoundary>
           </Content>
         </Layout>
       </Layout>

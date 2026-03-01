@@ -33,7 +33,7 @@ func run() error {
 	logger := observe.NewLogger(cfg.Observe.LogLevel)
 
 	// Open memory store (read-write, no migrations — agent runs those).
-	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, nil, false)
+	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, nil, false, logger)
 	if err != nil {
 		return fmt.Errorf("open memory store: %w", err)
 	}

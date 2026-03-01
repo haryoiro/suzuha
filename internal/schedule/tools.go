@@ -89,7 +89,8 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	}
 
 	var scheduledAt time.Time
-	if in.ScheduledAt != "" {
+	switch {
+	case in.ScheduledAt != "":
 		var err error
 		scheduledAt, err = time.Parse(time.RFC3339, in.ScheduledAt)
 		if err != nil {
@@ -98,10 +99,10 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		if time.Until(scheduledAt) < time.Minute {
 			return tool.ErrorResult("scheduled_at must be at least 1 minute in the future"), nil
 		}
-	} else if cronSchedule != nil {
+	case cronSchedule != nil:
 		// Auto-calculate the next occurrence from the cron expression.
 		scheduledAt = cronSchedule.Next(time.Now())
-	} else {
+	default:
 		return tool.ErrorResult("either scheduled_at or cron_expr is required"), nil
 	}
 
@@ -244,7 +245,7 @@ func (t *CancelTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return nil, fmt.Errorf("schedule_cancel: %w", err)
 	}
 	if !ok {
-		return tool.ErrorResult("schedule not found or already executed/cancelled"), nil
+		return tool.ErrorResult("schedule not found or already executed/canceled"), nil
 	}
-	return tool.TextResult(fmt.Sprintf("Cancelled schedule %s", in.ID)), nil
+	return tool.TextResult(fmt.Sprintf("Canceled schedule %s", in.ID)), nil
 }

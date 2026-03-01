@@ -27,6 +27,8 @@ type Scheduler struct {
 
 	mu      sync.Mutex
 	running bool
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // New creates a Scheduler.
@@ -72,7 +74,11 @@ func (s *Scheduler) LoadJobs(jobs []JobDef) error {
 		taskName := j.Task
 		_, err = s.cron.AddFunc(j.Cron, func() {
 			s.logger.Info("scheduler: executing job", "job", jobName, "task", taskName)
-			if execErr := task.Execute(context.Background(), s.cc, cfg); execErr != nil {
+			jobCtx := s.ctx
+			if jobCtx == nil {
+				jobCtx = context.Background()
+			}
+			if execErr := task.Execute(jobCtx, s.cc, cfg); execErr != nil {
 				s.logger.Error("scheduler: job failed", "job", jobName, "task", taskName, "error", execErr)
 			}
 		})
@@ -92,6 +98,7 @@ func (s *Scheduler) Start() {
 		return
 	}
 	s.running = true
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.cron.Start()
 	s.logger.Info("scheduler: started", "entries", len(s.cron.Entries()))
 }
@@ -101,6 +108,9 @@ func (s *Scheduler) Stop() context.Context {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.running = false
+	if s.cancel != nil {
+		s.cancel()
+	}
 	ctx := s.cron.Stop()
 	s.logger.Info("scheduler: stopped")
 	return ctx

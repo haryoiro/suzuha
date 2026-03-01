@@ -3,8 +3,11 @@ package forget
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -44,7 +47,9 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	fc := defaultConfig()
 	if len(cfg) > 0 {
-		_ = json.Unmarshal(cfg, &fc)
+		if err := json.Unmarshal(cfg, &fc); err != nil {
+			cc.Logger.Warn("forget: parse config", "error", err)
+		}
 	}
 
 	cc.Logger.Info("forget: starting",
@@ -63,32 +68,38 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	cc.Logger.Info("forget: loaded memories", "count", len(entries))
 
 	// Phase 2: Build similarity groups using Union-Find.
-	uf := newUnionFind(len(entries))
-	idxByID := make(map[string]int, len(entries))
-	for i, e := range entries {
-		idxByID[e.id] = i
+	// Load all embeddings in a single query instead of per-entry KNN queries.
+	embeddings, embErr := loadAllEmbeddings(ctx, cc.DB)
+	if embErr != nil {
+		return fmt.Errorf("forget: load embeddings: %w", embErr)
 	}
 
-	for i, e := range entries {
-		neighbours, err := knnSearch(ctx, cc.DB, e.id, fc.KNNNeighbours)
-		if err != nil {
-			cc.Logger.Warn("forget: knn search", "error", err, "id", e.id)
-			continue
+	uf := newUnionFind(len(entries))
+
+	// Entries are sorted by type (ORDER BY m.type from loadEntries).
+	// Compare within contiguous same-type blocks only.
+	typeStart := 0
+	for typeStart < len(entries) {
+		typeEnd := typeStart + 1
+		for typeEnd < len(entries) && entries[typeEnd].memType == entries[typeStart].memType {
+			typeEnd++
 		}
-		for _, n := range neighbours {
-			if n.id == e.id || n.distance >= fc.SimilarityThreshold {
+		for i := typeStart; i < typeEnd; i++ {
+			embI, okI := embeddings[entries[i].id]
+			if !okI {
 				continue
 			}
-			j, ok := idxByID[n.id]
-			if !ok {
-				continue
+			for j := i + 1; j < typeEnd; j++ {
+				embJ, okJ := embeddings[entries[j].id]
+				if !okJ {
+					continue
+				}
+				if cosineDistance(embI, embJ) < fc.SimilarityThreshold {
+					uf.union(i, j)
+				}
 			}
-			// Only group memories of the same type.
-			if entries[i].memType != entries[j].memType {
-				continue
-			}
-			uf.union(i, j)
 		}
+		typeStart = typeEnd
 	}
 
 	// Phase 3: Extract groups with 2+ members.
@@ -195,7 +206,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 type forgetConfig struct {
 	SimilarityThreshold float64 `json:"similarity_threshold"`
-	KNNNeighbours       int     `json:"knn_neighbours"`
+	KNNNeighbours       int     `json:"knn_neighbors"`
 	MaxGroupsPerLLMCall int     `json:"max_groups_per_llm_call"`
 	MaxGroupSize        int     `json:"max_group_size"`
 	DryRun              bool    `json:"dry_run"`
@@ -232,11 +243,6 @@ type memoryGroup struct {
 	members []memEntry
 }
 
-type neighbour struct {
-	id       string
-	distance float64
-}
-
 type decision struct {
 	action        string // "keep" or "merge"
 	keepID        string
@@ -247,6 +253,62 @@ type decision struct {
 }
 
 // --- DB helpers ---
+
+// deserializeFloat32 converts a raw byte blob (little-endian packed float32s) to []float32.
+func deserializeFloat32(blob []byte) ([]float32, error) {
+	if len(blob)%4 != 0 {
+		return nil, fmt.Errorf("invalid blob length %d", len(blob))
+	}
+	n := len(blob) / 4
+	vec := make([]float32, n)
+	for i := 0; i < n; i++ {
+		bits := binary.LittleEndian.Uint32(blob[i*4 : (i+1)*4])
+		vec[i] = math.Float32frombits(bits)
+	}
+	return vec, nil
+}
+
+// cosineDistance returns the cosine distance between two vectors (0=identical, 2=opposite).
+func cosineDistance(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 2.0
+	}
+	var dot, normA, normB float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+		normA += float64(a[i]) * float64(a[i])
+		normB += float64(b[i]) * float64(b[i])
+	}
+	denom := math.Sqrt(normA) * math.Sqrt(normB)
+	if denom == 0 {
+		return 2.0
+	}
+	return 1.0 - dot/denom
+}
+
+// loadAllEmbeddings loads all embeddings from memories_vec in a single query.
+func loadAllEmbeddings(ctx context.Context, db *sql.DB) (map[string][]float32, error) {
+	rows, err := db.QueryContext(ctx, `SELECT id, embedding FROM memories_vec`)
+	if err != nil {
+		return nil, fmt.Errorf("load embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string][]float32)
+	for rows.Next() {
+		var id string
+		var blob []byte
+		if err := rows.Scan(&id, &blob); err != nil {
+			continue
+		}
+		vec, err := deserializeFloat32(blob)
+		if err != nil {
+			continue
+		}
+		result[id] = vec
+	}
+	return result, rows.Err()
+}
 
 func loadEntries(ctx context.Context, db *sql.DB) ([]memEntry, error) {
 	rows, err := db.QueryContext(ctx,
@@ -269,34 +331,15 @@ func loadEntries(ctx context.Context, db *sql.DB) ([]memEntry, error) {
 		}
 		e.memType = memory.MemoryType(typ)
 		if metaRaw.Valid && metaRaw.String != "" {
-			_ = json.Unmarshal([]byte(metaRaw.String), &e.metadata)
+			if err := json.Unmarshal([]byte(metaRaw.String), &e.metadata); err != nil {
+				slog.Warn("forget: unmarshal metadata", "id", e.id, "error", err)
+			}
 		}
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
 }
 
-func knnSearch(ctx context.Context, db *sql.DB, memID string, k int) ([]neighbour, error) {
-	rows, err := db.QueryContext(ctx,
-		`SELECT v2.id, v2.distance
-		 FROM memories_vec v1
-		 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = ?
-		 WHERE v1.id = ?`, k, memID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []neighbour
-	for rows.Next() {
-		var n neighbour
-		if err := rows.Scan(&n.id, &n.distance); err != nil {
-			continue
-		}
-		results = append(results, n)
-	}
-	return results, rows.Err()
-}
 
 // deleteMemory removes a memory from all tables in a transaction.
 // Follows the same pattern as memory.SQLiteStore.Delete.
@@ -307,15 +350,22 @@ func deleteMemory(ctx context.Context, db *sql.DB, id string) error {
 	}
 	defer tx.Rollback()
 
-	_, _ = tx.ExecContext(ctx,
-		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id)
-	_, _ = tx.ExecContext(ctx,
-		`DELETE FROM memories_vec WHERE id = ?`, id)
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id); err != nil {
+		slog.Warn("forget: fts delete", "id", id, "error", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM memories_vec WHERE id = ?`, id); err != nil {
+		slog.Warn("forget: vec delete", "id", id, "error", err)
+	}
 	res, err := tx.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, raErr := res.RowsAffected()
+	if raErr != nil {
+		slog.Warn("forget: rows affected", "id", id, "error", raErr)
+	}
 	if n == 0 {
 		return fmt.Errorf("not found: %s", id)
 	}
@@ -472,8 +522,6 @@ func stripCodeFence(s string) string {
 	} else if strings.HasPrefix(s, "```") {
 		s = strings.TrimPrefix(s, "```")
 	}
-	if strings.HasSuffix(s, "```") {
-		s = strings.TrimSuffix(s, "```")
-	}
+	s = strings.TrimSuffix(s, "```")
 	return strings.TrimSpace(s)
 }

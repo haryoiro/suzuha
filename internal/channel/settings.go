@@ -10,6 +10,7 @@ import (
 // Mode represents the bot's behavior in a channel.
 type Mode string
 
+// Channel behavior modes.
 const (
 	ModeActive   Mode = "active"   // read and respond (default)
 	ModeListen   Mode = "listen"   // ingest messages but never respond

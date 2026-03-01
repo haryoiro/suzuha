@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3" // register sqlite3 driver
 )
 
@@ -23,12 +24,16 @@ type SQLiteStore struct {
 	db      *sql.DB
 	embedFn EmbedFunc
 	onSave  func() // optional hook called on successful Save
+	logger  *slog.Logger
 }
 
 // NewSQLiteStore opens or creates a SQLite database at dbPath.
 // If runMigrations is true, pending schema migrations are applied.
 // Typically only the agent process should run migrations to avoid race conditions.
-func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool) (*SQLiteStore, error) {
+func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool, logger *slog.Logger) (*SQLiteStore, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("memory: open db: %w", err)
@@ -47,7 +52,7 @@ func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool) (*SQLi
 		}
 	}
 
-	return &SQLiteStore{db: db, embedFn: embedFn}, nil
+	return &SQLiteStore{db: db, embedFn: embedFn, logger: logger}, nil
 }
 
 // SetOnSave registers a callback invoked after each successful Save.
@@ -107,10 +112,12 @@ func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 	// Update vector index.
 	if len(mem.Embedding) > 0 {
 		if blob, err := sqlite_vec.SerializeFloat32(mem.Embedding); err == nil {
-			_, _ = tx.ExecContext(ctx,
+			if _, err := tx.ExecContext(ctx,
 				`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
 				mem.ID, blob,
-			)
+			); err != nil {
+				s.logger.Warn("memory: vec insert failed", "id", mem.ID, "error", err)
+			}
 		}
 	}
 
@@ -158,7 +165,12 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 
 	// Filter vec results by time if needed.
 	if !since.IsZero() && len(vecResults) > 0 {
-		vecResults, _ = s.filterVecBySince(ctx, vecResults, since, limit*2)
+		filtered, filterErr := s.filterVecBySince(ctx, vecResults, since, limit*2)
+		if filterErr != nil {
+			s.logger.Warn("memory: vec time filter failed, using unfiltered", "error", filterErr)
+		} else {
+			vecResults = filtered
+		}
 	}
 
 	// 3. If both failed, return FTS error.
@@ -479,7 +491,9 @@ func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[
 			return nil, fmt.Errorf("memory: load scan: %w", err)
 		}
 		m.Type = MemoryType(typeStr)
-		_ = json.Unmarshal([]byte(metaJSON), &m.Metadata)
+		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
+			slog.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+		}
 		result[m.ID] = m
 	}
 	return result, rows.Err()
@@ -495,7 +509,9 @@ func scanMemories(rows *sql.Rows) ([]Memory, error) {
 			return nil, fmt.Errorf("memory: scan: %w", err)
 		}
 		m.Type = MemoryType(typeStr)
-		_ = json.Unmarshal([]byte(metaJSON), &m.Metadata)
+		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
+			slog.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+		}
 		results = append(results, m)
 	}
 	return results, rows.Err()
@@ -536,7 +552,7 @@ func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType M
 		return "", nil
 	}
 
-	// KNN search for nearest neighbour, then check type and distance.
+	// KNN search for nearest neighbor, then check type and distance.
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT v.id, v.distance, m.type FROM memories_vec v
 		 JOIN memories m ON m.id = v.id
@@ -629,7 +645,9 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 			return nil, 0, fmt.Errorf("memory: list scan: %w", err)
 		}
 		m.Type = MemoryType(typeStr)
-		_ = json.Unmarshal([]byte(metaJSON), &m.Metadata)
+		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
+			s.logger.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+		}
 		results = append(results, m)
 	}
 	return results, total, rows.Err()
@@ -646,7 +664,9 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Memory, error) {
 		return nil, fmt.Errorf("memory: get: %w", err)
 	}
 	m.Type = MemoryType(typeStr)
-	_ = json.Unmarshal([]byte(metaJSON), &m.Metadata)
+	if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
+		s.logger.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+	}
 	return &m, nil
 }
 
@@ -671,18 +691,25 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 	if err != nil {
 		return fmt.Errorf("memory: update: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, raErr := res.RowsAffected()
+	if raErr != nil {
+		s.logger.Warn("memory: rows affected", "id", mem.ID, "error", raErr)
+	}
 	if n == 0 {
 		return fmt.Errorf("memory: not found: %s", mem.ID)
 	}
 
 	// Rebuild FTS index for this row.
-	_, _ = tx.ExecContext(ctx,
-		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, mem.ID)
-	_, _ = tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, mem.ID); err != nil {
+		s.logger.Warn("memory: fts delete on update", "id", mem.ID, "error", err)
+	}
+	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO memories_fts (rowid, content) VALUES (
 			(SELECT rowid FROM memories WHERE id = ?), ?
-		)`, mem.ID, mem.Content)
+		)`, mem.ID, mem.Content); err != nil {
+		s.logger.Warn("memory: fts insert on update", "id", mem.ID, "error", err)
+	}
 
 	return tx.Commit()
 }
@@ -695,17 +722,24 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 	defer tx.Rollback()
 
 	// Delete from FTS.
-	_, _ = tx.ExecContext(ctx,
-		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id)
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id); err != nil {
+		s.logger.Warn("memory: fts delete", "id", id, "error", err)
+	}
 	// Delete from vec.
-	_, _ = tx.ExecContext(ctx,
-		`DELETE FROM memories_vec WHERE id = ?`, id)
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM memories_vec WHERE id = ?`, id); err != nil {
+		s.logger.Warn("memory: vec delete", "id", id, "error", err)
+	}
 	// Delete from main table.
 	res, err := tx.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("memory: delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, raErr := res.RowsAffected()
+	if raErr != nil {
+		s.logger.Warn("memory: rows affected on delete", "id", id, "error", raErr)
+	}
 	if n == 0 {
 		return fmt.Errorf("memory: not found: %s", id)
 	}

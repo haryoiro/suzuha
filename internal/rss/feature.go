@@ -3,6 +3,8 @@ package rss
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"time"
 
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -41,7 +43,9 @@ func (f *Feature) Tools() []tool.Tool {
 
 // Tasks returns the RSS polling scheduler task.
 func (f *Feature) Tasks() []scheduler.CronTask {
-	return []scheduler.CronTask{&Task{}}
+	return []scheduler.CronTask{&Task{
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+	}}
 }
 
 var _ scheduler.Feature = (*Feature)(nil)

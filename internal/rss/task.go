@@ -19,7 +19,9 @@ import (
 )
 
 // Task implements scheduler.CronTask for RSS feed monitoring and notification.
-type Task struct{}
+type Task struct {
+	httpClient *http.Client
+}
 
 var _ scheduler.CronTask = (*Task)(nil)
 
@@ -47,7 +49,9 @@ func defaultRSSConfig() rssConfig {
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	rc := defaultRSSConfig()
 	if len(cfg) > 0 {
-		_ = json.Unmarshal(cfg, &rc)
+		if err := json.Unmarshal(cfg, &rc); err != nil {
+			cc.Logger.Warn("rss: parse config", "error", err)
+		}
 	}
 
 	store := NewFeedStore(cc.DB)
@@ -62,11 +66,10 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		return nil
 	}
 
-	httpClient := &http.Client{Timeout: 30 * time.Second}
 	var newItemsByChannel = make(map[string][]itemWithFeed)
 
 	for _, feed := range feeds {
-		items, fetchErr := fetchFeed(ctx, httpClient, feed, store, cc)
+		items, fetchErr := fetchFeed(ctx, t.httpClient, feed, store, cc)
 		if fetchErr != nil {
 			cc.Logger.Error("rss: fetch feed failed", "feed", feed.Name, "url", feed.URL, "error", fetchErr)
 			continue
@@ -74,7 +77,9 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		if len(items) > 0 {
 			newItemsByChannel[feed.ChannelID] = append(newItemsByChannel[feed.ChannelID], items...)
 		}
-		_ = store.UpdateLastPolled(ctx, feed.ID)
+		if err := store.UpdateLastPolled(ctx, feed.ID); err != nil {
+			cc.Logger.Warn("rss: update last polled", "feed", feed.ID, "error", err)
+		}
 	}
 
 	if len(newItemsByChannel) == 0 {
@@ -136,7 +141,11 @@ func fetchFeed(ctx context.Context, client *http.Client, feed Feed, store *FeedS
 			continue
 		}
 
-		exists, _ := store.ItemExists(ctx, feed.ID, guid)
+		exists, existsErr := store.ItemExists(ctx, feed.ID, guid)
+		if existsErr != nil {
+			cc.Logger.Warn("rss: check item exists", "feed", feed.ID, "guid", guid, "error", existsErr)
+			continue
+		}
 		if exists {
 			continue
 		}
@@ -171,7 +180,9 @@ func fetchFeed(ctx context.Context, client *http.Client, feed Feed, store *FeedS
 		if saveErr := cc.Memory.Save(ctx, mem); saveErr != nil {
 			cc.Logger.Error("rss: save memory failed", "item", item.Title, "error", saveErr)
 		} else {
-			_ = store.UpdateItemMemoryID(ctx, item.ID, mem.ID)
+			if err := store.UpdateItemMemoryID(ctx, item.ID, mem.ID); err != nil {
+				cc.Logger.Warn("rss: update item memory id", "item", item.ID, "error", err)
+			}
 		}
 
 		newItems = append(newItems, itemWithFeed{Item: *item, Feed: feed})

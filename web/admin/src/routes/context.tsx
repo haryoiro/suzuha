@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Tag, Progress, Spin, Empty, Button } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { useAgentContext } from "../hooks/useAgentContext";
@@ -10,7 +11,7 @@ const roleColors: Record<string, string> = {
   tool: "orange",
 };
 
-function MessageRow({ msg }: { msg: ContextMessage }) {
+const MessageRow = memo(function MessageRow({ msg }: { msg: ContextMessage }) {
   return (
     <div
       style={{
@@ -64,9 +65,9 @@ function MessageRow({ msg }: { msg: ContextMessage }) {
       </div>
     </div>
   );
-}
+});
 
-export function ContextPage() {
+export const ContextPage = memo(function ContextPage() {
   const { data, isLoading, refetch } = useAgentContext();
 
   if (isLoading) {
@@ -142,4 +143,6 @@ export function ContextPage() {
       </div>
     </div>
   );
-}
+});
+
+export default ContextPage;

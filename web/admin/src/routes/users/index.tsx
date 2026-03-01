@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Table, Tag, Input, Space, Typography, Card, Descriptions, Modal, List, Button, Form, Switch, Select, message } from "antd";
 import { SearchOutlined, RobotOutlined, EditOutlined } from "@ant-design/icons";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,132 +8,6 @@ import { usersApi, type User, type PlatformLink, type UserGuildChannel } from ".
 import { formatJST } from "../../lib/date";
 
 const { Title, Text } = Typography;
-
-export function UsersPage() {
-  const [offset, setOffset] = useState(0);
-  const [limit] = useState(50);
-  const [search, setSearch] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  const { data, isLoading } = useUsers({ offset, limit, q: search });
-
-  const columns: ColumnsType<User> = [
-    {
-      title: "Display Name",
-      dataIndex: "display_name",
-      key: "display_name",
-      render: (name: string, record: User) => (
-        <Space>
-          <a onClick={() => setSelectedUserId(record.id)}>{name || "(unnamed)"}</a>
-          {record.is_bot && <Tag icon={<RobotOutlined />} color="purple">BOT</Tag>}
-        </Space>
-      ),
-    },
-    {
-      title: "Role",
-      dataIndex: "role",
-      key: "role",
-      width: 120,
-      render: (role: string) => {
-        const color = role === "owner" ? "red" : role === "admin" ? "orange" : "blue";
-        return <Tag color={color}>{role}</Tag>;
-      },
-    },
-    {
-      title: "Closeness",
-      dataIndex: "closeness",
-      key: "closeness",
-      width: 90,
-      sorter: (a: User, b: User) => a.closeness - b.closeness,
-      render: (val: number) => {
-        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
-        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
-      },
-    },
-    {
-      title: "Trust",
-      dataIndex: "trust",
-      key: "trust",
-      width: 80,
-      sorter: (a: User, b: User) => a.trust - b.trust,
-      render: (val: number) => {
-        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
-        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
-      },
-    },
-    {
-      title: "Interest",
-      dataIndex: "interest",
-      key: "interest",
-      width: 80,
-      sorter: (a: User, b: User) => a.interest - b.interest,
-      render: (val: number) => {
-        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
-        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
-      },
-    },
-    {
-      title: "Platforms",
-      dataIndex: "platforms",
-      key: "platforms",
-      responsive: ["md"],
-      render: (platforms?: PlatformLink[]) =>
-        platforms?.map((p) => (
-          <Tag key={`${p.platform}-${p.platform_user_id}`}>
-            {p.platform}: {p.platform_name || p.platform_user_id}
-          </Tag>
-        )) ?? "-",
-    },
-    {
-      title: "Updated",
-      dataIndex: "updated_at",
-      key: "updated_at",
-      width: 180,
-      responsive: ["md"],
-      render: (v: string) => formatJST(v),
-    },
-  ];
-
-  return (
-    <div>
-      <Title level={3}>Users</Title>
-
-      <Space style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="Search users..."
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setOffset(0);
-          }}
-          allowClear
-          style={{ width: "100%", maxWidth: 300 }}
-        />
-      </Space>
-
-      <Table<User>
-        columns={columns}
-        dataSource={data?.data ?? []}
-        rowKey="id"
-        loading={isLoading}
-        scroll={{ x: 400 }}
-        pagination={{
-          total: data?.total ?? 0,
-          current: Math.floor(offset / limit) + 1,
-          pageSize: limit,
-          onChange: (page) => setOffset((page - 1) * limit),
-          showTotal: (total) => `${total} users`,
-        }}
-      />
-
-      <UserDetailModal
-        userId={selectedUserId}
-        onClose={() => setSelectedUserId(null)}
-      />
-    </div>
-  );
-}
 
 /** Group guild-channel entries by guild for display. */
 function groupByGuild(entries: UserGuildChannel[]) {
@@ -149,7 +23,7 @@ function groupByGuild(entries: UserGuildChannel[]) {
   return Array.from(map.entries());
 }
 
-function UserDetailModal({
+const UserDetailModal = memo(function UserDetailModal({
   userId,
   onClose,
 }: {
@@ -353,4 +227,132 @@ function UserDetailModal({
       )}
     </Modal>
   );
-}
+});
+
+export const UsersPage = memo(function UsersPage() {
+  const [offset, setOffset] = useState(0);
+  const [limit] = useState(50);
+  const [search, setSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  const { data, isLoading } = useUsers({ offset, limit, q: search });
+
+  const columns: ColumnsType<User> = [
+    {
+      title: "Display Name",
+      dataIndex: "display_name",
+      key: "display_name",
+      render: (name: string, record: User) => (
+        <Space>
+          <a onClick={() => setSelectedUserId(record.id)}>{name || "(unnamed)"}</a>
+          {record.is_bot && <Tag icon={<RobotOutlined />} color="purple">BOT</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: "Role",
+      dataIndex: "role",
+      key: "role",
+      width: 120,
+      render: (role: string) => {
+        const color = role === "owner" ? "red" : role === "admin" ? "orange" : "blue";
+        return <Tag color={color}>{role}</Tag>;
+      },
+    },
+    {
+      title: "Closeness",
+      dataIndex: "closeness",
+      key: "closeness",
+      width: 90,
+      sorter: (a: User, b: User) => a.closeness - b.closeness,
+      render: (val: number) => {
+        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
+        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
+      },
+    },
+    {
+      title: "Trust",
+      dataIndex: "trust",
+      key: "trust",
+      width: 80,
+      sorter: (a: User, b: User) => a.trust - b.trust,
+      render: (val: number) => {
+        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
+        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
+      },
+    },
+    {
+      title: "Interest",
+      dataIndex: "interest",
+      key: "interest",
+      width: 80,
+      sorter: (a: User, b: User) => a.interest - b.interest,
+      render: (val: number) => {
+        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
+        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
+      },
+    },
+    {
+      title: "Platforms",
+      dataIndex: "platforms",
+      key: "platforms",
+      responsive: ["md"],
+      render: (platforms?: PlatformLink[]) =>
+        platforms?.map((p) => (
+          <Tag key={`${p.platform}-${p.platform_user_id}`}>
+            {p.platform}: {p.platform_name || p.platform_user_id}
+          </Tag>
+        )) ?? "-",
+    },
+    {
+      title: "Updated",
+      dataIndex: "updated_at",
+      key: "updated_at",
+      width: 180,
+      responsive: ["md"],
+      render: (v: string) => formatJST(v),
+    },
+  ];
+
+  return (
+    <div>
+      <Title level={3}>Users</Title>
+
+      <Space style={{ marginBottom: 16 }}>
+        <Input
+          placeholder="Search users..."
+          prefix={<SearchOutlined />}
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setOffset(0);
+          }}
+          allowClear
+          style={{ width: "100%", maxWidth: 300 }}
+        />
+      </Space>
+
+      <Table<User>
+        columns={columns}
+        dataSource={data?.data ?? []}
+        rowKey="id"
+        loading={isLoading}
+        scroll={{ x: 400 }}
+        pagination={{
+          total: data?.total ?? 0,
+          current: Math.floor(offset / limit) + 1,
+          pageSize: limit,
+          onChange: (page) => setOffset((page - 1) * limit),
+          showTotal: (total) => `${total} users`,
+        }}
+      />
+
+      <UserDetailModal
+        userId={selectedUserId}
+        onClose={() => setSelectedUserId(null)}
+      />
+    </div>
+  );
+});
+
+export default UsersPage;

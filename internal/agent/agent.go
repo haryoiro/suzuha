@@ -350,14 +350,15 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 
 	// 8. Send response (strip LLM thinking tags, directive tags, and silent markers).
 	text := stripDirectiveTags(stripThinkTags(resp.Text))
-	if isSilentResponse(text) {
+	switch {
+	case isSilentResponse(text):
 		a.logger.Info("skipping response (silent)",
 			"raw_text", truncate(resp.Text, 100))
-	} else if a.channelSettings != nil && respondChannel != "" && !isDM &&
-		a.channelSettings.GetMode(respondChannel) != channelpkg.ModeActive {
+	case a.channelSettings != nil && respondChannel != "" && !isDM &&
+		a.channelSettings.GetMode(respondChannel) != channelpkg.ModeActive:
 		a.logger.Info("suppressing send to non-active channel",
 			"channel", respondChannel, "mode", string(a.channelSettings.GetMode(respondChannel)))
-	} else {
+	default:
 		a.logger.Info("sending response",
 			"channel", channel,
 			"length", len(text),
@@ -553,6 +554,16 @@ func (a *Agent) compact(ctx context.Context) {
 			a.ctx.ResetInjectedUsers()
 			a.ctx.ResetSeenChannels()
 			persistContext(ctx, a.db, a.ctx, a.logger)
+			return
+		}
+
+		if len(result.KeepIndices) == 0 {
+			a.logger.Warn("consolidator returned no keep indices, falling back to truncation")
+			a.ctx.TruncateOldest(len(msgs) / 2)
+			a.ctx.ResetInjectedUsers()
+			a.ctx.ResetSeenChannels()
+			persistContext(ctx, a.db, a.ctx, a.logger)
+			a.applyAffinityDeltas(ctx, result.AffinityDeltas, msgs)
 			return
 		}
 

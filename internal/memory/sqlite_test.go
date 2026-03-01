@@ -11,7 +11,7 @@ func newTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	store, err := NewSQLiteStore(dbPath, nil, true)
+	store, err := NewSQLiteStore(dbPath, nil, true, nil)
 	if err != nil {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestSaveWithEmbedFunc(t *testing.T) {
 		return make([]float32, 768), nil
 	}
 
-	store, err := NewSQLiteStore(dbPath, embedFn, true)
+	store, err := NewSQLiteStore(dbPath, embedFn, true, nil)
 	if err != nil {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
@@ -137,14 +137,14 @@ func TestMigrateSkip(t *testing.T) {
 	dbPath := filepath.Join(dir, "test.db")
 
 	// First open with migrations.
-	store1, err := NewSQLiteStore(dbPath, nil, true)
+	store1, err := NewSQLiteStore(dbPath, nil, true, nil)
 	if err != nil {
 		t.Fatalf("first open: %v", err)
 	}
 	store1.Close()
 
 	// Second open without migrations should work.
-	store2, err := NewSQLiteStore(dbPath, nil, false)
+	store2, err := NewSQLiteStore(dbPath, nil, false, nil)
 	if err != nil {
 		t.Fatalf("second open without migrate: %v", err)
 	}

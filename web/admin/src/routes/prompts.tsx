@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { Typography, Card, Tabs, Input, Button, Space, App, Spin, Tag } from "antd";
 import { SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import { usePrompts, useUpdatePrompt } from "../hooks/usePrompts";
@@ -7,7 +7,7 @@ import { formatJST } from "../lib/date";
 const { Title } = Typography;
 const { TextArea } = Input;
 
-export function PromptsPage() {
+export const PromptsPage = memo(function PromptsPage() {
   const { data: files, isLoading } = usePrompts();
   const updateMutation = useUpdatePrompt();
   const { message } = App.useApp();
@@ -113,4 +113,6 @@ export function PromptsPage() {
       </Card>
     </div>
   );
-}
+});
+
+export default PromptsPage;

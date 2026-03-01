@@ -52,7 +52,11 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 	// Save extracted memories to long-term store (skip duplicates).
 	for i := range result.Memories {
 		mem := &result.Memories[i]
-		if dupID, _ := s.store.IsDuplicate(ctx, mem.Content, mem.Type); dupID != "" {
+		dupID, dupErr := s.store.IsDuplicate(ctx, mem.Content, mem.Type)
+		if dupErr != nil {
+			s.logger.Warn("consolidator: duplicate check failed", "error", dupErr)
+		}
+		if dupID != "" {
 			s.logger.Debug("consolidator: skip duplicate memory", "existing_id", dupID, "content", mem.Content)
 			continue
 		}
@@ -146,11 +150,19 @@ func parseCompactResponse(text string, msgCount int) *CompactResult {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
+		upper := strings.ToUpper(line)
 
-		if strings.HasPrefix(line, "KEEP:") {
-			indices := strings.TrimPrefix(line, "KEEP:")
+		if strings.HasPrefix(upper, "KEEP:") {
+			indices := line[len("KEEP:"):]
+			// Strip trailing parenthetical comments.
+			if parenIdx := strings.Index(indices, "("); parenIdx >= 0 {
+				indices = indices[:parenIdx]
+			}
 			for _, part := range strings.Split(indices, ",") {
 				part = strings.TrimSpace(part)
+				if part == "" {
+					continue
+				}
 				var idx int
 				if _, err := fmt.Sscanf(part, "%d", &idx); err == nil && idx >= 0 && idx < msgCount {
 					result.KeepIndices = append(result.KeepIndices, idx)
@@ -160,11 +172,11 @@ func parseCompactResponse(text string, msgCount int) *CompactResult {
 			continue
 		}
 
-		if strings.HasPrefix(line, "MEMORIES:") {
+		if strings.HasPrefix(upper, "MEMORIES:") {
 			section = "memories"
 			continue
 		}
-		if strings.HasPrefix(line, "AFFINITY:") {
+		if strings.HasPrefix(upper, "AFFINITY:") {
 			section = "affinity"
 			continue
 		}
@@ -184,6 +196,19 @@ func parseCompactResponse(text string, msgCount int) *CompactResult {
 				result.AffinityDeltas = append(result.AffinityDeltas, delta)
 			}
 		}
+	}
+
+	// Deduplicate KeepIndices.
+	if len(result.KeepIndices) > 0 {
+		seen := make(map[int]bool, len(result.KeepIndices))
+		deduped := make([]int, 0, len(result.KeepIndices))
+		for _, idx := range result.KeepIndices {
+			if !seen[idx] {
+				seen[idx] = true
+				deduped = append(deduped, idx)
+			}
+		}
+		result.KeepIndices = deduped
 	}
 
 	return result

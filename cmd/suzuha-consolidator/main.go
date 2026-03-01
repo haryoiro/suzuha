@@ -70,7 +70,7 @@ func run() error {
 	embedFn := func(ctx context.Context, text string) ([]float32, error) {
 		return llmClient.Embed(ctx, text)
 	}
-	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, false)
+	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, false, logger)
 	if err != nil {
 		return fmt.Errorf("open memory store: %w", err)
 	}

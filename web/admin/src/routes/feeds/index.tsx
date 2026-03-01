@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   Table,
   Tag,
@@ -36,7 +36,84 @@ import { formatJST } from "../../lib/date";
 
 const { Title, Text } = Typography;
 
-export function FeedsPage() {
+const FeedItemsModal = memo(function FeedItemsModal({
+  feedId,
+  onClose,
+}: {
+  feedId: string | null;
+  onClose: () => void;
+}) {
+  const [offset, setOffset] = useState(0);
+  const [limit] = useState(20);
+
+  const { data, isLoading } = useFeedItems(feedId ?? "", { offset, limit });
+
+  const columns: ColumnsType<FeedItem> = [
+    {
+      title: "Title",
+      dataIndex: "title",
+      key: "title",
+      ellipsis: true,
+      render: (title: string, record: FeedItem) => (
+        <a href={record.link} target="_blank" rel="noopener noreferrer">
+          {title}
+        </a>
+      ),
+    },
+    {
+      title: "Published",
+      dataIndex: "published_at",
+      key: "published_at",
+      width: 180,
+      render: (v?: string) =>
+        v ? formatJST(v) : "-",
+    },
+    {
+      title: "Notified",
+      dataIndex: "notified",
+      key: "notified",
+      width: 100,
+      render: (v: boolean) =>
+        v ? <Tag color="green">Yes</Tag> : <Tag>No</Tag>,
+    },
+    {
+      title: "Memory",
+      dataIndex: "memory_id",
+      key: "memory_id",
+      width: 100,
+      render: (v: string) =>
+        v ? <Tag color="blue">Linked</Tag> : <Text type="secondary">-</Text>,
+    },
+  ];
+
+  return (
+    <Modal
+      title="Feed Items"
+      open={!!feedId}
+      onCancel={onClose}
+      footer={null}
+      width="90vw"
+      style={{ maxWidth: 900 }}
+    >
+      <Table<FeedItem>
+        columns={columns}
+        dataSource={data?.data ?? []}
+        rowKey="id"
+        loading={isLoading}
+        size="small"
+        pagination={{
+          total: data?.total ?? 0,
+          current: Math.floor(offset / limit) + 1,
+          pageSize: limit,
+          onChange: (page) => setOffset((page - 1) * limit),
+          showTotal: (total) => `${total} items`,
+        }}
+      />
+    </Modal>
+  );
+});
+
+export const FeedsPage = memo(function FeedsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [itemsFeedId, setItemsFeedId] = useState<string | null>(null);
   const [form] = Form.useForm();
@@ -234,81 +311,6 @@ export function FeedsPage() {
       />
     </div>
   );
-}
+});
 
-function FeedItemsModal({
-  feedId,
-  onClose,
-}: {
-  feedId: string | null;
-  onClose: () => void;
-}) {
-  const [offset, setOffset] = useState(0);
-  const [limit] = useState(20);
-
-  const { data, isLoading } = useFeedItems(feedId ?? "", { offset, limit });
-
-  const columns: ColumnsType<FeedItem> = [
-    {
-      title: "Title",
-      dataIndex: "title",
-      key: "title",
-      ellipsis: true,
-      render: (title: string, record: FeedItem) => (
-        <a href={record.link} target="_blank" rel="noopener noreferrer">
-          {title}
-        </a>
-      ),
-    },
-    {
-      title: "Published",
-      dataIndex: "published_at",
-      key: "published_at",
-      width: 180,
-      render: (v?: string) =>
-        v ? formatJST(v) : "-",
-    },
-    {
-      title: "Notified",
-      dataIndex: "notified",
-      key: "notified",
-      width: 100,
-      render: (v: boolean) =>
-        v ? <Tag color="green">Yes</Tag> : <Tag>No</Tag>,
-    },
-    {
-      title: "Memory",
-      dataIndex: "memory_id",
-      key: "memory_id",
-      width: 100,
-      render: (v: string) =>
-        v ? <Tag color="blue">Linked</Tag> : <Text type="secondary">-</Text>,
-    },
-  ];
-
-  return (
-    <Modal
-      title="Feed Items"
-      open={!!feedId}
-      onCancel={onClose}
-      footer={null}
-      width="90vw"
-      style={{ maxWidth: 900 }}
-    >
-      <Table<FeedItem>
-        columns={columns}
-        dataSource={data?.data ?? []}
-        rowKey="id"
-        loading={isLoading}
-        size="small"
-        pagination={{
-          total: data?.total ?? 0,
-          current: Math.floor(offset / limit) + 1,
-          pageSize: limit,
-          onChange: (page) => setOffset((page - 1) * limit),
-          showTotal: (total) => `${total} items`,
-        }}
-      />
-    </Modal>
-  );
-}
+export default FeedsPage;

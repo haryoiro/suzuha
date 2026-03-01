@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, memo } from "react";
 import {
   Card,
   Form,
@@ -21,7 +21,7 @@ interface Props {
   onBack: () => void;
 }
 
-export function MemoryDetailPage({ id, onBack }: Props) {
+export const MemoryDetailPage = memo(function MemoryDetailPage({ id, onBack }: Props) {
   const { data: memory, isLoading } = useMemory(id);
   const updateMutation = useUpdateMemory();
   const deleteMutation = useDeleteMemory();
@@ -143,4 +143,6 @@ export function MemoryDetailPage({ id, onBack }: Props) {
       </Card>
     </div>
   );
-}
+});
+
+export default MemoryDetailPage;

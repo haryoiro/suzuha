@@ -33,6 +33,7 @@ type User struct {
 // AffinityAxis represents an affinity dimension.
 type AffinityAxis string
 
+// Affinity axis dimensions.
 const (
 	AxisCloseness AffinityAxis = "closeness"
 	AxisTrust     AffinityAxis = "trust"

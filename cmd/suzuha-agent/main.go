@@ -47,6 +47,7 @@ func main() {
 	}
 }
 
+//nolint:gocyclo // main initialization function — splitting would add indirection without benefit
 func run() error {
 	// Load config.
 	cfgPath := "config.yaml"
@@ -68,7 +69,7 @@ func run() error {
 	embedFn := func(ctx context.Context, text string) ([]float32, error) {
 		return llmClient.Embed(ctx, text)
 	}
-	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, true)
+	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, embedFn, true, logger)
 	if err != nil {
 		return fmt.Errorf("open memory store: %w", err)
 	}
@@ -267,17 +268,22 @@ func run() error {
 				u, resolveErr := userStore.Resolve(context.Background(), "discord", discordUser.ID, discordUser.Username)
 				if resolveErr != nil {
 					logger.Error("affinity command: resolve user", "error", resolveErr)
-					_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 						Type: discordgo.InteractionResponseChannelMessageWithSource,
 						Data: &discordgo.InteractionResponseData{
 							Content: "ユーザー情報の取得に失敗しました。",
 							Flags:   discordgo.MessageFlagsEphemeral,
 						},
-					})
+					}); err != nil {
+						logger.Warn("affinity command: respond error", "error", err)
+					}
 					return
 				}
 
-				events, _ := userStore.GetAffinity(context.Background(), u.ID, 10)
+				events, affinityErr := userStore.GetAffinity(context.Background(), u.ID, 10)
+				if affinityErr != nil {
+					logger.Warn("affinity command: get affinity", "error", affinityErr)
+				}
 
 				displayName := u.DisplayName
 				if displayName == "" {
@@ -310,13 +316,15 @@ func run() error {
 					}
 				}
 
-				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
 						Content: sb.String(),
 						Flags:   discordgo.MessageFlagsEphemeral,
 					},
-				})
+				}); err != nil {
+					logger.Warn("affinity command: respond", "error", err)
+				}
 			})
 		})
 	}

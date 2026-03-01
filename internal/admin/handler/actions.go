@@ -87,14 +87,15 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve scheduled_at: explicit value, or auto-calculate from cron_expr.
 	var scheduledAt time.Time
-	if body.ScheduledAt != "" {
+	switch {
+	case body.ScheduledAt != "":
 		parsed, parseErr := time.Parse(time.RFC3339, body.ScheduledAt)
 		if parseErr != nil {
 			http.Error(w, `{"error":"scheduled_at must be RFC3339 format"}`, http.StatusBadRequest)
 			return
 		}
 		scheduledAt = parsed.UTC()
-	} else if body.CronExpr != nil && *body.CronExpr != "" {
+	case body.CronExpr != nil && *body.CronExpr != "":
 		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 		sched, parseErr := parser.Parse(*body.CronExpr)
 		if parseErr != nil {
@@ -102,7 +103,7 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		scheduledAt = sched.Next(time.Now()).UTC()
-	} else {
+	default:
 		http.Error(w, `{"error":"either scheduled_at or cron_expr is required"}`, http.StatusBadRequest)
 		return
 	}

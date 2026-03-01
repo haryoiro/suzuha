@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { Select, Space, Tag, Button, Switch } from "antd";
 import { ClearOutlined } from "@ant-design/icons";
 import { useLogStream } from "../hooks/useLogStream";
@@ -18,7 +18,7 @@ function formatValue(v: unknown): string {
   return JSON.stringify(v);
 }
 
-function LogRow({ entry }: { entry: LogEntry }) {
+const LogRow = memo(function LogRow({ entry }: { entry: LogEntry }) {
   const time = formatJST(entry.time, "HH:mm:ss.SSS");
 
   const attrs = entry.attrs ? Object.entries(entry.attrs) : [];
@@ -58,9 +58,9 @@ function LogRow({ entry }: { entry: LogEntry }) {
       ))}
     </div>
   );
-}
+});
 
-export function LogsPage() {
+export const LogsPage = memo(function LogsPage() {
   const [level, setLevel] = useState<string | undefined>();
   const [source, setSource] = useState<string | undefined>();
   const [autoScroll, setAutoScroll] = useState(true);
@@ -153,4 +153,6 @@ export function LogsPage() {
       </div>
     </div>
   );
-}
+});
+
+export default LogsPage;

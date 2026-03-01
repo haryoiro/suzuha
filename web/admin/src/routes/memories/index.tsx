@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   Table,
   Input,
@@ -43,7 +43,7 @@ interface Props {
   onViewDetail: (id: string) => void;
 }
 
-export function MemoriesPage({ onViewDetail }: Props) {
+export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) {
   const [view, setView] = useState<"list" | "dedup">("list");
   const [offset, setOffset] = useState(0);
   const [limit] = useState(20);
@@ -279,5 +279,6 @@ export function MemoriesPage({ onViewDetail }: Props) {
       </Modal>
     </div>
   );
-}
+});
 
+export default MemoriesPage;

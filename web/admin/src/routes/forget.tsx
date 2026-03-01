@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   Typography,
   Card,
@@ -33,7 +33,7 @@ const typeColors: Record<string, string> = {
 };
 
 /** Embeddable dedup view for the Memories page tab. */
-export function DedupView() {
+export const DedupView = memo(function DedupView() {
   const [threshold, setThreshold] = useState(0.25);
   const queryClient = useQueryClient();
 
@@ -122,9 +122,9 @@ export function DedupView() {
       )}
     </div>
   );
-}
+});
 
-function GroupCard({ group, onDone }: { group: ForgetGroup; onDone: () => void }) {
+const GroupCard = memo(function GroupCard({ group, onDone }: { group: ForgetGroup; onDone: () => void }) {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeContent, setMergeContent] = useState("");
   const queryClient = useQueryClient();
@@ -246,4 +246,6 @@ function GroupCard({ group, onDone }: { group: ForgetGroup; onDone: () => void }
       </Modal>
     </>
   );
-}
+});
+
+export default DedupView;

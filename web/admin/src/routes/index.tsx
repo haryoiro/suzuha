@@ -1,5 +1,5 @@
 import { Button, Card, Col, Row, Statistic, Spin, Progress, message } from "antd";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useMetrics } from "../hooks/useMetrics";
 import type { MetricItem, BoredomStatus } from "../lib/api";
@@ -34,7 +34,7 @@ function boredomColor(value: number): string {
   return "#52c41a";
 }
 
-export function DashboardPage() {
+export const DashboardPage = memo(function DashboardPage() {
   const { data, isLoading, refetch } = useMetrics();
   const metrics = data?.metrics;
   const [compacting, setCompacting] = useState(false);
@@ -179,4 +179,6 @@ export function DashboardPage() {
       </Row>
     </div>
   );
-}
+});
+
+export default DashboardPage;

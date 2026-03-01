@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import {
   Table,
   Tag,
@@ -39,7 +39,7 @@ const modeLabels: Record<string, string> = {
   disabled: "Disabled",
 };
 
-export function DiscordPage() {
+export const DiscordPage = memo(function DiscordPage() {
   const [guildId, setGuildId] = useState<string | undefined>(undefined);
 
   const { data: guildsData } = useGuildList();
@@ -284,4 +284,6 @@ export function DiscordPage() {
       `}</style>
     </div>
   );
-}
+});
+
+export default DiscordPage;

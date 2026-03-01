@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Table, Tag, Typography, Space, Button, Modal, Form, Input, message, Popconfirm, Select, DatePicker } from "antd";
 import { PlusOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,7 +35,105 @@ function resolveChannelLabel(channelId: string, channels: ChannelEntry[]): strin
   return channelId;
 }
 
-export function ActionsPage() {
+const ActionFormModal = memo(function ActionFormModal({
+  action,
+  open,
+  onClose,
+  channels,
+}: {
+  action: ScheduledAction | null;
+  open: boolean;
+  onClose: () => void;
+  channels: ChannelEntry[];
+}) {
+  const [form] = Form.useForm();
+  const queryClient = useQueryClient();
+  const isEdit = !!action;
+
+  const handleSubmit = async (values: Record<string, unknown>) => {
+    const scheduledAt = values.scheduled_at as dayjs.Dayjs | undefined;
+    const body = {
+      channel_id: values.channel_id as string,
+      content: values.content as string,
+      mode: (values.mode as string) || "direct",
+      scheduled_at: scheduledAt ? scheduledAt.toISOString() : undefined,
+      cron_expr: (values.cron_expr as string) || undefined,
+    };
+
+    try {
+      if (isEdit && action) {
+        await actionsApi.update(action.id, body);
+        message.success("Updated");
+      } else {
+        await actionsApi.create(body);
+        message.success("Created");
+      }
+      queryClient.invalidateQueries({ queryKey: ["scheduled-actions"] });
+      onClose();
+    } catch {
+      message.error("Failed");
+    }
+  };
+
+  const channelOptions = buildChannelOptions(channels);
+
+  return (
+    <Modal
+      title={isEdit ? "Edit Action" : "New Scheduled Action"}
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      destroyOnClose
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={
+          action
+            ? {
+                channel_id: action.channel_id,
+                content: action.content,
+                mode: action.mode || "direct",
+                scheduled_at: toJST(action.scheduled_at),
+                cron_expr: action.cron_expr ?? "",
+              }
+            : { mode: "direct", cron_expr: "" }
+        }
+        onFinish={handleSubmit}
+      >
+        <Form.Item label="Channel" name="channel_id" rules={[{ required: true }]}>
+          <Select
+            showSearch
+            placeholder="Select channel"
+            options={channelOptions}
+            optionFilterProp="label"
+          />
+        </Form.Item>
+        <Form.Item label="Mode" name="mode" rules={[{ required: true }]}>
+          <Select options={[
+            { value: "direct", label: "Direct（そのまま投稿）" },
+            { value: "prompt", label: "Prompt（LLM で生成して投稿）" },
+          ]} />
+        </Form.Item>
+        <Form.Item label="Content" name="content" rules={[{ required: true }]}>
+          <TextArea rows={3} placeholder="Message content" />
+        </Form.Item>
+        <Form.Item label="Scheduled At" name="scheduled_at" extra="cron_expr のみの場合は省略可（次回実行時刻を自動計算）">
+          <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: "100%" }} />
+        </Form.Item>
+        <Form.Item label="Cron Expression" name="cron_expr">
+          <Input placeholder="e.g. 0 9 * * * (optional)" />
+        </Form.Item>
+        <Space>
+          <Button type="primary" htmlType="submit">{isEdit ? "Update" : "Create"}</Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </Space>
+      </Form>
+    </Modal>
+  );
+});
+
+export const ActionsPage = memo(function ActionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [editingAction, setEditingAction] = useState<ScheduledAction | null>(null);
   const [creating, setCreating] = useState(false);
@@ -157,102 +255,6 @@ export function ActionsPage() {
       />
     </div>
   );
-}
+});
 
-function ActionFormModal({
-  action,
-  open,
-  onClose,
-  channels,
-}: {
-  action: ScheduledAction | null;
-  open: boolean;
-  onClose: () => void;
-  channels: ChannelEntry[];
-}) {
-  const [form] = Form.useForm();
-  const queryClient = useQueryClient();
-  const isEdit = !!action;
-
-  const handleSubmit = async (values: Record<string, unknown>) => {
-    const scheduledAt = values.scheduled_at as dayjs.Dayjs | undefined;
-    const body = {
-      channel_id: values.channel_id as string,
-      content: values.content as string,
-      mode: (values.mode as string) || "direct",
-      scheduled_at: scheduledAt ? scheduledAt.toISOString() : undefined,
-      cron_expr: (values.cron_expr as string) || undefined,
-    };
-
-    try {
-      if (isEdit && action) {
-        await actionsApi.update(action.id, body);
-        message.success("Updated");
-      } else {
-        await actionsApi.create(body);
-        message.success("Created");
-      }
-      queryClient.invalidateQueries({ queryKey: ["scheduled-actions"] });
-      onClose();
-    } catch {
-      message.error("Failed");
-    }
-  };
-
-  const channelOptions = buildChannelOptions(channels);
-
-  return (
-    <Modal
-      title={isEdit ? "Edit Action" : "New Scheduled Action"}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      destroyOnClose
-    >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={
-          action
-            ? {
-                channel_id: action.channel_id,
-                content: action.content,
-                mode: action.mode || "direct",
-                scheduled_at: toJST(action.scheduled_at),
-                cron_expr: action.cron_expr ?? "",
-              }
-            : { mode: "direct", cron_expr: "" }
-        }
-        onFinish={handleSubmit}
-      >
-        <Form.Item label="Channel" name="channel_id" rules={[{ required: true }]}>
-          <Select
-            showSearch
-            placeholder="Select channel"
-            options={channelOptions}
-            optionFilterProp="label"
-          />
-        </Form.Item>
-        <Form.Item label="Mode" name="mode" rules={[{ required: true }]}>
-          <Select options={[
-            { value: "direct", label: "Direct（そのまま投稿）" },
-            { value: "prompt", label: "Prompt（LLM で生成して投稿）" },
-          ]} />
-        </Form.Item>
-        <Form.Item label="Content" name="content" rules={[{ required: true }]}>
-          <TextArea rows={3} placeholder="Message content" />
-        </Form.Item>
-        <Form.Item label="Scheduled At" name="scheduled_at" extra="cron_expr のみの場合は省略可（次回実行時刻を自動計算）">
-          <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: "100%" }} />
-        </Form.Item>
-        <Form.Item label="Cron Expression" name="cron_expr">
-          <Input placeholder="e.g. 0 9 * * * (optional)" />
-        </Form.Item>
-        <Space>
-          <Button type="primary" htmlType="submit">{isEdit ? "Update" : "Create"}</Button>
-          <Button onClick={onClose}>Cancel</Button>
-        </Space>
-      </Form>
-    </Modal>
-  );
-}
+export default ActionsPage;
