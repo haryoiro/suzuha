@@ -65,6 +65,13 @@ export function ActionsPage() {
       render: (text: string) => <Text style={{ maxWidth: 300 }}>{text}</Text>,
     },
     {
+      title: "Mode",
+      dataIndex: "mode",
+      key: "mode",
+      width: 90,
+      render: (v: string) => <Tag color={v === "prompt" ? "purple" : "default"}>{v}</Tag>,
+    },
+    {
       title: "Channel",
       dataIndex: "channel_id",
       key: "channel_id",
@@ -168,10 +175,12 @@ function ActionFormModal({
   const isEdit = !!action;
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const scheduledAt = values.scheduled_at as dayjs.Dayjs | undefined;
     const body = {
       channel_id: values.channel_id as string,
       content: values.content as string,
-      scheduled_at: (values.scheduled_at as dayjs.Dayjs).toISOString(),
+      mode: (values.mode as string) || "direct",
+      scheduled_at: scheduledAt ? scheduledAt.toISOString() : undefined,
       cron_expr: (values.cron_expr as string) || undefined,
     };
 
@@ -208,10 +217,11 @@ function ActionFormModal({
             ? {
                 channel_id: action.channel_id,
                 content: action.content,
+                mode: action.mode || "direct",
                 scheduled_at: toJST(action.scheduled_at),
                 cron_expr: action.cron_expr ?? "",
               }
-            : { cron_expr: "" }
+            : { mode: "direct", cron_expr: "" }
         }
         onFinish={handleSubmit}
       >
@@ -223,10 +233,16 @@ function ActionFormModal({
             optionFilterProp="label"
           />
         </Form.Item>
+        <Form.Item label="Mode" name="mode" rules={[{ required: true }]}>
+          <Select options={[
+            { value: "direct", label: "Direct（そのまま投稿）" },
+            { value: "prompt", label: "Prompt（LLM で生成して投稿）" },
+          ]} />
+        </Form.Item>
         <Form.Item label="Content" name="content" rules={[{ required: true }]}>
           <TextArea rows={3} placeholder="Message content" />
         </Form.Item>
-        <Form.Item label="Scheduled At" name="scheduled_at" rules={[{ required: true }]}>
+        <Form.Item label="Scheduled At" name="scheduled_at" extra="cron_expr のみの場合は省略可（次回実行時刻を自動計算）">
           <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: "100%" }} />
         </Form.Item>
         <Form.Item label="Cron Expression" name="cron_expr">

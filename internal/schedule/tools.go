@@ -31,7 +31,8 @@ Use the channel_id from the message metadata.
 For recurring schedules, provide a cron_expr in standard 5-field cron format (minute hour day month weekday).
 If scheduled_at is omitted, the next occurrence is automatically calculated from cron_expr.
 Use random_minutes to add a random offset (0 to N minutes) to each occurrence — useful for natural-feeling recurring messages.
-Examples: cron_expr "0 8 * * *" with random_minutes 240 = every day at a random time between 8:00-12:00 UTC.`
+Examples: cron_expr "0 8 * * *" with random_minutes 240 = every day at a random time between 8:00-12:00 UTC.
+Set mode to "prompt" to treat content as an instruction — the LLM will generate a response from it before posting. Default mode is "direct" (post content as-is).`
 }
 
 func (t *CreateTool) InputSchema() json.RawMessage {
@@ -43,7 +44,8 @@ func (t *CreateTool) InputSchema() json.RawMessage {
 			"scheduled_at": {"type": "string", "description": "Optional: when to send, in RFC3339 format (e.g. 2025-01-15T10:00:00+09:00). If omitted and cron_expr is set, the next cron occurrence is used automatically."},
 			"cron_expr":      {"type": "string", "description": "Optional: 5-field cron expression for recurring schedule (e.g. '0 8 * * *' = daily at 8:00). If scheduled_at is omitted, the first occurrence is auto-calculated from the cron expression."},
 			"random_minutes": {"type": "integer", "description": "Optional: add a random offset of 0 to N minutes to each scheduled time. E.g. cron '0 8 * * *' + random_minutes 240 = daily random between 8:00-12:00."},
-			"created_by":     {"type": "string", "description": "Optional: user ID who requested this (from message metadata)."}
+			"created_by":     {"type": "string", "description": "Optional: user ID who requested this (from message metadata)."},
+			"mode":           {"type": "string", "enum": ["direct", "prompt"], "description": "Optional: 'direct' posts content as-is (default). 'prompt' treats content as an instruction and generates a response via LLM before posting."}
 		},
 		"required": ["channel_id", "content"]
 	}`)
@@ -56,6 +58,7 @@ type createInput struct {
 	CronExpr      string `json:"cron_expr"`
 	RandomMinutes int    `json:"random_minutes"`
 	CreatedBy     string `json:"created_by"`
+	Mode          string `json:"mode"`
 }
 
 func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
@@ -108,9 +111,14 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		scheduledAt = scheduledAt.Add(offset)
 	}
 
+	mode := in.Mode
+	if mode == "" {
+		mode = "direct"
+	}
 	action := &Action{
 		ChannelID:     in.ChannelID,
 		Content:       in.Content,
+		Mode:          mode,
 		ScheduledAt:   scheduledAt,
 		CronExpr:      in.CronExpr,
 		RandomMinutes: in.RandomMinutes,

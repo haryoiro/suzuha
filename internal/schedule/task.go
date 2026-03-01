@@ -3,10 +3,13 @@ package schedule
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 // Task is a CronTask that sends due scheduled actions.
@@ -35,7 +38,22 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 	cc.Logger.Info("schedule: processing due actions", slog.Int("count", len(actions)))
 
 	for _, a := range actions {
-		_, sendErr := cc.Notifier.Send(ctx, a.ChannelID, a.Content, "schedule")
+		message := a.Content
+
+		// In prompt mode, pass content through LLM to generate a natural response.
+		if a.Mode == "prompt" {
+			generated, llmErr := generateFromPrompt(ctx, cc, a.Content)
+			if llmErr != nil {
+				cc.Logger.Error("schedule: llm generation failed, will retry",
+					slog.String("id", a.ID),
+					slog.Any("error", llmErr),
+				)
+				continue
+			}
+			message = generated
+		}
+
+		_, sendErr := cc.Notifier.Send(ctx, a.ChannelID, message, "schedule")
 		if sendErr != nil {
 			// Don't mark executed — will retry on next run.
 			cc.Logger.Warn("schedule: send failed, will retry",
@@ -66,4 +84,25 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 		}
 	}
 	return nil
+}
+
+// generateFromPrompt sends the content as a prompt to the LLM and returns the response.
+func generateFromPrompt(ctx context.Context, cc *scheduler.CronContext, prompt string) (string, error) {
+	messages := []providers.Message{
+		{Role: "user", Content: prompt},
+	}
+	if cc.SystemPrompt != "" {
+		messages = append([]providers.Message{{Role: "system", Content: cc.SystemPrompt}}, messages...)
+	}
+
+	resp, err := cc.LLM.CompleteRaw(ctx, messages)
+	if err != nil {
+		return "", fmt.Errorf("llm: %w", err)
+	}
+
+	text := strings.TrimSpace(resp.Text)
+	if text == "" {
+		return "", fmt.Errorf("llm returned empty response")
+	}
+	return text, nil
 }

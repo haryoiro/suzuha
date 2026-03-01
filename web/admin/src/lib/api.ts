@@ -253,6 +253,7 @@ export interface ScheduledAction {
   id: string;
   channel_id: string;
   content: string;
+  mode: string;
   scheduled_at: string;
   cron_expr?: string;
   created_by?: string;
@@ -266,12 +267,12 @@ export const actionsApi = {
     fetchJSON<{ data: ScheduledAction[] }>(
       `/api/scheduled-actions${status ? `?status=${status}` : ""}`
     ),
-  create: (body: { channel_id: string; content: string; scheduled_at: string; cron_expr?: string }) =>
+  create: (body: { channel_id: string; content: string; mode?: string; scheduled_at?: string; cron_expr?: string }) =>
     fetchJSON<{ data: { id: string } }>("/api/scheduled-actions", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  update: (id: string, body: { channel_id?: string; content?: string; scheduled_at?: string; cron_expr?: string; status?: string }) =>
+  update: (id: string, body: { channel_id?: string; content?: string; mode?: string; scheduled_at?: string; cron_expr?: string; status?: string }) =>
     fetchJSON<{ ok: boolean }>(`/api/scheduled-actions/${id}`, {
       method: "PUT",
       body: JSON.stringify(body),
@@ -400,6 +401,51 @@ export const promptsApi = {
     fetchJSON<{ ok: boolean; reloaded: boolean }>(`/api/prompts/${name}`, {
       method: "PUT",
       body: JSON.stringify({ content }),
+    }),
+};
+
+// Forget (memory deduplication) API
+export interface ForgetMemory {
+  id: string;
+  type: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForgetGroup {
+  type: string;
+  members: ForgetMemory[];
+  avg_distance: number;
+}
+
+export interface ForgetStatus {
+  has_run: boolean;
+  last_run_at?: string;
+  total_deleted?: number;
+  total_merged?: number;
+}
+
+export const forgetApi = {
+  groups: (threshold?: number) =>
+    fetchJSON<{ data: ForgetGroup[]; total: number }>(
+      `/api/forget/groups${threshold != null ? `?threshold=${threshold}` : ""}`
+    ),
+  status: () => fetchJSON<ForgetStatus>("/api/forget/status"),
+  delete: (deleteIds: string[]) =>
+    fetchJSON<{ deleted: number }>("/api/forget/delete", {
+      method: "POST",
+      body: JSON.stringify({ delete_ids: deleteIds }),
+    }),
+  merge: (deleteIds: string[], mergedContent: string, type: string) =>
+    fetchJSON<{ deleted: number; merged: boolean }>("/api/forget/merge", {
+      method: "POST",
+      body: JSON.stringify({ delete_ids: deleteIds, merged_content: mergedContent, type }),
+    }),
+  run: () =>
+    fetchJSON<{ ok: boolean; error?: string }>("/api/forget/run", {
+      method: "POST",
     }),
 };
 
