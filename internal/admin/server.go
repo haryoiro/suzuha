@@ -84,6 +84,14 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	boredomH := handler.NewBoredomHandler(store.DB(), logger)
 	mux.HandleFunc("GET /api/boredom", boredomH.Get)
 
+	// Memory deduplication (forget).
+	forgetH := handler.NewForgetHandler(store.DB(), cfg.ConsolidatorAPI, logger)
+	mux.HandleFunc("GET /api/forget/groups", forgetH.Groups)
+	mux.HandleFunc("GET /api/forget/status", forgetH.Status)
+	mux.HandleFunc("POST /api/forget/delete", forgetH.Delete)
+	mux.HandleFunc("POST /api/forget/merge", forgetH.Merge)
+	mux.HandleFunc("POST /api/forget/run", forgetH.Run)
+
 	// RSS feeds CRUD.
 	rssH := handler.NewRSSHandler(store.DB(), logger)
 	mux.HandleFunc("GET /api/feeds", rssH.List)

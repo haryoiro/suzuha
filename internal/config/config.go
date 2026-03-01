@@ -93,6 +93,7 @@ type Agent struct {
 type Consolidator struct {
 	Address     string    `yaml:"address"`      // gRPC address, e.g. "localhost:50051"
 	AgentNotify string    `yaml:"agent_notify"` // Agent's notification gRPC address, e.g. "localhost:50052"
+	APIAddr     string    `yaml:"api_addr"`     // HTTP API address for manual triggers, e.g. ":9091"
 	Scheduler   Scheduler `yaml:"scheduler"`
 }
 
@@ -128,13 +129,14 @@ type Observe struct {
 
 // Admin configures the admin dashboard service.
 type Admin struct {
-	Addr         string `yaml:"addr"`           // e.g. ":8080"
-	AgentMetrics string `yaml:"agent_metrics"`  // e.g. "http://agent:9090/metrics"
-	AgentLogs    string `yaml:"agent_logs"`     // e.g. "http://agent:9090/internal/logs"
-	AgentContext string `yaml:"agent_context"`  // e.g. "http://agent:9090/internal/context"
-	ConsolLogs   string `yaml:"consol_logs"`    // e.g. "http://consolidator:9090/internal/logs"
-	StaticDir    string `yaml:"static_dir"`     // path to built SPA assets
-	PromptDir    string `yaml:"prompt_dir"`     // path to prompt files (IDENTITY.md, SOUL.md)
+	Addr             string `yaml:"addr"`              // e.g. ":8080"
+	AgentMetrics     string `yaml:"agent_metrics"`     // e.g. "http://agent:9090/metrics"
+	AgentLogs        string `yaml:"agent_logs"`        // e.g. "http://agent:9090/internal/logs"
+	AgentContext     string `yaml:"agent_context"`     // e.g. "http://agent:9090/internal/context"
+	ConsolLogs       string `yaml:"consol_logs"`       // e.g. "http://consolidator:9090/internal/logs"
+	ConsolidatorAPI  string `yaml:"consolidator_api"`  // e.g. "http://consolidator:9091"
+	StaticDir        string `yaml:"static_dir"`        // path to built SPA assets
+	PromptDir        string `yaml:"prompt_dir"`        // path to prompt files (IDENTITY.md, SOUL.md)
 }
 
 // Load reads and parses a config file from the given path.
@@ -237,6 +239,9 @@ func (c *Config) setDefaults() {
 	if c.Consolidator.AgentNotify == "" {
 		c.Consolidator.AgentNotify = "localhost:50052"
 	}
+	if c.Consolidator.APIAddr == "" {
+		c.Consolidator.APIAddr = ":9091"
+	}
 	if c.Observe.LogLevel == "" {
 		c.Observe.LogLevel = "info"
 	}
@@ -254,6 +259,9 @@ func (c *Config) setDefaults() {
 	}
 	if c.Admin.AgentContext == "" {
 		c.Admin.AgentContext = "http://localhost:9090/internal/context"
+	}
+	if c.Admin.ConsolidatorAPI == "" {
+		c.Admin.ConsolidatorAPI = "http://localhost:9091"
 	}
 	if c.Admin.PromptDir == "" {
 		c.Admin.PromptDir = c.Agent.PromptDir

@@ -110,3 +110,14 @@ func (s *Scheduler) Stop() context.Context {
 func (s *Scheduler) Entries() int {
 	return len(s.cron.Entries())
 }
+
+// TriggerTask executes a registered task immediately by name.
+// cfg is optional task-specific config (JSON); if nil, the task's default config is used.
+func (s *Scheduler) TriggerTask(ctx context.Context, taskName string, cfg json.RawMessage) error {
+	task, ok := s.registry.Get(taskName)
+	if !ok {
+		return fmt.Errorf("unknown task: %s", taskName)
+	}
+	s.logger.Info("scheduler: manual trigger", "task", taskName)
+	return task.Execute(ctx, s.cc, cfg)
+}

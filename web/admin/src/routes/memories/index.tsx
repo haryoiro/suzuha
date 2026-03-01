@@ -13,11 +13,6 @@ import {
   Statistic,
   Progress,
   Segmented,
-  Card,
-  List,
-  Slider,
-  Spin,
-  Empty,
 } from "antd";
 import {
   PlusOutlined,
@@ -27,9 +22,10 @@ import {
   CopyOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMemories, useCreateMemory, useDeleteMemory, useDuplicates } from "../../hooks/useMemories";
+import { useMemories, useCreateMemory, useDeleteMemory } from "../../hooks/useMemories";
 import { memoriesApi } from "../../lib/api";
 import type { Memory } from "../../lib/api";
+import { DedupView } from "../forget";
 import type { ColumnsType } from "antd/es/table";
 import { formatJST } from "../../lib/date";
 
@@ -48,7 +44,7 @@ interface Props {
 }
 
 export function MemoriesPage({ onViewDetail }: Props) {
-  const [view, setView] = useState<"list" | "duplicates">("list");
+  const [view, setView] = useState<"list" | "dedup">("list");
   const [offset, setOffset] = useState(0);
   const [limit] = useState(20);
   const [typeFilter, setTypeFilter] = useState<string>("");
@@ -172,10 +168,10 @@ export function MemoriesPage({ onViewDetail }: Props) {
 
       <Segmented
         value={view}
-        onChange={(v) => setView(v as "list" | "duplicates")}
+        onChange={(v) => setView(v as "list" | "dedup")}
         options={[
           { label: "List", value: "list" },
-          { label: "Duplicates", value: "duplicates", icon: <CopyOutlined /> },
+          { label: "Dedup", value: "dedup", icon: <CopyOutlined /> },
         ]}
         style={{ marginBottom: 16 }}
       />
@@ -248,7 +244,7 @@ export function MemoriesPage({ onViewDetail }: Props) {
           />
         </>
       ) : (
-        <DuplicatesView onViewDetail={onViewDetail} />
+        <DedupView />
       )}
 
       <Modal
@@ -285,105 +281,3 @@ export function MemoriesPage({ onViewDetail }: Props) {
   );
 }
 
-function DuplicatesView({ onViewDetail }: { onViewDetail: (id: string) => void }) {
-  const [threshold, setThreshold] = useState(0.2);
-  const { data, isLoading, refetch } = useDuplicates(threshold);
-  const deleteMutation = useDeleteMemory();
-
-  if (isLoading) {
-    return <Spin tip="Scanning for duplicates..." style={{ display: "block", marginTop: 48 }} />;
-  }
-
-  const groups = data?.data ?? [];
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-        <span style={{ whiteSpace: "nowrap", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
-          Distance threshold:
-        </span>
-        <Slider
-          min={0.05}
-          max={0.5}
-          step={0.05}
-          value={threshold}
-          onChange={setThreshold}
-          style={{ width: 200 }}
-          tooltip={{ formatter: (v) => `${v}` }}
-        />
-        <Button size="small" onClick={() => refetch()}>Refresh</Button>
-      </div>
-
-      {groups.length === 0 ? (
-        <Empty description="No duplicate groups found" />
-      ) : (
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>
-          {groups.length} duplicate group{groups.length > 1 ? "s" : ""} found
-        </div>
-      )}
-
-      {groups.map((group, gi) => (
-        <Card
-          key={gi}
-          size="small"
-          title={
-            <Space>
-              <Tag color={typeColors[group.memories[0]?.type]}>{group.memories[0]?.type}</Tag>
-              <span>{group.memories.length} similar memories</span>
-            </Space>
-          }
-          style={{ marginBottom: 12 }}
-        >
-          <List
-            size="small"
-            dataSource={group.memories}
-            renderItem={(mem, mi) => (
-              <List.Item
-                actions={[
-                  <Button
-                    key="view"
-                    type="text"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() => onViewDetail(mem.id)}
-                  />,
-                  mi > 0 ? (
-                    <Popconfirm
-                      key="del"
-                      title="Delete this duplicate?"
-                      onConfirm={() => {
-                        deleteMutation.mutate(mem.id, {
-                          onSuccess: () => {
-                            message.success("Deleted");
-                            refetch();
-                          },
-                        });
-                      }}
-                    >
-                      <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  ) : (
-                    <Tag key="keep" color="green">keep</Tag>
-                  ),
-                ]}
-              >
-                <List.Item.Meta
-                  title={
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-                      {mem.id.slice(0, 8)}... | {formatJST(mem.updated_at)}
-                    </span>
-                  }
-                  description={
-                    <span style={{ color: "rgba(255,255,255,0.85)" }}>
-                      {mem.content}
-                    </span>
-                  }
-                />
-              </List.Item>
-            )}
-          />
-        </Card>
-      ))}
-    </div>
-  );
-}
