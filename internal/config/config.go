@@ -214,15 +214,23 @@ func (c *Config) setDefaults() {
 	if c.Embedding.Dims == 0 {
 		c.Embedding.Dims = 1024
 	}
-	// Vision defaults: inherit from LLM if not set.
+	// Vision defaults: inherit from embedding if same provider, otherwise from LLM.
 	if c.Vision.Provider == "" {
 		c.Vision.Provider = c.LLM.Provider
 	}
 	if c.Vision.APIKey == "" {
-		c.Vision.APIKey = c.LLM.APIKey
+		if c.Vision.Provider == c.Embedding.Provider {
+			c.Vision.APIKey = c.Embedding.APIKey
+		} else {
+			c.Vision.APIKey = c.LLM.APIKey
+		}
 	}
-	if c.Vision.APIBase == "" && c.Vision.Provider == c.LLM.Provider {
-		c.Vision.APIBase = c.LLM.APIBase
+	if c.Vision.APIBase == "" {
+		if c.Vision.Provider == c.Embedding.Provider {
+			c.Vision.APIBase = c.Embedding.APIBase
+		} else if c.Vision.Provider == c.LLM.Provider {
+			c.Vision.APIBase = c.LLM.APIBase
+		}
 	}
 	if c.Memory.DBPath == "" {
 		c.Memory.DBPath = "memory.db"
