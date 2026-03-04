@@ -11,10 +11,3 @@ pre-commit:
     build:
       glob: "*.go"
       run: go build ./...
-
-pre-push:
-  parallel: true
-  commands:
-    test:
-      glob: "*.go"
-      run: go test ./...

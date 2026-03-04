@@ -13,7 +13,7 @@ import (
 //
 // The template pre-imports commonly used stdlib packages and suppresses
 // unused-import errors with blank identifiers. The harness handles
-// stdin/stdout JSON marshalling.
+// stdin/stdout JSON marshaling.
 const toolTemplate = `package main
 
 import (
