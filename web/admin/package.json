@@ -21,7 +21,8 @@
   },
   "pnpm": {
     "overrides": {
-      "minimatch@<10": "npm:minimatch@^10.2.1"
+      "minimatch@<10": "npm:minimatch@^10.2.1",
+      "serialize-javascript@<7.0.3": "npm:serialize-javascript@^7.0.3"
     }
   },
   "devDependencies": {
