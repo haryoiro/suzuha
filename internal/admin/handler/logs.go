@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// LogHandler proxies SSE log streams from agent/consolidator.
+// LogHandler proxies SSE log streams from agent (and optionally other sources).
 type LogHandler struct {
 	agentURL  string
 	consolURL string

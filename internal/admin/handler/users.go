@@ -6,18 +6,20 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
+
+	"github.com/haryoiro/suzuha/internal/user"
 )
 
 // UsersHandler provides HTTP handlers for browsing user data.
 type UsersHandler struct {
-	db     *sql.DB
+	users  user.AdminStore
+	db     *sql.DB // for Memories endpoint (json_extract query)
 	logger *slog.Logger
 }
 
 // NewUsersHandler creates a new UsersHandler.
-func NewUsersHandler(db *sql.DB, logger *slog.Logger) *UsersHandler {
-	return &UsersHandler{db: db, logger: logger}
+func NewUsersHandler(users user.AdminStore, db *sql.DB, logger *slog.Logger) *UsersHandler {
+	return &UsersHandler{users: users, db: db, logger: logger}
 }
 
 type userJSON struct {
@@ -51,6 +53,22 @@ type affinityEventJSON struct {
 	CreatedAt string  `json:"created_at"`
 }
 
+func userToJSON(u user.User) userJSON {
+	return userJSON{
+		ID:          u.ID,
+		DisplayName: u.DisplayName,
+		Role:        string(u.Role),
+		IsBot:       u.IsBot,
+		Affinity:    u.Affinity,
+		Closeness:   u.Closeness,
+		Trust:       u.Trust,
+		Interest:    u.Interest,
+		Metadata:    u.Metadata,
+		CreatedAt:   u.CreatedAt.Format("2006-01-02 15:04:05"),
+		UpdatedAt:   u.UpdatedAt.Format("2006-01-02 15:04:05"),
+	}
+}
+
 // List handles GET /api/users.
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -60,74 +78,57 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	// Count total.
-	var total int
-	if err := h.db.QueryRowContext(r.Context(), `SELECT count(*) FROM users`).Scan(&total); err != nil {
-		h.logger.Error("count users", "error", err)
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-
-	// Fetch users.
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
-		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	users, total, err := h.users.List(r.Context(), offset, limit)
 	if err != nil {
 		h.logger.Error("list users", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
-	var users []userJSON
-	for rows.Next() {
-		var u userJSON
-		var metaJSON sql.NullString
-		if err := rows.Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &u.Closeness, &u.Trust, &u.Interest, &metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
-			h.logger.Error("scan user", "error", err)
-			continue
+	result := make([]userJSON, 0, len(users))
+	for _, u := range users {
+		uj := userToJSON(u)
+		links, _ := h.users.ListPlatformLinks(r.Context(), u.ID)
+		for _, l := range links {
+			uj.Platforms = append(uj.Platforms, platformLinkJSON{
+				Platform:       l.Platform,
+				PlatformUserID: l.PlatformUserID,
+				PlatformName:   l.PlatformName,
+			})
 		}
-		if metaJSON.Valid {
-			_ = json.Unmarshal([]byte(metaJSON.String), &u.Metadata)
+		if uj.Platforms == nil {
+			uj.Platforms = []platformLinkJSON{}
 		}
-		users = append(users, u)
+		result = append(result, uj)
 	}
 
-	// Fetch platform links for each user.
-	for i := range users {
-		links, _ := h.getPlatformLinks(r, users[i].ID)
-		users[i].Platforms = links
-	}
-
-	if users == nil {
-		users = []userJSON{}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"data": users, "total": total})
+	writeJSON(w, http.StatusOK, map[string]any{"data": result, "total": total})
 }
 
 // Get handles GET /api/users/{id}.
 func (h *UsersHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	var u userJSON
-	var metaJSON sql.NullString
-	err := h.db.QueryRowContext(r.Context(),
-		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
-		 FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &u.Role, &u.IsBot, &u.Affinity, &u.Closeness, &u.Trust, &u.Interest, &metaJSON, &u.CreatedAt, &u.UpdatedAt)
+	u, err := h.users.Get(r.Context(), id)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
-	if metaJSON.Valid {
-		_ = json.Unmarshal([]byte(metaJSON.String), &u.Metadata)
+
+	uj := userToJSON(*u)
+	links, _ := h.users.ListPlatformLinks(r.Context(), u.ID)
+	for _, l := range links {
+		uj.Platforms = append(uj.Platforms, platformLinkJSON{
+			Platform:       l.Platform,
+			PlatformUserID: l.PlatformUserID,
+			PlatformName:   l.PlatformName,
+		})
+	}
+	if uj.Platforms == nil {
+		uj.Platforms = []platformLinkJSON{}
 	}
 
-	links, _ := h.getPlatformLinks(r, u.ID)
-	u.Platforms = links
-
-	writeJSON(w, http.StatusOK, map[string]any{"data": u})
+	writeJSON(w, http.StatusOK, map[string]any{"data": uj})
 }
 
 // Update handles PUT /api/users/{id}.
@@ -144,53 +145,28 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build dynamic UPDATE query.
-	var sets []string
-	var args []any
-	if body.DisplayName != nil {
-		sets = append(sets, "display_name = ?")
-		args = append(args, *body.DisplayName)
+	fields := user.UpdateFields{
+		DisplayName: body.DisplayName,
+		IsBot:       body.IsBot,
 	}
 	if body.Role != nil {
 		switch *body.Role {
 		case "owner", "member", "guest":
-			sets = append(sets, "role = ?")
-			args = append(args, *body.Role)
+			role := user.Role(*body.Role)
+			fields.Role = &role
 		default:
 			http.Error(w, `{"error":"invalid role"}`, http.StatusBadRequest)
 			return
 		}
 	}
-	if body.IsBot != nil {
-		sets = append(sets, "is_bot = ?")
-		args = append(args, *body.IsBot)
-	}
-	if len(sets) == 0 {
+	if fields.DisplayName == nil && fields.Role == nil && fields.IsBot == nil {
 		http.Error(w, `{"error":"no fields to update"}`, http.StatusBadRequest)
 		return
 	}
-	sets = append(sets, "updated_at = ?")
-	args = append(args, time.Now())
-	args = append(args, id)
 
-	query := "UPDATE users SET "
-	for i, s := range sets {
-		if i > 0 {
-			query += ", "
-		}
-		query += s
-	}
-	query += " WHERE id = ?"
-
-	res, err := h.db.ExecContext(r.Context(), query, args...)
-	if err != nil {
+	if err := h.users.Update(r.Context(), id, fields); err != nil {
 		h.logger.Error("update user", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -204,47 +180,38 @@ func (h *UsersHandler) AffinityEvents(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT id, user_id, delta, axis, reason, created_at
-		 FROM affinity_events WHERE user_id = ?
-		 ORDER BY created_at DESC LIMIT ?`, id, limit)
+	events, err := h.users.ListAffinityEvents(r.Context(), id, limit)
 	if err != nil {
 		h.logger.Error("affinity events", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
-	var events []affinityEventJSON
-	for rows.Next() {
-		var e affinityEventJSON
-		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &e.Axis, &e.Reason, &e.CreatedAt); err != nil {
-			continue
-		}
-		events = append(events, e)
-	}
-	if events == nil {
-		events = []affinityEventJSON{}
+	result := make([]affinityEventJSON, 0, len(events))
+	for _, e := range events {
+		result = append(result, affinityEventJSON{
+			ID:        e.ID,
+			UserID:    e.UserID,
+			Delta:     e.Delta,
+			Axis:      string(e.Axis),
+			Reason:    e.Reason,
+			CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"data": events})
+	writeJSON(w, http.StatusOK, map[string]any{"data": result})
 }
 
 // Guilds handles GET /api/users/{id}/guilds.
 func (h *UsersHandler) Guilds(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT ugc.guild_id, g.name, ugc.channel_id, ugc.channel_name, ugc.last_seen_at
-		 FROM user_guild_channels ugc
-		 JOIN guilds g ON g.id = ugc.guild_id
-		 WHERE ugc.user_id = ?
-		 ORDER BY ugc.last_seen_at DESC`, id)
+
+	guilds, err := h.users.GetUserGuilds(r.Context(), id)
 	if err != nil {
 		h.logger.Error("user guilds", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
 	type entry struct {
 		GuildID     string `json:"guild_id"`
@@ -253,21 +220,22 @@ func (h *UsersHandler) Guilds(w http.ResponseWriter, r *http.Request) {
 		ChannelName string `json:"channel_name"`
 		LastSeenAt  string `json:"last_seen_at"`
 	}
-	var entries []entry
-	for rows.Next() {
-		var e entry
-		if err := rows.Scan(&e.GuildID, &e.GuildName, &e.ChannelID, &e.ChannelName, &e.LastSeenAt); err != nil {
-			continue
-		}
-		entries = append(entries, e)
+	result := make([]entry, 0, len(guilds))
+	for _, g := range guilds {
+		result = append(result, entry{
+			GuildID:     g.GuildID,
+			GuildName:   g.GuildName,
+			ChannelID:   g.ChannelID,
+			ChannelName: g.ChannelName,
+			LastSeenAt:  g.LastSeenAt.Format("2006-01-02 15:04:05"),
+		})
 	}
-	if entries == nil {
-		entries = []entry{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": entries})
+
+	writeJSON(w, http.StatusOK, map[string]any{"data": result})
 }
 
 // Memories handles GET /api/users/{id}/memories.
+// Uses raw DB for json_extract query.
 func (h *UsersHandler) Memories(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -303,24 +271,4 @@ func (h *UsersHandler) Memories(w http.ResponseWriter, r *http.Request) {
 		entries = []memEntry{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": entries})
-}
-
-func (h *UsersHandler) getPlatformLinks(r *http.Request, userID string) ([]platformLinkJSON, error) {
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT platform, platform_user_id, platform_name
-		 FROM platform_links WHERE user_id = ?`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var links []platformLinkJSON
-	for rows.Next() {
-		var l platformLinkJSON
-		if err := rows.Scan(&l.Platform, &l.PlatformUserID, &l.PlatformName); err != nil {
-			continue
-		}
-		links = append(links, l)
-	}
-	return links, nil
 }

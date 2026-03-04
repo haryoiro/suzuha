@@ -147,21 +147,18 @@ func (h *MemoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // VecStats handles GET /api/memories/vec-stats.
 // Returns vector storage statistics: total memories, embedded count, dimensions.
 func (h *MemoryHandler) VecStats(w http.ResponseWriter, r *http.Request) {
-	db := h.store.DB()
-	ctx := r.Context()
+	total, embedded, err := h.store.VecStats(r.Context())
+	if err != nil {
+		h.logger.Error("vec-stats", "error", err)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
 
-	var totalMemories int
-	db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories").Scan(&totalMemories)
-
-	var embeddedCount int
-	db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories_vec").Scan(&embeddedCount)
-
-	// Get IDs with embeddings for the list endpoint.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"total_memories":  totalMemories,
-		"embedded_count":  embeddedCount,
-		"missing_count":   totalMemories - embeddedCount,
-		"coverage_pct":    safePct(embeddedCount, totalMemories),
+		"total_memories": total,
+		"embedded_count": embedded,
+		"missing_count":  total - embedded,
+		"coverage_pct":   safePct(embedded, total),
 	})
 }
 
@@ -280,7 +277,7 @@ func (h *MemoryHandler) Duplicates(w http.ResponseWriter, r *http.Request) {
 		all = append(all, e)
 	}
 
-	// For each memory, find neighbours with small distance.
+	// For each memory, find neighbors with small distance.
 	type dupGroup struct {
 		Memories []memory.Memory `json:"memories"`
 	}
@@ -330,10 +327,4 @@ func (h *MemoryHandler) Duplicates(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"data": groups, "total": len(groups)})
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
 }

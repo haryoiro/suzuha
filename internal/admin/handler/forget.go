@@ -15,14 +15,14 @@ import (
 
 // ForgetHandler provides HTTP handlers for memory deduplication management.
 type ForgetHandler struct {
-	db              *sql.DB
-	consolidatorAPI string // e.g. "http://consolidator:9091"
-	logger          *slog.Logger
+	memStore memory.AdminStore
+	agentAPI string // e.g. "http://agent:9090"
+	logger   *slog.Logger
 }
 
 // NewForgetHandler creates a new ForgetHandler.
-func NewForgetHandler(db *sql.DB, consolidatorAPI string, logger *slog.Logger) *ForgetHandler {
-	return &ForgetHandler{db: db, consolidatorAPI: consolidatorAPI, logger: logger}
+func NewForgetHandler(memStore memory.AdminStore, agentAPI string, logger *slog.Logger) *ForgetHandler {
+	return &ForgetHandler{memStore: memStore, agentAPI: agentAPI, logger: logger}
 }
 
 type forgetMemory struct {
@@ -61,7 +61,7 @@ func (h *ForgetHandler) Groups(w http.ResponseWriter, r *http.Request) {
 		createdAt string
 		updatedAt string
 	}
-	rows, err := h.db.QueryContext(ctx,
+	rows, err := h.memStore.DB().QueryContext(ctx,
 		`SELECT v.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
 		 ORDER BY m.type, m.created_at`)
@@ -128,7 +128,7 @@ func (h *ForgetHandler) Groups(w http.ResponseWriter, r *http.Request) {
 	var pairs []distPair
 
 	for i, e := range all {
-		neighRows, err := h.db.QueryContext(ctx,
+		neighRows, err := h.memStore.DB().QueryContext(ctx,
 			`SELECT v2.id, v2.distance
 			 FROM memories_vec v1
 			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = 10
@@ -214,27 +214,11 @@ func (h *ForgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	var deleted int
-	for _, id := range body.DeleteIDs {
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			continue
-		}
-		_, _ = tx.ExecContext(ctx,
-			`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id)
-		_, _ = tx.ExecContext(ctx,
-			`DELETE FROM memories_vec WHERE id = ?`, id)
-		res, err := tx.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id)
-		if err != nil {
-			tx.Rollback()
-			continue
-		}
-		n, _ := res.RowsAffected()
-		if n > 0 {
-			deleted++
-		}
-		tx.Commit()
+	deleted, err := h.memStore.DeleteBatch(r.Context(), body.DeleteIDs)
+	if err != nil {
+		h.logger.Error("forget: delete", "error", err)
+		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
+		return
 	}
 
 	h.logger.Info("forget: manual delete", "requested", len(body.DeleteIDs), "deleted", deleted)
@@ -261,36 +245,21 @@ func (h *ForgetHandler) Merge(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Delete originals.
-	var deleted int
-	for _, id := range body.DeleteIDs {
-		tx, err := h.db.BeginTx(ctx, nil)
-		if err != nil {
-			continue
-		}
-		_, _ = tx.ExecContext(ctx,
-			`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id)
-		_, _ = tx.ExecContext(ctx,
-			`DELETE FROM memories_vec WHERE id = ?`, id)
-		res, err := tx.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id)
-		if err != nil {
-			tx.Rollback()
-			continue
-		}
-		n, _ := res.RowsAffected()
-		if n > 0 {
-			deleted++
-		}
-		tx.Commit()
+	deleted, err := h.memStore.DeleteBatch(ctx, body.DeleteIDs)
+	if err != nil {
+		h.logger.Error("forget: merge delete", "error", err)
 	}
 
 	// Insert merged memory (without embedding — BackfillEmbeddings will handle it).
-	metaJSON, _ := json.Marshal(map[string]any{"source": "forget_merge"})
-	_, err := h.db.ExecContext(ctx,
-		`INSERT INTO memories (id, type, content, metadata, created_at, updated_at)
-		 VALUES (lower(hex(randomblob(16))), ?, ?, ?, datetime('now'), datetime('now'))`,
-		string(body.Type), body.MergedContent, string(metaJSON))
-	if err != nil {
-		h.logger.Error("forget: merge insert", "error", err)
+	mem := &memory.Memory{
+		Type:    body.Type,
+		Content: body.MergedContent,
+		Metadata: map[string]any{
+			"source": "forget_merge",
+		},
+	}
+	if saveErr := h.memStore.SaveRaw(ctx, mem); saveErr != nil {
+		h.logger.Error("forget: merge insert", "error", saveErr)
 		http.Error(w, `{"error":"merge insert failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -303,7 +272,7 @@ func (h *ForgetHandler) Merge(w http.ResponseWriter, r *http.Request) {
 // Returns the last run status from task_state.
 func (h *ForgetHandler) Status(w http.ResponseWriter, r *http.Request) {
 	var stateJSON string
-	err := h.db.QueryRowContext(r.Context(),
+	err := h.memStore.DB().QueryRowContext(r.Context(),
 		`SELECT state FROM task_state WHERE task_name = 'forget'`,
 	).Scan(&stateJSON)
 
@@ -322,14 +291,14 @@ func (h *ForgetHandler) Status(w http.ResponseWriter, r *http.Request) {
 }
 
 // Run handles POST /api/forget/run.
-// Proxies to the consolidator's trigger API to run the forget task immediately.
+// Proxies to the agent's trigger API to run the forget task immediately.
 func (h *ForgetHandler) Run(w http.ResponseWriter, r *http.Request) {
-	if h.consolidatorAPI == "" {
-		http.Error(w, `{"error":"consolidator_api not configured"}`, http.StatusServiceUnavailable)
+	if h.agentAPI == "" {
+		http.Error(w, `{"error":"agent_api not configured"}`, http.StatusServiceUnavailable)
 		return
 	}
 
-	url := strings.TrimSuffix(h.consolidatorAPI, "/") + "/api/trigger/forget"
+	url := strings.TrimSuffix(h.agentAPI, "/") + "/internal/trigger/forget"
 	req, err := http.NewRequestWithContext(r.Context(), "POST", url, strings.NewReader(`{}`))
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
@@ -340,7 +309,7 @@ func (h *ForgetHandler) Run(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		h.logger.Error("forget: trigger proxy", "error", err)
-		http.Error(w, `{"error":"consolidator unreachable"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()

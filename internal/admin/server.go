@@ -11,6 +11,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/schedule"
+	"github.com/haryoiro/suzuha/internal/user"
 )
 
 // Server is the admin dashboard HTTP server.
@@ -21,7 +23,7 @@ type Server struct {
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *Server {
+func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *schedule.Store, logger *slog.Logger) *Server {
 	mux := http.NewServeMux()
 
 	// Health check.
@@ -43,7 +45,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/metrics/json", metH.ServeJSON)
 
 	// Users.
-	userH := handler.NewUsersHandler(store.DB(), logger)
+	userH := handler.NewUsersHandler(userStore, store.DB(), logger)
 	mux.HandleFunc("GET /api/users", userH.List)
 	mux.HandleFunc("GET /api/users/{id}", userH.Get)
 	mux.HandleFunc("PUT /api/users/{id}", userH.Update)
@@ -52,7 +54,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/users/{id}/memories", userH.Memories)
 
 	// Guilds & channels.
-	guildH := handler.NewGuildsHandler(store.DB(), logger)
+	guildH := handler.NewGuildsHandler(userStore, logger)
 	mux.HandleFunc("GET /api/guilds", guildH.List)
 	mux.HandleFunc("GET /api/channels", guildH.AllChannels)
 	mux.HandleFunc("GET /api/guilds/{id}/channels", guildH.Channels)
@@ -65,7 +67,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("DELETE /api/channel-settings/{channelId}", chSettingsH.Delete)
 
 	// Scheduled actions.
-	actionsH := handler.NewActionsHandler(store.DB(), logger)
+	actionsH := handler.NewActionsHandler(schedStore, logger)
 	mux.HandleFunc("GET /api/scheduled-actions", actionsH.List)
 	mux.HandleFunc("POST /api/scheduled-actions", actionsH.Create)
 	mux.HandleFunc("PUT /api/scheduled-actions/{id}", actionsH.Update)
@@ -85,7 +87,8 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("GET /api/boredom", boredomH.Get)
 
 	// Memory deduplication (forget).
-	forgetH := handler.NewForgetHandler(store.DB(), cfg.ConsolidatorAPI, logger)
+	// Trigger API is now served by the agent process (merged from consolidator).
+	forgetH := handler.NewForgetHandler(store, agentBase, logger)
 	mux.HandleFunc("GET /api/forget/groups", forgetH.Groups)
 	mux.HandleFunc("GET /api/forget/status", forgetH.Status)
 	mux.HandleFunc("POST /api/forget/delete", forgetH.Delete)
@@ -102,6 +105,27 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	mux.HandleFunc("DELETE /api/feeds/{id}", rssH.Delete)
 	mux.HandleFunc("GET /api/feeds/{id}/items", rssH.ListItems)
 
+	// Location devices & places.
+	locH := handler.NewLocationHandler(store.DB(), agentBase, logger)
+	mux.HandleFunc("GET /api/location/{userId}", locH.GetLocation)
+	mux.HandleFunc("GET /api/location/devices", locH.ListDevices)
+	mux.HandleFunc("PUT /api/location/devices/{id}", locH.UpsertDevice)
+	mux.HandleFunc("DELETE /api/location/devices/{id}", locH.DeleteDevice)
+	mux.HandleFunc("GET /api/location/places", locH.ListPlaces)
+	mux.HandleFunc("POST /api/location/places", locH.CreatePlace)
+	mux.HandleFunc("PUT /api/location/places/{id}", locH.UpdatePlace)
+	mux.HandleFunc("DELETE /api/location/places/{id}", locH.DeletePlace)
+
+	// Tools (proxy to agent).
+	toolsH := handler.NewToolsHandler(agentBase, logger)
+	mux.HandleFunc("GET /api/tools", toolsH.List)
+	mux.HandleFunc("PUT /api/tools/{name}/enabled", toolsH.ToggleTool)
+
+	// LLM provider (proxy to agent).
+	llmH := handler.NewLLMHandler(agentBase, logger)
+	mux.HandleFunc("GET /api/llm", llmH.Get)
+	mux.HandleFunc("PUT /api/llm", llmH.Put)
+
 	// Prompt files.
 	promptH := handler.NewPromptHandler(cfg.PromptDir, agentBase, logger)
 	mux.HandleFunc("GET /api/prompts", promptH.List)
@@ -112,8 +136,8 @@ func NewServer(cfg config.Admin, store memory.AdminStore, logger *slog.Logger) *
 	ctxH := handler.NewContextHandler(cfg.AgentContext, logger)
 	mux.HandleFunc("GET /api/context", ctxH.Proxy)
 
-	// Log streaming.
-	logH := handler.NewLogHandler(cfg.AgentLogs, cfg.ConsolLogs, logger)
+	// Log streaming (consolidator logs are now part of agent).
+	logH := handler.NewLogHandler(cfg.AgentLogs, "", logger)
 	mux.HandleFunc("GET /api/logs/stream", logH.Stream)
 
 	// SPA static files.

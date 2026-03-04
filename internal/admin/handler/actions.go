@@ -1,26 +1,25 @@
 package handler
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/robfig/cron/v3"
 )
 
 // ActionsHandler provides HTTP handlers for scheduled actions.
 type ActionsHandler struct {
-	db     *sql.DB
+	store  *schedule.Store
 	logger *slog.Logger
 }
 
 // NewActionsHandler creates a new ActionsHandler.
-func NewActionsHandler(db *sql.DB, logger *slog.Logger) *ActionsHandler {
-	return &ActionsHandler{db: db, logger: logger}
+func NewActionsHandler(store *schedule.Store, logger *slog.Logger) *ActionsHandler {
+	return &ActionsHandler{store: store, logger: logger}
 }
 
 type actionJSON struct {
@@ -36,6 +35,29 @@ type actionJSON struct {
 	CreatedAt   string  `json:"created_at"`
 }
 
+func actionToJSON(a schedule.Action) actionJSON {
+	j := actionJSON{
+		ID:          a.ID,
+		ChannelID:   a.ChannelID,
+		Content:     a.Content,
+		Mode:        a.Mode,
+		ScheduledAt: a.ScheduledAt.Format(time.RFC3339),
+		Status:      a.Status,
+		CreatedAt:   a.CreatedAt.Format(time.RFC3339),
+	}
+	if a.CronExpr != "" {
+		j.CronExpr = &a.CronExpr
+	}
+	if a.CreatedBy != "" {
+		j.CreatedBy = &a.CreatedBy
+	}
+	if a.ExecutedAt != nil {
+		s := a.ExecutedAt.Format(time.RFC3339)
+		j.ExecutedAt = &s
+	}
+	return j
+}
+
 // List handles GET /api/scheduled-actions.
 func (h *ActionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -43,28 +65,22 @@ func (h *ActionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 {
 		limit = 50
 	}
-	status := q.Get("status")
 
-	query := `SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, cron_expr, created_by, status, executed_at, created_at
-	          FROM scheduled_actions`
-	var args []any
-	if status != "" {
-		query += ` WHERE status = ?`
-		args = append(args, status)
-	}
-	query += ` ORDER BY scheduled_at DESC LIMIT ?`
-	args = append(args, limit)
-
-	rows, err := h.db.QueryContext(r.Context(), query, args...)
+	actions, err := h.store.List(r.Context(), schedule.ActionListOpts{
+		Status: q.Get("status"),
+		Limit:  limit,
+	})
 	if err != nil {
 		h.logger.Error("list actions", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
-	actions := h.scanActions(rows)
-	writeJSON(w, http.StatusOK, map[string]any{"data": actions})
+	result := make([]actionJSON, 0, len(actions))
+	for _, a := range actions {
+		result = append(result, actionToJSON(a))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": result})
 }
 
 // Create handles POST /api/scheduled-actions.
@@ -108,27 +124,25 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := uuid.NewString()
-	var cronExpr any
+	var cronExpr string
 	if body.CronExpr != nil {
 		cronExpr = *body.CronExpr
 	}
 
-	mode := body.Mode
-	if mode == "" {
-		mode = "direct"
+	a := &schedule.Action{
+		ChannelID:   body.ChannelID,
+		Content:     body.Content,
+		Mode:        body.Mode,
+		ScheduledAt: scheduledAt,
+		CronExpr:    cronExpr,
+		CreatedBy:   "admin",
 	}
-
-	_, err := h.db.ExecContext(r.Context(),
-		`INSERT INTO scheduled_actions (id, channel_id, content, mode, scheduled_at, cron_expr, created_by, status)
-		 VALUES (?, ?, ?, ?, ?, ?, 'admin', 'pending')`,
-		id, body.ChannelID, body.Content, mode, scheduledAt.Format(time.RFC3339), cronExpr)
-	if err != nil {
+	if err := h.store.Create(r.Context(), a); err != nil {
 		h.logger.Error("create action", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"data": map[string]string{"id": id}})
+	writeJSON(w, http.StatusCreated, map[string]any{"data": map[string]string{"id": a.ID}})
 }
 
 // Update handles PUT /api/scheduled-actions/{id}.
@@ -148,56 +162,18 @@ func (h *ActionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sets []string
-	var args []any
-	if body.ChannelID != nil {
-		sets = append(sets, "channel_id = ?")
-		args = append(args, *body.ChannelID)
+	fields := schedule.ActionUpdateFields{
+		ChannelID:   body.ChannelID,
+		Content:     body.Content,
+		Mode:        body.Mode,
+		ScheduledAt: body.ScheduledAt,
+		CronExpr:    body.CronExpr,
+		Status:      body.Status,
 	}
-	if body.Content != nil {
-		sets = append(sets, "content = ?")
-		args = append(args, *body.Content)
-	}
-	if body.Mode != nil {
-		sets = append(sets, "mode = ?")
-		args = append(args, *body.Mode)
-	}
-	if body.ScheduledAt != nil {
-		sets = append(sets, "scheduled_at = ?")
-		args = append(args, *body.ScheduledAt)
-	}
-	if body.CronExpr != nil {
-		sets = append(sets, "cron_expr = ?")
-		args = append(args, *body.CronExpr)
-	}
-	if body.Status != nil {
-		sets = append(sets, "status = ?")
-		args = append(args, *body.Status)
-	}
-	if len(sets) == 0 {
-		http.Error(w, `{"error":"no fields to update"}`, http.StatusBadRequest)
-		return
-	}
-	args = append(args, id)
 
-	query := "UPDATE scheduled_actions SET "
-	for i, s := range sets {
-		if i > 0 {
-			query += ", "
-		}
-		query += s
-	}
-	query += " WHERE id = ?"
-
-	res, err := h.db.ExecContext(r.Context(), query, args...)
-	if err != nil {
+	if err := h.store.Update(r.Context(), id, fields); err != nil {
 		h.logger.Error("update action", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -206,42 +182,10 @@ func (h *ActionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /api/scheduled-actions/{id}.
 func (h *ActionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	res, err := h.db.ExecContext(r.Context(), `DELETE FROM scheduled_actions WHERE id = ?`, id)
-	if err != nil {
+	if err := h.store.Delete(r.Context(), id); err != nil {
 		h.logger.Error("delete action", "error", err)
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-func (h *ActionsHandler) scanActions(rows *sql.Rows) []actionJSON {
-	var actions []actionJSON
-	for rows.Next() {
-		var a actionJSON
-		var cronExpr, createdBy, executedAt sql.NullString
-		if err := rows.Scan(&a.ID, &a.ChannelID, &a.Content, &a.Mode, &a.ScheduledAt,
-			&cronExpr, &createdBy, &a.Status, &executedAt, &a.CreatedAt); err != nil {
-			continue
-		}
-		if cronExpr.Valid {
-			a.CronExpr = &cronExpr.String
-		}
-		if createdBy.Valid {
-			a.CreatedBy = &createdBy.String
-		}
-		if executedAt.Valid {
-			a.ExecutedAt = &executedAt.String
-		}
-		actions = append(actions, a)
-	}
-	if actions == nil {
-		actions = []actionJSON{}
-	}
-	return actions
 }
