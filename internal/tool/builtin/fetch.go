@@ -62,6 +62,7 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 	if err != nil {
 		return tool.ErrorResult("bad request: " + err.Error()), nil
 	}
+	req.Header.Set("User-Agent", "suzuha-bot/1.0 (https://github.com/haryoiro/suzuha)")
 
 	resp, err := f.client.Do(req)
 	if err != nil {

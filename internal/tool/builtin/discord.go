@@ -933,3 +933,96 @@ func (d *DiscordCreateThread) Execute(_ context.Context, input json.RawMessage) 
 }
 
 var _ tool.Tool = (*DiscordCreateThread)(nil)
+
+// ───────────────────────────────────────────────
+// Bot presence / status
+// ───────────────────────────────────────────────
+
+// DiscordUpdateStatus changes the bot's online presence and activity.
+type DiscordUpdateStatus struct{ session *discordgo.Session }
+
+func NewDiscordUpdateStatus(s *discordgo.Session) *DiscordUpdateStatus {
+	return &DiscordUpdateStatus{session: s}
+}
+func (d *DiscordUpdateStatus) Name() string { return "discord_update_status" }
+func (d *DiscordUpdateStatus) Description() string {
+	return "Botの表示状態とアクティビティを変更する。気分や行動に合わせて自由に設定できる。"
+}
+func (d *DiscordUpdateStatus) InputSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"status": {
+				"type": "string",
+				"enum": ["online", "idle", "dnd", "invisible"],
+				"description": "オンライン状態。online=オンライン, idle=退席中, dnd=取り込み中, invisible=オフライン表示"
+			},
+			"activity_type": {
+				"type": "string",
+				"enum": ["playing", "listening", "watching", "competing", "custom"],
+				"description": "アクティビティの種類"
+			},
+			"activity_text": {
+				"type": "string",
+				"description": "アクティビティのテキスト（例: 'ネットサーフィン', 'みんなの会話', 'プログラミング'）"
+			}
+		}
+	}`)
+}
+
+func (d *DiscordUpdateStatus) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+	var in struct {
+		Status       string `json:"status"`
+		ActivityType string `json:"activity_type"`
+		ActivityText string `json:"activity_text"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return tool.ErrorResult("invalid input: " + err.Error()), nil
+	}
+
+	status := in.Status
+	if status == "" {
+		status = "online"
+	}
+
+	data := discordgo.UpdateStatusData{Status: status}
+
+	if in.ActivityText != "" {
+		actType := discordgo.ActivityTypeGame // default: "Playing"
+		switch in.ActivityType {
+		case "listening":
+			actType = discordgo.ActivityTypeListening
+		case "watching":
+			actType = discordgo.ActivityTypeWatching
+		case "competing":
+			actType = discordgo.ActivityTypeCompeting
+		case "custom":
+			actType = discordgo.ActivityTypeCustom
+		}
+
+		activity := &discordgo.Activity{
+			Name: in.ActivityText,
+			Type: actType,
+		}
+		if actType == discordgo.ActivityTypeCustom {
+			activity.State = in.ActivityText
+		}
+		data.Activities = []*discordgo.Activity{activity}
+	}
+
+	if err := d.session.UpdateStatusComplex(data); err != nil {
+		return tool.ErrorResult("update status failed: " + err.Error()), nil
+	}
+
+	desc := "status=" + status
+	if in.ActivityText != "" {
+		at := in.ActivityType
+		if at == "" {
+			at = "playing"
+		}
+		desc += ", " + at + "=" + in.ActivityText
+	}
+	return tool.TextResult("updated: " + desc), nil
+}
+
+var _ tool.Tool = (*DiscordUpdateStatus)(nil)
