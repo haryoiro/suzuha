@@ -34,3 +34,6 @@ type AffinityDelta struct {
 type Client interface {
 	Compact(ctx context.Context, req *CompactRequest) (*CompactResult, error)
 }
+
+// Server satisfies Client — compaction can be called in-process.
+var _ Client = (*Server)(nil)

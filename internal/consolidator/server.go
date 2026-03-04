@@ -39,7 +39,7 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 	// Build a prompt asking the LLM to select important messages and extract memories.
 	prompt := buildCompactPrompt(req.Messages, req.TargetCount)
 
-	resp, err := s.llmClient.CompleteRaw(ctx, []providers.Message{
+	resp, err := s.llmClient.CompleteRawDefault(ctx, []providers.Message{
 		{Role: "system", Content: compactSystemPrompt},
 		{Role: "user", Content: prompt},
 	})

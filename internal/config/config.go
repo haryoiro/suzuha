@@ -23,6 +23,13 @@ type Config struct {
 	Consolidator Consolidator `yaml:"consolidator"`
 	Observe      Observe      `yaml:"observe"`
 	Admin        Admin        `yaml:"admin"`
+	Location     Location     `yaml:"location"`
+}
+
+// Location configures the Overland GPS tracking integration.
+type Location struct {
+	Enabled bool   `yaml:"enabled"`
+	Token   string `yaml:"token"`
 }
 
 // LLM configures the language model provider.
@@ -201,6 +208,9 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("DISCORD_TOKEN"); v != "" {
 		c.Discord.Token = v
 	}
+	if v := os.Getenv("OVERLAND_TOKEN"); v != "" {
+		c.Location.Token = v
+	}
 }
 
 func (c *Config) setDefaults() {
@@ -245,12 +255,8 @@ func (c *Config) setDefaults() {
 	if c.Agent.InterestThreshold == 0 {
 		c.Agent.InterestThreshold = 0.5
 	}
-	if c.Consolidator.Address == "" {
-		c.Consolidator.Address = "localhost:50051"
-	}
-	if c.Consolidator.AgentNotify == "" {
-		c.Consolidator.AgentNotify = "localhost:50052"
-	}
+	// Consolidator.Address and AgentNotify are no longer used (consolidation is in-process).
+	// Fields kept for YAML backward compatibility.
 	if c.Consolidator.APIAddr == "" {
 		c.Consolidator.APIAddr = ":9091"
 	}
