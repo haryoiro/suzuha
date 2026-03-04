@@ -381,6 +381,7 @@ export interface ContextResponse {
   estimated_tokens: number;
   usage_ratio: number;
   max_tokens: number;
+  ephemeral?: ContextMessage[];
 }
 
 export const contextApi = {
@@ -446,6 +447,85 @@ export const forgetApi = {
   run: () =>
     fetchJSON<{ ok: boolean; error?: string }>("/api/forget/run", {
       method: "POST",
+    }),
+};
+
+// Location API
+export interface LocationDevice {
+  device_id: string;
+  owner_name: string;
+  user_id?: string;
+  user_display_name?: string;
+  created_at?: string;
+}
+
+export interface LocationPlace {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  created_at?: string;
+}
+
+export const locationApi = {
+  listDevices: () =>
+    fetchJSON<{ data: LocationDevice[] }>("/api/location/devices"),
+  upsertDevice: (deviceId: string, body: { owner_name: string; user_id?: string }) =>
+    fetchJSON<{ ok: boolean }>(`/api/location/devices/${encodeURIComponent(deviceId)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteDevice: (deviceId: string) =>
+    fetch(`${BASE_URL}/api/location/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
+  listPlaces: () =>
+    fetchJSON<{ data: LocationPlace[] }>("/api/location/places"),
+  createPlace: (body: { name: string; latitude: number; longitude: number; radius_m: number }) =>
+    fetchJSON<{ ok: boolean }>("/api/location/places", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updatePlace: (id: string, body: { name: string; latitude: number; longitude: number; radius_m: number }) =>
+    fetchJSON<{ ok: boolean }>(`/api/location/places/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deletePlace: (id: string) =>
+    fetch(`${BASE_URL}/api/location/places/${id}`, { method: "DELETE" }),
+};
+
+// Tools API
+export interface ToolInfo {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  enabled: boolean;
+}
+
+export const toolsApi = {
+  list: () => fetchJSON<{ data: ToolInfo[] }>("/api/tools"),
+  toggle: (name: string, enabled: boolean) =>
+    fetchJSON<{ ok: boolean }>(`/api/tools/${encodeURIComponent(name)}/enabled`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+};
+
+// LLM Provider API
+export interface LLMProviderInfo {
+  provider: string;
+  model: string;
+  api_base: string;
+  max_ctx: number;
+  vision: boolean;
+}
+
+export const llmApi = {
+  get: () => fetchJSON<LLMProviderInfo>("/api/llm"),
+  update: (body: { provider: string; model: string; api_key?: string; api_base?: string; max_ctx?: number; vision?: boolean }) =>
+    fetchJSON<{ ok: boolean }>("/api/llm", {
+      method: "PUT",
+      body: JSON.stringify(body),
     }),
 };
 

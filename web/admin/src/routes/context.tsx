@@ -1,6 +1,6 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Tag, Progress, Spin, Empty, Button } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { ReloadOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import { useAgentContext } from "../hooks/useAgentContext";
 import type { ContextMessage } from "../lib/api";
 
@@ -67,6 +67,49 @@ const MessageRow = memo(function MessageRow({ msg }: { msg: ContextMessage }) {
   );
 });
 
+const EphemeralSection = memo(function EphemeralSection({
+  messages,
+}: {
+  messages: ContextMessage[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 8, flexShrink: 0 }}>
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "rgba(255,255,255,0.6)",
+          fontSize: 13,
+          userSelect: "none",
+          marginBottom: open ? 4 : 0,
+        }}
+      >
+        {open ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
+        <span>Ephemeral ({messages.length})</span>
+      </div>
+      {open && (
+        <div
+          style={{
+            background: "rgba(114,46,209,0.1)",
+            border: "1px solid rgba(114,46,209,0.3)",
+            borderRadius: 6,
+            maxHeight: 200,
+            overflow: "auto",
+          }}
+        >
+          {messages.map((msg, i) => (
+            <MessageRow key={`eph-${i}`} msg={msg} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const ContextPage = memo(function ContextPage() {
   const { data, isLoading, refetch } = useAgentContext();
 
@@ -116,6 +159,10 @@ export const ContextPage = memo(function ContextPage() {
           Refresh
         </Button>
       </div>
+
+      {data.ephemeral && data.ephemeral.length > 0 && (
+        <EphemeralSection messages={data.ephemeral} />
+      )}
 
       <div
         style={{

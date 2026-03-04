@@ -12,6 +12,8 @@ import {
   ClockCircleOutlined,
   MenuOutlined,
   ApiOutlined,
+  EnvironmentOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -26,6 +28,8 @@ const FeedsPage = lazy(() => import("./routes/feeds/index"));
 const DiscordPage = lazy(() => import("./routes/discord/index"));
 const PromptsPage = lazy(() => import("./routes/prompts"));
 const ActionsPage = lazy(() => import("./routes/actions"));
+const LocationPage = lazy(() => import("./routes/location"));
+const ToolsPage = lazy(() => import("./routes/tools"));
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -38,6 +42,8 @@ type Page =
   | { key: "discord" }
   | { key: "users" }
   | { key: "actions" }
+  | { key: "location" }
+  | { key: "tools" }
   | { key: "prompts" }
   | { key: "metrics" }
   | { key: "context" }
@@ -50,7 +56,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "prompts", "metrics", "context", "logs"];
+  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "location", "tools", "prompts", "metrics", "context", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -80,6 +86,8 @@ export function App() {
     { key: "discord", icon: <ApiOutlined />, label: "Discord" },
     { key: "users", icon: <TeamOutlined />, label: "Users" },
     { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
+    { key: "location", icon: <EnvironmentOutlined />, label: "Location" },
+    { key: "tools", icon: <ToolOutlined />, label: "Tools" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
@@ -106,6 +114,10 @@ export function App() {
         return <UsersPage />;
       case "actions":
         return <ActionsPage />;
+      case "location":
+        return <LocationPage />;
+      case "tools":
+        return <ToolsPage />;
       case "prompts":
         return <PromptsPage />;
       case "metrics":
