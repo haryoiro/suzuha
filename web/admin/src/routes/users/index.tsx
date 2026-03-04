@@ -190,26 +190,27 @@ const UserDetailModal = memo(function UserDetailModal({
                 size="small"
                 dataSource={events}
                 renderItem={(e) => (
-                  <List.Item>
-                    <Space>
-                      <Tag color={e.axis === "trust" ? "orange" : e.axis === "interest" ? "purple" : "blue"}>
-                        {e.axis || "closeness"}
-                      </Tag>
-                      <Text
-                        style={{
-                          color: e.delta > 0 ? "#52c41a" : "#ff4d4f",
-                          fontWeight: 600,
-                          minWidth: 50,
-                        }}
-                      >
-                        {e.delta > 0 ? "+" : ""}
-                        {e.delta.toFixed(1)}
-                      </Text>
-                      <Text type="secondary">{e.reason}</Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {formatJST(e.created_at)}
-                      </Text>
-                    </Space>
+                  <List.Item style={{ padding: "8px 0" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Tag color={e.axis === "trust" ? "orange" : e.axis === "interest" ? "purple" : "blue"} style={{ margin: 0 }}>
+                          {e.axis || "closeness"}
+                        </Tag>
+                        <Text
+                          style={{
+                            color: e.delta > 0 ? "#52c41a" : "#ff4d4f",
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {e.delta > 0 ? "+" : ""}{e.delta.toFixed(1)}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap", marginLeft: "auto" }}>
+                          {formatJST(e.created_at)}
+                        </Text>
+                      </div>
+                      <Text type="secondary" style={{ fontSize: 13 }}>{e.reason}</Text>
+                    </div>
                   </List.Item>
                 )}
               />
