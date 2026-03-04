@@ -163,6 +163,15 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 			ToolCalls: resp.ToolCalls,
 		})
 
+		// Send intermediate text to chat if the LLM returned text alongside tool calls.
+		if intermediateText := llm.StripDirectiveTags(resp.Text); intermediateText != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
+			a.logger.Info("sending intermediate response before tool execution",
+				"channel", channel, "length", len(intermediateText))
+			if err := a.chat.Send(ctx, channel, intermediateText); err != nil {
+				a.logger.Warn("failed to send intermediate response", "error", err)
+			}
+		}
+
 		allStopAfter := true
 		for _, tc := range resp.ToolCalls {
 			a.logger.Info("tool call",
