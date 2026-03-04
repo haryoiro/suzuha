@@ -1,14 +1,62 @@
 package event
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// MessagePayload carries typed fields for a chat message event.
+type MessagePayload struct {
+	Content     string   `json:"content"`
+	Channel     string   `json:"channel"`
+	ChannelName string   `json:"channel_name,omitempty"`
+	UserID      string   `json:"user_id"`
+	UserName    string   `json:"user_name"`
+	MessageID   string   `json:"message_id,omitempty"`
+	GuildID     string   `json:"guild_id,omitempty"`
+	GuildName   string   `json:"guild_name,omitempty"`
+	ImageURLs   []string `json:"image_urls,omitempty"`
+	IsDM        bool     `json:"is_dm"`
+	IsMention   bool     `json:"is_mention"`
+}
+
+// Well-known event sources and types.
+const (
+	SourceInternal = "internal"
+	TypeSelfPrompt = "self_prompt"
+)
 
 // Event is the common schema for all events from all sources.
 type Event struct {
 	ID        string         `json:"id"`
-	Source    string         `json:"source"`    // "discord" | "cli" | "timer" | "webhook"
-	Type      string         `json:"type"`      // "message" | "heartbeat" | "trigger"
-	Payload   map[string]any `json:"payload"`   // source-specific data
+	Source    string         `json:"source"`    // "discord" | "cli" | "internal"
+	Type      string         `json:"type"`      // "message" | "self_prompt"
+	Message   MessagePayload `json:"message"`
 	Timestamp time.Time      `json:"timestamp"`
+}
+
+// NewMessageEvent creates a message event with a generated ID and current timestamp.
+func NewMessageEvent(source string, msg MessagePayload) Event {
+	return Event{
+		ID:        uuid.NewString(),
+		Source:    source,
+		Type:      "message",
+		Message:   msg,
+		Timestamp: time.Now(),
+	}
+}
+
+// NewSelfPromptEvent creates an internal self-prompt event (e.g. boredom trigger).
+// These events are processed by the agent pipeline but do not count as user interaction.
+func NewSelfPromptEvent(channel, content string) Event {
+	return Event{
+		ID:        uuid.NewString(),
+		Source:    SourceInternal,
+		Type:      TypeSelfPrompt,
+		Message:   MessagePayload{Content: content, Channel: channel},
+		Timestamp: time.Now(),
+	}
 }
 
 // Bus is a simple fan-in event bus. All sources publish events,

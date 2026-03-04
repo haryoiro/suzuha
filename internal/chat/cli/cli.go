@@ -5,9 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/event"
 )
 
@@ -46,18 +44,12 @@ func (c *Chat) Run(ctx context.Context) error {
 			if line == "" {
 				continue
 			}
-			c.bus.Publish(event.Event{
-				ID:        uuid.NewString(),
-				Source:    "cli",
-				Type:      "message",
-				Payload: map[string]any{
-					"content":   line,
-					"channel":   "cli",
-					"user_id":   "local",
-					"user_name": "user",
-				},
-				Timestamp: time.Now(),
-			})
+			c.bus.Publish(event.NewMessageEvent("cli", event.MessagePayload{
+				Content:  line,
+				Channel:  "cli",
+				UserID:   "local",
+				UserName: "user",
+			}))
 		}
 	}
 }

@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/event"
 )
@@ -196,28 +194,19 @@ func (c *Chat) Typing(_ context.Context, channel string) {
 
 // messageToEvent converts a Discord message to an Event.
 func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM bool, guildID, guildName, channelName string, imageURLs []string) event.Event {
-	payload := map[string]any{
-		"content":      content,
-		"channel":      channel,
-		"message_id":   messageID,
-		"user_id":      userID,
-		"user_name":    userName,
-		"is_mention":   isMention,
-		"is_dm":        isDM,
-		"guild_id":     guildID,
-		"guild_name":   guildName,
-		"channel_name": channelName,
-	}
-	if len(imageURLs) > 0 {
-		payload["image_urls"] = imageURLs
-	}
-	return event.Event{
-		ID:        uuid.NewString(),
-		Source:    "discord",
-		Type:      "message",
-		Payload:   payload,
-		Timestamp: time.Now(),
-	}
+	return event.NewMessageEvent("discord", event.MessagePayload{
+		Content:     content,
+		Channel:     channel,
+		MessageID:   messageID,
+		UserID:      userID,
+		UserName:    userName,
+		IsMention:   isMention,
+		IsDM:        isDM,
+		GuildID:     guildID,
+		GuildName:   guildName,
+		ChannelName: channelName,
+		ImageURLs:   imageURLs,
+	})
 }
 
 // splitMessage splits a long message into chunks that fit Discord's 2000 char limit.
