@@ -97,6 +97,84 @@ type Store interface {
 	// GetUserGuilds returns guilds and channels a user has been seen in.
 	GetUserGuilds(ctx context.Context, userID string) ([]UserGuild, error)
 
+	// ResolveExisting looks up an internal user by platform + platform_user_id.
+	// Returns sql.ErrNoRows (wrapped) if the user does not exist.
+	// Unlike Resolve, this does NOT create the user.
+	ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error)
+
+	// ListMentionable returns non-bot users with positive affinity
+	// who have a discord platform link. Used for mention targeting.
+	ListMentionable(ctx context.Context) ([]MentionableUser, error)
+
 	// Close releases resources.
 	Close() error
+}
+
+// AdminStore extends Store with methods needed by the admin dashboard.
+type AdminStore interface {
+	Store
+
+	// List returns users with pagination.
+	List(ctx context.Context, offset, limit int) ([]User, int, error)
+
+	// Update applies partial updates to a user.
+	// Only non-nil fields are updated.
+	Update(ctx context.Context, id string, fields UpdateFields) error
+
+	// ListPlatformLinks returns all platform links for a user.
+	ListPlatformLinks(ctx context.Context, userID string) ([]PlatformLink, error)
+
+	// ListAffinityEvents returns affinity events for a user with limit.
+	ListAffinityEvents(ctx context.Context, userID string, limit int) ([]AffinityEvent, error)
+
+	// ListGuilds returns all guilds with member and channel counts.
+	ListGuilds(ctx context.Context) ([]GuildSummary, error)
+
+	// ListAllChannels returns all channels with their guild info.
+	ListAllChannels(ctx context.Context) ([]ChannelEntry, error)
+
+	// GetGuildChannels returns channels for a specific guild with activity info.
+	GetGuildChannels(ctx context.Context, guildID string) ([]GuildChannel, error)
+}
+
+// UpdateFields holds the optional update fields for admin Update.
+type UpdateFields struct {
+	DisplayName *string
+	Role        *Role
+	IsBot       *bool
+}
+
+// MentionableUser is a lightweight read model for mention targeting.
+type MentionableUser struct {
+	DisplayName   string  `json:"display_name"`
+	DiscordUserID string  `json:"discord_user_id"`
+	Affinity      float64 `json:"affinity"`
+	Closeness     float64 `json:"closeness"`
+	Interest      float64 `json:"interest"`
+}
+
+// GuildSummary is a read model for the guilds list admin view.
+type GuildSummary struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	MemberCount  int       `json:"member_count"`
+	ChannelCount int       `json:"channel_count"`
+}
+
+// ChannelEntry is a flat channel+guild record.
+type ChannelEntry struct {
+	ChannelID   string `json:"channel_id"`
+	ChannelName string `json:"channel_name"`
+	GuildID     string `json:"guild_id"`
+	GuildName   string `json:"guild_name"`
+}
+
+// GuildChannel combines channel data with activity info.
+type GuildChannel struct {
+	ChannelID         string  `json:"channel_id"`
+	ChannelName       string  `json:"channel_name"`
+	UserCount         int     `json:"user_count"`
+	LastSeenAt        string  `json:"last_seen_at"`
+	LastUserMessageAt *string `json:"last_user_message_at,omitempty"`
 }

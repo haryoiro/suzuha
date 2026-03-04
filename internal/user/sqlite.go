@@ -307,6 +307,224 @@ func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserG
 	return result, rows.Err()
 }
 
+func (s *SQLiteStore) ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error) {
+	var userID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT user_id FROM platform_links WHERE platform = ? AND platform_user_id = ?`,
+		platform, platformUserID,
+	).Scan(&userID)
+	if err != nil {
+		return nil, fmt.Errorf("user: resolve existing: %w", err)
+	}
+	return s.Get(ctx, userID)
+}
+
+func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT u.display_name, pl.platform_user_id, u.affinity, u.closeness, u.interest
+		FROM users u
+		JOIN platform_links pl ON pl.user_id = u.id AND pl.platform = 'discord'
+		WHERE u.is_bot = 0 AND u.affinity > 0
+		ORDER BY u.interest DESC, u.closeness DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("user: list mentionable: %w", err)
+	}
+	defer rows.Close()
+
+	var result []MentionableUser
+	for rows.Next() {
+		var m MentionableUser
+		if err := rows.Scan(&m.DisplayName, &m.DiscordUserID, &m.Affinity, &m.Closeness, &m.Interest); err != nil {
+			return nil, fmt.Errorf("user: scan mentionable: %w", err)
+		}
+		result = append(result, m)
+	}
+	return result, rows.Err()
+}
+
+// --- AdminStore implementation ---
+
+func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var total int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("user: count: %w", err)
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
+		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("user: list: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		var roleStr string
+		var metaJSON sql.NullString
+		if err := rows.Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity,
+			&u.Closeness, &u.Trust, &u.Interest,
+			&metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, 0, fmt.Errorf("user: scan list: %w", err)
+		}
+		u.Role = Role(roleStr)
+		if metaJSON.Valid {
+			_ = json.Unmarshal([]byte(metaJSON.String), &u.Metadata)
+		}
+		users = append(users, u)
+	}
+	return users, total, rows.Err()
+}
+
+func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields) error {
+	var sets []string
+	var args []any
+	if fields.DisplayName != nil {
+		sets = append(sets, "display_name = ?")
+		args = append(args, *fields.DisplayName)
+	}
+	if fields.Role != nil {
+		sets = append(sets, "role = ?")
+		args = append(args, string(*fields.Role))
+	}
+	if fields.IsBot != nil {
+		sets = append(sets, "is_bot = ?")
+		args = append(args, *fields.IsBot)
+	}
+	if len(sets) == 0 {
+		return fmt.Errorf("user: no fields to update")
+	}
+	sets = append(sets, "updated_at = ?")
+	args = append(args, time.Now())
+	args = append(args, id)
+
+	query := "UPDATE users SET "
+	for i, s := range sets {
+		if i > 0 {
+			query += ", "
+		}
+		query += s
+	}
+	query += " WHERE id = ?"
+
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("user: update: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("user: not found: %s", id)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]PlatformLink, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, user_id, platform, platform_user_id, platform_name, created_at
+		 FROM platform_links WHERE user_id = ?`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user: list platform links: %w", err)
+	}
+	defer rows.Close()
+
+	var links []PlatformLink
+	for rows.Next() {
+		var l PlatformLink
+		if err := rows.Scan(&l.ID, &l.UserID, &l.Platform, &l.PlatformUserID, &l.PlatformName, &l.CreatedAt); err != nil {
+			return nil, fmt.Errorf("user: scan platform link: %w", err)
+		}
+		links = append(links, l)
+	}
+	return links, rows.Err()
+}
+
+func (s *SQLiteStore) ListAffinityEvents(ctx context.Context, userID string, limit int) ([]AffinityEvent, error) {
+	return s.GetAffinity(ctx, userID, limit)
+}
+
+func (s *SQLiteStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT g.id, g.name, g.updated_at,
+		       COUNT(DISTINCT ugc.user_id) AS member_count,
+		       COUNT(DISTINCT ugc.channel_id) AS channel_count
+		FROM guilds g
+		LEFT JOIN user_guild_channels ugc ON ugc.guild_id = g.id
+		GROUP BY g.id
+		ORDER BY g.updated_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("user: list guilds: %w", err)
+	}
+	defer rows.Close()
+
+	var guilds []GuildSummary
+	for rows.Next() {
+		var g GuildSummary
+		if err := rows.Scan(&g.ID, &g.Name, &g.UpdatedAt, &g.MemberCount, &g.ChannelCount); err != nil {
+			return nil, fmt.Errorf("user: scan guild: %w", err)
+		}
+		guilds = append(guilds, g)
+	}
+	return guilds, rows.Err()
+}
+
+func (s *SQLiteStore) ListAllChannels(ctx context.Context) ([]ChannelEntry, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ugc.channel_id, ugc.channel_name, ugc.guild_id, g.name
+		FROM user_guild_channels ugc
+		JOIN guilds g ON g.id = ugc.guild_id
+		GROUP BY ugc.channel_id
+		ORDER BY g.name, ugc.channel_name`)
+	if err != nil {
+		return nil, fmt.Errorf("user: list all channels: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []ChannelEntry
+	for rows.Next() {
+		var e ChannelEntry
+		if err := rows.Scan(&e.ChannelID, &e.ChannelName, &e.GuildID, &e.GuildName); err != nil {
+			return nil, fmt.Errorf("user: scan channel entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func (s *SQLiteStore) GetGuildChannels(ctx context.Context, guildID string) ([]GuildChannel, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ugc.channel_id, ugc.channel_name,
+		       COUNT(DISTINCT ugc.user_id) AS user_count,
+		       MAX(ugc.last_seen_at) AS last_seen_at,
+		       ca.last_user_message_at
+		FROM user_guild_channels ugc
+		LEFT JOIN channel_activity ca ON ca.channel_id = ugc.channel_id
+		WHERE ugc.guild_id = ?
+		GROUP BY ugc.channel_id
+		ORDER BY last_seen_at DESC`, guildID)
+	if err != nil {
+		return nil, fmt.Errorf("user: get guild channels: %w", err)
+	}
+	defer rows.Close()
+
+	var channels []GuildChannel
+	for rows.Next() {
+		var c GuildChannel
+		var lastMsg sql.NullString
+		if err := rows.Scan(&c.ChannelID, &c.ChannelName, &c.UserCount, &c.LastSeenAt, &lastMsg); err != nil {
+			return nil, fmt.Errorf("user: scan guild channel: %w", err)
+		}
+		if lastMsg.Valid {
+			c.LastUserMessageAt = &lastMsg.String
+		}
+		channels = append(channels, c)
+	}
+	return channels, rows.Err()
+}
+
 func (s *SQLiteStore) Close() error {
 	// DB is shared — don't close it here.
 	return nil

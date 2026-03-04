@@ -21,10 +21,11 @@ func init() {
 
 // SQLiteStore implements Store using SQLite + sqlite-vec + FTS5.
 type SQLiteStore struct {
-	db      *sql.DB
-	embedFn EmbedFunc
-	onSave  func() // optional hook called on successful Save
-	logger  *slog.Logger
+	db       *sql.DB
+	embedFn  EmbedFunc
+	onSave   func() // optional hook called on successful Save
+	logger   *slog.Logger
+	embedSig chan struct{} // signals the background embedding worker
 }
 
 // NewSQLiteStore opens or creates a SQLite database at dbPath.
@@ -52,35 +53,33 @@ func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool, logger
 		}
 	}
 
-	return &SQLiteStore{db: db, embedFn: embedFn, logger: logger}, nil
+	return &SQLiteStore{db: db, embedFn: embedFn, logger: logger, embedSig: make(chan struct{}, 1)}, nil
 }
 
 // SetOnSave registers a callback invoked after each successful Save.
 func (s *SQLiteStore) SetOnSave(fn func()) { s.onSave = fn }
 
 func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
-	if mem.ID == "" {
-		mem.ID = uuid.NewString()
+	// If embedding is already provided, save everything inline.
+	if len(mem.Embedding) > 0 {
+		return s.saveWithEmbedding(ctx, mem)
 	}
-	now := time.Now()
-	if mem.CreatedAt.IsZero() {
-		mem.CreatedAt = now
+	// Otherwise, save content + FTS immediately; embedding is generated
+	// asynchronously by the background worker (RunEmbeddingWorker).
+	if err := s.saveContentAndFTS(ctx, mem); err != nil {
+		return err
 	}
-	mem.UpdatedAt = now
+	s.notifyEmbedWorker()
+	return nil
+}
+
+// saveWithEmbedding persists content, FTS index, and vector embedding in one transaction.
+func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error {
+	s.initMemFields(mem)
 
 	metadataJSON, err := json.Marshal(mem.Metadata)
 	if err != nil {
 		return fmt.Errorf("memory: marshal metadata: %w", err)
-	}
-
-	// Generate embedding if not provided.
-	if len(mem.Embedding) == 0 && s.embedFn != nil {
-		emb, err := s.embedFn(ctx, mem.Content)
-		if err != nil {
-			// Non-fatal: save without embedding.
-			emb = nil
-		}
-		mem.Embedding = emb
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -89,18 +88,15 @@ func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 	}
 	defer tx.Rollback()
 
-	// Insert main record.
-	_, err = tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(ctx,
 		`INSERT OR REPLACE INTO memories (id, type, content, metadata, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
 		mem.CreatedAt, mem.UpdatedAt,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("memory: insert: %w", err)
 	}
 
-	// Update FTS index.
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO memories_fts (rowid, content) VALUES (
 			(SELECT rowid FROM memories WHERE id = ?), ?
@@ -109,15 +105,12 @@ func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 		return fmt.Errorf("memory: fts insert: %w", err)
 	}
 
-	// Update vector index.
-	if len(mem.Embedding) > 0 {
-		if blob, err := sqlite_vec.SerializeFloat32(mem.Embedding); err == nil {
-			if _, err := tx.ExecContext(ctx,
-				`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
-				mem.ID, blob,
-			); err != nil {
-				s.logger.Warn("memory: vec insert failed", "id", mem.ID, "error", err)
-			}
+	if blob, err := sqlite_vec.SerializeFloat32(mem.Embedding); err == nil {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
+			mem.ID, blob,
+		); err != nil {
+			s.logger.Warn("memory: vec insert failed", "id", mem.ID, "error", err)
 		}
 	}
 
@@ -128,6 +121,105 @@ func (s *SQLiteStore) Save(ctx context.Context, mem *Memory) error {
 		s.onSave()
 	}
 	return nil
+}
+
+// saveContentAndFTS persists content and FTS index without generating an embedding.
+// The embedding will be backfilled asynchronously by RunEmbeddingWorker.
+func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error {
+	s.initMemFields(mem)
+
+	metadataJSON, err := json.Marshal(mem.Metadata)
+	if err != nil {
+		return fmt.Errorf("memory: marshal metadata: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("memory: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT OR REPLACE INTO memories (id, type, content, metadata, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
+		mem.CreatedAt, mem.UpdatedAt,
+	); err != nil {
+		return fmt.Errorf("memory: insert: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO memories_fts (rowid, content) VALUES (
+			(SELECT rowid FROM memories WHERE id = ?), ?
+		)`, mem.ID, mem.Content,
+	); err != nil {
+		return fmt.Errorf("memory: fts insert: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if s.onSave != nil {
+		s.onSave()
+	}
+	return nil
+}
+
+// initMemFields sets ID and timestamps if not already set.
+func (s *SQLiteStore) initMemFields(mem *Memory) {
+	if mem.ID == "" {
+		mem.ID = uuid.NewString()
+	}
+	now := time.Now()
+	if mem.CreatedAt.IsZero() {
+		mem.CreatedAt = now
+	}
+	mem.UpdatedAt = now
+}
+
+// notifyEmbedWorker sends a non-blocking signal to wake up the embedding worker.
+func (s *SQLiteStore) notifyEmbedWorker() {
+	select {
+	case s.embedSig <- struct{}{}:
+	default: // already signaled
+	}
+}
+
+// RunEmbeddingWorker processes pending embeddings in the background.
+// It wakes up on signal (after Save) or periodically. Call as a goroutine.
+func (s *SQLiteStore) RunEmbeddingWorker(ctx context.Context) {
+	const batchSize = 20
+	const pollInterval = 30 * time.Second
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.embedSig:
+		case <-time.After(pollInterval):
+		}
+
+		// Drain any extra signals.
+		for {
+			select {
+			case <-s.embedSig:
+			default:
+				goto process
+			}
+		}
+	process:
+		for {
+			n, err := s.BackfillEmbeddings(ctx, batchSize)
+			if err != nil {
+				s.logger.Warn("embedding worker: backfill error", "error", err)
+				break
+			}
+			if n == 0 {
+				break
+			}
+			s.logger.Info("embedding worker: backfilled", "count", n)
+		}
+	}
 }
 
 func (s *SQLiteStore) Search(ctx context.Context, query string, limit int) ([]Memory, error) {
@@ -534,6 +626,23 @@ func (s *SQLiteStore) ListByUser(ctx context.Context, userID string, limit int) 
 	return scanMemories(rows)
 }
 
+func (s *SQLiteStore) ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT m.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
+		 FROM memories m, json_each(json_extract(m.metadata, '$.participants')) AS j
+		 WHERE m.type = ? AND j.value = ?
+		 ORDER BY m.updated_at DESC
+		 LIMIT ?`,
+		string(MemoryTypeEpisode), userID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("memory: list episodes by participant: %w", err)
+	}
+	defer rows.Close()
+
+	return scanMemories(rows)
+}
+
 // dupDistanceThreshold is the max vector distance for two memories to be
 // considered duplicates. Lower = stricter. Cosine distance typically ranges 0–2.
 const dupDistanceThreshold = 0.15
@@ -745,6 +854,139 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 	}
 
 	return tx.Commit()
+}
+
+func (s *SQLiteStore) ListByType(ctx context.Context, memType MemoryType, limit int) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, type, content, metadata, created_at, updated_at
+		 FROM memories
+		 WHERE type = ?
+		 ORDER BY updated_at DESC
+		 LIMIT ?`,
+		string(memType), limit)
+	if err != nil {
+		return nil, fmt.Errorf("memory: list by type: %w", err)
+	}
+	defer rows.Close()
+
+	return scanMemories(rows)
+}
+
+func (s *SQLiteStore) ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, type, content, metadata, created_at, updated_at
+		 FROM memories
+		 WHERE type = ? AND created_at > ?
+		 ORDER BY created_at DESC
+		 LIMIT ?`,
+		string(memType), since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("memory: list recent by type: %w", err)
+	}
+	defer rows.Close()
+	return scanMemories(rows)
+}
+
+func (s *SQLiteStore) VecStats(ctx context.Context) (total, embedded int, err error) {
+	if err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories").Scan(&total); err != nil {
+		return 0, 0, fmt.Errorf("memory: vec stats total: %w", err)
+	}
+	if err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories_vec").Scan(&embedded); err != nil {
+		return 0, 0, fmt.Errorf("memory: vec stats embedded: %w", err)
+	}
+	return total, embedded, nil
+}
+
+func (s *SQLiteStore) FindDuplicates(ctx context.Context, k int, threshold float64) ([]DuplicateGroup, error) {
+	if k <= 0 {
+		k = 10
+	}
+	// Load all memories with embeddings.
+	type memEntry struct {
+		Memory
+		visited bool
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT v.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
+		 FROM memories_vec v JOIN memories m ON m.id = v.id
+		 ORDER BY m.type, m.updated_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("memory: find duplicates list: %w", err)
+	}
+	defer rows.Close()
+
+	var all []memEntry
+	for rows.Next() {
+		var e memEntry
+		var metaJSON string
+		if err := rows.Scan(&e.ID, &e.Type, &e.Content, &metaJSON, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			continue
+		}
+		if metaJSON != "" {
+			json.Unmarshal([]byte(metaJSON), &e.Metadata)
+		}
+		all = append(all, e)
+	}
+
+	var groups []DuplicateGroup
+	for i := range all {
+		if all[i].visited {
+			continue
+		}
+		neighRows, err := s.db.QueryContext(ctx,
+			`SELECT v2.id, v2.distance
+			 FROM memories_vec v1
+			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = ?
+			 WHERE v1.id = ?`, k, all[i].ID)
+		if err != nil {
+			continue
+		}
+
+		group := []Memory{all[i].Memory}
+		all[i].visited = true
+
+		for neighRows.Next() {
+			var nid string
+			var dist float32
+			if err := neighRows.Scan(&nid, &dist); err != nil {
+				continue
+			}
+			if nid == all[i].ID || float64(dist) >= threshold {
+				continue
+			}
+			for j := range all {
+				if all[j].ID == nid && !all[j].visited && all[j].Type == all[i].Type {
+					group = append(group, all[j].Memory)
+					all[j].visited = true
+					break
+				}
+			}
+		}
+		neighRows.Close()
+
+		if len(group) > 1 {
+			groups = append(groups, DuplicateGroup{Memories: group})
+		}
+	}
+	return groups, nil
+}
+
+func (s *SQLiteStore) DeleteBatch(ctx context.Context, ids []string) (int, error) {
+	var deleted int
+	for _, id := range ids {
+		if err := s.Delete(ctx, id); err != nil {
+			s.logger.Warn("memory: batch delete skip", "id", id, "error", err)
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+func (s *SQLiteStore) SaveRaw(ctx context.Context, mem *Memory) error {
+	// SaveRaw saves without embedding and without signaling the worker.
+	// Used by admin merge endpoint where BackfillEmbeddings handles it later.
+	return s.saveContentAndFTS(ctx, mem)
 }
 
 // BackfillEmbeddings generates embeddings for memories that don't have them yet.

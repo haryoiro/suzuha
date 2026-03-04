@@ -49,12 +49,27 @@ type Store interface {
 	// ListByUser returns user-type memories for a specific user ID (from metadata).
 	ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error)
 
+	// ListEpisodesByParticipant returns episode memories where userID appears
+	// in metadata.participants. No embedding required.
+	ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]Memory, error)
+
+	// ListByType returns the most recent memories of a specific type, up to limit.
+	ListByType(ctx context.Context, memType MemoryType, limit int) ([]Memory, error)
+
+	// ListRecentByType returns memories of a specific type created after since, up to limit.
+	ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error)
+
 	// IsDuplicate checks if a very similar memory already exists.
 	// Returns the existing memory ID if found, or empty string if no duplicate.
 	IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, error)
 
 	// Close releases database resources.
 	Close() error
+}
+
+// DuplicateGroup is a cluster of similar memories found by vector distance.
+type DuplicateGroup struct {
+	Memories []Memory `json:"memories"`
 }
 
 // AdminStore extends Store with methods needed by the admin dashboard.
@@ -70,10 +85,26 @@ type AdminStore interface {
 	// Update updates an existing memory's content, type, and/or metadata.
 	Update(ctx context.Context, mem *Memory) error
 
-	// Delete removes a memory by ID from all tables.
+	// Delete removes a memory by ID from all tables (FTS, vec, main).
 	Delete(ctx context.Context, id string) error
 
+	// VecStats returns counts of total memories and vector-embedded memories.
+	VecStats(ctx context.Context) (total, embedded int, err error)
+
+	// FindDuplicates returns groups of semantically similar memories
+	// using KNN vector search with the given number of neighbors per entry.
+	FindDuplicates(ctx context.Context, k int, threshold float64) ([]DuplicateGroup, error)
+
+	// DeleteBatch removes multiple memories by ID.
+	// Returns the count of successfully deleted memories.
+	DeleteBatch(ctx context.Context, ids []string) (int, error)
+
+	// SaveRaw inserts a memory without generating an embedding.
+	// Used for merge operations where embedding will be backfilled later.
+	SaveRaw(ctx context.Context, mem *Memory) error
+
 	// DB returns the underlying *sql.DB for direct queries.
+	// Deprecated: prefer using typed methods instead. Will be removed in a future phase.
 	DB() *sql.DB
 }
 
