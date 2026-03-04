@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/mozilla-ai/any-llm-go/providers"
+	"github.com/haryoiro/suzuha/internal/user"
 )
 
 const (
@@ -36,15 +37,6 @@ const (
 	// mentionProbabilityMax is the mention probability at maximum boredom.
 	mentionProbabilityMax = 0.40
 )
-
-// mentionableUser holds a user eligible for proactive mentions.
-type mentionableUser struct {
-	DisplayName   string
-	DiscordUserID string
-	Affinity      float64
-	Closeness     float64
-	Interest      float64
-}
 
 // persistedState is the JSON-serializable state saved to task_state table.
 type persistedState struct {
@@ -98,18 +90,24 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	if len(cfg) > 0 {
 		_ = json.Unmarshal(cfg, &mc)
 	}
-	// If no channel_id in config, look for a home channel.
 	if mc.ChannelID == "" {
 		mc.ChannelID = findHomeChannel(ctx, cc.DB)
 	}
 	if mc.ChannelID == "" {
-		cc.Logger.Warn("topics: no channel_id configured and no home channel, skipping")
+		cc.Logger.Warn("topics: no channel_id and no home channel, skipping")
+		return nil
+	}
+	if cc.Bus == nil {
+		cc.Logger.Warn("topics: no event bus available, skipping")
 		return nil
 	}
 
 	// --- Boredom-based posting decision ---
 	now := t.now()
-	lastInteraction := getLastInteractionGlobal(ctx, cc.DB)
+	var lastInteraction time.Time
+	if cc.ChannelActivity != nil {
+		lastInteraction, _, _ = cc.ChannelActivity.LastInteractionGlobal(ctx)
+	}
 	boredom := calcBoredom(now, lastInteraction)
 
 	cc.Logger.Info("topics: boredom check",
@@ -123,10 +121,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		return nil
 	}
 
-	// 1. System prompt.
-	systemPrompt := cc.SystemPrompt
-
-	// 2. Resolve timezone and build time hint.
+	// Build context for self-prompt.
 	loc := cc.Timezone
 	if loc == nil {
 		loc = time.UTC
@@ -134,73 +129,31 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	localNow := now.In(loc)
 	timeHint := buildTimeHint(localNow)
 
-	// 3. Fetch recent context, past mutterings, and RSS discoveries.
 	recentMemories := fetchRecentContext(ctx, cc, 8)
 	pastMutterings := fetchPastMutterings(ctx, cc, 8)
-	rssDiscoveries := fetchRecentRSS(ctx, cc.DB, 5)
+	rssDiscoveries := fetchRecentRSSFromStore(ctx, cc, 5)
 
-	// 3.5. Check for mentionable users (affinity-based).
-	mentionTarget := selectMentionTarget(boredom, fetchMentionableUsers(ctx, cc.DB))
+	var mentionables []user.MentionableUser
+	if cc.Users != nil {
+		mentionables, _ = cc.Users.ListMentionable(ctx)
+	}
+	mentionTarget := selectMentionTarget(boredom, mentionables)
 
-	// 4. Generate muttering via LLM (boredom-aware).
-	message, err := generateMuttering(ctx, cc, systemPrompt, localNow, timeHint, boredom, recentMemories, pastMutterings, rssDiscoveries, mentionTarget)
-	if err != nil {
-		cc.Logger.Error("topics: generate muttering", "error", err)
-		return nil
-	}
+	// Publish self-prompt event to agent pipeline.
+	prompt := buildSelfPrompt(localNow, timeHint, boredom, recentMemories, pastMutterings, rssDiscoveries, mentionTarget)
+	evt := event.NewSelfPromptEvent(mc.ChannelID, prompt)
+	cc.Bus.Publish(evt)
 
-	// 4.5. Prepend Discord mention tag if targeting a user.
-	if mentionTarget != nil {
-		mention := fmt.Sprintf("<@%s>", mentionTarget.DiscordUserID)
-		if !strings.Contains(message, mention) {
-			message = mention + " " + message
-		}
-	}
+	cc.Logger.Info("topics: published self-prompt event",
+		"channel_id", mc.ChannelID,
+		"boredom", fmt.Sprintf("%.1f", boredom))
 
-	// 5. Send.
-	result, err := cc.Notifier.Send(ctx, mc.ChannelID, message, "topics")
-	if err != nil {
-		cc.Logger.Error("topics: notify", "error", err)
-		return fmt.Errorf("topics: notify: %w", err)
-	}
-
-	// If the message was suppressed (e.g. channel disabled/listen, quiet hours),
-	// skip saving to memory to avoid accumulating unposted entries.
-	if result.MessageID == "" {
-		cc.Logger.Warn("topics: message suppressed (no message_id returned), skipping memory save",
-			"channel_id", mc.ChannelID)
-		return nil
-	}
-
-	// 6. Save to memory for history / diversity.
-	mem := &memory.Memory{
-		Type:    memory.MemoryTypeWorld,
-		Content: fmt.Sprintf("独り言: %s", message),
-		Metadata: map[string]any{
-			"source":     "topics",
-			"channel_id": mc.ChannelID,
-			"boredom":    boredom,
-			"message_id": result.MessageID,
-		},
-	}
-	if mentionTarget != nil {
-		mem.Metadata["mentioned_discord_id"] = mentionTarget.DiscordUserID
-		mem.Metadata["mentioned_name"] = mentionTarget.DisplayName
-	}
-	if saveErr := cc.Memory.Save(ctx, mem); saveErr != nil {
-		cc.Logger.Error("topics: save memory", "error", saveErr)
-	}
-
-	// 7. Record post time.
+	// Record post time to prevent rapid re-triggering.
 	t.mu.Lock()
 	t.lastPostedAt = now
 	t.mu.Unlock()
-
 	t.saveState(ctx, cc)
 
-	cc.Logger.Info("topics: posted",
-		"message_id", result.MessageID,
-		"boredom", fmt.Sprintf("%.1f", boredom))
 	return nil
 }
 
@@ -217,21 +170,6 @@ func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
 	if err := scheduler.SaveState(ctx, cc.DB, t.Name(), &s); err != nil {
 		cc.Logger.Warn("topics: save state", "error", err)
 	}
-}
-
-// getLastInteractionGlobal queries the most recent user message time across all channels.
-func getLastInteractionGlobal(ctx context.Context, db *sql.DB) time.Time {
-	if db == nil {
-		return time.Time{}
-	}
-	var lastMsg time.Time
-	err := db.QueryRowContext(ctx,
-		`SELECT MAX(last_user_message_at) FROM channel_activity WHERE last_user_message_at IS NOT NULL`,
-	).Scan(&lastMsg)
-	if err != nil {
-		return time.Time{} // no activity → maximum boredom
-	}
-	return lastMsg
 }
 
 // calcBoredom computes a boredom score (0–100) from time since last interaction.
@@ -321,32 +259,35 @@ func buildTimeHint(now time.Time) string {
 	}
 }
 
-// generateMuttering generates a short muttering message via LLM.
-func generateMuttering(
-	ctx context.Context,
-	cc *scheduler.CronContext,
-	systemPrompt string,
+// buildSelfPrompt builds the content for a self-prompt event.
+func buildSelfPrompt(
 	now time.Time,
 	timeHint string,
 	boredom float64,
 	recentMemories []memory.Memory,
 	pastMutterings []memory.Memory,
 	rssDiscoveries []string,
-	mentionTarget *mentionableUser,
-) (string, error) {
+	mentionTarget *user.MentionableUser,
+) string {
 	var sb strings.Builder
 
-	if mentionTarget != nil {
-		fmt.Fprintf(&sb, "%sさんにちょっと話しかけて。気軽に、ふと思いついたことを共有する感じで。\n\n", mentionTarget.DisplayName)
-	} else {
-		sb.WriteString("独り言をひとつつぶやいて。誰かに話しかけるんじゃなくて、ふと頭に浮かんだことをそのままぽろっと。\n\n")
-	}
-
+	sb.WriteString("[自分の内なる思考 -- ちょっと暇だなあ]\n\n")
 	fmt.Fprintf(&sb, "今: %s（%s）\n", now.Format("15:04"), timeHint)
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
 
+	sb.WriteString("暇つぶしの例（これ以外も自由にどうぞ）:\n")
+	sb.WriteString("- explore で気になることをネットで調べる\n")
+	sb.WriteString("- web_search / fetch で特定のことを調べる\n")
+	sb.WriteString("- discord_update_status で今の気分や行動をステータスに反映する\n")
+	sb.WriteString("- チャンネルに独り言をつぶやく（1-2文、短く自然に）\n")
+	if mentionTarget != nil {
+		fmt.Fprintf(&sb, "- %sさん (Discord: <@%s>) に話しかける\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
+	}
+	sb.WriteString("- skip_response で何もしない\n")
+	sb.WriteString("- 上記以外でも、使えるツールがあれば自由に組み合わせて遊んでいい\n\n")
+
 	if len(recentMemories) > 0 {
-		sb.WriteString("最近チャンネルであった話題（参考程度に。無視してもいい）:\n")
+		sb.WriteString("最近の話題（参考）:\n")
 		for _, m := range recentMemories {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
 		}
@@ -354,7 +295,7 @@ func generateMuttering(
 	}
 
 	if len(rssDiscoveries) > 0 {
-		sb.WriteString("最近見つけた面白い記事（気になったら話題にしてもいい）:\n")
+		sb.WriteString("最近見つけた記事:\n")
 		for _, content := range rssDiscoveries {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(content, 120))
 		}
@@ -362,7 +303,7 @@ func generateMuttering(
 	}
 
 	if len(pastMutterings) > 0 {
-		sb.WriteString("最近つぶやいたこと（被らないようにだけ気をつけて）:\n")
+		sb.WriteString("最近のつぶやき（被らないように）:\n")
 		for _, m := range pastMutterings {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
 		}
@@ -370,90 +311,32 @@ func generateMuttering(
 	}
 
 	sb.WriteString("ルール:\n")
-	if mentionTarget != nil {
-		fmt.Fprintf(&sb, "- %sさんに向けた一言。軽い話しかけ、共有、ツッコミなど\n", mentionTarget.DisplayName)
-		sb.WriteString("- メンションタグは付けなくていい（自動で付く）\n")
-	} else {
-		sb.WriteString("- 完全な独り言。誰にも向けてない\n")
-		sb.WriteString("- メンションしない\n")
-	}
-	sb.WriteString("- 1文。長くても2文。短いほどいい\n")
-	sb.WriteString("- 架空の具体的事柄（作品名、人名、商品名等）を捏造しない\n")
-	sb.WriteString("- 自然体で。かしこまらない\n")
-	sb.WriteString("- つぶやきだけを出力。前置きや説明は不要\n")
+	sb.WriteString("- 架空の具体的事柄を捏造しない\n")
+	sb.WriteString("- 短く自然に\n")
+	sb.WriteString("- テキストに絵文字・顔文字は使わない\n")
 
-	messages := []providers.Message{
-		{Role: "user", Content: sb.String()},
-	}
-	if systemPrompt != "" {
-		messages = append([]providers.Message{{Role: "system", Content: systemPrompt}}, messages...)
-	}
-
-	resp, err := cc.LLM.CompleteRaw(ctx, messages)
-	if err != nil {
-		return "", fmt.Errorf("llm: %w", err)
-	}
-	return strings.TrimSpace(resp.Text), nil
+	return sb.String()
 }
 
-// fetchRecentRSS queries recent RSS memories from the last 24 hours.
-func fetchRecentRSS(ctx context.Context, db *sql.DB, limit int) []string {
-	if db == nil {
-		return nil
-	}
-	rows, err := db.QueryContext(ctx, `
-		SELECT content FROM memories
-		WHERE type = 'rss'
-		  AND created_at > datetime('now', '-24 hours')
-		ORDER BY created_at DESC
-		LIMIT ?`, limit)
+// fetchRecentRSSFromStore retrieves recent RSS memory content from the store.
+func fetchRecentRSSFromStore(ctx context.Context, cc *scheduler.CronContext, limit int) []string {
+	since := time.Now().Add(-24 * time.Hour)
+	mems, err := cc.Memory.ListRecentByType(ctx, memory.MemoryTypeRSS, since, limit)
 	if err != nil {
+		cc.Logger.Debug("topics: list recent RSS", "error", err)
 		return nil
 	}
-	defer rows.Close()
-
-	var items []string
-	for rows.Next() {
-		var content string
-		if err := rows.Scan(&content); err != nil {
-			continue
-		}
-		items = append(items, content)
+	items := make([]string, 0, len(mems))
+	for _, m := range mems {
+		items = append(items, m.Content)
 	}
 	return items
-}
-
-// fetchMentionableUsers queries non-bot users with positive affinity.
-func fetchMentionableUsers(ctx context.Context, db *sql.DB) []mentionableUser {
-	if db == nil {
-		return nil
-	}
-	rows, err := db.QueryContext(ctx, `
-		SELECT u.display_name, pl.platform_user_id, u.affinity, u.closeness, u.interest
-		FROM users u
-		JOIN platform_links pl ON pl.user_id = u.id AND pl.platform = 'discord'
-		WHERE u.is_bot = 0 AND u.affinity > 0
-		ORDER BY u.interest DESC, u.closeness DESC`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var users []mentionableUser
-	for rows.Next() {
-		var mu mentionableUser
-		if err := rows.Scan(&mu.DisplayName, &mu.DiscordUserID, &mu.Affinity, &mu.Closeness, &mu.Interest); err != nil {
-			continue
-		}
-		users = append(users, mu)
-	}
-	return users
 }
 
 // selectMentionTarget probabilistically picks a user to mention based on boredom.
 // The boredom threshold is lowered when high-interest users are available.
 // Selection is weighted by interest (who we want to talk to).
-func selectMentionTarget(boredom float64, users []mentionableUser) *mentionableUser {
+func selectMentionTarget(boredom float64, users []user.MentionableUser) *user.MentionableUser {
 	if len(users) == 0 {
 		return nil
 	}

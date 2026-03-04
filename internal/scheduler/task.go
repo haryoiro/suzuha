@@ -7,9 +7,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/channel"
+	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
+	"github.com/haryoiro/suzuha/internal/user"
 )
 
 // CronTask is a pluggable periodic job, analogous to tool.Tool for agent tools.
@@ -38,8 +41,16 @@ type CronContext struct {
 	LLM      *llm.Client
 	Memory   memory.Store
 	Notifier notification.Notifier // Unified notifier (Send + Reply).
-	DB       *sql.DB
+	DB       *sql.DB               // Keep for backward compat; prefer typed stores.
 	Logger   *slog.Logger
+
+	// Typed stores (Phase 1 — prefer these over raw DB).
+	Users           user.Store             // User operations (resolve, affinity, etc.).
+	ChannelActivity channel.ActivityStore  // Channel activity reads.
+	MemoryAdmin     memory.AdminStore      // Admin-level memory operations (batch delete, etc.).
+
+	// Event injection
+	Bus *event.Bus // Agent event bus for publishing self-prompt events. May be nil.
 
 	// Environment
 	Timezone     *time.Location // Scheduler-level timezone. Nil defaults to UTC.

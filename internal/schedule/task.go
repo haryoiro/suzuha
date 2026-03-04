@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
@@ -95,14 +95,14 @@ func generateFromPrompt(ctx context.Context, cc *scheduler.CronContext, prompt s
 		messages = append([]providers.Message{{Role: "system", Content: cc.SystemPrompt}}, messages...)
 	}
 
-	resp, err := cc.LLM.CompleteRaw(ctx, messages)
+	resp, err := cc.LLM.CompleteRawDefault(ctx, messages)
 	if err != nil {
 		return "", fmt.Errorf("llm: %w", err)
 	}
 
-	text := strings.TrimSpace(resp.Text)
+	text := llm.StripDirectiveTags(resp.Text)
 	if text == "" {
-		return "", fmt.Errorf("llm returned empty response")
+		return "", fmt.Errorf("llm returned empty or silent response")
 	}
 	return text, nil
 }

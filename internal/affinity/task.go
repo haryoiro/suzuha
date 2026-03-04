@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/user"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
@@ -110,7 +110,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	// 5. Apply deltas.
 	for _, d := range deltas {
-		if err := applyDelta(ctx, cc.DB, d); err != nil {
+		if err := applyDelta(ctx, cc.Users, d); err != nil {
 			cc.Logger.Warn("affinity_eval: apply delta", "error", err, "user_id", d.platformUserID)
 		} else {
 			cc.Logger.Info("affinity_eval: applied",
@@ -191,7 +191,7 @@ func evaluateAffinity(ctx context.Context, cc *scheduler.CronContext, msgs []llm
 		}
 	}
 
-	resp, err := cc.LLM.CompleteRaw(ctx, []providers.Message{
+	resp, err := cc.LLM.CompleteRawDefault(ctx, []providers.Message{
 		{Role: "user", Content: sb.String()},
 	})
 	if err != nil {
@@ -248,55 +248,21 @@ func parseDeltas(text string) []affinityDelta {
 }
 
 // applyDelta resolves the platform user to an internal ID and updates affinity.
-func applyDelta(ctx context.Context, db *sql.DB, d affinityDelta) error {
-	// Resolve platform user → internal user ID.
-	var userID string
-	err := db.QueryRowContext(ctx,
-		`SELECT user_id FROM platform_links WHERE platform = ? AND platform_user_id = ?`,
-		d.platform, d.platformUserID,
-	).Scan(&userID)
+func applyDelta(ctx context.Context, users user.Store, d affinityDelta) error {
+	u, err := users.ResolveExisting(ctx, d.platform, d.platformUserID)
 	if err != nil {
 		return fmt.Errorf("resolve user %s/%s: %w", d.platform, d.platformUserID, err)
 	}
 
-	axis := d.axis
+	axis := user.AffinityAxis(d.axis)
 	if axis == "" {
-		axis = "closeness"
+		axis = user.AxisCloseness
 	}
 
-	// Atomic: insert event + update axis-specific column + legacy affinity.
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	eventID := uuid.NewString()
-	now := time.Now()
-
-	_, err = tx.ExecContext(ctx,
-		`INSERT INTO affinity_events (id, user_id, delta, axis, reason, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		eventID, userID, d.delta, axis, d.reason, now)
-	if err != nil {
-		return fmt.Errorf("insert event: %w", err)
-	}
-
-	axisCol := "closeness"
-	switch axis {
-	case "trust":
-		axisCol = "trust"
-	case "interest":
-		axisCol = "interest"
-	}
-	query := fmt.Sprintf(
-		`UPDATE users SET %s = %s + ?, affinity = affinity + ?, updated_at = ? WHERE id = ?`,
-		axisCol, axisCol,
-	)
-	_, err = tx.ExecContext(ctx, query, d.delta, d.delta, now, userID)
-	if err != nil {
-		return fmt.Errorf("update affinity: %w", err)
-	}
-
-	return tx.Commit()
+	return users.UpdateAffinity(ctx, &user.AffinityEvent{
+		UserID: u.ID,
+		Delta:  d.delta,
+		Axis:   axis,
+		Reason: d.reason,
+	})
 }

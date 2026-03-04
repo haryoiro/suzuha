@@ -21,7 +21,7 @@ type Action struct {
 	CronExpr      string // empty for one-shot
 	RandomMinutes int    // random offset window in minutes (0 = disabled)
 	CreatedBy     string
-	Status        string // pending, executed, cancelled
+	Status        string // pending, executed, canceled
 	ExecutedAt    *time.Time
 	CreatedAt     time.Time
 }
@@ -111,7 +111,7 @@ func (s *Store) ListPendingByCreator(ctx context.Context, createdBy string) ([]A
 	return scanActions(rows)
 }
 
-// Cancel marks a pending action as cancelled. Returns false if not found or not pending.
+// Cancel marks a pending action as canceled. Returns false if not found or not pending.
 func (s *Store) Cancel(ctx context.Context, id string) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE scheduled_actions SET status = 'cancelled'
@@ -201,6 +201,111 @@ func scanActions(rows *sql.Rows) ([]Action, error) {
 		actions = append(actions, a)
 	}
 	return actions, rows.Err()
+}
+
+// ActionListOpts controls filtering for admin List.
+type ActionListOpts struct {
+	Status string // empty = all
+	Limit  int
+}
+
+// ActionUpdateFields holds the optional update fields for admin Update.
+type ActionUpdateFields struct {
+	ChannelID   *string
+	Content     *string
+	Mode        *string
+	ScheduledAt *string
+	CronExpr    *string
+	Status      *string
+}
+
+// List returns actions with optional status filter, ordered by scheduled_at DESC.
+func (s *Store) List(ctx context.Context, opts ActionListOpts) ([]Action, error) {
+	if opts.Limit <= 0 {
+		opts.Limit = 50
+	}
+	query := `SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, executed_at, created_at
+	          FROM scheduled_actions`
+	var args []any
+	if opts.Status != "" {
+		query += ` WHERE status = ?`
+		args = append(args, opts.Status)
+	}
+	query += ` ORDER BY scheduled_at DESC LIMIT ?`
+	args = append(args, opts.Limit)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("schedule: list: %w", err)
+	}
+	defer rows.Close()
+	return scanActions(rows)
+}
+
+// Update applies partial updates to a scheduled action.
+func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields) error {
+	var sets []string
+	var args []any
+	if fields.ChannelID != nil {
+		sets = append(sets, "channel_id = ?")
+		args = append(args, *fields.ChannelID)
+	}
+	if fields.Content != nil {
+		sets = append(sets, "content = ?")
+		args = append(args, *fields.Content)
+	}
+	if fields.Mode != nil {
+		sets = append(sets, "mode = ?")
+		args = append(args, *fields.Mode)
+	}
+	if fields.ScheduledAt != nil {
+		sets = append(sets, "scheduled_at = ?")
+		args = append(args, *fields.ScheduledAt)
+	}
+	if fields.CronExpr != nil {
+		sets = append(sets, "cron_expr = ?")
+		args = append(args, *fields.CronExpr)
+	}
+	if fields.Status != nil {
+		sets = append(sets, "status = ?")
+		args = append(args, *fields.Status)
+	}
+	if len(sets) == 0 {
+		return fmt.Errorf("schedule: no fields to update")
+	}
+	args = append(args, id)
+
+	query := "UPDATE scheduled_actions SET "
+	for i, s := range sets {
+		if i > 0 {
+			query += ", "
+		}
+		query += s
+	}
+	query += " WHERE id = ?"
+
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("schedule: update: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("schedule: not found: %s", id)
+	}
+	return nil
+}
+
+// Delete removes a scheduled action by ID.
+func (s *Store) Delete(ctx context.Context, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM scheduled_actions WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("schedule: delete: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("schedule: not found: %s", id)
+	}
+	return nil
 }
 
 func nullString(s string) any {

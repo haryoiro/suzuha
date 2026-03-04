@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -343,7 +344,7 @@ func llmBatchScore(ctx context.Context, cc *scheduler.CronContext, candidates []
 		{Role: "user", Content: prompt},
 	}
 
-	resp, err := cc.LLM.CompleteRaw(ctx, messages)
+	resp, err := cc.LLM.CompleteRawDefault(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("llm score: %w", err)
 	}
@@ -481,11 +482,15 @@ func generateNotification(ctx context.Context, cc *scheduler.CronContext, items 
 		{Role: "user", Content: sb.String()},
 	}
 
-	resp, err := cc.LLM.CompleteRaw(ctx, messages)
+	resp, err := cc.LLM.CompleteRawDefault(ctx, messages)
 	if err != nil {
 		return "", err
 	}
-	return resp.Text, nil
+	text := llm.StripDirectiveTags(resp.Text)
+	if text == "" {
+		return "", fmt.Errorf("llm returned empty notification")
+	}
+	return text, nil
 }
 
 // formatSimpleNotification creates a plain text notification as fallback.
