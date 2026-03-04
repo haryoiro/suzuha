@@ -14,6 +14,7 @@ type Context struct {
 	messages        []llm.Message
 	systemPrompt    string          // pinned system prompt, immune to compaction
 	maxTokens       int
+	tokenCalibration float64        // actual/estimated ratio from last LLM Usage; 0 = uncalibrated
 	injectedUsers   map[string]bool // tracks which user IDs have had profiles injected
 	seenChannels    map[string]bool // tracks channels with bootstrapped history
 }
@@ -96,11 +97,49 @@ func (c *Context) EstimatedTokens() int {
 }
 
 // UsageRatio returns estimated token usage as a fraction of max.
+// If a calibration ratio has been set via CalibrateTokens, the raw
+// estimate is multiplied by that ratio for better accuracy.
 func (c *Context) UsageRatio() float64 {
 	if c.maxTokens <= 0 {
 		return 0
 	}
-	return float64(c.EstimatedTokens()) / float64(c.maxTokens)
+	est := float64(c.EstimatedTokens())
+	c.mu.RLock()
+	cal := c.tokenCalibration
+	c.mu.RUnlock()
+	if cal > 0 {
+		est *= cal
+	}
+	return est / float64(c.maxTokens)
+}
+
+// CalibrateTokens updates the calibration ratio using the actual token
+// count reported by the LLM provider (from Usage.PromptTokens).
+// The ratio is smoothed with an exponential moving average so a single
+// outlier doesn't swing the estimate too far.
+func (c *Context) CalibrateTokens(actualPromptTokens int) {
+	est := c.EstimatedTokens()
+	if est <= 0 || actualPromptTokens <= 0 {
+		return
+	}
+	newRatio := float64(actualPromptTokens) / float64(est)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.tokenCalibration <= 0 {
+		// First calibration — use the raw ratio.
+		c.tokenCalibration = newRatio
+	} else {
+		// EMA: 70% old, 30% new.
+		c.tokenCalibration = c.tokenCalibration*0.7 + newRatio*0.3
+	}
+}
+
+// TokenCalibration returns the current calibration ratio (0 = uncalibrated).
+func (c *Context) TokenCalibration() float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.tokenCalibration
 }
 
 // estimateStringTokens returns a rough token count using rune-based heuristics
@@ -210,9 +249,32 @@ func (c *Context) ResetSeenChannels() {
 	c.seenChannels = make(map[string]bool)
 }
 
+// RemoveChannelHistory removes existing "[Recent history for channel=X]"
+// system messages for the given channel so they can be replaced with fresh ones.
+func (c *Context) RemoveChannelHistory(channelID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	prefix := "[Recent history for channel=" + channelID + "]"
+	filtered := c.messages[:0]
+	for _, m := range c.messages {
+		if m.Role == "system" && len(m.Content) >= len(prefix) && m.Content[:len(prefix)] == prefix {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	c.messages = filtered
+}
+
 // MaxTokens returns the configured max token limit.
 func (c *Context) MaxTokens() int {
 	return c.maxTokens
+}
+
+// SetMaxTokens updates the max token limit at runtime.
+func (c *Context) SetMaxTokens(n int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.maxTokens = n
 }
 
 // ReplaceAll replaces all messages with the given slice.
