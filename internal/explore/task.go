@@ -11,7 +11,6 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 const (
@@ -149,7 +148,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	for depth := 0; depth < maxDepth; depth++ {
 		// Evaluate the current content.
-		eval, err := t.evaluate(ctx, cc, systemPrompt, title, content, path)
+		eval, err := evaluate(ctx, cc.LLM, systemPrompt, title, content, path)
 		if err != nil {
 			cc.Logger.Error("explore: evaluate", "error", err, "depth", depth)
 			break
@@ -199,7 +198,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		}
 
 		// Let LLM pick which result to read.
-		picked, err := t.pickResult(ctx, cc, systemPrompt, nextQuery, results, path)
+		picked, err := pickResult(ctx, cc.LLM, systemPrompt, nextQuery, results, path)
 		if err != nil || picked == nil {
 			cc.Logger.Warn("explore: pick result failed or none interesting",
 				"query", nextQuery, "error", err)
@@ -220,7 +219,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	// --- Step 3: Save exploration summary ---
 	if len(path) > 0 {
-		summary := t.buildSummary(path, rememberedItems)
+		summary := buildSummary(path, rememberedItems)
 		mem := &memory.Memory{
 			Type:    memory.MemoryTypeWorld,
 			Content: summary,
@@ -245,136 +244,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	return nil
 }
 
-// evaluate asks the LLM to evaluate content from のの's perspective.
-func (t *Task) evaluate(
-	ctx context.Context,
-	cc *scheduler.CronContext,
-	systemPrompt string,
-	title, content string,
-	path []hop,
-) (*evaluation, error) {
-	var sb strings.Builder
-
-	sb.WriteString("今読んでるもの:\n")
-	fmt.Fprintf(&sb, "タイトル: %s\n", title)
-	fmt.Fprintf(&sb, "内容: %s\n\n", truncateRunes(content, contentMaxRunes))
-
-	if len(path) > 0 {
-		sb.WriteString("ここまでの探索:\n")
-		for i, h := range path {
-			fmt.Fprintf(&sb, "%d. 「%s」→ %s\n", i+1, h.Title, h.Impression)
-		}
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("気になることがあったら何が気になるか教えて。\n")
-	sb.WriteString("もう十分なら next_query を null にして。\n\n")
-	sb.WriteString("JSON で返して（これだけ出力して）:\n")
-	sb.WriteString(`{"impression": "感想1-2文", "remember": true/false, "next_query": "キーワード" or null}`)
-	sb.WriteString("\n")
-
-	messages := []providers.Message{
-		{Role: "user", Content: sb.String()},
-	}
-	if systemPrompt != "" {
-		messages = append([]providers.Message{{Role: "system", Content: systemPrompt}}, messages...)
-	}
-
-	resp, err := cc.LLM.CompleteRaw(ctx, messages)
-	if err != nil {
-		return nil, fmt.Errorf("llm: %w", err)
-	}
-
-	text := strings.TrimSpace(resp.Text)
-	// Strip markdown code fences if present.
-	text = stripCodeFence(text)
-
-	var eval evaluation
-	if err := json.Unmarshal([]byte(text), &eval); err != nil {
-		// If JSON parsing fails, treat as "not interested".
-		cc.Logger.Warn("explore: failed to parse evaluation, stopping",
-			"raw", text, "error", err)
-		return &evaluation{
-			Impression: text,
-			Remember:   false,
-			NextQuery:  nil,
-		}, nil
-	}
-	return &eval, nil
-}
-
-// pickResult asks the LLM to choose a search result to read.
-func (t *Task) pickResult(
-	ctx context.Context,
-	cc *scheduler.CronContext,
-	systemPrompt string,
-	query string,
-	results []SearchResult,
-	path []hop,
-) (*SearchResult, error) {
-	var sb strings.Builder
-
-	fmt.Fprintf(&sb, "「%s」で検索した結果:\n\n", query)
-	sb.WriteString(truncateResults(results, snippetMaxRunes))
-	sb.WriteString("\n")
-
-	if len(path) > 0 {
-		sb.WriteString("ここまでの探索:\n")
-		for i, h := range path {
-			fmt.Fprintf(&sb, "%d. 「%s」→ %s\n", i+1, h.Title, h.Impression)
-		}
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("どれが一番気になる？番号で答えて（どれも気にならなければ 0）。\n")
-	sb.WriteString("数字だけ出力して。\n")
-
-	messages := []providers.Message{
-		{Role: "user", Content: sb.String()},
-	}
-	if systemPrompt != "" {
-		messages = append([]providers.Message{{Role: "system", Content: systemPrompt}}, messages...)
-	}
-
-	resp, err := cc.LLM.CompleteRaw(ctx, messages)
-	if err != nil {
-		return nil, fmt.Errorf("llm pick: %w", err)
-	}
-
-	text := strings.TrimSpace(resp.Text)
-	// Extract first digit sequence.
-	var idx int
-	for _, r := range text {
-		if r >= '0' && r <= '9' {
-			idx = idx*10 + int(r-'0')
-		} else if idx > 0 {
-			break
-		}
-	}
-
-	if idx <= 0 || idx > len(results) {
-		return nil, nil // nothing picked
-	}
-	return &results[idx-1], nil
-}
-
-func (t *Task) buildSummary(path []hop, remembered []string) string {
-	var sb strings.Builder
-	sb.WriteString("ネット散歩: ")
-
-	titles := make([]string, len(path))
-	for i, h := range path {
-		titles[i] = h.Title
-	}
-	sb.WriteString(strings.Join(titles, " → "))
-
-	if len(remembered) > 0 {
-		sb.WriteString("\n覚えたこと: ")
-		sb.WriteString(strings.Join(remembered, " / "))
-	}
-
-	return sb.String()
-}
 
 func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
 	if cc.DB == nil {
