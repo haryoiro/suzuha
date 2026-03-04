@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/haryoiro/suzuha/internal/admin"
-	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/samber/do/v2"
 )
 
 func main() {
@@ -25,21 +25,14 @@ func run() error {
 	if p := os.Getenv("SUZUHA_CONFIG"); p != "" {
 		cfgPath = p
 	}
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
 
-	logger := observe.NewLogger(cfg.Observe.LogLevel)
+	injector := do.New(adminPackages(cfgPath)...)
 
-	// Open memory store (read-write, no migrations — agent runs those).
-	store, err := memory.NewSQLiteStore(cfg.Memory.DBPath, nil, false, logger)
-	if err != nil {
-		return fmt.Errorf("open memory store: %w", err)
-	}
+	logger := do.MustInvoke[*slog.Logger](injector)
+	store := do.MustInvoke[*memory.SQLiteStore](injector)
 	defer store.Close()
 
-	srv := admin.NewServer(cfg.Admin, store, logger)
+	srv := do.MustInvoke[*admin.Server](injector)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
