@@ -41,7 +41,7 @@ func New(token, botID string, bus *event.Bus, log *slog.Logger) *Chat {
 func (c *Chat) Run(ctx context.Context) error {
 	session, err := discordgo.New("Bot " + c.token)
 	if err != nil {
-		return fmt.Errorf("discord: create session: %w", err)
+		return fmt.Errorf("discord: セッションの作成に失敗: %w", err)
 	}
 	c.session = session
 
@@ -109,12 +109,12 @@ func (c *Chat) Run(ctx context.Context) error {
 	})
 
 	if err := session.Open(); err != nil {
-		return fmt.Errorf("discord: open: %w", err)
+		return fmt.Errorf("discord: 接続の開始に失敗: %w", err)
 	}
 	defer session.Close()
 
 	c.botID = session.State.User.ID
-	c.log.Info("discord connected", "user", session.State.User.Username, "id", c.botID)
+	c.log.Info("discord 接続しました", "user", session.State.User.Username, "id", c.botID)
 
 	// Call onReady callback if set.
 	if c.onReady != nil {
@@ -122,19 +122,19 @@ func (c *Chat) Run(ctx context.Context) error {
 	}
 
 	<-ctx.Done()
-	c.log.Info("discord shutting down")
+	c.log.Info("discord シャットダウン中")
 	return ctx.Err()
 }
 
 // Send sends a message to a Discord channel.
 func (c *Chat) Send(_ context.Context, channel string, text string) error {
 	if c.session == nil {
-		return fmt.Errorf("discord: session not initialized")
+		return fmt.Errorf("discord: セッションが初期化されていません")
 	}
 	chunks := splitMessage(text, 2000)
 	for _, chunk := range chunks {
 		if _, err := c.session.ChannelMessageSend(channel, chunk); err != nil {
-			return fmt.Errorf("discord: send: %w", err)
+			return fmt.Errorf("discord: 送信に失敗: %w", err)
 		}
 	}
 	return nil
@@ -143,14 +143,14 @@ func (c *Chat) Send(_ context.Context, channel string, text string) error {
 // SendWithID sends a message and returns the Discord message ID of the last chunk.
 func (c *Chat) SendWithID(_ context.Context, channel string, text string) (string, error) {
 	if c.session == nil {
-		return "", fmt.Errorf("discord: session not initialized")
+		return "", fmt.Errorf("discord: セッションが初期化されていません")
 	}
 	chunks := splitMessage(text, 2000)
 	var lastID string
 	for _, chunk := range chunks {
 		msg, err := c.session.ChannelMessageSend(channel, chunk)
 		if err != nil {
-			return "", fmt.Errorf("discord: send: %w", err)
+			return "", fmt.Errorf("discord: 送信に失敗: %w", err)
 		}
 		lastID = msg.ID
 	}
@@ -160,7 +160,7 @@ func (c *Chat) SendWithID(_ context.Context, channel string, text string) (strin
 // SendReply sends a reply to replyToID and returns the Discord message ID of the last chunk.
 func (c *Chat) SendReply(_ context.Context, channel, text, replyToID string) (string, error) {
 	if c.session == nil {
-		return "", fmt.Errorf("discord: session not initialized")
+		return "", fmt.Errorf("discord: セッションが初期化されていません")
 	}
 	chunks := splitMessage(text, 2000)
 	var lastID string
@@ -177,7 +177,7 @@ func (c *Chat) SendReply(_ context.Context, channel, text, replyToID string) (st
 			msg, err = c.session.ChannelMessageSend(channel, chunk)
 		}
 		if err != nil {
-			return "", fmt.Errorf("discord: send reply: %w", err)
+			return "", fmt.Errorf("discord: リプライの送信に失敗: %w", err)
 		}
 		lastID = msg.ID
 	}
