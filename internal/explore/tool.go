@@ -64,7 +64,7 @@ func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 
 	summary, err := t.doExploration(ctx, in.Query)
 	if err != nil {
-		return tool.ErrorResult(fmt.Sprintf("explore failed: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("explore: 探索に失敗しました: %v", err)), nil
 	}
 	return tool.TextResult(summary), nil
 }
@@ -77,7 +77,7 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string) (str
 		if err != nil || len(results) == 0 {
 			article, wErr := RandomArticle(ctx)
 			if wErr != nil {
-				return "", fmt.Errorf("explore: no results and wikipedia failed: %w", wErr)
+				return "", fmt.Errorf("explore: 検索結果がなくWikipediaも失敗しました: %w", wErr)
 			}
 			title = article.Title
 			content = article.Extract
@@ -88,7 +88,7 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string) (str
 	} else {
 		article, err := RandomArticle(ctx)
 		if err != nil {
-			return "", fmt.Errorf("explore: wikipedia random: %w", err)
+			return "", fmt.Errorf("explore: Wikipediaランダム記事の取得に失敗: %w", err)
 		}
 		title = article.Title
 		content = article.Extract

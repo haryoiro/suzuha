@@ -36,7 +36,7 @@ func NewSearXNG(baseURL string) *SearXNGClient {
 func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	u, err := url.Parse(c.baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("searxng: parse url: %w", err)
+		return nil, fmt.Errorf("searxng: URLのパースに失敗: %w", err)
 	}
 	u.Path = "/search"
 	q := u.Query()
@@ -47,25 +47,25 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("searxng: build request: %w", err)
+		return nil, fmt.Errorf("searxng: リクエストの作成に失敗: %w", err)
 	}
 	req.Header.Set("User-Agent", "suzuha-bot/1.0")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("searxng: fetch: %w", err)
+		return nil, fmt.Errorf("searxng: 取得に失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("searxng: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("searxng: ステータス %d", resp.StatusCode)
 	}
 
 	var body struct {
 		Results []SearchResult `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("searxng: decode: %w", err)
+		return nil, fmt.Errorf("searxng: デコードに失敗: %w", err)
 	}
 
 	if limit > 0 && len(body.Results) > limit {
@@ -78,18 +78,18 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes int) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("fetch page: build request: %w", err)
+		return "", fmt.Errorf("fetch page: リクエストの作成に失敗: %w", err)
 	}
 	req.Header.Set("User-Agent", "suzuha-bot/1.0")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("fetch page: %w", err)
+		return "", fmt.Errorf("fetch page: 取得に失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch page: status %d", resp.StatusCode)
+		return "", fmt.Errorf("fetch page: ステータス %d", resp.StatusCode)
 	}
 
 	// Read limited bytes to avoid huge pages.
