@@ -44,7 +44,7 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 		{Role: "user", Content: prompt},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("consolidator: compact llm call: %w", err)
+		return nil, fmt.Errorf("consolidator: コンパクト処理のLLM呼び出しに失敗: %w", err)
 	}
 
 	result := parseCompactResponse(resp.Text, len(req.Messages))
@@ -54,14 +54,14 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 		mem := &result.Memories[i]
 		dupID, dupErr := s.store.IsDuplicate(ctx, mem.Content, mem.Type)
 		if dupErr != nil {
-			s.logger.Warn("consolidator: duplicate check failed", "error", dupErr)
+			s.logger.Warn("consolidator: 重複チェックに失敗しました", "error", dupErr)
 		}
 		if dupID != "" {
-			s.logger.Debug("consolidator: skip duplicate memory", "existing_id", dupID, "content", mem.Content)
+			s.logger.Debug("consolidator: 重複メモリをスキップ", "existing_id", dupID, "content", mem.Content)
 			continue
 		}
 		if err := s.store.Save(ctx, mem); err != nil {
-			s.logger.Warn("consolidator: save memory failed", "error", err)
+			s.logger.Warn("consolidator: メモリの保存に失敗しました", "error", err)
 		}
 	}
 
