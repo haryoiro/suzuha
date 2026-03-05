@@ -45,12 +45,12 @@ type reactInput struct {
 func (d *DiscordReact) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in reactInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if err := d.session.MessageReactionAdd(in.ChannelID, in.MessageID, in.Emoji); err != nil {
-		return tool.ErrorResult("react failed: " + err.Error()), nil
+		return tool.ErrorResult("リアクション失敗: " + err.Error()), nil
 	}
-	return tool.StopResult("reacted with " + in.Emoji), nil
+	return tool.StopResult("リアクション済み: " + in.Emoji), nil
 }
 
 var _ tool.Tool = (*DiscordReact)(nil)
@@ -90,16 +90,16 @@ type replyInput struct {
 func (d *DiscordReply) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in replyInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	_, err := d.session.ChannelMessageSendReply(in.ChannelID, in.Content, &discordgo.MessageReference{
 		MessageID: in.MessageID,
 		ChannelID: in.ChannelID,
 	})
 	if err != nil {
-		return tool.ErrorResult("reply failed: " + err.Error()), nil
+		return tool.ErrorResult("返信失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("replied"), nil
+	return tool.TextResult("返信しました"), nil
 }
 
 var _ tool.Tool = (*DiscordReply)(nil)
@@ -137,14 +137,14 @@ type historyInput struct {
 func (d *DiscordGetHistory) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in historyInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.Limit <= 0 || in.Limit > 50 {
 		in.Limit = 10
 	}
 	msgs, err := d.session.ChannelMessages(in.ChannelID, in.Limit, "", "", "")
 	if err != nil {
-		return tool.ErrorResult("get history failed: " + err.Error()), nil
+		return tool.ErrorResult("履歴取得失敗: " + err.Error()), nil
 	}
 	type msgOut struct {
 		ID       string `json:"id"`
@@ -203,17 +203,17 @@ type sendDMInput struct {
 func (d *DiscordSendDM) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in sendDMInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	ch, err := d.session.UserChannelCreate(in.UserID)
 	if err != nil {
-		return tool.ErrorResult("create DM channel failed: " + err.Error()), nil
+		return tool.ErrorResult("DMチャンネル作成失敗: " + err.Error()), nil
 	}
 	_, err = d.session.ChannelMessageSend(ch.ID, in.Content)
 	if err != nil {
-		return tool.ErrorResult("send DM failed: " + err.Error()), nil
+		return tool.ErrorResult("DM送信失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("DM sent"), nil
+	return tool.TextResult("DMを送信しました"), nil
 }
 
 var _ tool.Tool = (*DiscordSendDM)(nil)
@@ -253,7 +253,7 @@ func (d *DiscordCreateChannel) Execute(_ context.Context, input json.RawMessage)
 		CategoryID string `json:"category_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	data := discordgo.GuildChannelCreateData{
 		Name:  in.Name,
@@ -265,7 +265,7 @@ func (d *DiscordCreateChannel) Execute(_ context.Context, input json.RawMessage)
 	}
 	ch, err := d.session.GuildChannelCreateComplex(in.GuildID, data)
 	if err != nil {
-		return tool.ErrorResult("create channel failed: " + err.Error()), nil
+		return tool.ErrorResult("チャンネル作成失敗: " + err.Error()), nil
 	}
 	out, _ := json.Marshal(map[string]string{"id": ch.ID, "name": ch.Name})
 	return tool.TextResult(string(out)), nil
@@ -302,7 +302,7 @@ func (d *DiscordEditChannel) Execute(_ context.Context, input json.RawMessage) (
 		Topic     *string `json:"topic"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	edit := &discordgo.ChannelEdit{}
 	if in.Name != nil {
@@ -313,9 +313,9 @@ func (d *DiscordEditChannel) Execute(_ context.Context, input json.RawMessage) (
 	}
 	_, err := d.session.ChannelEdit(in.ChannelID, edit)
 	if err != nil {
-		return tool.ErrorResult("edit channel failed: " + err.Error()), nil
+		return tool.ErrorResult("チャンネル編集失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("channel updated"), nil
+	return tool.TextResult("チャンネルを更新しました"), nil
 }
 
 var _ tool.Tool = (*DiscordEditChannel)(nil)
@@ -345,13 +345,13 @@ func (d *DiscordDeleteChannel) Execute(_ context.Context, input json.RawMessage)
 		ChannelID string `json:"channel_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	_, err := d.session.ChannelDelete(in.ChannelID)
 	if err != nil {
-		return tool.ErrorResult("delete channel failed: " + err.Error()), nil
+		return tool.ErrorResult("チャンネル削除失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("channel deleted"), nil
+	return tool.TextResult("チャンネルを削除しました"), nil
 }
 
 var _ tool.Tool = (*DiscordDeleteChannel)(nil)
@@ -381,11 +381,11 @@ func (d *DiscordListChannels) Execute(_ context.Context, input json.RawMessage) 
 		GuildID string `json:"guild_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	channels, err := d.session.GuildChannels(in.GuildID)
 	if err != nil {
-		return tool.ErrorResult("list channels failed: " + err.Error()), nil
+		return tool.ErrorResult("チャンネル一覧取得失敗: " + err.Error()), nil
 	}
 	type chOut struct {
 		ID       string `json:"id"`
@@ -451,13 +451,13 @@ func (d *DiscordKickMember) Execute(_ context.Context, input json.RawMessage) (*
 		Reason  string `json:"reason"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	err := d.session.GuildMemberDeleteWithReason(in.GuildID, in.UserID, in.Reason)
 	if err != nil {
-		return tool.ErrorResult("kick failed: " + err.Error()), nil
+		return tool.ErrorResult("キック失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("member kicked"), nil
+	return tool.TextResult("メンバーをキックしました"), nil
 }
 
 var _ tool.Tool = (*DiscordKickMember)(nil)
@@ -493,13 +493,13 @@ func (d *DiscordBanMember) Execute(_ context.Context, input json.RawMessage) (*t
 		DeleteDays int    `json:"delete_days"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	err := d.session.GuildBanCreateWithReason(in.GuildID, in.UserID, in.Reason, in.DeleteDays)
 	if err != nil {
-		return tool.ErrorResult("ban failed: " + err.Error()), nil
+		return tool.ErrorResult("BAN失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("member banned"), nil
+	return tool.TextResult("メンバーをBANしました"), nil
 }
 
 var _ tool.Tool = (*DiscordBanMember)(nil)
@@ -533,7 +533,7 @@ func (d *DiscordTimeoutMember) Execute(_ context.Context, input json.RawMessage)
 		Minutes int    `json:"minutes"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	var until *time.Time
 	if in.Minutes > 0 {
@@ -544,12 +544,12 @@ func (d *DiscordTimeoutMember) Execute(_ context.Context, input json.RawMessage)
 		CommunicationDisabledUntil: until,
 	})
 	if err != nil {
-		return tool.ErrorResult("timeout failed: " + err.Error()), nil
+		return tool.ErrorResult("タイムアウト失敗: " + err.Error()), nil
 	}
 	if in.Minutes == 0 {
-		return tool.TextResult("timeout removed"), nil
+		return tool.TextResult("タイムアウトを解除しました"), nil
 	}
-	return tool.TextResult(fmt.Sprintf("member timed out for %d minutes", in.Minutes)), nil
+	return tool.TextResult(fmt.Sprintf("メンバーを%d分間タイムアウトしました", in.Minutes)), nil
 }
 
 var _ tool.Tool = (*DiscordTimeoutMember)(nil)
@@ -581,14 +581,14 @@ func (d *DiscordListMembers) Execute(_ context.Context, input json.RawMessage) (
 		Limit   int    `json:"limit"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.Limit <= 0 || in.Limit > 100 {
 		in.Limit = 50
 	}
 	members, err := d.session.GuildMembers(in.GuildID, "", in.Limit)
 	if err != nil {
-		return tool.ErrorResult("list members failed: " + err.Error()), nil
+		return tool.ErrorResult("メンバー一覧取得失敗: " + err.Error()), nil
 	}
 	type mOut struct {
 		UserID   string   `json:"user_id"`
@@ -644,12 +644,12 @@ func (d *DiscordDeleteMessage) Execute(_ context.Context, input json.RawMessage)
 		MessageID string `json:"message_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if err := d.session.ChannelMessageDelete(in.ChannelID, in.MessageID); err != nil {
-		return tool.ErrorResult("delete message failed: " + err.Error()), nil
+		return tool.ErrorResult("メッセージ削除失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("message deleted"), nil
+	return tool.TextResult("メッセージを削除しました"), nil
 }
 
 var _ tool.Tool = (*DiscordDeleteMessage)(nil)
@@ -683,7 +683,7 @@ func (d *DiscordPinMessage) Execute(_ context.Context, input json.RawMessage) (*
 		Pin       bool   `json:"pin"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	var err error
 	if in.Pin {
@@ -692,12 +692,12 @@ func (d *DiscordPinMessage) Execute(_ context.Context, input json.RawMessage) (*
 		err = d.session.ChannelMessageUnpin(in.ChannelID, in.MessageID)
 	}
 	if err != nil {
-		return tool.ErrorResult("pin/unpin failed: " + err.Error()), nil
+		return tool.ErrorResult("ピン留め/解除失敗: " + err.Error()), nil
 	}
 	if in.Pin {
-		return tool.TextResult("message pinned"), nil
+		return tool.TextResult("メッセージをピン留めしました"), nil
 	}
-	return tool.TextResult("message unpinned"), nil
+	return tool.TextResult("メッセージのピン留めを解除しました"), nil
 }
 
 var _ tool.Tool = (*DiscordPinMessage)(nil)
@@ -735,12 +735,12 @@ func (d *DiscordAddRole) Execute(_ context.Context, input json.RawMessage) (*too
 		RoleID  string `json:"role_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if err := d.session.GuildMemberRoleAdd(in.GuildID, in.UserID, in.RoleID); err != nil {
-		return tool.ErrorResult("add role failed: " + err.Error()), nil
+		return tool.ErrorResult("ロール付与失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("role added"), nil
+	return tool.TextResult("ロールを付与しました"), nil
 }
 
 var _ tool.Tool = (*DiscordAddRole)(nil)
@@ -774,12 +774,12 @@ func (d *DiscordRemoveRole) Execute(_ context.Context, input json.RawMessage) (*
 		RoleID  string `json:"role_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if err := d.session.GuildMemberRoleRemove(in.GuildID, in.UserID, in.RoleID); err != nil {
-		return tool.ErrorResult("remove role failed: " + err.Error()), nil
+		return tool.ErrorResult("ロール削除失敗: " + err.Error()), nil
 	}
-	return tool.TextResult("role removed"), nil
+	return tool.TextResult("ロールを削除しました"), nil
 }
 
 var _ tool.Tool = (*DiscordRemoveRole)(nil)
@@ -809,11 +809,11 @@ func (d *DiscordListRoles) Execute(_ context.Context, input json.RawMessage) (*t
 		GuildID string `json:"guild_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	roles, err := d.session.GuildRoles(in.GuildID)
 	if err != nil {
-		return tool.ErrorResult("list roles failed: " + err.Error()), nil
+		return tool.ErrorResult("ロール一覧取得失敗: " + err.Error()), nil
 	}
 	type rOut struct {
 		ID    string `json:"id"`
@@ -859,11 +859,11 @@ func (d *DiscordServerInfo) Execute(_ context.Context, input json.RawMessage) (*
 		GuildID string `json:"guild_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	g, err := d.session.Guild(in.GuildID)
 	if err != nil {
-		return tool.ErrorResult("get guild failed: " + err.Error()), nil
+		return tool.ErrorResult("サーバー情報取得失敗: " + err.Error()), nil
 	}
 	out, _ := json.Marshal(map[string]any{
 		"id":           g.ID,
@@ -910,7 +910,7 @@ func (d *DiscordCreateThread) Execute(_ context.Context, input json.RawMessage) 
 		MessageID string `json:"message_id"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	var ch *discordgo.Channel
 	var err error
@@ -926,7 +926,7 @@ func (d *DiscordCreateThread) Execute(_ context.Context, input json.RawMessage) 
 		})
 	}
 	if err != nil {
-		return tool.ErrorResult("create thread failed: " + err.Error()), nil
+		return tool.ErrorResult("スレッド作成失敗: " + err.Error()), nil
 	}
 	out, _ := json.Marshal(map[string]string{"id": ch.ID, "name": ch.Name})
 	return tool.TextResult(string(out)), nil
@@ -977,7 +977,7 @@ func (d *DiscordUpdateStatus) Execute(_ context.Context, input json.RawMessage) 
 		ActivityText string `json:"activity_text"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
 	status := in.Status
@@ -1011,7 +1011,7 @@ func (d *DiscordUpdateStatus) Execute(_ context.Context, input json.RawMessage) 
 	}
 
 	if err := d.session.UpdateStatusComplex(data); err != nil {
-		return tool.ErrorResult("update status failed: " + err.Error()), nil
+		return tool.ErrorResult("ステータス更新失敗: " + err.Error()), nil
 	}
 
 	desc := "status=" + status
@@ -1022,7 +1022,7 @@ func (d *DiscordUpdateStatus) Execute(_ context.Context, input json.RawMessage) 
 		}
 		desc += ", " + at + "=" + in.ActivityText
 	}
-	return tool.TextResult("updated: " + desc), nil
+	return tool.TextResult("更新しました: " + desc), nil
 }
 
 var _ tool.Tool = (*DiscordUpdateStatus)(nil)

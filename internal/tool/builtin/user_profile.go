@@ -51,21 +51,21 @@ type updateProfileInput struct {
 func (u *UpdateUserProfile) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in updateProfileInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.UserID == "" || in.DisplayName == "" {
-		return tool.ErrorResult("user_id and display_name are required"), nil
+		return tool.ErrorResult("user_idとdisplay_nameは必須です"), nil
 	}
 
 	// Resolve the user (auto-creates if not exists).
 	resolved, err := u.users.Resolve(ctx, in.Platform, in.UserID, "")
 	if err != nil {
-		return nil, fmt.Errorf("update_user_profile: resolve: %w", err)
+		return nil, fmt.Errorf("update_user_profile: ユーザー解決に失敗: %w", err)
 	}
 
 	// Update display name in DB.
 	if err := u.users.UpdateDisplayName(ctx, resolved.ID, in.DisplayName); err != nil {
-		return nil, fmt.Errorf("update_user_profile: update: %w", err)
+		return nil, fmt.Errorf("update_user_profile: 更新に失敗: %w", err)
 	}
 
 	// Update short-term memory if callback is set.
@@ -73,5 +73,5 @@ func (u *UpdateUserProfile) Execute(ctx context.Context, input json.RawMessage) 
 		u.onUpdate(in.UserID, in.DisplayName)
 	}
 
-	return tool.TextResult(fmt.Sprintf("Updated display name for user to %q.", in.DisplayName)), nil
+	return tool.TextResult(fmt.Sprintf("ユーザーの表示名を %q に更新しました。", in.DisplayName)), nil
 }

@@ -51,7 +51,7 @@ type fetchInput struct {
 func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in fetchInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
 	if in.Method == "" {
@@ -60,19 +60,19 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 
 	req, err := http.NewRequestWithContext(ctx, in.Method, in.URL, nil)
 	if err != nil {
-		return tool.ErrorResult("bad request: " + err.Error()), nil
+		return tool.ErrorResult("不正なリクエスト: " + err.Error()), nil
 	}
 	req.Header.Set("User-Agent", "suzuha-bot/1.0 (https://github.com/haryoiro/suzuha)")
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return tool.ErrorResult("fetch failed: " + err.Error()), nil
+		return tool.ErrorResult("フェッチ失敗: " + err.Error()), nil
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return tool.ErrorResult("read body: " + err.Error()), nil
+		return tool.ErrorResult("レスポンス読み取り失敗: " + err.Error()), nil
 	}
 
 	ct := resp.Header.Get("Content-Type")
@@ -86,7 +86,7 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 	// Truncate to keep LLM context manageable.
 	runes := []rune(text)
 	if len(runes) > maxOutputRunes {
-		text = string(runes[:maxOutputRunes]) + "\n\n...(truncated)"
+		text = string(runes[:maxOutputRunes]) + "\n\n...(省略)"
 	}
 
 	return tool.TextResult(fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, text)), nil
