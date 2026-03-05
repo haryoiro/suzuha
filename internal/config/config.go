@@ -34,11 +34,33 @@ type Location struct {
 
 // LLM configures the language model provider.
 type LLM struct {
-	Provider  string `yaml:"provider"` // "openai", "zhipu", etc.
+	Provider  string      `yaml:"provider"` // "openai", "zhipu", etc.
+	Model     string      `yaml:"model"`
+	APIKey    string      `yaml:"api_key"`
+	APIBase   string      `yaml:"api_base"` // Custom base URL for OpenAI-compatible providers.
+	MaxTokens int         `yaml:"max_tokens"`
+	Presets   []LLMPreset `yaml:"presets"` // Named presets for quick provider switching.
+}
+
+// LLMPreset is a named LLM provider configuration that can be activated at runtime.
+type LLMPreset struct {
+	Name      string `yaml:"name"`
+	Provider  string `yaml:"provider"`
 	Model     string `yaml:"model"`
 	APIKey    string `yaml:"api_key"`
-	APIBase   string `yaml:"api_base"` // Custom base URL for OpenAI-compatible providers.
+	APIBase   string `yaml:"api_base"`
 	MaxTokens int    `yaml:"max_tokens"`
+	Vision    bool   `yaml:"vision"`
+}
+
+// FindPreset returns the preset with the given name, or nil if not found.
+func (l *LLM) FindPreset(name string) *LLMPreset {
+	for i := range l.Presets {
+		if l.Presets[i].Name == name {
+			return &l.Presets[i]
+		}
+	}
+	return nil
 }
 
 // Embedding configures the embedding provider (can differ from LLM provider).
