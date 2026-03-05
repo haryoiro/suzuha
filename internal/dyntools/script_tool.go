@@ -57,18 +57,18 @@ func (s *ScriptTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return tool.ErrorResult(fmt.Sprintf("tool execution timed out (%s)", s.timeout)), nil
+			return tool.ErrorResult(fmt.Sprintf("ツールの実行がタイムアウトしました (%s)", s.timeout)), nil
 		}
 		msg := stderr.String()
 		if msg == "" {
 			msg = err.Error()
 		}
-		return tool.ErrorResult("tool execution failed: " + msg), nil
+		return tool.ErrorResult("ツールの実行に失敗しました: " + msg), nil
 	}
 
 	var out scriptOutput
 	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
-		return tool.ErrorResult("invalid tool output: " + stdout.String()), nil
+		return tool.ErrorResult("ツール出力が不正です: " + stdout.String()), nil
 	}
 
 	if out.IsError {

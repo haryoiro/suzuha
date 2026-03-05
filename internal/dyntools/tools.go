@@ -20,20 +20,20 @@ func NewCreateTool(mgr *Manager) *CreateTool { return &CreateTool{manager: mgr} 
 
 func (t *CreateTool) Name() string { return "create_tool" }
 func (t *CreateTool) Description() string {
-	return `Create a new custom tool. Describe what the tool should do and Claude Code will generate the Go implementation.
-The generated code will be compiled and immediately available for use.
-You can also provide source_code directly instead of a prompt if you prefer.`
+	return `新しいカスタムツールを作成します。ツールの動作を記述すると、Claude Codeがgoの実装を生成します。
+生成されたコードはコンパイルされ、すぐに使用可能になります。
+プロンプトの代わりにsource_codeを直接指定することもできます。`
 }
 
 func (t *CreateTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"name":         {"type": "string", "description": "Tool name (lowercase alphanumeric + underscores, 1-64 chars). Example: prime_factorize"},
-			"description":  {"type": "string", "description": "What this tool does (shown to you in future conversations)."},
-			"input_schema": {"type": "object", "description": "JSON Schema for the tool's input parameters."},
-			"prompt":       {"type": "string", "description": "Description of what the tool should do. Claude Code will generate the Go implementation."},
-			"source_code":  {"type": "string", "description": "Optional: provide Go source code directly instead of a prompt. Must define func run(input json.RawMessage) (string, error). No package/import needed."}
+			"name":         {"type": "string", "description": "ツール名（小文字英数字+アンダースコア、1-64文字）。例: prime_factorize"},
+			"description":  {"type": "string", "description": "ツールの説明（今後の会話で表示されます）。"},
+			"input_schema": {"type": "object", "description": "ツールの入力パラメータのJSONスキーマ。"},
+			"prompt":       {"type": "string", "description": "ツールの動作の説明。Claude CodeがGoの実装を生成します。"},
+			"source_code":  {"type": "string", "description": "任意: プロンプトの代わりにGoソースコードを直接指定。func run(input json.RawMessage) (string, error) を定義する必要があります。package/importは不要。"}
 		},
 		"required": ["name", "description", "input_schema"]
 	}`)
@@ -48,13 +48,13 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		SourceCode  string          `json:"source_code"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("入力が不正です: " + err.Error()), nil
 	}
 	if in.Name == "" || in.Description == "" {
-		return tool.ErrorResult("name and description are required"), nil
+		return tool.ErrorResult("name と description は必須です"), nil
 	}
 	if in.Prompt == "" && in.SourceCode == "" {
-		return tool.ErrorResult("either prompt or source_code is required"), nil
+		return tool.ErrorResult("prompt または source_code のいずれかが必要です"), nil
 	}
 
 	sourceCode := in.SourceCode
@@ -64,15 +64,15 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		schemaStr := string(in.InputSchema)
 		sourceCode, err = t.manager.GenerateCode(ctx, in.Name, in.Description, schemaStr, in.Prompt)
 		if err != nil {
-			return tool.ErrorResult(fmt.Sprintf("code generation failed: %v", err)), nil
+			return tool.ErrorResult(fmt.Sprintf("コード生成に失敗しました: %v", err)), nil
 		}
 	}
 
 	if err := t.manager.Create(in.Name, in.Description, in.InputSchema, sourceCode); err != nil {
-		return tool.ErrorResult(fmt.Sprintf("failed to create tool: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("ツールの作成に失敗しました: %v", err)), nil
 	}
 
-	return tool.TextResult(fmt.Sprintf("Tool %q created and registered successfully. You can now use it.", in.Name)), nil
+	return tool.TextResult(fmt.Sprintf("ツール %q を作成・登録しました。使用可能です。", in.Name)), nil
 }
 
 var _ tool.Tool = (*CreateTool)(nil)
@@ -88,14 +88,14 @@ func NewDeleteTool(mgr *Manager) *DeleteTool { return &DeleteTool{manager: mgr} 
 
 func (t *DeleteTool) Name() string { return "delete_tool" }
 func (t *DeleteTool) Description() string {
-	return "Delete a custom tool that was previously created with create_tool."
+	return "create_tool で作成したカスタムツールを削除します。"
 }
 
 func (t *DeleteTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"name": {"type": "string", "description": "Name of the dynamic tool to delete."}
+			"name": {"type": "string", "description": "削除するダイナミックツールの名前。"}
 		},
 		"required": ["name"]
 	}`)
@@ -106,14 +106,14 @@ func (t *DeleteTool) Execute(_ context.Context, input json.RawMessage) (*tool.To
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("入力が不正です: " + err.Error()), nil
 	}
 
 	if err := t.manager.Delete(in.Name); err != nil {
-		return tool.ErrorResult(fmt.Sprintf("failed to delete tool: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("ツールの削除に失敗しました: %v", err)), nil
 	}
 
-	return tool.TextResult(fmt.Sprintf("Tool %q deleted.", in.Name)), nil
+	return tool.TextResult(fmt.Sprintf("ツール %q を削除しました。", in.Name)), nil
 }
 
 var _ tool.Tool = (*DeleteTool)(nil)
@@ -129,7 +129,7 @@ func NewListTool(mgr *Manager) *ListTool { return &ListTool{manager: mgr} }
 
 func (t *ListTool) Name() string { return "list_dynamic_tools" }
 func (t *ListTool) Description() string {
-	return "List all custom tools created with create_tool."
+	return "create_tool で作成した全カスタムツールを一覧表示します。"
 }
 
 func (t *ListTool) InputSchema() json.RawMessage {
@@ -142,11 +142,11 @@ func (t *ListTool) InputSchema() json.RawMessage {
 func (t *ListTool) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	manifests, err := t.manager.List()
 	if err != nil {
-		return tool.ErrorResult("failed to list tools: " + err.Error()), nil
+		return tool.ErrorResult("ツール一覧の取得に失敗しました: " + err.Error()), nil
 	}
 
 	if len(manifests) == 0 {
-		return tool.TextResult("No custom tools have been created yet."), nil
+		return tool.TextResult("カスタムツールはまだ作成されていません。"), nil
 	}
 
 	data, _ := json.MarshalIndent(manifests, "", "  ")

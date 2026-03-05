@@ -48,12 +48,12 @@ func NewManager(toolsDir string, registry *tool.Registry, logger *slog.Logger) *
 // LoadAll scans toolsDir and registers all valid compiled tools.
 func (m *Manager) LoadAll() error {
 	if err := os.MkdirAll(m.toolsDir, 0755); err != nil {
-		return fmt.Errorf("dyntools: create tools dir: %w", err)
+		return fmt.Errorf("dyntools: ツールディレクトリの作成に失敗: %w", err)
 	}
 
 	entries, err := os.ReadDir(m.toolsDir)
 	if err != nil {
-		return fmt.Errorf("dyntools: read tools dir: %w", err)
+		return fmt.Errorf("dyntools: ツールディレクトリの読み取りに失敗: %w", err)
 	}
 
 	count := 0
@@ -63,14 +63,14 @@ func (m *Manager) LoadAll() error {
 		}
 		name := entry.Name()
 		if err := m.loadOne(name); err != nil {
-			m.logger.Warn("dyntools: skip tool", "name", name, "error", err)
+			m.logger.Warn("dyntools: ツールをスキップ", "name", name, "error", err)
 			continue
 		}
 		count++
 	}
 
 	if count > 0 {
-		m.logger.Info("dyntools: loaded tools", "count", count)
+		m.logger.Info("dyntools: ツールを読み込みました", "count", count)
 	}
 	return nil
 }
@@ -82,22 +82,22 @@ func (m *Manager) loadOne(name string) error {
 
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
-		return fmt.Errorf("read manifest: %w", err)
+		return fmt.Errorf("マニフェストの読み取りに失敗: %w", err)
 	}
 
 	var manifest Manifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		return fmt.Errorf("parse manifest: %w", err)
+		return fmt.Errorf("マニフェストのパースに失敗: %w", err)
 	}
 
 	if _, err := os.Stat(binaryPath); err != nil {
-		return fmt.Errorf("binary not found: %w", err)
+		return fmt.Errorf("バイナリが見つかりません: %w", err)
 	}
 
 	st := NewScriptTool(manifest.Name, manifest.Description, manifest.InputSchema, binaryPath)
 	m.registry.Register(st)
 	m.loaded[manifest.Name] = true
-	m.logger.Info("dyntools: registered", "tool", manifest.Name)
+	m.logger.Info("dyntools: 登録しました", "tool", manifest.Name)
 	return nil
 }
 
@@ -107,17 +107,17 @@ func (m *Manager) Create(name, description string, inputSchema json.RawMessage, 
 	defer m.mu.Unlock()
 
 	if !validName.MatchString(name) {
-		return fmt.Errorf("invalid tool name %q: must match [a-z][a-z0-9_]{0,63}", name)
+		return fmt.Errorf("無効なツール名 %q: [a-z][a-z0-9_]{0,63} に一致する必要があります", name)
 	}
 
 	// Check for conflicts with non-dynamic tools.
 	if _, exists := m.registry.Get(name); exists && !m.loaded[name] {
-		return fmt.Errorf("tool %q already exists as a builtin tool", name)
+		return fmt.Errorf("ツール %q は既にビルトインツールとして存在しています", name)
 	}
 
 	dir := filepath.Join(m.toolsDir, name)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("create dir: %w", err)
+		return fmt.Errorf("ディレクトリの作成に失敗: %w", err)
 	}
 
 	// Write manifest.
@@ -131,7 +131,7 @@ func (m *Manager) Create(name, description string, inputSchema json.RawMessage, 
 	manifestPath := filepath.Join(dir, "manifest.json")
 	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
 		os.RemoveAll(dir)
-		return fmt.Errorf("write manifest: %w", err)
+		return fmt.Errorf("マニフェストの書き込みに失敗: %w", err)
 	}
 
 	// Generate and write source.
@@ -139,7 +139,7 @@ func (m *Manager) Create(name, description string, inputSchema json.RawMessage, 
 	mainPath := filepath.Join(dir, "main.go")
 	if err := os.WriteFile(mainPath, []byte(source), 0644); err != nil {
 		os.RemoveAll(dir)
-		return fmt.Errorf("write source: %w", err)
+		return fmt.Errorf("ソースの書き込みに失敗: %w", err)
 	}
 
 	// Compile.
@@ -148,7 +148,7 @@ func (m *Manager) Create(name, description string, inputSchema json.RawMessage, 
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		compileErr := fmt.Errorf("compilation failed:\n%s", string(output))
+		compileErr := fmt.Errorf("コンパイルに失敗:\n%s", string(output))
 		os.RemoveAll(dir)
 		return compileErr
 	}
@@ -157,7 +157,7 @@ func (m *Manager) Create(name, description string, inputSchema json.RawMessage, 
 	st := NewScriptTool(name, description, inputSchema, binaryPath)
 	m.registry.Register(st)
 	m.loaded[name] = true
-	m.logger.Info("dyntools: created", "tool", name)
+	m.logger.Info("dyntools: 作成しました", "tool", name)
 	return nil
 }
 
@@ -167,7 +167,7 @@ func (m *Manager) Delete(name string) error {
 	defer m.mu.Unlock()
 
 	if !m.loaded[name] {
-		return fmt.Errorf("tool %q is not a dynamic tool", name)
+		return fmt.Errorf("ツール %q はダイナミックツールではありません", name)
 	}
 
 	m.registry.Unregister(name)
@@ -175,10 +175,10 @@ func (m *Manager) Delete(name string) error {
 
 	dir := filepath.Join(m.toolsDir, name)
 	if err := os.RemoveAll(dir); err != nil {
-		return fmt.Errorf("remove dir: %w", err)
+		return fmt.Errorf("ディレクトリの削除に失敗: %w", err)
 	}
 
-	m.logger.Info("dyntools: deleted", "tool", name)
+	m.logger.Info("dyntools: 削除しました", "tool", name)
 	return nil
 }
 
@@ -241,19 +241,19 @@ Rules:
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	m.logger.Info("dyntools: generating code with claude", "tool", name)
+	m.logger.Info("dyntools: claudeでコード生成中", "tool", name)
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("claude code generation timed out (120s)")
+			return "", fmt.Errorf("claudeのコード生成がタイムアウトしました (120秒)")
 		}
-		return "", fmt.Errorf("claude CLI failed: %v\nstderr: %s", err, stderr.String())
+		return "", fmt.Errorf("claude CLIの実行に失敗: %v\nstderr: %s", err, stderr.String())
 	}
 
 	code := stdout.String()
 	if code == "" {
-		return "", fmt.Errorf("claude returned empty output")
+		return "", fmt.Errorf("claudeが空の出力を返しました")
 	}
 
-	m.logger.Info("dyntools: code generated", "tool", name, "length", len(code))
+	m.logger.Info("dyntools: コード生成完了", "tool", name, "length", len(code))
 	return code, nil
 }
