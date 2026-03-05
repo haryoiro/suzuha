@@ -114,11 +114,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			logger := do.MustInvoke[*slog.Logger](i)
 			if cfg.Discord.Token != "" {
 				dc := do.MustInvoke[*discord.Chat](i)
-				logger.Info("chat mode: discord")
+				logger.Info("チャットモード: discord")
 				return dc, nil
 			}
 			bus := do.MustInvoke[*event.Bus](i)
-			logger.Info("chat mode: cli")
+			logger.Info("チャットモード: cli")
 			return cli.New(os.Stdin, os.Stdout, bus), nil
 		})
 
@@ -197,14 +197,14 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 			for _, f := range features {
 				if err := f.Setup(context.Background(), store.DB()); err != nil {
-					logger.Error("feature setup failed", "feature", f.Name(), "error", err)
+					logger.Error("フィーチャーのセットアップに失敗しました", "feature", f.Name(), "error", err)
 				}
 				for _, t := range f.Tools() {
 					registry.Register(t)
 				}
 				if h, ok := f.(agent.PipelineHook); ok {
 					ag.AddHook(h)
-					logger.Info("pipeline hook registered", "feature", f.Name())
+					logger.Info("パイプラインフックを登録しました", "feature", f.Name())
 				}
 			}
 			return features, nil
@@ -236,7 +236,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 		if parsed, tzErr := time.LoadLocation(tz); tzErr == nil {
 			schedulerLoc = parsed
 		} else {
-			logger.Warn("scheduler: invalid timezone, using UTC", "timezone", tz, "error", tzErr)
+			logger.Warn("scheduler: 無効なタイムゾーンです。UTCを使用します", "timezone", tz, "error", tzErr)
 		}
 	}
 
@@ -246,7 +246,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 			End:      cfg.Consolidator.Scheduler.QuietHours.End,
 			Location: schedulerLoc,
 		}, logger)(notifier)
-		logger.Info("scheduler: quiet hours enabled",
+		logger.Info("scheduler: 静寂時間を有効化しました",
 			"start", cfg.Consolidator.Scheduler.QuietHours.Start,
 			"end", cfg.Consolidator.Scheduler.QuietHours.End,
 			"timezone", schedulerLoc.String(),
@@ -282,7 +282,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 
 	sched := scheduler.New(taskRegistry, cc, logger)
 	if err := sched.Setup(context.Background()); err != nil {
-		return nil, fmt.Errorf("scheduler setup: %w", err)
+		return nil, fmt.Errorf("scheduler セットアップに失敗: %w", err)
 	}
 
 	// Convert config jobs to scheduler JobDefs.
@@ -296,7 +296,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 		}
 	}
 	if err := sched.LoadJobs(jobDefs); err != nil {
-		return nil, fmt.Errorf("scheduler load jobs: %w", err)
+		return nil, fmt.Errorf("scheduler ジョブの読み込みに失敗: %w", err)
 	}
 
 	return sched, nil
