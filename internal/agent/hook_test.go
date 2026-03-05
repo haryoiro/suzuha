@@ -90,7 +90,7 @@ type errorHook struct {
 
 func (h *errorHook) AfterPerceive(_ context.Context, _ []event.Event, _ *Perception) error {
 	h.called = true
-	return errors.New("hook error")
+	return errors.New("フックエラー")
 }
 func (h *errorHook) AfterThink(_ context.Context, _ *Perception, _ *Thought) error    { return nil }
 func (h *errorHook) AfterAct(_ context.Context, _ *Perception, _ *Thought) error      { return nil }

@@ -125,7 +125,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	if a.channelSettings != nil && p.Channel != "" && !p.IsDM {
 		mode := a.channelSettings.GetMode(p.Channel)
 		if mode == channelpkg.ModeListen {
-			a.logger.Info("listen mode: ingesting without response", "channel", p.Channel)
+			a.logger.Info("リッスンモード: 応答せずに取り込み", "channel", p.Channel)
 			return &Thought{ListenMode: true}
 		}
 		if a.channelSettings.Get(p.Channel).Home {
@@ -151,7 +151,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 		cs := a.conversationState(p.Channel)
 		directive = responseDirective(p.LastEvent, a.botID, p.MaxCloseness, p.MaxInterest, cs)
 	}
-	a.logger.Info("llm request", "message_count", len(a.ctx.Messages()),
+	a.logger.Info("LLMリクエスト", "message_count", len(a.ctx.Messages()),
 		"ephemeral_count", len(ephemeral), "directive", directive)
 
 	// Cache ephemeral messages for admin visibility.
@@ -171,7 +171,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 func (a *Agent) buildMemoryContext(ctx context.Context, query string) string {
 	memories, err := a.memory.Search(ctx, query, 3)
 	if err != nil {
-		a.logger.Debug("memory search failed", "error", err)
+		a.logger.Debug("メモリ検索失敗", "error", err)
 		return ""
 	}
 	if len(memories) == 0 {
@@ -271,7 +271,7 @@ func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
 func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID string) string {
 	u, err := a.users.Resolve(ctx, platform, platformUserID, "")
 	if err != nil {
-		a.logger.Debug("user profile lookup failed", "error", err)
+		a.logger.Debug("ユーザープロファイル取得失敗", "error", err)
 		return ""
 	}
 
@@ -280,7 +280,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 
 	events, err := a.users.GetAffinity(ctx, u.ID, 5)
 	if err != nil {
-		a.logger.Debug("affinity history lookup failed", "error", err)
+		a.logger.Debug("親密度履歴の取得失敗", "error", err)
 	}
 	if len(events) > 0 {
 		content += "Recent affinity history:\n"
@@ -292,7 +292,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 	if a.memory != nil {
 		memories, err := a.memory.ListByUser(ctx, u.ID, 5)
 		if err != nil {
-			a.logger.Debug("user memory search failed", "error", err)
+			a.logger.Debug("ユーザーメモリ検索失敗", "error", err)
 		}
 		if len(memories) > 0 {
 			content += "Known facts:\n"
@@ -303,7 +303,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 
 		episodes, err := a.memory.ListEpisodesByParticipant(ctx, platformUserID, 3)
 		if err != nil {
-			a.logger.Debug("episode memory search failed", "error", err)
+			a.logger.Debug("エピソードメモリ検索失敗", "error", err)
 		}
 		if len(episodes) > 0 {
 			content += "Shared episodes:\n"
@@ -315,7 +315,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 
 	guilds, err := a.users.GetUserGuilds(ctx, u.ID)
 	if err != nil {
-		a.logger.Debug("user guild lookup failed", "error", err)
+		a.logger.Debug("ユーザーギルド取得失敗", "error", err)
 	}
 	if len(guilds) > 0 {
 		type guildInfo struct {

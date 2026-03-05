@@ -34,7 +34,7 @@ func (a *Agent) compact(ctx context.Context) {
 			TargetCount: target,
 		})
 		if err != nil {
-			a.logger.Warn("consolidator compact failed, falling back to truncation", "error", err)
+			a.logger.Warn("コンソリデータの圧縮失敗、切り詰めにフォールバック", "error", err)
 			a.ctx.TruncateOldest(len(msgs) / 2)
 			a.ctx.ResetInjectedUsers()
 			a.ctx.ResetSeenChannels()
@@ -43,7 +43,7 @@ func (a *Agent) compact(ctx context.Context) {
 		}
 
 		if len(result.KeepIndices) == 0 {
-			a.logger.Warn("consolidator returned no keep indices, falling back to truncation")
+			a.logger.Warn("コンソリデータが保持インデックスを返さず、切り詰めにフォールバック")
 			a.ctx.TruncateOldest(len(msgs) / 2)
 			a.ctx.ResetInjectedUsers()
 			a.ctx.ResetSeenChannels()
@@ -82,7 +82,7 @@ func (a *Agent) applyAffinityDeltas(ctx context.Context, deltas []consolidator.A
 	for _, d := range deltas {
 		u, err := a.users.Resolve(ctx, d.Platform, d.PlatformUserID, "")
 		if err != nil {
-			a.logger.Warn("user resolve for affinity failed", "error", err)
+			a.logger.Warn("親密度更新用のユーザー解決失敗", "error", err)
 			continue
 		}
 
@@ -113,7 +113,7 @@ func (a *Agent) applyAffinityDeltas(ctx context.Context, deltas []consolidator.A
 			GroupEnd:       groupEnd,
 		}
 		if err := a.users.UpdateAffinity(ctx, evt); err != nil {
-			a.logger.Warn("update affinity failed", "error", err)
+			a.logger.Warn("親密度更新失敗", "error", err)
 		}
 	}
 }
@@ -160,7 +160,7 @@ func (a *Agent) logConversationTurn(ctx context.Context, startIdx int, channel s
 			msg.Timestamp,
 		)
 		if err != nil {
-			a.logger.Warn("log conversation: insert failed", "error", err, "role", msg.Role)
+			a.logger.Warn("会話ログ: 挿入失敗", "error", err, "role", msg.Role)
 		}
 	}
 }
@@ -180,14 +180,14 @@ func persistContext(ctx context.Context, db *sql.DB, agentCtx *Context, logger *
 	msgs := agentCtx.Messages()
 	data, err := json.Marshal(msgs)
 	if err != nil {
-		logger.Warn("persist context: marshal", "error", err)
+		logger.Warn("コンテキスト永続化: マーシャル失敗", "error", err)
 		return
 	}
 	_, err = db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO context_snapshot (id, messages, updated_at) VALUES (1, ?, datetime('now'))`,
 		string(data))
 	if err != nil {
-		logger.Warn("persist context: write", "error", err)
+		logger.Warn("コンテキスト永続化: 書き込み失敗", "error", err)
 	}
 }
 
@@ -200,13 +200,13 @@ func loadContext(db *sql.DB, logger *slog.Logger) []llm.Message {
 	err := db.QueryRow(`SELECT messages FROM context_snapshot WHERE id = 1`).Scan(&data)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			logger.Warn("load context: query", "error", err)
+			logger.Warn("コンテキスト読み込み: クエリ失敗", "error", err)
 		}
 		return nil
 	}
 	var msgs []llm.Message
 	if err := json.Unmarshal([]byte(data), &msgs); err != nil {
-		logger.Warn("load context: unmarshal", "error", err)
+		logger.Warn("コンテキスト読み込み: アンマーシャル失敗", "error", err)
 		return nil
 	}
 	return msgs

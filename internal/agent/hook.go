@@ -26,7 +26,7 @@ func (a *Agent) AddHook(h PipelineHook) {
 func (a *Agent) runHooks(fn func(PipelineHook) error) {
 	for _, h := range a.hooks {
 		if err := fn(h); err != nil {
-			a.logger.Warn("pipeline hook error", "error", err)
+			a.logger.Warn("パイプラインフックエラー", "error", err)
 		}
 	}
 }

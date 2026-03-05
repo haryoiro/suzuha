@@ -111,7 +111,7 @@ func New(
 			saved = saved[1:]
 		}
 		agentCtx.ReplaceAll(saved)
-		logger.Info("context restored from db", "messages", len(saved))
+		logger.Info("DBからコンテキスト復元", "messages", len(saved))
 	}
 
 	return &Agent{
@@ -142,6 +142,11 @@ func (a *Agent) AgentContext() *Context {
 // SetBotID updates the bot's platform user ID at runtime.
 func (a *Agent) SetBotID(id string) {
 	a.botID = id
+}
+
+// BotID returns the bot's platform user ID.
+func (a *Agent) BotID() string {
+	return a.botID
 }
 
 // SetLocationStore sets the location store for GPS context injection.
@@ -205,11 +210,11 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 
 			if len(batch) > 1 {
-				a.logger.Info("batch processing", "batch_size", len(batch))
+				a.logger.Info("バッチ処理", "batch_size", len(batch))
 			}
 
 			if err := a.handleBatch(ctx, batch); err != nil {
-				a.logger.Error("handle event failed", "error", err.Error())
+				a.logger.Error("イベント処理失敗", "error", err.Error())
 			}
 		}
 	}
@@ -231,11 +236,11 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	if a.metrics != nil {
 		a.metrics.ContextWindowUsage.Set(ratio)
 	}
-	a.logger.Debug("context window", "usage_ratio", fmt.Sprintf("%.2f", ratio),
+	a.logger.Debug("コンテキストウィンドウ", "usage_ratio", fmt.Sprintf("%.2f", ratio),
 		"message_count", len(a.ctx.Messages()),
 		"calibration", fmt.Sprintf("%.2f", a.ctx.TokenCalibration()))
 	if a.contextWindowPct > 0 && ratio > a.contextWindowPct {
-		a.logger.Info("context compaction triggered", "ratio", fmt.Sprintf("%.2f", ratio))
+		a.logger.Info("コンテキスト圧縮を開始", "ratio", fmt.Sprintf("%.2f", ratio))
 		a.compact(ctx)
 	}
 
@@ -263,7 +268,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 func (a *Agent) ReloadPrompt(newPrompt string) {
 	a.systemPrompt = newPrompt
 	a.ctx.SetSystemPrompt(newPrompt)
-	a.logger.Info("system prompt reloaded", "length", len(newPrompt))
+	a.logger.Info("システムプロンプト再読み込み", "length", len(newPrompt))
 }
 
 // ForceCompact triggers context compaction externally (e.g. from admin API).

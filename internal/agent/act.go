@@ -37,7 +37,7 @@ var _ tool.Tool = skipResponseTool{}
 func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 	resp, err := a.completeWithTools(ctx, t.Directive, p.Channel, t.Ephemeral)
 	if err != nil {
-		return fmt.Errorf("agent: complete: %w", err)
+		return fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
 
 	// Add assistant response to context.
@@ -57,27 +57,27 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 	text := llm.StripDirectiveTags(resp.Text)
 	switch {
 	case containsSkipTool(resp.ToolCalls) && text == "":
-		a.logger.Info("skipping response (skip_response tool)")
+		a.logger.Info("応答をスキップ (skip_responseツール)")
 	case containsSkipTool(resp.ToolCalls) && text != "":
-		a.logger.Warn("skip_response called with text, sending anyway",
+		a.logger.Warn("skip_responseがテキスト付きで呼ばれたため、そのまま送信します",
 			"text_length", len(text))
 		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-			return fmt.Errorf("agent: send: %w", err)
+			return fmt.Errorf("agent: 送信に失敗: %w", err)
 		}
 	case llm.IsSilentResponse(text):
-		a.logger.Info("skipping response (silent)",
+		a.logger.Info("応答をスキップ (サイレント)",
 			"raw_text", truncate(resp.Text, 100))
 	case a.channelSettings != nil && p.Channel != "" && !p.IsDM &&
 		a.channelSettings.GetMode(p.Channel) != channelpkg.ModeActive:
-		a.logger.Info("suppressing send to non-active channel",
+		a.logger.Info("非アクティブチャンネルへの送信を抑制",
 			"channel", p.Channel, "mode", string(a.channelSettings.GetMode(p.Channel)))
 	default:
-		a.logger.Info("sending response",
+		a.logger.Info("応答を送信",
 			"channel", p.Channel,
 			"length", len(text),
 			"content", truncate(text, 200))
 		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-			return fmt.Errorf("agent: send: %w", err)
+			return fmt.Errorf("agent: 送信に失敗: %w", err)
 		}
 	}
 
@@ -133,7 +133,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 			return nil, err
 		}
 
-		a.logger.Info("llm response",
+		a.logger.Info("LLM応答",
 			"iteration", iter,
 			"finish_reason", resp.FinishReason,
 			"text_length", len(resp.Text),
@@ -145,7 +145,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		// Calibrate token estimator using actual prompt tokens from the provider.
 		if iter == 0 && resp.Usage.PromptTokens > 0 {
 			a.ctx.CalibrateTokens(resp.Usage.PromptTokens)
-			a.logger.Debug("token calibration updated",
+			a.logger.Debug("トークンキャリブレーション更新",
 				"actual", resp.Usage.PromptTokens,
 				"estimated", a.ctx.EstimatedTokens(),
 				"ratio", fmt.Sprintf("%.2f", a.ctx.TokenCalibration()))
@@ -165,16 +165,16 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 
 		// Send intermediate text to chat if the LLM returned text alongside tool calls.
 		if intermediateText := llm.StripDirectiveTags(resp.Text); intermediateText != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
-			a.logger.Info("sending intermediate response before tool execution",
+			a.logger.Info("ツール実行前に中間応答を送信",
 				"channel", channel, "length", len(intermediateText))
 			if err := a.chat.Send(ctx, channel, intermediateText); err != nil {
-				a.logger.Warn("failed to send intermediate response", "error", err)
+				a.logger.Warn("中間応答の送信に失敗", "error", err)
 			}
 		}
 
 		allStopAfter := true
 		for _, tc := range resp.ToolCalls {
-			a.logger.Info("tool call",
+			a.logger.Info("ツール呼び出し",
 				"iteration", iter,
 				"tool", tc.Function.Name,
 				"call_id", tc.ID,
@@ -182,10 +182,10 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 
 			t, ok := toolMap[tc.Function.Name]
 			if !ok {
-				a.logger.Warn("unknown tool", "tool", tc.Function.Name)
+				a.logger.Warn("不明なツール", "tool", tc.Function.Name)
 				a.ctx.Add(llm.Message{
 					Role:       "tool",
-					Content:    fmt.Sprintf("error: unknown tool %q", tc.Function.Name),
+					Content:    fmt.Sprintf("error: 不明なツール %q", tc.Function.Name),
 					ToolCallID: tc.ID,
 					Timestamp:  time.Now(),
 				})
@@ -202,7 +202,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 			elapsed := time.Since(start)
 
 			if err != nil {
-				a.logger.Error("tool execute error",
+				a.logger.Error("ツール実行エラー",
 					"tool", tc.Function.Name, "error", err, "elapsed_ms", elapsed.Milliseconds())
 				if a.metrics != nil {
 					a.metrics.ToolCallsTotal.WithLabelValues(tc.Function.Name, "error").Inc()
@@ -234,7 +234,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 				content += c.Text
 			}
 
-			a.logger.Info("tool result",
+			a.logger.Info("ツール結果",
 				"tool", tc.Function.Name,
 				"elapsed_ms", elapsed.Milliseconds(),
 				"is_error", result.IsError,
@@ -249,12 +249,12 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		}
 
 		if allStopAfter {
-			a.logger.Info("all tools returned StopAfter, ending tool loop", "iteration", iter)
+			a.logger.Info("全ツールがStopAfterを返したためツールループを終了", "iteration", iter)
 			return resp, nil
 		}
 	}
 
-	return nil, fmt.Errorf("agent: tool loop exceeded %d iterations", maxIter)
+	return nil, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
 }
 
 // containsSkipTool returns true if the tool calls include skip_response.

@@ -23,7 +23,7 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 		for _, evt := range batch {
 			chID := evt.Message.Channel
 			if chID != "" && !evt.Message.IsDM && a.channelSettings.GetMode(chID) == channelpkg.ModeDisabled {
-				a.logger.Debug("skipping disabled channel", "channel", chID)
+				a.logger.Debug("無効なチャンネルをスキップ", "channel", chID)
 				continue
 			}
 			filtered = append(filtered, evt)
@@ -73,7 +73,7 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, float64, float64) {
 	msg := eventToMessage(evt)
 
-	a.logger.Info("event received",
+	a.logger.Info("イベント受信",
 		"source", evt.Source, "type", evt.Type,
 		"user", msg.UserName, "user_id", msg.UserID,
 		"channel", msg.Channel, "content", truncate(msg.Content, 100))
@@ -83,11 +83,11 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
-			a.logger.Warn("user resolve failed", "error", err)
+			a.logger.Warn("ユーザー解決失敗", "error", err)
 		} else {
 			if u.DisplayName != "" {
 				msg.UserName = u.DisplayName
-				a.logger.Debug("user resolved", "display_name", u.DisplayName, "role", u.Role,
+				a.logger.Debug("ユーザー解決済み", "display_name", u.DisplayName, "role", u.Role,
 					"closeness", u.Closeness, "trust", u.Trust, "interest", u.Interest)
 			}
 			userCloseness = u.Closeness
@@ -97,7 +97,7 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 			channelName := evt.Message.ChannelName
 			if guildID != "" {
 				if err := a.users.TrackGuildChannel(ctx, u.ID, guildID, guildName, msg.Channel, channelName); err != nil {
-					a.logger.Warn("track guild channel failed", "error", err)
+					a.logger.Warn("ギルドチャンネル追跡失敗", "error", err)
 				}
 			}
 		}
@@ -170,7 +170,7 @@ func (a *Agent) describeImages(ctx context.Context, urls []string) string {
 	for i, u := range urls {
 		desc, err := a.llm.DescribeImage(ctx, u)
 		if err != nil {
-			a.logger.Warn("vision: image description failed", "url", u, "error", err)
+			a.logger.Warn("ビジョン: 画像説明失敗", "url", u, "error", err)
 			desc = "画像の読み取りに失敗しました"
 		}
 		parts = append(parts, fmt.Sprintf("[添付画像%d: %s]", i+1, desc))
@@ -200,7 +200,7 @@ func (a *Agent) injectChannelHistory(ctx context.Context, channelID, messageCont
 		})
 		result, err := histTool.Execute(ctx, input)
 		if err != nil {
-			a.logger.Warn("channel history tool failed", "channel", channelID, "error", err)
+			a.logger.Warn("チャンネル履歴ツール失敗", "channel", channelID, "error", err)
 		} else if result != nil && !result.IsError && len(result.Content) > 0 && result.Content[0].Text != "" {
 			content = a.formatChannelHistory(ctx, channelID, result.Content[0].Text, source)
 		}
@@ -210,7 +210,7 @@ func (a *Agent) injectChannelHistory(ctx context.Context, channelID, messageCont
 		since := time.Now().Add(-3 * 24 * time.Hour)
 		memories, err := a.memory.SearchRecent(ctx, messageContent, 5, since)
 		if err != nil {
-			a.logger.Debug("channel memory fallback failed", "error", err)
+			a.logger.Debug("チャンネルメモリフォールバック失敗", "error", err)
 		}
 		if len(memories) > 0 {
 			var b strings.Builder
@@ -228,7 +228,7 @@ func (a *Agent) injectChannelHistory(ctx context.Context, channelID, messageCont
 			Content:   content,
 			Timestamp: time.Now(),
 		})
-		a.logger.Info("channel history injected", "channel", channelID, "length", len(content))
+		a.logger.Info("チャンネル履歴を注入", "channel", channelID, "length", len(content))
 	}
 }
 
