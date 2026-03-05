@@ -35,7 +35,7 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 	}
 	var s persistedState
 	if err := scheduler.LoadState(ctx, cc.DB, t.Name(), &s); err != nil {
-		cc.Logger.Warn("forget: load state", "error", err)
+		cc.Logger.Warn("forget: 状態の読み込みに失敗", "error", err)
 		return nil
 	}
 	t.mu.Lock()
@@ -48,30 +48,30 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	fc := defaultConfig()
 	if len(cfg) > 0 {
 		if err := json.Unmarshal(cfg, &fc); err != nil {
-			cc.Logger.Warn("forget: parse config", "error", err)
+			cc.Logger.Warn("forget: 設定の解析に失敗", "error", err)
 		}
 	}
 
-	cc.Logger.Info("forget: starting",
+	cc.Logger.Info("forget: 開始",
 		"similarity_threshold", fc.SimilarityThreshold,
 		"dry_run", fc.DryRun)
 
 	// Phase 1: Load all memories that have embeddings.
 	entries, err := loadEntries(ctx, cc.DB)
 	if err != nil {
-		return fmt.Errorf("forget: load entries: %w", err)
+		return fmt.Errorf("forget: エントリの読み込みに失敗: %w", err)
 	}
 	if len(entries) < 2 {
-		cc.Logger.Info("forget: not enough memories to deduplicate", "count", len(entries))
+		cc.Logger.Info("forget: 重複排除に必要な記憶数が不足", "count", len(entries))
 		return nil
 	}
-	cc.Logger.Info("forget: loaded memories", "count", len(entries))
+	cc.Logger.Info("forget: 記憶を読み込み完了", "count", len(entries))
 
 	// Phase 2: Build similarity groups using Union-Find.
 	// Load all embeddings in a single query instead of per-entry KNN queries.
 	embeddings, embErr := loadAllEmbeddings(ctx, cc.DB)
 	if embErr != nil {
-		return fmt.Errorf("forget: load embeddings: %w", embErr)
+		return fmt.Errorf("forget: 埋め込みの読み込みに失敗: %w", embErr)
 	}
 
 	uf := newUnionFind(len(entries))
@@ -122,7 +122,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 
 	if len(groups) == 0 {
-		cc.Logger.Info("forget: no duplicate groups found")
+		cc.Logger.Info("forget: 重複グループは見つかりませんでした")
 		return nil
 	}
 
@@ -131,7 +131,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		return len(groups[i].members) > len(groups[j].members)
 	})
 
-	cc.Logger.Info("forget: found duplicate groups", "groups", len(groups))
+	cc.Logger.Info("forget: 重複グループを検出", "groups", len(groups))
 
 	// Phase 4: Batch LLM calls to judge each group.
 	var totalDeleted, totalMerged int
@@ -145,7 +145,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 		decisions, err := judgeBatch(ctx, cc, batch)
 		if err != nil {
-			cc.Logger.Error("forget: llm judge batch", "error", err,
+			cc.Logger.Error("forget: LLM判定バッチでエラー", "error", err,
 				"batch", fmt.Sprintf("%d-%d", batchStart, batchEnd))
 			continue
 		}
@@ -165,12 +165,12 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 			case "keep":
 				n, err := cc.MemoryAdmin.DeleteBatch(ctx, d.deleteIDs)
 				if err != nil {
-					cc.Logger.Error("forget: delete", "error", err, "ids", d.deleteIDs)
+					cc.Logger.Error("forget: 削除に失敗", "error", err, "ids", d.deleteIDs)
 				}
 				totalDeleted += n
 			case "merge":
 				if err := mergeMemories(ctx, cc, d); err != nil {
-					cc.Logger.Error("forget: merge", "error", err)
+					cc.Logger.Error("forget: 統合に失敗", "error", err)
 				} else {
 					totalMerged++
 					totalDeleted += len(d.deleteIDs)
@@ -179,7 +179,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		}
 	}
 
-	cc.Logger.Info("forget: completed",
+	cc.Logger.Info("forget: 完了",
 		"groups", len(groups),
 		"deleted", totalDeleted,
 		"merged", totalMerged,
@@ -194,7 +194,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		TotalDeleted: totalDeleted,
 		TotalMerged:  totalMerged,
 	}); err != nil {
-		cc.Logger.Warn("forget: save state", "error", err)
+		cc.Logger.Warn("forget: 状態の保存に失敗", "error", err)
 	}
 
 	return nil
@@ -255,7 +255,7 @@ type decision struct {
 // deserializeFloat32 converts a raw byte blob (little-endian packed float32s) to []float32.
 func deserializeFloat32(blob []byte) ([]float32, error) {
 	if len(blob)%4 != 0 {
-		return nil, fmt.Errorf("invalid blob length %d", len(blob))
+		return nil, fmt.Errorf("不正なblobの長さ: %d", len(blob))
 	}
 	n := len(blob) / 4
 	vec := make([]float32, n)
@@ -288,7 +288,7 @@ func cosineDistance(a, b []float32) float64 {
 func loadAllEmbeddings(ctx context.Context, db *sql.DB) (map[string][]float32, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, embedding FROM memories_vec`)
 	if err != nil {
-		return nil, fmt.Errorf("load embeddings: %w", err)
+		return nil, fmt.Errorf("埋め込みの読み込みに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -330,7 +330,7 @@ func loadEntries(ctx context.Context, db *sql.DB) ([]memEntry, error) {
 		e.memType = memory.MemoryType(typ)
 		if metaRaw.Valid && metaRaw.String != "" {
 			if err := json.Unmarshal([]byte(metaRaw.String), &e.metadata); err != nil {
-				slog.Warn("forget: unmarshal metadata", "id", e.id, "error", err)
+				slog.Warn("forget: メタデータのJSON解析に失敗", "id", e.id, "error", err)
 			}
 		}
 		entries = append(entries, e)
@@ -344,7 +344,7 @@ func loadEntries(ctx context.Context, db *sql.DB) ([]memEntry, error) {
 func mergeMemories(ctx context.Context, cc *scheduler.CronContext, d decision) error {
 	// Delete all original members via AdminStore.
 	if _, err := cc.MemoryAdmin.DeleteBatch(ctx, d.deleteIDs); err != nil {
-		cc.Logger.Warn("forget: merge delete", "error", err, "ids", d.deleteIDs)
+		cc.Logger.Warn("forget: 統合時の削除に失敗", "error", err, "ids", d.deleteIDs)
 	}
 
 	// Save new merged memory (embedding auto-generated by Store.Save).
