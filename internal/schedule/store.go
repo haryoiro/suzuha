@@ -57,7 +57,7 @@ func (s *Store) Setup(ctx context.Context) error {
 		s.db.ExecContext(ctx, `ALTER TABLE scheduled_actions ADD COLUMN mode TEXT NOT NULL DEFAULT 'direct'`)
 	}
 	if err != nil {
-		return fmt.Errorf("create scheduled_actions: %w", err)
+		return fmt.Errorf("scheduled_actions テーブルの作成に失敗: %w", err)
 	}
 
 	_, err = s.db.ExecContext(ctx, `
@@ -150,7 +150,7 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 		SELECT COALESCE(cron_expr,''), random_minutes, scheduled_at FROM scheduled_actions WHERE id = ?`, id,
 	).Scan(&cronExpr, &randomMinutes, &scheduledAt)
 	if err != nil {
-		return fmt.Errorf("fetch action %s: %w", id, err)
+		return fmt.Errorf("アクション %s の取得に失敗: %w", id, err)
 	}
 
 	if cronExpr != "" {
@@ -186,7 +186,7 @@ func nextCronTime(expr string, t time.Time) (time.Time, error) {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	sched, err := parser.Parse(expr)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("parse cron %q: %w", expr, err)
+		return time.Time{}, fmt.Errorf("cron式 %q の解析に失敗: %w", expr, err)
 	}
 	return sched.Next(t), nil
 }
@@ -236,7 +236,7 @@ func (s *Store) List(ctx context.Context, opts ActionListOpts) ([]Action, error)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("schedule: list: %w", err)
+		return nil, fmt.Errorf("schedule: 一覧取得に失敗: %w", err)
 	}
 	defer rows.Close()
 	return scanActions(rows)
@@ -271,7 +271,7 @@ func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields
 		args = append(args, *fields.Status)
 	}
 	if len(sets) == 0 {
-		return fmt.Errorf("schedule: no fields to update")
+		return fmt.Errorf("schedule: 更新するフィールドがありません")
 	}
 	args = append(args, id)
 
@@ -286,11 +286,11 @@ func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields
 
 	res, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("schedule: update: %w", err)
+		return fmt.Errorf("schedule: 更新に失敗: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("schedule: not found: %s", id)
+		return fmt.Errorf("schedule: 見つかりません: %s", id)
 	}
 	return nil
 }
@@ -299,11 +299,11 @@ func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields
 func (s *Store) Delete(ctx context.Context, id string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM scheduled_actions WHERE id = ?`, id)
 	if err != nil {
-		return fmt.Errorf("schedule: delete: %w", err)
+		return fmt.Errorf("schedule: 削除に失敗: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("schedule: not found: %s", id)
+		return fmt.Errorf("schedule: 見つかりません: %s", id)
 	}
 	return nil
 }

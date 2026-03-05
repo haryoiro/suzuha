@@ -35,7 +35,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 		return nil
 	}
 
-	cc.Logger.Info("schedule: processing due actions", slog.Int("count", len(actions)))
+	cc.Logger.Info("schedule: 期限到来のアクションを処理中", slog.Int("count", len(actions)))
 
 	for _, a := range actions {
 		message := a.Content
@@ -44,7 +44,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 		if a.Mode == "prompt" {
 			generated, llmErr := generateFromPrompt(ctx, cc, a.Content)
 			if llmErr != nil {
-				cc.Logger.Error("schedule: llm generation failed, will retry",
+				cc.Logger.Error("schedule: LLM生成に失敗、リトライします",
 					slog.String("id", a.ID),
 					slog.Any("error", llmErr),
 				)
@@ -56,7 +56,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 		_, sendErr := cc.Notifier.Send(ctx, a.ChannelID, message, "schedule")
 		if sendErr != nil {
 			// Don't mark executed — will retry on next run.
-			cc.Logger.Warn("schedule: send failed, will retry",
+			cc.Logger.Warn("schedule: 送信に失敗、リトライします",
 				slog.String("id", a.ID),
 				slog.String("channel", a.ChannelID),
 				slog.Any("error", sendErr),
@@ -65,19 +65,19 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 		}
 
 		if markErr := store.MarkExecuted(ctx, a.ID, now); markErr != nil {
-			cc.Logger.Error("schedule: mark executed failed",
+			cc.Logger.Error("schedule: 実行済みマークに失敗",
 				slog.String("id", a.ID),
 				slog.Any("error", markErr),
 			)
 		}
 
 		if a.CronExpr != "" {
-			cc.Logger.Info("schedule: recurring action sent, rescheduled",
+			cc.Logger.Info("schedule: 定期アクションを送信、再スケジュール済み",
 				slog.String("id", a.ID),
 				slog.String("channel", a.ChannelID),
 			)
 		} else {
-			cc.Logger.Info("schedule: action sent",
+			cc.Logger.Info("schedule: アクションを送信済み",
 				slog.String("id", a.ID),
 				slog.String("channel", a.ChannelID),
 			)
@@ -102,7 +102,7 @@ func generateFromPrompt(ctx context.Context, cc *scheduler.CronContext, prompt s
 
 	text := llm.StripDirectiveTags(resp.Text)
 	if text == "" {
-		return "", fmt.Errorf("llm returned empty or silent response")
+		return "", fmt.Errorf("LLMが空またはサイレントなレスポンスを返しました")
 	}
 	return text, nil
 }

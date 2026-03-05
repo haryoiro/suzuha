@@ -64,17 +64,17 @@ type createInput struct {
 func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in createInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
 	if in.ChannelID == "" {
-		return tool.ErrorResult("channel_id is required"), nil
+		return tool.ErrorResult("channel_id は必須です"), nil
 	}
 	if strings.TrimSpace(in.Content) == "" {
-		return tool.ErrorResult("content is required"), nil
+		return tool.ErrorResult("content は必須です"), nil
 	}
 	if utf8.RuneCountInString(in.Content) > 2000 {
-		return tool.ErrorResult("content must be 2000 characters or less"), nil
+		return tool.ErrorResult("content は2000文字以下にしてください"), nil
 	}
 
 	// Validate cron expression if provided.
@@ -84,7 +84,7 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		var parseErr error
 		cronSchedule, parseErr = parser.Parse(in.CronExpr)
 		if parseErr != nil {
-			return tool.ErrorResult("invalid cron_expr: " + parseErr.Error()), nil
+			return tool.ErrorResult("無効な cron_expr: " + parseErr.Error()), nil
 		}
 	}
 
@@ -94,16 +94,16 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		var err error
 		scheduledAt, err = time.Parse(time.RFC3339, in.ScheduledAt)
 		if err != nil {
-			return tool.ErrorResult("scheduled_at must be RFC3339 format (e.g. 2025-01-15T10:00:00+09:00): " + err.Error()), nil
+			return tool.ErrorResult("scheduled_at はRFC3339形式で指定してください (例: 2025-01-15T10:00:00+09:00): " + err.Error()), nil
 		}
 		if time.Until(scheduledAt) < time.Minute {
-			return tool.ErrorResult("scheduled_at must be at least 1 minute in the future"), nil
+			return tool.ErrorResult("scheduled_at は少なくとも1分後の時刻を指定してください"), nil
 		}
 	case cronSchedule != nil:
 		// Auto-calculate the next occurrence from the cron expression.
 		scheduledAt = cronSchedule.Next(time.Now())
 	default:
-		return tool.ErrorResult("either scheduled_at or cron_expr is required"), nil
+		return tool.ErrorResult("scheduled_at または cron_expr のいずれかが必須です"), nil
 	}
 
 	// Apply random offset.
@@ -129,7 +129,7 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return nil, fmt.Errorf("schedule_create: %w", err)
 	}
 
-	result := fmt.Sprintf("Scheduled (ID: %s) at %s", action.ID, scheduledAt.Format("2006-01-02 15:04 MST"))
+	result := fmt.Sprintf("スケジュール登録完了 (ID: %s) 実行予定: %s", action.ID, scheduledAt.Format("2006-01-02 15:04 MST"))
 	if in.CronExpr != "" {
 		result += fmt.Sprintf(" (recurring: %s)", in.CronExpr)
 	}
@@ -183,7 +183,7 @@ func (t *ListTool) Execute(ctx context.Context, input json.RawMessage) (*tool.To
 	}
 
 	if len(actions) == 0 {
-		return tool.TextResult("No pending schedules."), nil
+		return tool.TextResult("保留中のスケジュールはありません。"), nil
 	}
 
 	var sb strings.Builder
@@ -234,10 +234,10 @@ type cancelInput struct {
 func (t *CancelTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in cancelInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.ID == "" {
-		return tool.ErrorResult("id is required"), nil
+		return tool.ErrorResult("id は必須です"), nil
 	}
 
 	ok, err := t.store.Cancel(ctx, in.ID)
@@ -245,7 +245,7 @@ func (t *CancelTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return nil, fmt.Errorf("schedule_cancel: %w", err)
 	}
 	if !ok {
-		return tool.ErrorResult("schedule not found or already executed/canceled"), nil
+		return tool.ErrorResult("スケジュールが見つからないか、既に実行済み・キャンセル済みです"), nil
 	}
-	return tool.TextResult(fmt.Sprintf("Canceled schedule %s", in.ID)), nil
+	return tool.TextResult(fmt.Sprintf("スケジュール %s をキャンセルしました", in.ID)), nil
 }
