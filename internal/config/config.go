@@ -172,12 +172,12 @@ type Admin struct {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("config: read %s: %w", path, err)
+		return nil, fmt.Errorf("config: %s の読み込みに失敗: %w", path, err)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("config: parse %s: %w", path, err)
+		return nil, fmt.Errorf("config: %s のパースに失敗: %w", path, err)
 	}
 
 	cfg.applyEnv()
@@ -209,7 +209,7 @@ func (c *Config) loadPromptFiles(configDir string) error {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return fmt.Errorf("config: read %s: %w", name, err)
+			return fmt.Errorf("config: %s の読み込みに失敗: %w", name, err)
 		}
 		parts = append(parts, strings.TrimSpace(string(data)))
 	}
