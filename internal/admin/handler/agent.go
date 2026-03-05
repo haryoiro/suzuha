@@ -27,14 +27,14 @@ func NewAgentHandler(baseURL string, logger *slog.Logger) *AgentHandler {
 func (h *AgentHandler) Compact(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, h.baseURL+"/internal/compact", nil)
 	if err != nil {
-		h.logger.Error("compact request build", "error", err)
+		h.logger.Error("コンパクトリクエストの作成に失敗", "error", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("compact proxy", "error", err)
+		h.logger.Error("コンパクトのプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}

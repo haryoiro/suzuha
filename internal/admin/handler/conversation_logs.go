@@ -66,7 +66,7 @@ func (h *ConversationLogsHandler) Export(w http.ResponseWriter, r *http.Request)
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
-		h.logger.Error("export conversation logs", "error", err)
+		h.logger.Error("会話ログのエクスポートに失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -82,7 +82,7 @@ func (h *ConversationLogsHandler) Export(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var row convLogRow
 		if err := rows.Scan(&row.TurnID, &row.Role, &row.Content, &row.ToolCalls, &row.ToolCallID); err != nil {
-			h.logger.Error("scan conversation log row", "error", err)
+			h.logger.Error("会話ログ行のスキャンに失敗", "error", err)
 			continue
 		}
 
@@ -114,7 +114,7 @@ func (h *ConversationLogsHandler) Export(w http.ResponseWriter, r *http.Request)
 	enc.SetEscapeHTML(false)
 	for _, t := range turns {
 		if err := enc.Encode(map[string]any{"messages": t.messages}); err != nil {
-			h.logger.Error("encode conversation turn", "error", err)
+			h.logger.Error("会話ターンのエンコードに失敗", "error", err)
 			return
 		}
 	}
@@ -130,7 +130,7 @@ func (h *ConversationLogsHandler) List(w http.ResponseWriter, r *http.Request) {
 		 GROUP BY channel_id
 		 ORDER BY last DESC`)
 	if err != nil {
-		h.logger.Error("list conversation logs", "error", err)
+		h.logger.Error("会話ログ一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

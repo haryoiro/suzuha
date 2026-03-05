@@ -136,6 +136,14 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	ctxH := handler.NewContextHandler(cfg.AgentContext, logger)
 	mux.HandleFunc("GET /api/context", ctxH.Proxy)
 
+	// Playground proxy (chat with LLM using agent context snapshot).
+	playH := handler.NewPlaygroundHandler(agentBase, logger)
+	mux.HandleFunc("POST /api/playground", playH.Send)
+
+	// Identity proxy (bot's own identity).
+	identityH := handler.NewIdentityHandler(agentBase, logger)
+	mux.HandleFunc("GET /api/identity", identityH.Get)
+
 	// Log streaming (consolidator logs are now part of agent).
 	logH := handler.NewLogHandler(cfg.AgentLogs, "", logger)
 	mux.HandleFunc("GET /api/logs/stream", logH.Stream)
@@ -148,7 +156,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	}
 	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
 		mux.Handle("/", spaHandler(staticDir))
-		logger.Info("serving SPA", "dir", staticDir)
+		logger.Info("SPAを配信中", "dir", staticDir)
 	} else {
 		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -175,7 +183,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 
 // ListenAndServe starts the admin HTTP server.
 func (s *Server) ListenAndServe() error {
-	s.logger.Info("suzuha-admin starting", "addr", s.cfg.Addr)
+	s.logger.Info("suzuha-admin を起動します", "addr", s.cfg.Addr)
 	return http.ListenAndServe(s.cfg.Addr, s.handler)
 }
 

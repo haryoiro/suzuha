@@ -32,7 +32,7 @@ func (h *LocationHandler) notifyAgentReload(r *http.Request) {
 	}
 	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
 	if err != nil {
-		h.logger.Warn("reload-location-settings proxy", "error", err)
+		h.logger.Warn("位置情報設定の再読み込みプロキシに失敗", "error", err)
 		return
 	}
 	resp.Body.Close()
@@ -53,7 +53,7 @@ func (h *LocationHandler) GetLocation(w http.ResponseWriter, r *http.Request) {
 	store := location.NewStore(h.db)
 	locs, err := store.QueryLatestByUserID(r.Context(), userID)
 	if err != nil {
-		h.logger.Error("get user location", "user_id", userID, "error", err)
+		h.logger.Error("ユーザー位置情報の取得に失敗", "user_id", userID, "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -70,7 +70,7 @@ func (h *LocationHandler) ListDevices(w http.ResponseWriter, r *http.Request) {
 	store := location.NewStore(h.db)
 	devices, err := store.ListDevices(r.Context())
 	if err != nil {
-		h.logger.Error("list location devices", "error", err)
+		h.logger.Error("位置情報デバイス一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *LocationHandler) UpsertDevice(w http.ResponseWriter, r *http.Request) {
 
 	store := location.NewStore(h.db)
 	if err := store.UpsertDevice(r.Context(), deviceID, body.OwnerName, body.UserID); err != nil {
-		h.logger.Error("upsert location device", "error", err)
+		h.logger.Error("位置情報デバイスの登録・更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -122,7 +122,7 @@ func (h *LocationHandler) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 
 	store := location.NewStore(h.db)
 	if err := store.DeleteDevice(r.Context(), deviceID); err != nil {
-		h.logger.Error("delete location device", "error", err)
+		h.logger.Error("位置情報デバイスの削除に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -138,7 +138,7 @@ func (h *LocationHandler) ListPlaces(w http.ResponseWriter, r *http.Request) {
 	store := location.NewStore(h.db)
 	places, err := store.ListPlaces(r.Context())
 	if err != nil {
-		h.logger.Error("list location places", "error", err)
+		h.logger.Error("場所一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -176,7 +176,7 @@ func (h *LocationHandler) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	}
 	store := location.NewStore(h.db)
 	if err := store.CreatePlace(r.Context(), p); err != nil {
-		h.logger.Error("create location place", "error", err)
+		h.logger.Error("場所の作成に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -213,7 +213,7 @@ func (h *LocationHandler) UpdatePlace(w http.ResponseWriter, r *http.Request) {
 	}
 	store := location.NewStore(h.db)
 	if err := store.UpdatePlace(r.Context(), p); err != nil {
-		h.logger.Error("update location place", "error", err)
+		h.logger.Error("場所の更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -232,7 +232,7 @@ func (h *LocationHandler) DeletePlace(w http.ResponseWriter, r *http.Request) {
 
 	store := location.NewStore(h.db)
 	if err := store.DeletePlace(r.Context(), id); err != nil {
-		h.logger.Error("delete location place", "error", err)
+		h.logger.Error("場所の削除に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

@@ -80,7 +80,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := h.users.List(r.Context(), offset, limit)
 	if err != nil {
-		h.logger.Error("list users", "error", err)
+		h.logger.Error("ユーザー一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -165,7 +165,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.users.Update(r.Context(), id, fields); err != nil {
-		h.logger.Error("update user", "error", err)
+		h.logger.Error("ユーザーの更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -182,7 +182,7 @@ func (h *UsersHandler) AffinityEvents(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.users.ListAffinityEvents(r.Context(), id, limit)
 	if err != nil {
-		h.logger.Error("affinity events", "error", err)
+		h.logger.Error("親密度イベントの取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -208,7 +208,7 @@ func (h *UsersHandler) Guilds(w http.ResponseWriter, r *http.Request) {
 
 	guilds, err := h.users.GetUserGuilds(r.Context(), id)
 	if err != nil {
-		h.logger.Error("user guilds", "error", err)
+		h.logger.Error("ユーザーのギルド取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -247,7 +247,7 @@ func (h *UsersHandler) Memories(w http.ResponseWriter, r *http.Request) {
 		 WHERE type = 'user' AND json_extract(metadata, '$.user_id') = ?
 		 ORDER BY updated_at DESC LIMIT ?`, id, limit)
 	if err != nil {
-		h.logger.Error("user memories", "error", err)
+		h.logger.Error("ユーザーのメモリ取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

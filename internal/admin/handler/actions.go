@@ -71,7 +71,7 @@ func (h *ActionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		Limit:  limit,
 	})
 	if err != nil {
-		h.logger.Error("list actions", "error", err)
+		h.logger.Error("アクション一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -138,7 +138,7 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:   "admin",
 	}
 	if err := h.store.Create(r.Context(), a); err != nil {
-		h.logger.Error("create action", "error", err)
+		h.logger.Error("アクションの作成に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -172,7 +172,7 @@ func (h *ActionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Update(r.Context(), id, fields); err != nil {
-		h.logger.Error("update action", "error", err)
+		h.logger.Error("アクションの更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -183,7 +183,7 @@ func (h *ActionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *ActionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.store.Delete(r.Context(), id); err != nil {
-		h.logger.Error("delete action", "error", err)
+		h.logger.Error("アクションの削除に失敗", "error", err)
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}

@@ -72,7 +72,7 @@ func (h *MetricsHandler) ServeJSON(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(),
 		`SELECT name, labels, value FROM metrics WHERE name LIKE 'suzuha_%' ORDER BY name, labels`)
 	if err != nil {
-		h.logger.Error("metrics query", "error", err)
+		h.logger.Error("メトリクスのクエリに失敗", "error", err)
 		http.Error(w, `{"error":"query failed"}`, http.StatusInternalServerError)
 		return
 	}

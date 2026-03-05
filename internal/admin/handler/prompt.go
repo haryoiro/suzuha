@@ -51,7 +51,7 @@ func (h *PromptHandler) List(w http.ResponseWriter, r *http.Request) {
 				files = append(files, promptFile{Name: name, Content: ""})
 				continue
 			}
-			h.logger.Error("read prompt file", "name", name, "error", err)
+			h.logger.Error("プロンプトファイルの読み込みに失敗", "name", name, "error", err)
 			continue
 		}
 		info, _ := os.Stat(path)
@@ -118,12 +118,12 @@ func (h *PromptHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	path := filepath.Join(h.promptDir, name)
 	if err := os.WriteFile(path, []byte(body.Content), 0644); err != nil {
-		h.logger.Error("write prompt file", "name", name, "error", err)
+		h.logger.Error("プロンプトファイルの書き込みに失敗", "name", name, "error", err)
 		http.Error(w, `{"error":"write failed"}`, http.StatusInternalServerError)
 		return
 	}
 
-	h.logger.Info("prompt file updated", "name", name, "length", len(body.Content))
+	h.logger.Info("プロンプトファイルを更新しました", "name", name, "length", len(body.Content))
 
 	// Notify agent to reload prompt.
 	reloaded := h.notifyReload(r)
@@ -142,12 +142,12 @@ func (h *PromptHandler) notifyReload(r *http.Request) bool {
 	}
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, h.agentBase+"/internal/reload-prompt", nil)
 	if err != nil {
-		h.logger.Warn("reload-prompt request build", "error", err)
+		h.logger.Warn("プロンプト再読み込みリクエストの作成に失敗", "error", err)
 		return false
 	}
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Warn("reload-prompt proxy", "error", err)
+		h.logger.Warn("プロンプト再読み込みのプロキシに失敗", "error", err)
 		return false
 	}
 	defer resp.Body.Close()

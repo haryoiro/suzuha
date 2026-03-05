@@ -66,7 +66,7 @@ func (h *ForgetHandler) Groups(w http.ResponseWriter, r *http.Request) {
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
 		 ORDER BY m.type, m.created_at`)
 	if err != nil {
-		h.logger.Error("forget: list", "error", err)
+		h.logger.Error("忘却: メモリ一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -216,12 +216,12 @@ func (h *ForgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	deleted, err := h.memStore.DeleteBatch(r.Context(), body.DeleteIDs)
 	if err != nil {
-		h.logger.Error("forget: delete", "error", err)
+		h.logger.Error("忘却: 削除に失敗", "error", err)
 		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
 		return
 	}
 
-	h.logger.Info("forget: manual delete", "requested", len(body.DeleteIDs), "deleted", deleted)
+	h.logger.Info("忘却: 手動削除を実行", "requested", len(body.DeleteIDs), "deleted", deleted)
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }
 
@@ -247,7 +247,7 @@ func (h *ForgetHandler) Merge(w http.ResponseWriter, r *http.Request) {
 	// Delete originals.
 	deleted, err := h.memStore.DeleteBatch(ctx, body.DeleteIDs)
 	if err != nil {
-		h.logger.Error("forget: merge delete", "error", err)
+		h.logger.Error("忘却: マージ時の削除に失敗", "error", err)
 	}
 
 	// Insert merged memory (without embedding — BackfillEmbeddings will handle it).
@@ -259,12 +259,12 @@ func (h *ForgetHandler) Merge(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	if saveErr := h.memStore.SaveRaw(ctx, mem); saveErr != nil {
-		h.logger.Error("forget: merge insert", "error", saveErr)
+		h.logger.Error("忘却: マージ後の挿入に失敗", "error", saveErr)
 		http.Error(w, `{"error":"merge insert failed"}`, http.StatusInternalServerError)
 		return
 	}
 
-	h.logger.Info("forget: manual merge", "deleted", deleted, "merged_content_len", len(body.MergedContent))
+	h.logger.Info("忘却: 手動マージを実行", "deleted", deleted, "merged_content_len", len(body.MergedContent))
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted, "merged": true})
 }
 
@@ -308,7 +308,7 @@ func (h *ForgetHandler) Run(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		h.logger.Error("forget: trigger proxy", "error", err)
+		h.logger.Error("忘却: トリガーのプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}

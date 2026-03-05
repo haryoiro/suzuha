@@ -22,7 +22,7 @@ func NewGuildsHandler(users user.AdminStore, logger *slog.Logger) *GuildsHandler
 func (h *GuildsHandler) List(w http.ResponseWriter, r *http.Request) {
 	guilds, err := h.users.ListGuilds(r.Context())
 	if err != nil {
-		h.logger.Error("list guilds", "error", err)
+		h.logger.Error("ギルド一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -52,7 +52,7 @@ func (h *GuildsHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *GuildsHandler) AllChannels(w http.ResponseWriter, r *http.Request) {
 	channels, err := h.users.ListAllChannels(r.Context())
 	if err != nil {
-		h.logger.Error("all channels", "error", err)
+		h.logger.Error("全チャンネル一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -82,7 +82,7 @@ func (h *GuildsHandler) Channels(w http.ResponseWriter, r *http.Request) {
 
 	channels, err := h.users.GetGuildChannels(r.Context(), guildID)
 	if err != nil {
-		h.logger.Error("guild channels", "error", err)
+		h.logger.Error("ギルドのチャンネル取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

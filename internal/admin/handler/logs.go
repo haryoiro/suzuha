@@ -91,13 +91,13 @@ func (h *LogHandler) proxySSE(ctx context.Context, url, source string, out chan<
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
-			h.logger.Error("log proxy request", "source", source, "error", err)
+			h.logger.Error("ログプロキシのリクエスト作成に失敗", "source", source, "error", err)
 			return
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			h.logger.Warn("log proxy connect", "source", source, "error", err)
+			h.logger.Warn("ログプロキシの接続に失敗", "source", source, "error", err)
 			// Retry after a delay.
 			select {
 			case <-ctx.Done():

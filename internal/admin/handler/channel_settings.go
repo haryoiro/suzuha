@@ -19,7 +19,7 @@ func (h *ChannelSettingsHandler) notifyAgentReload(r *http.Request) {
 	}
 	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
 	if err != nil {
-		h.logger.Warn("reload-channel-settings proxy", "error", err)
+		h.logger.Warn("チャンネル設定の再読み込みプロキシに失敗", "error", err)
 		return
 	}
 	resp.Body.Close()
@@ -78,7 +78,7 @@ func (h *ChannelSettingsHandler) List(w http.ResponseWriter, r *http.Request) {
 		rows, err = h.db.QueryContext(r.Context(), query)
 	}
 	if err != nil {
-		h.logger.Error("list channel settings", "error", err)
+		h.logger.Error("チャンネル設定一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -90,7 +90,7 @@ func (h *ChannelSettingsHandler) List(w http.ResponseWriter, r *http.Request) {
 		var lastMsg, settingsUpdated sql.NullString
 		if err := rows.Scan(&e.ChannelID, &e.ChannelName, &e.GuildID, &e.GuildName,
 			&e.UserCount, &e.Mode, &e.Home, &lastMsg, &settingsUpdated); err != nil {
-			h.logger.Error("scan channel setting", "error", err)
+			h.logger.Error("チャンネル設定のスキャンに失敗", "error", err)
 			continue
 		}
 		if lastMsg.Valid {
@@ -145,7 +145,7 @@ func (h *ChannelSettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) 
 		   updated_at = excluded.updated_at`,
 		channelID, body.GuildID, body.Mode, body.Home, now)
 	if err != nil {
-		h.logger.Error("upsert channel setting", "error", err)
+		h.logger.Error("チャンネル設定の登録・更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -166,7 +166,7 @@ func (h *ChannelSettingsHandler) Delete(w http.ResponseWriter, r *http.Request) 
 	_, err := h.db.ExecContext(r.Context(),
 		`DELETE FROM channel_settings WHERE channel_id = ?`, channelID)
 	if err != nil {
-		h.logger.Error("delete channel setting", "error", err)
+		h.logger.Error("チャンネル設定の削除に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

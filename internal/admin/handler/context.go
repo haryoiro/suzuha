@@ -27,7 +27,7 @@ func NewContextHandler(agentURL string, logger *slog.Logger) *ContextHandler {
 func (h *ContextHandler) Proxy(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.client.Get(h.agentURL)
 	if err != nil {
-		h.logger.Error("proxy context", "error", err)
+		h.logger.Error("コンテキストのプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}

@@ -25,7 +25,7 @@ func NewRSSHandler(db *sql.DB, logger *slog.Logger) *RSSHandler {
 func (h *RSSHandler) List(w http.ResponseWriter, r *http.Request) {
 	feeds, err := h.store.ListAll(r.Context())
 	if err != nil {
-		h.logger.Error("list feeds", "error", err)
+		h.logger.Error("フィード一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -60,7 +60,7 @@ func (h *RSSHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Enabled:   true,
 	}
 	if err := h.store.AddFeed(r.Context(), feed); err != nil {
-		h.logger.Error("create feed", "error", err)
+		h.logger.Error("フィードの作成に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -73,7 +73,7 @@ func (h *RSSHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	feed, err := h.store.GetFeed(r.Context(), id)
 	if err != nil {
-		h.logger.Error("get feed", "error", err)
+		h.logger.Error("フィードの取得に失敗", "error", err)
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
@@ -99,7 +99,7 @@ func (h *RSSHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	feed, err := h.store.GetFeed(r.Context(), id)
 	if err != nil {
-		h.logger.Error("get feed for update", "error", err)
+		h.logger.Error("更新対象フィードの取得に失敗", "error", err)
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
@@ -118,7 +118,7 @@ func (h *RSSHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.UpdateFeed(r.Context(), feed); err != nil {
-		h.logger.Error("update feed", "error", err)
+		h.logger.Error("フィードの更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -130,7 +130,7 @@ func (h *RSSHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *RSSHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.store.RemoveFeed(r.Context(), id); err != nil {
-		h.logger.Error("delete feed", "error", err)
+		h.logger.Error("フィードの削除に失敗", "error", err)
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
@@ -149,7 +149,7 @@ func (h *RSSHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 
 	items, total, err := h.store.ListItems(r.Context(), id, offset, limit)
 	if err != nil {
-		h.logger.Error("list feed items", "error", err)
+		h.logger.Error("フィードアイテム一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -163,7 +163,7 @@ func (h *RSSHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 func (h *RSSHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	total, enabled, err := h.store.CountFeeds(r.Context())
 	if err != nil {
-		h.logger.Error("feed stats", "error", err)
+		h.logger.Error("フィード統計の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

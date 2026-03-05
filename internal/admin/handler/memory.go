@@ -49,7 +49,7 @@ func (h *MemoryHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	memories, total, err := h.store.List(r.Context(), opts)
 	if err != nil {
-		h.logger.Error("list memories", "error", err)
+		h.logger.Error("メモリ一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -80,7 +80,7 @@ func (h *MemoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Metadata: req.Metadata,
 	}
 	if err := h.store.Save(r.Context(), mem); err != nil {
-		h.logger.Error("create memory", "error", err)
+		h.logger.Error("メモリの作成に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -93,7 +93,7 @@ func (h *MemoryHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	mem, err := h.store.Get(r.Context(), id)
 	if err != nil {
-		h.logger.Error("get memory", "error", err)
+		h.logger.Error("メモリの取得に失敗", "error", err)
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
@@ -124,7 +124,7 @@ func (h *MemoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Metadata: req.Metadata,
 	}
 	if err := h.store.Update(r.Context(), mem); err != nil {
-		h.logger.Error("update memory", "error", err)
+		h.logger.Error("メモリの更新に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *MemoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *MemoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.store.Delete(r.Context(), id); err != nil {
-		h.logger.Error("delete memory", "error", err)
+		h.logger.Error("メモリの削除に失敗", "error", err)
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
@@ -149,7 +149,7 @@ func (h *MemoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *MemoryHandler) VecStats(w http.ResponseWriter, r *http.Request) {
 	total, embedded, err := h.store.VecStats(r.Context())
 	if err != nil {
-		h.logger.Error("vec-stats", "error", err)
+		h.logger.Error("ベクトル統計の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -190,7 +190,7 @@ func (h *MemoryHandler) ListWithVec(w http.ResponseWriter, r *http.Request) {
 
 	memories, total, err := h.store.List(r.Context(), opts)
 	if err != nil {
-		h.logger.Error("list memories with vec", "error", err)
+		h.logger.Error("ベクトル付きメモリ一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -254,7 +254,7 @@ func (h *MemoryHandler) Duplicates(w http.ResponseWriter, r *http.Request) {
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
 		 ORDER BY m.type, m.updated_at DESC`)
 	if err != nil {
-		h.logger.Error("duplicates: list", "error", err)
+		h.logger.Error("重複メモリ一覧の取得に失敗", "error", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}

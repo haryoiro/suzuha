@@ -27,7 +27,7 @@ func NewToolsHandler(agentBase string, logger *slog.Logger) *ToolsHandler {
 func (h *ToolsHandler) List(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.client.Get(h.agentBase + "/internal/tools")
 	if err != nil {
-		h.logger.Error("proxy tools", "error", err)
+		h.logger.Error("ツール一覧のプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}
@@ -50,7 +50,7 @@ func (h *ToolsHandler) ToggleTool(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("proxy tool toggle", "error", err)
+		h.logger.Error("ツール切り替えのプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}
@@ -80,7 +80,7 @@ func NewLLMHandler(agentBase string, logger *slog.Logger) *LLMHandler {
 func (h *LLMHandler) Get(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.client.Get(h.agentBase + "/internal/llm")
 	if err != nil {
-		h.logger.Error("proxy llm get", "error", err)
+		h.logger.Error("LLM情報取得のプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}
@@ -100,7 +100,7 @@ func (h *LLMHandler) Put(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("proxy llm put", "error", err)
+		h.logger.Error("LLM設定更新のプロキシに失敗", "error", err)
 		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 		return
 	}
