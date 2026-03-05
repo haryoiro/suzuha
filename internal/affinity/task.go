@@ -38,11 +38,11 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 	}
 	var s persistedState
 	if err := scheduler.LoadState(ctx, cc.DB, t.Name(), &s); err != nil {
-		cc.Logger.Warn("affinity_eval: load state", "error", err)
+		cc.Logger.Warn("affinity_eval: 状態の読み込みに失敗", "error", err)
 		return nil
 	}
 	t.lastEvaluatedAt = s.LastEvaluatedAt
-	cc.Logger.Info("affinity_eval: restored state", "last_evaluated_at", s.LastEvaluatedAt)
+	cc.Logger.Info("affinity_eval: 状態を復元しました", "last_evaluated_at", s.LastEvaluatedAt)
 	return nil
 }
 
@@ -70,18 +70,18 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	inactiveThreshold := time.Now().Add(-time.Duration(ec.InactivityMinutes) * time.Minute)
 	hasRecentActivity, err := hasActivityBetween(ctx, cc.DB, t.lastEvaluatedAt, inactiveThreshold)
 	if err != nil {
-		cc.Logger.Debug("affinity_eval: check activity", "error", err)
+		cc.Logger.Debug("affinity_eval: アクティビティの確認に失敗", "error", err)
 		return nil
 	}
 	if !hasRecentActivity {
-		cc.Logger.Debug("affinity_eval: no recent activity to evaluate")
+		cc.Logger.Debug("affinity_eval: 評価対象の最近のアクティビティがありません")
 		return nil
 	}
 
 	// 2. Load conversation messages from context_snapshot.
 	msgs, err := loadContextMessages(cc.DB)
 	if err != nil {
-		cc.Logger.Debug("affinity_eval: load context", "error", err)
+		cc.Logger.Debug("affinity_eval: コンテキストの読み込みに失敗", "error", err)
 		return nil
 	}
 
@@ -97,23 +97,23 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		recent = append(recent, m)
 	}
 	if len(recent) < 2 {
-		cc.Logger.Debug("affinity_eval: too few messages", "count", len(recent))
+		cc.Logger.Debug("affinity_eval: メッセージが少なすぎます", "count", len(recent))
 		return nil
 	}
 
 	// 4. Run lightweight LLM evaluation.
 	deltas, err := evaluateAffinity(ctx, cc, recent)
 	if err != nil {
-		cc.Logger.Error("affinity_eval: llm eval", "error", err)
+		cc.Logger.Error("affinity_eval: LLM評価に失敗", "error", err)
 		return nil
 	}
 
 	// 5. Apply deltas.
 	for _, d := range deltas {
 		if err := applyDelta(ctx, cc.Users, d); err != nil {
-			cc.Logger.Warn("affinity_eval: apply delta", "error", err, "user_id", d.platformUserID)
+			cc.Logger.Warn("affinity_eval: デルタの適用に失敗", "error", err, "user_id", d.platformUserID)
 		} else {
-			cc.Logger.Info("affinity_eval: applied",
+			cc.Logger.Info("affinity_eval: 適用しました",
 				"user_id", d.platformUserID, "delta", d.delta, "reason", d.reason)
 		}
 	}
@@ -122,7 +122,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	now := time.Now()
 	t.lastEvaluatedAt = now
 	if saveErr := scheduler.SaveState(ctx, cc.DB, t.Name(), &persistedState{LastEvaluatedAt: now}); saveErr != nil {
-		cc.Logger.Warn("affinity_eval: save state", "error", saveErr)
+		cc.Logger.Warn("affinity_eval: 状態の保存に失敗", "error", saveErr)
 	}
 
 	return nil
@@ -251,7 +251,7 @@ func parseDeltas(text string) []affinityDelta {
 func applyDelta(ctx context.Context, users user.Store, d affinityDelta) error {
 	u, err := users.ResolveExisting(ctx, d.platform, d.platformUserID)
 	if err != nil {
-		return fmt.Errorf("resolve user %s/%s: %w", d.platform, d.platformUserID, err)
+		return fmt.Errorf("ユーザー %s/%s の解決に失敗: %w", d.platform, d.platformUserID, err)
 	}
 
 	axis := user.AffinityAxis(d.axis)
