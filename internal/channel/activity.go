@@ -38,7 +38,7 @@ func (s *SQLiteActivityStore) LastInteractionGlobal(ctx context.Context) (time.T
 		return time.Time{}, "", nil
 	}
 	if err != nil {
-		return time.Time{}, "", fmt.Errorf("channel: last interaction global: %w", err)
+		return time.Time{}, "", fmt.Errorf("channel: 全チャンネルの最終インタラクション取得に失敗: %w", err)
 	}
 	return lastMsg, channelID, nil
 }
