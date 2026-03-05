@@ -48,7 +48,7 @@ func (m *Manager) Start(ctx context.Context, servers []config.ToolServer) {
 			continue
 		}
 		if _, err := m.ConnectServer(ctx, srv); err != nil {
-			m.logger.Warn("mcp server connection failed, skipping",
+			m.logger.Warn("MCPサーバー接続に失敗、スキップします",
 				"name", srv.Name, "error", err)
 		}
 	}
@@ -61,11 +61,11 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 	defer m.mu.Unlock()
 
 	if _, exists := m.servers[srv.Name]; exists {
-		return nil, fmt.Errorf("server %q already connected", srv.Name)
+		return nil, fmt.Errorf("サーバー %q は既に接続されています", srv.Name)
 	}
 
 	if srv.Command == "" {
-		return nil, fmt.Errorf("mcp server %q: command is required", srv.Name)
+		return nil, fmt.Errorf("MCPサーバー %q: コマンドが必要です", srv.Name)
 	}
 
 	cmd := exec.Command(srv.Command, srv.Args...)
@@ -81,15 +81,15 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 	// corrupts the JSON-RPC stream.
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, fmt.Errorf("stdin pipe: %w", err)
+		return nil, fmt.Errorf("標準入力パイプの作成に失敗: %w", err)
 	}
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("stdout pipe: %w", err)
+		return nil, fmt.Errorf("標準出力パイプの作成に失敗: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start command: %w", err)
+		return nil, fmt.Errorf("コマンドの起動に失敗: %w", err)
 	}
 
 	// Wrap stdout with a filter that only passes JSON lines.
@@ -113,14 +113,14 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		cmd.Process.Kill()
-		return nil, fmt.Errorf("connect: %w", err)
+		return nil, fmt.Errorf("接続に失敗: %w", err)
 	}
 
 	// Discover and register tools.
 	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
 	if err != nil {
 		session.Close()
-		return nil, fmt.Errorf("list tools: %w", err)
+		return nil, fmt.Errorf("ツール一覧の取得に失敗: %w", err)
 	}
 
 	var toolNames []string
@@ -128,7 +128,7 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 		prefixedName := srv.Name + "." + t.Name
 		schema, err := json.Marshal(t.InputSchema)
 		if err != nil {
-			m.logger.Warn("mcp tool schema marshal failed",
+			m.logger.Warn("MCPツールスキーマのマーシャルに失敗",
 				"server", srv.Name, "tool", t.Name, "error", err)
 			continue
 		}
@@ -142,7 +142,7 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 		}
 		m.registry.Register(mcpTool)
 		toolNames = append(toolNames, prefixedName)
-		m.logger.Info("mcp tool registered",
+		m.logger.Info("MCPツールを登録",
 			"server", srv.Name, "tool", prefixedName)
 	}
 
@@ -151,7 +151,7 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 		toolNames: toolNames,
 	}
 
-	m.logger.Info("mcp server connected",
+	m.logger.Info("MCPサーバーに接続",
 		"name", srv.Name, "tools", len(toolNames))
 	return toolNames, nil
 }
@@ -163,7 +163,7 @@ func (m *Manager) DisconnectServer(name string) error {
 
 	entry, ok := m.servers[name]
 	if !ok {
-		return fmt.Errorf("server %q not connected", name)
+		return fmt.Errorf("サーバー %q は接続されていません", name)
 	}
 
 	entry.session.Close()
@@ -172,7 +172,7 @@ func (m *Manager) DisconnectServer(name string) error {
 	}
 	delete(m.servers, name)
 
-	m.logger.Info("mcp server disconnected", "name", name)
+	m.logger.Info("MCPサーバーを切断", "name", name)
 	return nil
 }
 
@@ -231,7 +231,7 @@ func (f *jsonLineReader) Read(p []byte) (int, error) {
 			if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
 				f.buf.Write(line)
 			} else if len(trimmed) > 0 {
-				f.logger.Debug("mcp stdout filtered", "server", f.name, "line", string(trimmed))
+				f.logger.Debug("MCP標準出力をフィルタ", "server", f.name, "line", string(trimmed))
 			}
 		}
 		if err != nil {
@@ -265,7 +265,7 @@ func (t *MCPTool) Execute(ctx context.Context, input json.RawMessage) (*tool.Too
 	var args map[string]any
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
-			return tool.ErrorResult(fmt.Sprintf("invalid input: %v", err)), nil
+			return tool.ErrorResult(fmt.Sprintf("無効な入力: %v", err)), nil
 		}
 	}
 
@@ -274,7 +274,7 @@ func (t *MCPTool) Execute(ctx context.Context, input json.RawMessage) (*tool.Too
 		Arguments: args,
 	})
 	if err != nil {
-		return tool.ErrorResult(fmt.Sprintf("mcp call failed: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("MCP呼び出しに失敗: %v", err)), nil
 	}
 
 	return ConvertResult(res), nil
@@ -292,11 +292,11 @@ func ConvertResult(res *mcp.CallToolResult) *tool.ToolResult {
 		case *mcp.AudioContent:
 			contents = append(contents, tool.Content{Type: "text", Text: "[audio: " + v.MIMEType + "]"})
 		default:
-			contents = append(contents, tool.Content{Type: "text", Text: "[unsupported content type]"})
+			contents = append(contents, tool.Content{Type: "text", Text: "[サポートされていないコンテンツタイプ]"})
 		}
 	}
 	if len(contents) == 0 {
-		contents = []tool.Content{{Type: "text", Text: "(empty result)"}}
+		contents = []tool.Content{{Type: "text", Text: "(空の結果)"}}
 	}
 	return &tool.ToolResult{Content: contents, IsError: res.IsError}
 }
@@ -308,6 +308,6 @@ type logWriter struct {
 }
 
 func (w *logWriter) Write(p []byte) (int, error) {
-	w.logger.Debug("mcp server stderr", "server", w.name, "output", string(p))
+	w.logger.Debug("MCPサーバー標準エラー出力", "server", w.name, "output", string(p))
 	return len(p), nil
 }
