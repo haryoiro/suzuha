@@ -512,17 +512,27 @@ export const toolsApi = {
 };
 
 // LLM Provider API
+export interface LLMPreset {
+  name: string;
+  provider: string;
+  model: string;
+  api_base: string;
+  max_tokens: number;
+  vision: boolean;
+}
+
 export interface LLMProviderInfo {
   provider: string;
   model: string;
   api_base: string;
   max_ctx: number;
   vision: boolean;
+  presets: LLMPreset[];
 }
 
 export const llmApi = {
   get: () => fetchJSON<LLMProviderInfo>("/api/llm"),
-  update: (body: { provider: string; model: string; api_key?: string; api_base?: string; max_ctx?: number; vision?: boolean }) =>
+  update: (body: { preset?: string; provider?: string; model?: string; api_key?: string; api_base?: string; max_ctx?: number; vision?: boolean }) =>
     fetchJSON<{ ok: boolean }>("/api/llm", {
       method: "PUT",
       body: JSON.stringify(body),

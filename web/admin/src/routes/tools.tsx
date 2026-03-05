@@ -10,11 +10,6 @@ const { Title, Text } = Typography;
 
 // --- LLM Provider Switcher ---
 
-const PRESETS: { label: string; provider: string; model: string; api_base: string; api_key?: string; max_ctx?: number; vision?: boolean }[] = [
-  { label: "Zhipu GLM-4.7", provider: "zhipu", model: "glm-4.7", api_base: "https://open.bigmodel.cn/api/paas/v4" },
-  { label: "Qwen3-8B (local)", provider: "qwen", model: "Qwen/Qwen3-8B-AWQ", api_base: "http://host.docker.internal:8000/v1", api_key: "none", max_ctx: 12000 },
-];
-
 const LLMProviderSection = memo(function LLMProviderSection() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["llm-provider"], queryFn: () => llmApi.get() });
@@ -27,19 +22,13 @@ const LLMProviderSection = memo(function LLMProviderSection() {
     onError: () => message.error("Switch failed"),
   });
 
-  const current = data ? `${data.provider}/${data.model}` : "";
+  const presets = data?.presets ?? [];
+  const currentPreset = presets.find(
+    (p) => p.provider === data?.provider && p.model === data?.model,
+  );
 
-  const handleSelect = (value: string) => {
-    const preset = PRESETS.find((p) => `${p.provider}/${p.model}` === value);
-    if (!preset) return;
-    mutation.mutate({
-      provider: preset.provider,
-      model: preset.model,
-      api_base: preset.api_base,
-      api_key: preset.api_key,
-      max_ctx: preset.max_ctx,
-      vision: preset.vision,
-    });
+  const handleSelect = (name: string) => {
+    mutation.mutate({ preset: name });
   };
 
   return (
@@ -47,15 +36,15 @@ const LLMProviderSection = memo(function LLMProviderSection() {
       <Space align="center">
         <Text strong>LLM Provider:</Text>
         <Select
-          value={current || undefined}
+          value={currentPreset?.name}
           loading={isLoading}
           disabled={mutation.isPending}
           onChange={handleSelect}
           style={{ width: 250 }}
           placeholder="Select provider"
-          options={PRESETS.map((p) => ({
-            value: `${p.provider}/${p.model}`,
-            label: p.label,
+          options={presets.map((p) => ({
+            value: p.name,
+            label: `${p.name} (${p.model})`,
           }))}
         />
         {data && (
