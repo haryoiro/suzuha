@@ -136,7 +136,7 @@ func (c *Client) SwapProvider(providerName, model, apiKey, apiBase string, maxCt
 	if maxCtx > 0 {
 		c.maxCtx = maxCtx
 	}
-	c.logger.Info("llm provider swapped", "provider", providerName, "model", model, "api_base", apiBase, "max_ctx", c.maxCtx, "vision", visionCapable)
+	c.logger.Info("llm プロバイダを切り替えました", "provider", providerName, "model", model, "api_base", apiBase, "max_ctx", c.maxCtx, "vision", visionCapable)
 	return nil
 }
 
@@ -185,7 +185,7 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		if emb.Provider != "" && (emb.Provider != providerName || emb.APIKey != apiKey || emb.APIBase != apiBase) {
 			ep, err := newProvider(emb.Provider, emb.APIKey, emb.APIBase)
 			if err != nil {
-				return nil, fmt.Errorf("llm: init embedding provider: %w", err)
+				return nil, fmt.Errorf("llm: 埋め込みプロバイダの初期化に失敗: %w", err)
 			}
 			c.embeddingProv = ep
 		} else {
@@ -199,13 +199,13 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		if vis.Provider != "" && (vis.Provider != providerName || vis.APIKey != apiKey || vis.APIBase != apiBase) {
 			vp, err := newProvider(vis.Provider, vis.APIKey, vis.APIBase)
 			if err != nil {
-				return nil, fmt.Errorf("llm: init vision provider: %w", err)
+				return nil, fmt.Errorf("llm: ビジョンプロバイダの初期化に失敗: %w", err)
 			}
 			c.visionProv = vp
 		} else {
 			c.visionProv = p
 		}
-		logger.Info("vision model enabled", "model", vis.Model)
+		logger.Info("ビジョンモデルを有効化しました", "model", vis.Model)
 	}
 
 	return c, nil
@@ -220,11 +220,11 @@ func newProvider(providerName, apiKey, apiBase string) (providers.Provider, erro
 	case "openai", "zhipu", "qwen":
 		p, err := openai.New(opts...)
 		if err != nil {
-			return nil, fmt.Errorf("llm: init provider %s: %w", providerName, err)
+			return nil, fmt.Errorf("llm: プロバイダ %s の初期化に失敗: %w", providerName, err)
 		}
 		return p, nil
 	default:
-		return nil, fmt.Errorf("llm: unsupported provider %q", providerName)
+		return nil, fmt.Errorf("llm: 未対応のプロバイダ %q", providerName)
 	}
 }
 
@@ -246,7 +246,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		Tools:    convertTools(tools),
 	}
 
-	c.logger.Debug("llm request",
+	c.logger.Debug("llm リクエスト",
 		"model", model,
 		"messages", len(messages),
 		"tools", len(tools))
@@ -260,8 +260,8 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	}
 
 	if err != nil {
-		c.logger.Error("llm completion failed", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
-		return nil, fmt.Errorf("llm: completion: %w", err)
+		c.logger.Error("llm 補完に失敗しました", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
+		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
 	}
 
 	if c.metrics != nil && resp.Usage != nil {
@@ -270,8 +270,8 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	}
 
 	if len(resp.Choices) == 0 {
-		c.logger.Warn("llm empty response", "model", model, "elapsed_ms", elapsed.Milliseconds())
-		return nil, fmt.Errorf("llm: empty response")
+		c.logger.Warn("llm 空のレスポンスを受信しました", "model", model, "elapsed_ms", elapsed.Milliseconds())
+		return nil, fmt.Errorf("llm: 空のレスポンス")
 	}
 
 	choice := resp.Choices[0]
@@ -286,7 +286,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		r.Usage = *resp.Usage
 	}
 
-	c.logger.Info("llm completion",
+	c.logger.Info("llm 補完完了",
 		"model", model,
 		"elapsed_ms", elapsed.Milliseconds(),
 		"finish_reason", r.FinishReason,
@@ -294,7 +294,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		"tokens_out", r.Usage.CompletionTokens,
 		"tool_calls", len(r.ToolCalls))
 	if reasoning != "" {
-		c.logger.Debug("llm reasoning", "length", len(reasoning),
+		c.logger.Debug("llm 推論内容", "length", len(reasoning),
 			"content", truncateStr(reasoning, 300))
 	}
 
@@ -326,11 +326,11 @@ func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model
 
 	resp, err := prov.Completion(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("llm: completion: %w", err)
+		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("llm: empty response")
+		return nil, fmt.Errorf("llm: 空のレスポンス")
 	}
 
 	choice := resp.Choices[0]
@@ -413,7 +413,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 
 	ep, ok := c.embeddingProv.(providers.EmbeddingProvider)
 	if !ok {
-		return nil, fmt.Errorf("llm: embedding provider %q does not support embeddings", c.embeddingProv.Name())
+		return nil, fmt.Errorf("llm: 埋め込みプロバイダ %q は埋め込みをサポートしていません", c.embeddingProv.Name())
 	}
 
 	params := providers.EmbeddingParams{
@@ -425,7 +425,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 		params.Dimensions = &dims
 	}
 
-	c.logger.Debug("embedding request", "model", c.embeddingModel, "text_length", len(text))
+	c.logger.Debug("埋め込みリクエスト", "model", c.embeddingModel, "text_length", len(text))
 
 	start := time.Now()
 	resp, err := ep.Embedding(ctx, params)
@@ -436,13 +436,13 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	}
 
 	if err != nil {
-		c.logger.Error("embedding failed", "model", c.embeddingModel, "elapsed_ms", elapsed.Milliseconds(), "error", err)
-		return nil, fmt.Errorf("llm: embedding: %w", err)
+		c.logger.Error("埋め込みに失敗しました", "model", c.embeddingModel, "elapsed_ms", elapsed.Milliseconds(), "error", err)
+		return nil, fmt.Errorf("llm: 埋め込みに失敗: %w", err)
 	}
 
 	if len(resp.Data) == 0 {
-		c.logger.Warn("empty embedding response", "model", c.embeddingModel)
-		return nil, fmt.Errorf("llm: empty embedding response")
+		c.logger.Warn("埋め込みの空レスポンスを受信しました", "model", c.embeddingModel)
+		return nil, fmt.Errorf("llm: 埋め込みの空レスポンス")
 	}
 
 	// Convert float64 (API response) to float32 (sqlite-vec storage).
@@ -452,7 +452,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 		result[i] = float32(v)
 	}
 
-	c.logger.Debug("embedding done", "model", c.embeddingModel, "dims", len(result), "elapsed_ms", elapsed.Milliseconds())
+	c.logger.Debug("埋め込み完了", "model", c.embeddingModel, "dims", len(result), "elapsed_ms", elapsed.Milliseconds())
 	return result, nil
 }
 
@@ -479,7 +479,7 @@ func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, er
 	c.mu.RUnlock()
 
 	if prov == nil {
-		return "", fmt.Errorf("llm: vision model not configured")
+		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
 	}
 
 	params := providers.CompletionParams{
@@ -495,23 +495,23 @@ func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, er
 		},
 	}
 
-	c.logger.Debug("vision request", "model", model, "url", imageURL)
+	c.logger.Debug("ビジョンリクエスト", "model", model, "url", imageURL)
 
 	start := time.Now()
 	resp, err := prov.Completion(ctx, params)
 	elapsed := time.Since(start)
 
 	if err != nil {
-		c.logger.Error("vision completion failed", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err)
-		return "", fmt.Errorf("llm: vision: %w", err)
+		c.logger.Error("ビジョン補完に失敗しました", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err)
+		return "", fmt.Errorf("llm: ビジョンに失敗: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("llm: vision: empty response")
+		return "", fmt.Errorf("llm: ビジョン: 空のレスポンス")
 	}
 
 	text := resp.Choices[0].Message.ContentString()
-	c.logger.Info("vision completion", "model", model, "elapsed_ms", elapsed.Milliseconds(), "description_length", len(text))
+	c.logger.Info("ビジョン補完完了", "model", model, "elapsed_ms", elapsed.Milliseconds(), "description_length", len(text))
 	return text, nil
 }
 
