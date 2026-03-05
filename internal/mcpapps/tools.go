@@ -45,10 +45,10 @@ func (t *SearchTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		Limit int    `json:"limit"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.Query == "" {
-		return tool.ErrorResult("query is required"), nil
+		return tool.ErrorResult("クエリは必須です"), nil
 	}
 	if in.Limit <= 0 {
 		in.Limit = 5
@@ -56,15 +56,15 @@ func (t *SearchTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 
 	result, err := t.registry.Search(ctx, in.Query, in.Limit)
 	if err != nil {
-		return tool.ErrorResult("search failed: " + err.Error()), nil
+		return tool.ErrorResult("検索失敗: " + err.Error()), nil
 	}
 
 	if len(result.Servers) == 0 {
-		return tool.TextResult("No MCP servers found matching: " + in.Query), nil
+		return tool.TextResult("該当するMCPサーバーが見つかりません: " + in.Query), nil
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Found %d MCP servers:\n\n", len(result.Servers))
+	fmt.Fprintf(&sb, "%d件のMCPサーバーが見つかりました:\n\n", len(result.Servers))
 
 	for _, sr := range result.Servers {
 		s := sr.Server
@@ -100,7 +100,7 @@ func (t *SearchTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("To install, use: install_mcp_app with the server name.")
+	sb.WriteString("インストールするには、サーバー名を指定して install_mcp_app を使用してください。")
 	return tool.TextResult(sb.String()), nil
 }
 
@@ -141,16 +141,16 @@ func (t *InstallTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 		Env  map[string]string `json:"env"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.Name == "" {
-		return tool.ErrorResult("name is required"), nil
+		return tool.ErrorResult("名前は必須です"), nil
 	}
 
 	// Fetch server details from registry.
 	srv, err := t.registry.GetServer(ctx, in.Name)
 	if err != nil {
-		return tool.ErrorResult("registry lookup failed: " + err.Error()), nil
+		return tool.ErrorResult("レジストリ検索失敗: " + err.Error()), nil
 	}
 
 	// Select the best package.
@@ -167,7 +167,7 @@ func (t *InstallTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 
 	// Check if already connected.
 	if t.mcpMgr.IsConnected(toolSrv.Name) {
-		return tool.ErrorResult(fmt.Sprintf("server %q is already installed", toolSrv.Name)), nil
+		return tool.ErrorResult(fmt.Sprintf("サーバー %q は既にインストールされています", toolSrv.Name)), nil
 	}
 
 	// Pre-install the npm package globally so npx won't output download
@@ -177,18 +177,18 @@ func (t *InstallTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 		if pkg.Version != "" {
 			pkgSpec += "@" + pkg.Version
 		}
-		t.logger.Info("mcpapps: pre-installing npm package", "package", pkgSpec)
+		t.logger.Info("mcpapps: npmパッケージを事前インストール中", "package", pkgSpec)
 		installCmd := exec.CommandContext(ctx, "npm", "install", "-g", pkgSpec)
 		installCmd.Env = append(os.Environ(), "NO_COLOR=1")
 		if out, err := installCmd.CombinedOutput(); err != nil {
-			return tool.ErrorResult(fmt.Sprintf("npm install failed: %v\n%s", err, string(out))), nil
+			return tool.ErrorResult(fmt.Sprintf("npmインストール失敗: %v\n%s", err, string(out))), nil
 		}
 	}
 
 	// Connect and register tools.
 	toolNames, err := t.mcpMgr.ConnectServer(ctx, toolSrv)
 	if err != nil {
-		return tool.ErrorResult("failed to connect MCP server: " + err.Error()), nil
+		return tool.ErrorResult("MCPサーバー接続失敗: " + err.Error()), nil
 	}
 
 	// Persist to DB.
@@ -208,7 +208,7 @@ func (t *InstallTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 	if err := t.store.Add(ctx, app); err != nil {
 		// Rollback: disconnect on DB failure.
 		t.mcpMgr.DisconnectServer(toolSrv.Name)
-		return tool.ErrorResult("failed to save app: " + err.Error()), nil
+		return tool.ErrorResult("アプリ保存失敗: " + err.Error()), nil
 	}
 
 	title := srv.Title
@@ -217,12 +217,12 @@ func (t *InstallTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Installed **%s** successfully!\n\n", title)
-	fmt.Fprintf(&sb, "Available tools (%d):\n", len(toolNames))
+	fmt.Fprintf(&sb, "**%s** をインストールしました!\n\n", title)
+	fmt.Fprintf(&sb, "利用可能なツール (%d):\n", len(toolNames))
 	for _, name := range toolNames {
 		fmt.Fprintf(&sb, "- `%s`\n", name)
 	}
-	sb.WriteString("\nYou can now use these tools.")
+	sb.WriteString("\nこれらのツールが利用可能になりました。")
 
 	return tool.TextResult(sb.String()), nil
 }
@@ -260,10 +260,10 @@ func (t *UninstallTool) Execute(ctx context.Context, input json.RawMessage) (*to
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.Name == "" {
-		return tool.ErrorResult("name is required"), nil
+		return tool.ErrorResult("名前は必須です"), nil
 	}
 
 	// Disconnect server (ignore error if not connected -- may have crashed).
@@ -271,10 +271,10 @@ func (t *UninstallTool) Execute(ctx context.Context, input json.RawMessage) (*to
 
 	// Remove from DB.
 	if err := t.store.Remove(ctx, in.Name); err != nil {
-		return tool.ErrorResult("failed to remove app: " + err.Error()), nil
+		return tool.ErrorResult("アプリ削除失敗: " + err.Error()), nil
 	}
 
-	return tool.TextResult(fmt.Sprintf("App %q uninstalled.", in.Name)), nil
+	return tool.TextResult(fmt.Sprintf("アプリ %q をアンインストールしました。", in.Name)), nil
 }
 
 var _ tool.Tool = (*UninstallTool)(nil)
@@ -305,24 +305,24 @@ func (t *ListAppsTool) InputSchema() json.RawMessage {
 func (t *ListAppsTool) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolResult, error) {
 	apps, err := t.store.List(ctx)
 	if err != nil {
-		return tool.ErrorResult("failed to list apps: " + err.Error()), nil
+		return tool.ErrorResult("アプリ一覧取得失敗: " + err.Error()), nil
 	}
 
 	if len(apps) == 0 {
-		return tool.TextResult("No MCP apps installed. Use search_mcp_apps to find and install_mcp_app to install."), nil
+		return tool.TextResult("MCPアプリはインストールされていません。search_mcp_apps で検索し、install_mcp_app でインストールしてください。"), nil
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Installed MCP apps (%d):\n\n", len(apps))
+	fmt.Fprintf(&sb, "インストール済みMCPアプリ (%d):\n\n", len(apps))
 
 	for _, app := range apps {
 		title := app.Title
 		if title == "" {
 			title = app.Name
 		}
-		status := "connected"
+		status := "接続中"
 		if !t.mcpMgr.IsConnected(app.Name) {
-			status = "disconnected"
+			status = "切断"
 		}
 
 		fmt.Fprintf(&sb, "### %s [%s]\n", title, status)

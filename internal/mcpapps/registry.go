@@ -101,22 +101,22 @@ func (c *RegistryClient) Search(ctx context.Context, query string, limit int) (*
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("リクエストの作成に失敗: %w", err)
 	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("registry request: %w", err)
+		return nil, fmt.Errorf("レジストリリクエストに失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("registry returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("レジストリがステータス %d を返しました", resp.StatusCode)
 	}
 
 	var result SearchResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		return nil, fmt.Errorf("レスポンスのデコードに失敗: %w", err)
 	}
 	return &result, nil
 }
@@ -127,25 +127,25 @@ func (c *RegistryClient) GetServer(ctx context.Context, name string) (*ServerJSO
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("リクエストの作成に失敗: %w", err)
 	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("registry request: %w", err)
+		return nil, fmt.Errorf("レジストリリクエストに失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("server %q not found in registry", name)
+		return nil, fmt.Errorf("サーバー %q がレジストリに見つかりません", name)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("registry returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("レジストリがステータス %d を返しました", resp.StatusCode)
 	}
 
 	var sr ServerResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		return nil, fmt.Errorf("レスポンスのデコードに失敗: %w", err)
 	}
 	return &sr.Server, nil
 }

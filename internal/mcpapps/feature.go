@@ -43,7 +43,7 @@ func (f *Feature) Setup(_ context.Context, db *sql.DB) error {
 	// Auto-reconnect enabled apps from DB.
 	apps, err := f.store.ListEnabled(ctx)
 	if err != nil {
-		f.logger.Warn("mcpapps: failed to list enabled apps", "error", err)
+		f.logger.Warn("mcpapps: 有効なアプリの一覧取得に失敗", "error", err)
 		return nil
 	}
 
@@ -53,10 +53,10 @@ func (f *Feature) Setup(_ context.Context, db *sql.DB) error {
 		toolNames, err := f.mcpMgr.ConnectServer(connectCtx, srv)
 		cancel()
 		if err != nil {
-			f.logger.Warn("mcpapps: reconnect failed", "app", app.Name, "error", err)
+			f.logger.Warn("mcpapps: 再接続失敗", "app", app.Name, "error", err)
 			continue
 		}
-		f.logger.Info("mcpapps: reconnected", "app", app.Name, "tools", len(toolNames))
+		f.logger.Info("mcpapps: 再接続完了", "app", app.Name, "tools", len(toolNames))
 	}
 
 	return nil

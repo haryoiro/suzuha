@@ -29,9 +29,9 @@ func SelectPackage(srv ServerJSON) (Package, error) {
 		types = append(types, pkg.RegistryType+"/"+pkg.Transport.Type)
 	}
 	if len(types) == 0 {
-		return Package{}, fmt.Errorf("server %q has no packages", srv.Name)
+		return Package{}, fmt.Errorf("サーバー %q にパッケージがありません", srv.Name)
 	}
-	return Package{}, fmt.Errorf("no supported package type for %q (available: %s); only npm+stdio is supported",
+	return Package{}, fmt.Errorf("%q に対応するパッケージタイプがありません (利用可能: %s); npm+stdioのみサポートされています",
 		srv.Name, strings.Join(types, ", "))
 }
 
@@ -39,7 +39,7 @@ func SelectPackage(srv ServerJSON) (Package, error) {
 // userEnv provides user-supplied environment variable values.
 func ToToolServer(serverName string, pkg Package, userEnv map[string]string) (config.ToolServer, error) {
 	if pkg.RegistryType != "npm" {
-		return config.ToolServer{}, fmt.Errorf("unsupported registry type %q; only npm is supported", pkg.RegistryType)
+		return config.ToolServer{}, fmt.Errorf("サポートされていないレジストリタイプ %q; npmのみサポートされています", pkg.RegistryType)
 	}
 
 	// Build command args.
@@ -89,7 +89,7 @@ func ToToolServer(serverName string, pkg Package, userEnv map[string]string) (co
 	}
 
 	if len(missing) > 0 {
-		return config.ToolServer{}, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
+		return config.ToolServer{}, fmt.Errorf("必須環境変数が不足しています: %s", strings.Join(missing, ", "))
 	}
 
 	// Sanitize server name for use as config name (replace / with -)
