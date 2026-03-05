@@ -401,6 +401,17 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 
 	mux.HandleFunc("GET /internal/llm", func(w http.ResponseWriter, r *http.Request) {
 		prov, model, apiBase, vision := llmClient.ProviderInfo()
+		presets := make([]map[string]any, len(cfg.LLM.Presets))
+		for i, p := range cfg.LLM.Presets {
+			presets[i] = map[string]any{
+				"name":       p.Name,
+				"provider":   p.Provider,
+				"model":      p.Model,
+				"api_base":   p.APIBase,
+				"max_tokens": p.MaxTokens,
+				"vision":     p.Vision,
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"provider": prov,
@@ -408,10 +419,12 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			"api_base": apiBase,
 			"max_ctx":  llmClient.MaxContextTokens(),
 			"vision":   vision,
+			"presets":  presets,
 		})
 	})
 	mux.HandleFunc("PUT /internal/llm", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
+			Preset   string `json:"preset"`
 			Provider string `json:"provider"`
 			Model    string `json:"model"`
 			APIKey   string `json:"api_key"`
@@ -422,6 +435,24 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 			return
+		}
+		// Resolve preset if specified.
+		if body.Preset != "" {
+			p := cfg.LLM.FindPreset(body.Preset)
+			if p == nil {
+				http.Error(w, fmt.Sprintf(`{"error":"preset %q not found"}`, body.Preset), http.StatusBadRequest)
+				return
+			}
+			body.Provider = p.Provider
+			body.Model = p.Model
+			body.APIBase = p.APIBase
+			body.Vision = p.Vision
+			if p.APIKey != "" {
+				body.APIKey = p.APIKey
+			}
+			if p.MaxTokens > 0 {
+				body.MaxCtx = p.MaxTokens
+			}
 		}
 		if body.Provider == "" || body.Model == "" {
 			http.Error(w, `{"error":"provider and model required"}`, http.StatusBadRequest)
