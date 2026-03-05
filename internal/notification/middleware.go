@@ -34,12 +34,12 @@ type QuietHoursConfig struct {
 func WithQuietHours(cfg QuietHoursConfig, logger *slog.Logger) Middleware {
 	startH, startM, err := parseHHMM(cfg.Start)
 	if err != nil {
-		logger.Warn("quiet_hours: invalid start, middleware disabled", "start", cfg.Start, "error", err)
+		logger.Warn("quiet_hours: 開始時刻が無効です。ミドルウェアを無効化します", "start", cfg.Start, "error", err)
 		return func(n Notifier) Notifier { return n }
 	}
 	endH, endM, err := parseHHMM(cfg.End)
 	if err != nil {
-		logger.Warn("quiet_hours: invalid end, middleware disabled", "end", cfg.End, "error", err)
+		logger.Warn("quiet_hours: 終了時刻が無効です。ミドルウェアを無効化します", "end", cfg.End, "error", err)
 		return func(n Notifier) Notifier { return n }
 	}
 
@@ -86,7 +86,7 @@ func (q *quietHoursNotifier) Reply(ctx context.Context, channelID, content, repl
 func (q *quietHoursNotifier) suppressed(source, channelID string) bool {
 	now := time.Now().In(q.loc)
 	if inQuietWindow(now, q.startH, q.startM, q.endH, q.endM) {
-		q.logger.Info("quiet_hours: notification suppressed",
+		q.logger.Info("quiet_hours: 通知を抑制しました",
 			"source", source,
 			"channel", channelID,
 			"time", now.Format("15:04"),
@@ -114,7 +114,7 @@ func inQuietWindow(now time.Time, startH, startM, endH, endM int) bool {
 func parseHHMM(s string) (int, int, error) {
 	t, err := time.Parse("15:04", s)
 	if err != nil {
-		return 0, 0, fmt.Errorf("expected HH:MM format: %w", err)
+		return 0, 0, fmt.Errorf("HH:MM形式が必要です: %w", err)
 	}
 	return t.Hour(), t.Minute(), nil
 }
@@ -157,7 +157,7 @@ func (n *channelSettingsNotifier) suppressed(ctx context.Context, channelID, sou
 		return false
 	}
 	if mode == "disabled" || mode == "listen" {
-		n.logger.Info("channel_settings: notification suppressed",
+		n.logger.Info("channel_settings: 通知を抑制しました",
 			"channel", channelID, "mode", mode, "source", source)
 		return true
 	}
