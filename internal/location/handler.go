@@ -31,7 +31,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var payload OverlandPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		h.logger.Warn("overland: invalid payload", "error", err)
+		h.logger.Warn("overland: ペイロードが不正です", "error", err)
 		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
 		return
 	}
@@ -44,12 +44,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.SaveBatch(r.Context(), locs); err != nil {
-		h.logger.Error("overland: save failed", "error", err, "count", len(locs))
+		h.logger.Error("overland: 保存に失敗しました", "error", err, "count", len(locs))
 		http.Error(w, `{"error":"save failed"}`, http.StatusInternalServerError)
 		return
 	}
 
-	h.logger.Debug("overland: locations saved", "count", len(locs))
+	h.logger.Debug("overland: 位置情報を保存しました", "count", len(locs))
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"result":"ok"}`))
 }

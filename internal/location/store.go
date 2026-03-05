@@ -158,7 +158,7 @@ func (s *Store) SaveBatch(ctx context.Context, locs []Location) error {
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("location: begin tx: %w", err)
+		return fmt.Errorf("location: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -168,7 +168,7 @@ func (s *Store) SaveBatch(ctx context.Context, locs []Location) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
-		return fmt.Errorf("location: prepare: %w", err)
+		return fmt.Errorf("location: ステートメント準備に失敗: %w", err)
 	}
 	defer stmt.Close()
 
@@ -183,12 +183,12 @@ func (s *Store) SaveBatch(ctx context.Context, locs []Location) error {
 			loc.Wifi, loc.Address, loc.Timestamp,
 		)
 		if err != nil {
-			return fmt.Errorf("location: insert: %w", err)
+			return fmt.Errorf("location: 挿入に失敗: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("location: commit: %w", err)
+		return fmt.Errorf("location: コミットに失敗: %w", err)
 	}
 
 	// Update cache with the latest location per device and detect geofence transitions.
@@ -299,14 +299,14 @@ func (s *Store) QueryLatestByUserID(ctx context.Context, userID string) ([]UserL
 		LEFT JOIN users u ON d.user_id = u.id
 	`, userID)
 	if err != nil {
-		return nil, fmt.Errorf("location: query by user: %w", err)
+		return nil, fmt.Errorf("location: ユーザーによるクエリに失敗: %w", err)
 	}
 	defer rows.Close()
 
 	// Load places for geofence matching.
 	places, err := s.ListPlaces(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("location: load places: %w", err)
+		return nil, fmt.Errorf("location: 場所の読み込みに失敗: %w", err)
 	}
 
 	var out []UserLocation
@@ -322,7 +322,7 @@ func (s *Store) QueryLatestByUserID(ctx context.Context, userID string) ([]UserL
 			&loc.Timestamp, &loc.CreatedAt,
 			&ownerName, &displayName,
 		); err != nil {
-			return nil, fmt.Errorf("location: scan: %w", err)
+			return nil, fmt.Errorf("location: スキャンに失敗: %w", err)
 		}
 		loc.Altitude = altitude.Float64
 		loc.Speed = speed.Float64
@@ -386,7 +386,7 @@ func (s *Store) History(ctx context.Context, deviceID string, since, until time.
 	`
 	rows, err := s.db.QueryContext(ctx, query, deviceID, since, until, limit)
 	if err != nil {
-		return nil, fmt.Errorf("location: query: %w", err)
+		return nil, fmt.Errorf("location: クエリに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -401,7 +401,7 @@ func (s *Store) History(ctx context.Context, deviceID string, since, until time.
 			&batteryLevel, &batteryState, &motion, &wifi, &address,
 			&loc.Timestamp, &loc.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("location: scan: %w", err)
+			return nil, fmt.Errorf("location: スキャンに失敗: %w", err)
 		}
 		loc.Altitude = altitude.Float64
 		loc.Speed = speed.Float64
@@ -428,7 +428,7 @@ func (s *Store) HistoryAll(ctx context.Context, since, until time.Time, limit in
 	`
 	rows, err := s.db.QueryContext(ctx, query, since, until, limit)
 	if err != nil {
-		return nil, fmt.Errorf("location: query: %w", err)
+		return nil, fmt.Errorf("location: クエリに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -443,7 +443,7 @@ func (s *Store) HistoryAll(ctx context.Context, since, until time.Time, limit in
 			&batteryLevel, &batteryState, &motion, &wifi, &address,
 			&loc.Timestamp, &loc.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("location: scan: %w", err)
+			return nil, fmt.Errorf("location: スキャンに失敗: %w", err)
 		}
 		loc.Altitude = altitude.Float64
 		loc.Speed = speed.Float64
@@ -467,7 +467,7 @@ func (s *Store) LoadSettings(ctx context.Context) error {
 		FROM location_devices d
 		LEFT JOIN users u ON d.user_id = u.id`)
 	if err != nil {
-		return fmt.Errorf("location: load devices: %w", err)
+		return fmt.Errorf("location: デバイスの読み込みに失敗: %w", err)
 	}
 	defer dRows.Close()
 	for dRows.Next() {
@@ -475,7 +475,7 @@ func (s *Store) LoadSettings(ctx context.Context) error {
 		var userID sql.NullString
 		var displayName string
 		if err := dRows.Scan(&dm.DeviceID, &dm.OwnerName, &userID, &displayName); err != nil {
-			return fmt.Errorf("location: scan device: %w", err)
+			return fmt.Errorf("location: デバイスのスキャンに失敗: %w", err)
 		}
 		if userID.Valid {
 			dm.UserID = userID.String
@@ -487,24 +487,24 @@ func (s *Store) LoadSettings(ctx context.Context) error {
 		devices[dm.DeviceID] = &dm
 	}
 	if err := dRows.Err(); err != nil {
-		return fmt.Errorf("location: devices rows: %w", err)
+		return fmt.Errorf("location: デバイス行の読み取りに失敗: %w", err)
 	}
 
 	var places []Place
 	pRows, err := s.db.QueryContext(ctx, `SELECT id, name, latitude, longitude, radius_m FROM location_places`)
 	if err != nil {
-		return fmt.Errorf("location: load places: %w", err)
+		return fmt.Errorf("location: 場所の読み込みに失敗: %w", err)
 	}
 	defer pRows.Close()
 	for pRows.Next() {
 		var p Place
 		if err := pRows.Scan(&p.ID, &p.Name, &p.Latitude, &p.Longitude, &p.RadiusM); err != nil {
-			return fmt.Errorf("location: scan place: %w", err)
+			return fmt.Errorf("location: 場所のスキャンに失敗: %w", err)
 		}
 		places = append(places, p)
 	}
 	if err := pRows.Err(); err != nil {
-		return fmt.Errorf("location: places rows: %w", err)
+		return fmt.Errorf("location: 場所行の読み取りに失敗: %w", err)
 	}
 
 	s.mu.Lock()
@@ -528,14 +528,14 @@ func (s *Store) ListDevices(ctx context.Context) ([]DeviceMapping, error) {
 		LEFT JOIN users u ON d.user_id = u.id
 		ORDER BY d.created_at`)
 	if err != nil {
-		return nil, fmt.Errorf("location: list devices: %w", err)
+		return nil, fmt.Errorf("location: デバイス一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 	var out []DeviceMapping
 	for rows.Next() {
 		var d DeviceMapping
 		if err := rows.Scan(&d.DeviceID, &d.OwnerName, &d.UserID, &d.UserDisplayName, &d.CreatedAt); err != nil {
-			return nil, fmt.Errorf("location: scan device: %w", err)
+			return nil, fmt.Errorf("location: デバイスのスキャンに失敗: %w", err)
 		}
 		out = append(out, d)
 	}
@@ -568,14 +568,14 @@ func (s *Store) DeleteDevice(ctx context.Context, deviceID string) error {
 func (s *Store) ListPlaces(ctx context.Context) ([]Place, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, name, latitude, longitude, radius_m, created_at FROM location_places ORDER BY created_at`)
 	if err != nil {
-		return nil, fmt.Errorf("location: list places: %w", err)
+		return nil, fmt.Errorf("location: 場所一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 	var out []Place
 	for rows.Next() {
 		var p Place
 		if err := rows.Scan(&p.ID, &p.Name, &p.Latitude, &p.Longitude, &p.RadiusM, &p.CreatedAt); err != nil {
-			return nil, fmt.Errorf("location: scan place: %w", err)
+			return nil, fmt.Errorf("location: 場所のスキャンに失敗: %w", err)
 		}
 		out = append(out, p)
 	}
@@ -624,7 +624,7 @@ func (s *Store) LoadCache(ctx context.Context) error {
 		) latest ON l.device_id = latest.device_id AND l.timestamp = latest.max_ts
 	`)
 	if err != nil {
-		return fmt.Errorf("location: load cache: %w", err)
+		return fmt.Errorf("location: キャッシュの読み込みに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -640,7 +640,7 @@ func (s *Store) LoadCache(ctx context.Context) error {
 			&batteryLevel, &batteryState, &motion, &wifi, &address,
 			&loc.Timestamp, &loc.CreatedAt,
 		); err != nil {
-			return fmt.Errorf("location: scan cache: %w", err)
+			return fmt.Errorf("location: キャッシュのスキャンに失敗: %w", err)
 		}
 		loc.Altitude = altitude.Float64
 		loc.Speed = speed.Float64

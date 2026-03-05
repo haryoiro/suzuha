@@ -46,7 +46,7 @@ type getLocationInput struct {
 func (t *GetLocation) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in getLocationInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("入力が不正です: " + err.Error()), nil
 	}
 
 	if in.UserID == "" && in.DeviceID == "" {
@@ -131,7 +131,7 @@ type locationHistoryInput struct {
 func (t *GetLocationHistory) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in locationHistoryInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("入力が不正です: " + err.Error()), nil
 	}
 
 	if in.HoursAgo <= 0 {
@@ -152,7 +152,7 @@ func (t *GetLocationHistory) Execute(ctx context.Context, input json.RawMessage)
 		locs, err = t.store.HistoryAll(ctx, since, now, in.Limit)
 	}
 	if err != nil {
-		return tool.ErrorResult("query failed: " + err.Error()), nil
+		return tool.ErrorResult("クエリに失敗しました: " + err.Error()), nil
 	}
 
 	if len(locs) == 0 {
@@ -253,7 +253,7 @@ type nominatimResponse struct {
 func (t *ReverseGeocode) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in reverseGeocodeInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("入力が不正です: " + err.Error()), nil
 	}
 
 	url := fmt.Sprintf(
@@ -264,23 +264,23 @@ func (t *ReverseGeocode) Execute(ctx context.Context, input json.RawMessage) (*t
 	client := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return tool.ErrorResult("request build failed: " + err.Error()), nil
+		return tool.ErrorResult("リクエストの構築に失敗しました: " + err.Error()), nil
 	}
 	req.Header.Set("User-Agent", "suzuha-bot/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return tool.ErrorResult("geocode request failed: " + err.Error()), nil
+		return tool.ErrorResult("ジオコードリクエストに失敗しました: " + err.Error()), nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return tool.ErrorResult(fmt.Sprintf("geocode API returned %d", resp.StatusCode)), nil
+		return tool.ErrorResult(fmt.Sprintf("ジオコードAPIがステータス %d を返しました", resp.StatusCode)), nil
 	}
 
 	var nr nominatimResponse
 	if err := json.NewDecoder(resp.Body).Decode(&nr); err != nil {
-		return tool.ErrorResult("response parse failed: " + err.Error()), nil
+		return tool.ErrorResult("レスポンスの解析に失敗しました: " + err.Error()), nil
 	}
 
 	a := nr.Address
