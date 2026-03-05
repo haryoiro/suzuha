@@ -14,6 +14,7 @@ import {
   ApiOutlined,
   EnvironmentOutlined,
   ToolOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -30,6 +31,7 @@ const PromptsPage = lazy(() => import("./routes/prompts"));
 const ActionsPage = lazy(() => import("./routes/actions"));
 const LocationPage = lazy(() => import("./routes/location"));
 const ToolsPage = lazy(() => import("./routes/tools"));
+const PlaygroundPage = lazy(() => import("./routes/playground"));
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -44,6 +46,7 @@ type Page =
   | { key: "actions" }
   | { key: "location" }
   | { key: "tools" }
+  | { key: "playground" }
   | { key: "prompts" }
   | { key: "metrics" }
   | { key: "context" }
@@ -56,7 +59,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "location", "tools", "prompts", "metrics", "context", "logs"];
+  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "location", "tools", "playground", "prompts", "metrics", "context", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -88,6 +91,7 @@ export function App() {
     { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
     { key: "location", icon: <EnvironmentOutlined />, label: "Location" },
     { key: "tools", icon: <ToolOutlined />, label: "Tools" },
+    { key: "playground", icon: <ExperimentOutlined />, label: "Playground" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
@@ -118,6 +122,8 @@ export function App() {
         return <LocationPage />;
       case "tools":
         return <ToolsPage />;
+      case "playground":
+        return <PlaygroundPage />;
       case "prompts":
         return <PromptsPage />;
       case "metrics":
