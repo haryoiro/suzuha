@@ -18,7 +18,7 @@ func LoadState(ctx context.Context, db *sql.DB, taskName string, dest any) error
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("load task state %q: %w", taskName, err)
+		return fmt.Errorf("タスク状態 %q の読み込みに失敗: %w", taskName, err)
 	}
 	return json.Unmarshal([]byte(raw), dest)
 }
@@ -28,7 +28,7 @@ func LoadState(ctx context.Context, db *sql.DB, taskName string, dest any) error
 func SaveState(ctx context.Context, db *sql.DB, taskName string, src any) error {
 	data, err := json.Marshal(src)
 	if err != nil {
-		return fmt.Errorf("marshal task state %q: %w", taskName, err)
+		return fmt.Errorf("タスク状態 %q のマーシャルに失敗: %w", taskName, err)
 	}
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO task_state (task_name, state, updated_at)
@@ -37,7 +37,7 @@ func SaveState(ctx context.Context, db *sql.DB, taskName string, src any) error 
 		taskName, string(data),
 	)
 	if err != nil {
-		return fmt.Errorf("save task state %q: %w", taskName, err)
+		return fmt.Errorf("タスク状態 %q の保存に失敗: %w", taskName, err)
 	}
 	return nil
 }

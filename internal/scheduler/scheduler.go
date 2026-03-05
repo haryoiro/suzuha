@@ -48,9 +48,9 @@ func New(registry *TaskRegistry, cc *CronContext, logger *slog.Logger) *Schedule
 // Setup calls Setup() on all registered tasks.
 func (s *Scheduler) Setup(ctx context.Context) error {
 	for _, t := range s.registry.All() {
-		s.logger.Info("scheduler: setting up task", "task", t.Name())
+		s.logger.Info("scheduler: タスクをセットアップ中", "task", t.Name())
 		if err := t.Setup(ctx, s.cc); err != nil {
-			return fmt.Errorf("scheduler: setup %s: %w", t.Name(), err)
+			return fmt.Errorf("scheduler: %s のセットアップに失敗: %w", t.Name(), err)
 		}
 	}
 	return nil
@@ -61,31 +61,31 @@ func (s *Scheduler) LoadJobs(jobs []JobDef) error {
 	for _, j := range jobs {
 		task, ok := s.registry.Get(j.Task)
 		if !ok {
-			s.logger.Warn("scheduler: unknown task, skipping job", "job", j.Name, "task", j.Task)
+			s.logger.Warn("scheduler: 不明なタスク、ジョブをスキップします", "job", j.Name, "task", j.Task)
 			continue
 		}
 
 		cfg, err := json.Marshal(j.Config)
 		if err != nil {
-			return fmt.Errorf("scheduler: marshal config for %s: %w", j.Name, err)
+			return fmt.Errorf("scheduler: %s の設定のマーシャルに失敗: %w", j.Name, err)
 		}
 
 		jobName := j.Name
 		taskName := j.Task
 		_, err = s.cron.AddFunc(j.Cron, func() {
-			s.logger.Info("scheduler: executing job", "job", jobName, "task", taskName)
+			s.logger.Info("scheduler: ジョブを実行中", "job", jobName, "task", taskName)
 			jobCtx := s.ctx
 			if jobCtx == nil {
 				jobCtx = context.Background()
 			}
 			if execErr := task.Execute(jobCtx, s.cc, cfg); execErr != nil {
-				s.logger.Error("scheduler: job failed", "job", jobName, "task", taskName, "error", execErr)
+				s.logger.Error("scheduler: ジョブが失敗しました", "job", jobName, "task", taskName, "error", execErr)
 			}
 		})
 		if err != nil {
-			return fmt.Errorf("scheduler: add job %s (cron=%q): %w", j.Name, j.Cron, err)
+			return fmt.Errorf("scheduler: ジョブ %s の追加に失敗 (cron=%q): %w", j.Name, j.Cron, err)
 		}
-		s.logger.Info("scheduler: registered job", "job", j.Name, "task", task.Name(), "cron", j.Cron)
+		s.logger.Info("scheduler: ジョブを登録しました", "job", j.Name, "task", task.Name(), "cron", j.Cron)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func (s *Scheduler) Start() {
 	s.running = true
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.cron.Start()
-	s.logger.Info("scheduler: started", "entries", len(s.cron.Entries()))
+	s.logger.Info("scheduler: 開始しました", "entries", len(s.cron.Entries()))
 }
 
 // Stop gracefully stops the scheduler, waiting for running jobs to complete.
@@ -112,7 +112,7 @@ func (s *Scheduler) Stop() context.Context {
 		s.cancel()
 	}
 	ctx := s.cron.Stop()
-	s.logger.Info("scheduler: stopped")
+	s.logger.Info("scheduler: 停止しました")
 	return ctx
 }
 
@@ -126,8 +126,8 @@ func (s *Scheduler) Entries() int {
 func (s *Scheduler) TriggerTask(ctx context.Context, taskName string, cfg json.RawMessage) error {
 	task, ok := s.registry.Get(taskName)
 	if !ok {
-		return fmt.Errorf("unknown task: %s", taskName)
+		return fmt.Errorf("不明なタスク: %s", taskName)
 	}
-	s.logger.Info("scheduler: manual trigger", "task", taskName)
+	s.logger.Info("scheduler: 手動トリガー", "task", taskName)
 	return task.Execute(ctx, s.cc, cfg)
 }
