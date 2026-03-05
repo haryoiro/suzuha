@@ -37,19 +37,19 @@ func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool, logger
 	}
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("memory: open db: %w", err)
+		return nil, fmt.Errorf("memory: DB接続に失敗: %w", err)
 	}
 
 	// Enable WAL mode for concurrent reads.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("memory: set WAL: %w", err)
+		return nil, fmt.Errorf("memory: WALモードの設定に失敗: %w", err)
 	}
 
 	if runMigrations {
 		if err := migrate(db); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("memory: migrate: %w", err)
+			return nil, fmt.Errorf("memory: マイグレーションに失敗: %w", err)
 		}
 	}
 
@@ -79,12 +79,12 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 
 	metadataJSON, err := json.Marshal(mem.Metadata)
 	if err != nil {
-		return fmt.Errorf("memory: marshal metadata: %w", err)
+		return fmt.Errorf("memory: メタデータのJSON変換に失敗: %w", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("memory: begin tx: %w", err)
+		return fmt.Errorf("memory: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -94,7 +94,7 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
 		mem.CreatedAt, mem.UpdatedAt,
 	); err != nil {
-		return fmt.Errorf("memory: insert: %w", err)
+		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx,
@@ -102,7 +102,7 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 			(SELECT rowid FROM memories WHERE id = ?), ?
 		)`, mem.ID, mem.Content,
 	); err != nil {
-		return fmt.Errorf("memory: fts insert: %w", err)
+		return fmt.Errorf("memory: FTSインデックスの挿入に失敗: %w", err)
 	}
 
 	if blob, err := sqlite_vec.SerializeFloat32(mem.Embedding); err == nil {
@@ -110,7 +110,7 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 			`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
 			mem.ID, blob,
 		); err != nil {
-			s.logger.Warn("memory: vec insert failed", "id", mem.ID, "error", err)
+			s.logger.Warn("memory: ベクトルの挿入に失敗", "id", mem.ID, "error", err)
 		}
 	}
 
@@ -130,12 +130,12 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 
 	metadataJSON, err := json.Marshal(mem.Metadata)
 	if err != nil {
-		return fmt.Errorf("memory: marshal metadata: %w", err)
+		return fmt.Errorf("memory: メタデータのJSON変換に失敗: %w", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("memory: begin tx: %w", err)
+		return fmt.Errorf("memory: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -145,7 +145,7 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
 		mem.CreatedAt, mem.UpdatedAt,
 	); err != nil {
-		return fmt.Errorf("memory: insert: %w", err)
+		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx,
@@ -153,7 +153,7 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 			(SELECT rowid FROM memories WHERE id = ?), ?
 		)`, mem.ID, mem.Content,
 	); err != nil {
-		return fmt.Errorf("memory: fts insert: %w", err)
+		return fmt.Errorf("memory: FTSインデックスの挿入に失敗: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -211,13 +211,13 @@ func (s *SQLiteStore) RunEmbeddingWorker(ctx context.Context) {
 		for {
 			n, err := s.BackfillEmbeddings(ctx, batchSize)
 			if err != nil {
-				s.logger.Warn("embedding worker: backfill error", "error", err)
+				s.logger.Warn("embedding worker: バックフィルでエラー発生", "error", err)
 				break
 			}
 			if n == 0 {
 				break
 			}
-			s.logger.Info("embedding worker: backfilled", "count", n)
+			s.logger.Info("embedding worker: バックフィル完了", "count", n)
 		}
 	}
 }
@@ -259,7 +259,7 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 	if !since.IsZero() && len(vecResults) > 0 {
 		filtered, filterErr := s.filterVecBySince(ctx, vecResults, since, limit*2)
 		if filterErr != nil {
-			s.logger.Warn("memory: vec time filter failed, using unfiltered", "error", filterErr)
+			s.logger.Warn("memory: ベクトルの時間フィルタに失敗、フィルタなしで続行", "error", filterErr)
 		} else {
 			vecResults = filtered
 		}
@@ -267,7 +267,7 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 
 	// 3. If both failed, return FTS error.
 	if ftsErr != nil && (vecErr != nil || len(vecResults) == 0) {
-		return nil, fmt.Errorf("memory: search: %w", ftsErr)
+		return nil, fmt.Errorf("memory: 検索に失敗: %w", ftsErr)
 	}
 
 	// 4. If only FTS succeeded, return FTS results.
@@ -338,7 +338,7 @@ func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType Memor
 
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("memory: fts search: %w", err)
+		return nil, fmt.Errorf("memory: FTS検索に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -349,7 +349,7 @@ func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType Memor
 func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType MemoryType, limit int) ([]scoredID, error) {
 	embedding, err := s.embedFn(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("memory: embed query: %w", err)
+		return nil, fmt.Errorf("memory: クエリの埋め込み生成に失敗: %w", err)
 	}
 	if len(embedding) == 0 {
 		return nil, nil
@@ -357,7 +357,7 @@ func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType Memor
 
 	blob, err := sqlite_vec.SerializeFloat32(embedding)
 	if err != nil {
-		return nil, fmt.Errorf("memory: serialize embedding: %w", err)
+		return nil, fmt.Errorf("memory: 埋め込みのシリアライズに失敗: %w", err)
 	}
 
 	// Over-fetch if we need to filter by type in Go.
@@ -371,7 +371,7 @@ func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType Memor
 		blob, fetchLimit,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("memory: vec search: %w", err)
+		return nil, fmt.Errorf("memory: ベクトル検索に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -379,7 +379,7 @@ func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType Memor
 	for rows.Next() {
 		var r scoredID
 		if err := rows.Scan(&r.id, &r.distance); err != nil {
-			return nil, fmt.Errorf("memory: vec scan: %w", err)
+			return nil, fmt.Errorf("memory: ベクトル結果のスキャンに失敗: %w", err)
 		}
 		results = append(results, r)
 	}
@@ -416,7 +416,7 @@ func (s *SQLiteStore) filterVecByType(ctx context.Context, results []scoredID, m
 	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND type = ?`, placeholders)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("memory: filter by type: %w", err)
+		return nil, fmt.Errorf("memory: タイプによるフィルタに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -462,7 +462,7 @@ func (s *SQLiteStore) filterVecBySince(ctx context.Context, results []scoredID, 
 	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND created_at >= ?`, placeholders)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("memory: filter by since: %w", err)
+		return nil, fmt.Errorf("memory: 時間によるフィルタに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -571,7 +571,7 @@ func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[
 	)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("memory: load by ids: %w", err)
+		return nil, fmt.Errorf("memory: IDによる一括読み込みに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -580,11 +580,11 @@ func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[
 		var m Memory
 		var metaJSON, typeStr string
 		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("memory: load scan: %w", err)
+			return nil, fmt.Errorf("memory: 読み込み時のスキャンに失敗: %w", err)
 		}
 		m.Type = MemoryType(typeStr)
 		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-			slog.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 		}
 		result[m.ID] = m
 	}
@@ -598,11 +598,11 @@ func scanMemories(rows *sql.Rows) ([]Memory, error) {
 		var m Memory
 		var metaJSON, typeStr string
 		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("memory: scan: %w", err)
+			return nil, fmt.Errorf("memory: スキャンに失敗: %w", err)
 		}
 		m.Type = MemoryType(typeStr)
 		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-			slog.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 		}
 		results = append(results, m)
 	}
@@ -619,7 +619,7 @@ func (s *SQLiteStore) ListByUser(ctx context.Context, userID string, limit int) 
 		string(MemoryTypeUser), userID, limit,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("memory: list by user: %w", err)
+		return nil, fmt.Errorf("memory: ユーザー別一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -636,7 +636,7 @@ func (s *SQLiteStore) ListEpisodesByParticipant(ctx context.Context, userID stri
 		string(MemoryTypeEpisode), userID, limit,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("memory: list episodes by participant: %w", err)
+		return nil, fmt.Errorf("memory: 参加者別エピソード一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -727,7 +727,7 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 	var total int
 	countQ := fmt.Sprintf("SELECT count(*) FROM memories m WHERE %s", where)
 	if err := s.db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("memory: list count: %w", err)
+		return nil, 0, fmt.Errorf("memory: 一覧の件数取得に失敗: %w", err)
 	}
 
 	// Fetch page.
@@ -741,7 +741,7 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 
 	rows, err := s.db.QueryContext(ctx, q, pageArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("memory: list: %w", err)
+		return nil, 0, fmt.Errorf("memory: 一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -751,11 +751,11 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 		var metaJSON string
 		var typeStr string
 		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, 0, fmt.Errorf("memory: list scan: %w", err)
+			return nil, 0, fmt.Errorf("memory: 一覧のスキャンに失敗: %w", err)
 		}
 		m.Type = MemoryType(typeStr)
 		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-			s.logger.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+			s.logger.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 		}
 		results = append(results, m)
 	}
@@ -770,11 +770,11 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Memory, error) {
 		`SELECT id, type, content, metadata, created_at, updated_at FROM memories WHERE id = ?`, id,
 	).Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("memory: get: %w", err)
+		return nil, fmt.Errorf("memory: 取得に失敗: %w", err)
 	}
 	m.Type = MemoryType(typeStr)
 	if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-		s.logger.Warn("memory: unmarshal metadata", "id", m.ID, "error", err)
+		s.logger.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 	}
 	return &m, nil
 }
@@ -784,12 +784,12 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 
 	metadataJSON, err := json.Marshal(mem.Metadata)
 	if err != nil {
-		return fmt.Errorf("memory: marshal metadata: %w", err)
+		return fmt.Errorf("memory: メタデータのJSON変換に失敗: %w", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("memory: begin tx: %w", err)
+		return fmt.Errorf("memory: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -798,26 +798,26 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 		string(mem.Type), mem.Content, string(metadataJSON), mem.UpdatedAt, mem.ID,
 	)
 	if err != nil {
-		return fmt.Errorf("memory: update: %w", err)
+		return fmt.Errorf("memory: 更新に失敗: %w", err)
 	}
 	n, raErr := res.RowsAffected()
 	if raErr != nil {
-		s.logger.Warn("memory: rows affected", "id", mem.ID, "error", raErr)
+		s.logger.Warn("memory: 影響行数の取得に失敗", "id", mem.ID, "error", raErr)
 	}
 	if n == 0 {
-		return fmt.Errorf("memory: not found: %s", mem.ID)
+		return fmt.Errorf("memory: 見つかりません: %s", mem.ID)
 	}
 
 	// Rebuild FTS index for this row.
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, mem.ID); err != nil {
-		s.logger.Warn("memory: fts delete on update", "id", mem.ID, "error", err)
+		s.logger.Warn("memory: 更新時のFTS削除に失敗", "id", mem.ID, "error", err)
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO memories_fts (rowid, content) VALUES (
 			(SELECT rowid FROM memories WHERE id = ?), ?
 		)`, mem.ID, mem.Content); err != nil {
-		s.logger.Warn("memory: fts insert on update", "id", mem.ID, "error", err)
+		s.logger.Warn("memory: 更新時のFTS挿入に失敗", "id", mem.ID, "error", err)
 	}
 
 	return tx.Commit()
@@ -826,31 +826,31 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("memory: begin tx: %w", err)
+		return fmt.Errorf("memory: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
 	// Delete from FTS.
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, id); err != nil {
-		s.logger.Warn("memory: fts delete", "id", id, "error", err)
+		s.logger.Warn("memory: FTSの削除に失敗", "id", id, "error", err)
 	}
 	// Delete from vec.
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM memories_vec WHERE id = ?`, id); err != nil {
-		s.logger.Warn("memory: vec delete", "id", id, "error", err)
+		s.logger.Warn("memory: ベクトルの削除に失敗", "id", id, "error", err)
 	}
 	// Delete from main table.
 	res, err := tx.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id)
 	if err != nil {
-		return fmt.Errorf("memory: delete: %w", err)
+		return fmt.Errorf("memory: 削除に失敗: %w", err)
 	}
 	n, raErr := res.RowsAffected()
 	if raErr != nil {
-		s.logger.Warn("memory: rows affected on delete", "id", id, "error", raErr)
+		s.logger.Warn("memory: 削除時の影響行数の取得に失敗", "id", id, "error", raErr)
 	}
 	if n == 0 {
-		return fmt.Errorf("memory: not found: %s", id)
+		return fmt.Errorf("memory: 見つかりません: %s", id)
 	}
 
 	return tx.Commit()
@@ -865,7 +865,7 @@ func (s *SQLiteStore) ListByType(ctx context.Context, memType MemoryType, limit 
 		 LIMIT ?`,
 		string(memType), limit)
 	if err != nil {
-		return nil, fmt.Errorf("memory: list by type: %w", err)
+		return nil, fmt.Errorf("memory: タイプ別一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -881,7 +881,7 @@ func (s *SQLiteStore) ListRecentByType(ctx context.Context, memType MemoryType, 
 		 LIMIT ?`,
 		string(memType), since, limit)
 	if err != nil {
-		return nil, fmt.Errorf("memory: list recent by type: %w", err)
+		return nil, fmt.Errorf("memory: タイプ別最新一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 	return scanMemories(rows)
@@ -889,10 +889,10 @@ func (s *SQLiteStore) ListRecentByType(ctx context.Context, memType MemoryType, 
 
 func (s *SQLiteStore) VecStats(ctx context.Context) (total, embedded int, err error) {
 	if err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories").Scan(&total); err != nil {
-		return 0, 0, fmt.Errorf("memory: vec stats total: %w", err)
+		return 0, 0, fmt.Errorf("memory: ベクトル統計の全件数取得に失敗: %w", err)
 	}
 	if err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories_vec").Scan(&embedded); err != nil {
-		return 0, 0, fmt.Errorf("memory: vec stats embedded: %w", err)
+		return 0, 0, fmt.Errorf("memory: ベクトル統計の埋め込み済み件数取得に失敗: %w", err)
 	}
 	return total, embedded, nil
 }
@@ -911,7 +911,7 @@ func (s *SQLiteStore) FindDuplicates(ctx context.Context, k int, threshold float
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
 		 ORDER BY m.type, m.updated_at DESC`)
 	if err != nil {
-		return nil, fmt.Errorf("memory: find duplicates list: %w", err)
+		return nil, fmt.Errorf("memory: 重複検出用の一覧取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -975,7 +975,7 @@ func (s *SQLiteStore) DeleteBatch(ctx context.Context, ids []string) (int, error
 	var deleted int
 	for _, id := range ids {
 		if err := s.Delete(ctx, id); err != nil {
-			s.logger.Warn("memory: batch delete skip", "id", id, "error", err)
+			s.logger.Warn("memory: 一括削除でスキップ", "id", id, "error", err)
 			continue
 		}
 		deleted++
@@ -1001,7 +1001,7 @@ func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (in
 		 WHERE m.id NOT IN (SELECT id FROM memories_vec)
 		 LIMIT ?`, batchSize)
 	if err != nil {
-		return 0, fmt.Errorf("memory: backfill query: %w", err)
+		return 0, fmt.Errorf("memory: バックフィルクエリに失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -1009,7 +1009,7 @@ func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (in
 	for rows.Next() {
 		var id, content string
 		if err := rows.Scan(&id, &content); err != nil {
-			return count, fmt.Errorf("memory: backfill scan: %w", err)
+			return count, fmt.Errorf("memory: バックフィルのスキャンに失敗: %w", err)
 		}
 
 		emb, err := s.embedFn(ctx, content)
