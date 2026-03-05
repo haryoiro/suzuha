@@ -51,7 +51,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	rc := defaultRSSConfig()
 	if len(cfg) > 0 {
 		if err := json.Unmarshal(cfg, &rc); err != nil {
-			cc.Logger.Warn("rss: parse config", "error", err)
+			cc.Logger.Warn("rss: 設定のパースに失敗", "error", err)
 		}
 	}
 
@@ -60,10 +60,10 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	// 1. Fetch new articles from all enabled feeds.
 	feeds, err := store.ListEnabled(ctx)
 	if err != nil {
-		return fmt.Errorf("rss: list feeds: %w", err)
+		return fmt.Errorf("rss: フィード一覧の取得に失敗: %w", err)
 	}
 	if len(feeds) == 0 {
-		cc.Logger.Debug("rss: no enabled feeds")
+		cc.Logger.Debug("rss: 有効なフィードがありません")
 		return nil
 	}
 
@@ -72,26 +72,26 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	for _, feed := range feeds {
 		items, fetchErr := fetchFeed(ctx, t.httpClient, feed, store, cc)
 		if fetchErr != nil {
-			cc.Logger.Error("rss: fetch feed failed", "feed", feed.Name, "url", feed.URL, "error", fetchErr)
+			cc.Logger.Error("rss: フィードの取得に失敗", "feed", feed.Name, "url", feed.URL, "error", fetchErr)
 			continue
 		}
 		if len(items) > 0 {
 			newItemsByChannel[feed.ChannelID] = append(newItemsByChannel[feed.ChannelID], items...)
 		}
 		if err := store.UpdateLastPolled(ctx, feed.ID); err != nil {
-			cc.Logger.Warn("rss: update last polled", "feed", feed.ID, "error", err)
+			cc.Logger.Warn("rss: 最終取得時刻の更新に失敗", "feed", feed.ID, "error", err)
 		}
 	}
 
 	if len(newItemsByChannel) == 0 {
-		cc.Logger.Debug("rss: no new articles")
+		cc.Logger.Debug("rss: 新着記事はありません")
 		return nil
 	}
 
 	// 2. Score and notify per channel.
 	for channelID, items := range newItemsByChannel {
 		if err := scoreAndNotify(ctx, cc, rc, channelID, items); err != nil {
-			cc.Logger.Error("rss: score/notify failed", "channel", channelID, "error", err)
+			cc.Logger.Error("rss: スコアリング/通知に失敗", "channel", channelID, "error", err)
 		}
 	}
 
@@ -108,28 +108,28 @@ type itemWithFeed struct {
 func fetchFeed(ctx context.Context, client *http.Client, feed Feed, store *FeedStore, cc *scheduler.CronContext) ([]itemWithFeed, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", feed.URL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("リクエストの作成に失敗: %w", err)
 	}
 	req.Header.Set("User-Agent", "suzuha-rss/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch: %w", err)
+		return nil, fmt.Errorf("取得に失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http %d", resp.StatusCode)
+		return nil, fmt.Errorf("HTTPステータス %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2MB limit
 	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+		return nil, fmt.Errorf("ボディの読み取りに失敗: %w", err)
 	}
 
 	entries, err := parseRSSOrAtom(body)
 	if err != nil {
-		return nil, fmt.Errorf("parse: %w", err)
+		return nil, fmt.Errorf("パースに失敗: %w", err)
 	}
 
 	var newItems []itemWithFeed
@@ -144,7 +144,7 @@ func fetchFeed(ctx context.Context, client *http.Client, feed Feed, store *FeedS
 
 		exists, existsErr := store.ItemExists(ctx, feed.ID, guid)
 		if existsErr != nil {
-			cc.Logger.Warn("rss: check item exists", "feed", feed.ID, "guid", guid, "error", existsErr)
+			cc.Logger.Warn("rss: アイテムの存在確認に失敗", "feed", feed.ID, "guid", guid, "error", existsErr)
 			continue
 		}
 		if exists {
@@ -160,7 +160,7 @@ func fetchFeed(ctx context.Context, client *http.Client, feed Feed, store *FeedS
 			PublishedAt: entry.Published,
 		}
 		if err := store.InsertItem(ctx, item); err != nil {
-			cc.Logger.Error("rss: insert item failed", "guid", guid, "error", err)
+			cc.Logger.Error("rss: アイテムの挿入に失敗", "guid", guid, "error", err)
 			continue
 		}
 
@@ -179,17 +179,17 @@ func fetchFeed(ctx context.Context, client *http.Client, feed Feed, store *FeedS
 			},
 		}
 		if saveErr := cc.Memory.Save(ctx, mem); saveErr != nil {
-			cc.Logger.Error("rss: save memory failed", "item", item.Title, "error", saveErr)
+			cc.Logger.Error("rss: メモリの保存に失敗", "item", item.Title, "error", saveErr)
 		} else {
 			if err := store.UpdateItemMemoryID(ctx, item.ID, mem.ID); err != nil {
-				cc.Logger.Warn("rss: update item memory id", "item", item.ID, "error", err)
+				cc.Logger.Warn("rss: アイテムのメモリID更新に失敗", "item", item.ID, "error", err)
 			}
 		}
 
 		newItems = append(newItems, itemWithFeed{Item: *item, Feed: feed})
 	}
 
-	cc.Logger.Info("rss: fetched feed", "feed", feed.Name, "new", len(newItems), "total_entries", len(entries))
+	cc.Logger.Info("rss: フィードを取得しました", "feed", feed.Name, "new", len(newItems), "total_entries", len(entries))
 	return newItems, nil
 }
 
@@ -202,7 +202,7 @@ func scoreAndNotify(ctx context.Context, cc *scheduler.CronContext, rc rssConfig
 	// Collect user interests from memory.
 	interests, err := queryUserInterests(ctx, cc)
 	if err != nil {
-		cc.Logger.Warn("rss: query interests failed, falling back to notify all", "error", err)
+		cc.Logger.Warn("rss: 興味の取得に失敗、全件通知にフォールバック", "error", err)
 		return notifyChannel(ctx, cc, channelID, items, rc)
 	}
 
@@ -214,19 +214,19 @@ func scoreAndNotify(ctx context.Context, cc *scheduler.CronContext, rc rssConfig
 	// Phase A: Vector similarity pre-filter.
 	candidates := vectorPreFilter(ctx, cc, items, interests, rc.VectorThreshold)
 	if len(candidates) == 0 {
-		cc.Logger.Debug("rss: no candidates after vector filter", "channel", channelID)
+		cc.Logger.Debug("rss: ベクトルフィルタ後の候補がありません", "channel", channelID)
 		return nil
 	}
 
 	// Phase B: LLM batch scoring.
 	scored, err := llmBatchScore(ctx, cc, candidates, interests, rc)
 	if err != nil {
-		cc.Logger.Error("rss: llm scoring failed, notifying all candidates", "error", err)
+		cc.Logger.Error("rss: LLMスコアリングに失敗、全候補を通知します", "error", err)
 		return notifyChannel(ctx, cc, channelID, candidates, rc)
 	}
 
 	if len(scored) == 0 {
-		cc.Logger.Debug("rss: no articles above notify threshold", "channel", channelID)
+		cc.Logger.Debug("rss: 通知閾値を超える記事がありません", "channel", channelID)
 		return nil
 	}
 
@@ -346,7 +346,7 @@ func llmBatchScore(ctx context.Context, cc *scheduler.CronContext, candidates []
 
 	resp, err := cc.LLM.CompleteRawDefault(ctx, messages)
 	if err != nil {
-		return nil, fmt.Errorf("llm score: %w", err)
+		return nil, fmt.Errorf("LLMスコアリングに失敗: %w", err)
 	}
 
 	scores := parseScoreResponse(resp.Text)
@@ -450,7 +450,7 @@ func notifyChannel(ctx context.Context, cc *scheduler.CronContext, channelID str
 	}
 
 	if _, err := cc.Notifier.Send(ctx, channelID, message, "rss"); err != nil {
-		return fmt.Errorf("notify: %w", err)
+		return fmt.Errorf("通知の送信に失敗: %w", err)
 	}
 
 	// Mark items as notified.
@@ -488,7 +488,7 @@ func generateNotification(ctx context.Context, cc *scheduler.CronContext, items 
 	}
 	text := llm.StripDirectiveTags(resp.Text)
 	if text == "" {
-		return "", fmt.Errorf("llm returned empty notification")
+		return "", fmt.Errorf("LLMが空の通知を返しました")
 	}
 	return text, nil
 }
@@ -571,7 +571,7 @@ func parseRSSOrAtom(data []byte) ([]feedEntry, error) {
 		return convertAtomEntries(atom.Entries), nil
 	}
 
-	return nil, fmt.Errorf("unrecognized feed format")
+	return nil, fmt.Errorf("認識できないフィード形式です")
 }
 
 func convertRSSItems(items []rssItem) []feedEntry {
@@ -649,7 +649,7 @@ func parseRSSDate(s string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("unrecognized date: %s", s)
+	return time.Time{}, fmt.Errorf("認識できない日付形式: %s", s)
 }
 
 // --- Utility functions ---

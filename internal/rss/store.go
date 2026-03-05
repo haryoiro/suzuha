@@ -62,7 +62,7 @@ func (s *FeedStore) Setup(ctx context.Context) error {
 			updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`)
 	if err != nil {
-		return fmt.Errorf("create rss_feeds: %w", err)
+		return fmt.Errorf("rss_feedsテーブルの作成に失敗: %w", err)
 	}
 
 	_, err = s.db.ExecContext(ctx, `
@@ -80,7 +80,7 @@ func (s *FeedStore) Setup(ctx context.Context) error {
 			UNIQUE(feed_id, guid)
 		)`)
 	if err != nil {
-		return fmt.Errorf("create rss_items: %w", err)
+		return fmt.Errorf("rss_itemsテーブルの作成に失敗: %w", err)
 	}
 
 	return nil
@@ -107,7 +107,7 @@ func (s *FeedStore) RemoveFeed(ctx context.Context, idOrURL string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("feed not found: %s", idOrURL)
+		return fmt.Errorf("フィードが見つかりません: %s", idOrURL)
 	}
 	return nil
 }
@@ -257,7 +257,7 @@ func (s *FeedStore) UpdateFeed(ctx context.Context, f *Feed) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("feed not found: %s", f.ID)
+		return fmt.Errorf("フィードが見つかりません: %s", f.ID)
 	}
 	return nil
 }

@@ -51,10 +51,10 @@ type rssSubscribeInput struct {
 func (r *SubscribeTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in rssSubscribeInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.URL == "" || in.ChannelID == "" {
-		return tool.ErrorResult("url and channel_id are required"), nil
+		return tool.ErrorResult("url と channel_id は必須です"), nil
 	}
 	if in.Name == "" {
 		in.Name = in.URL
@@ -70,12 +70,12 @@ func (r *SubscribeTool) Execute(ctx context.Context, input json.RawMessage) (*to
 
 	if err := store.AddFeed(ctx, feed); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
-			return tool.ErrorResult("this feed URL is already registered"), nil
+			return tool.ErrorResult("このフィードURLは既に登録されています"), nil
 		}
 		return nil, fmt.Errorf("rss_subscribe: %w", err)
 	}
 
-	return tool.TextResult(fmt.Sprintf("Registered RSS feed %q (%s). New articles will be shared in this channel.", in.Name, in.URL)), nil
+	return tool.TextResult(fmt.Sprintf("RSSフィード %q (%s) を登録しました。新着記事はこのチャンネルに共有されます。", in.Name, in.URL)), nil
 }
 
 var _ tool.Tool = (*SubscribeTool)(nil)
@@ -114,18 +114,18 @@ type rssUnsubscribeInput struct {
 func (r *UnsubscribeTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in rssUnsubscribeInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.Identifier == "" {
-		return tool.ErrorResult("identifier is required"), nil
+		return tool.ErrorResult("identifier は必須です"), nil
 	}
 
 	store := NewFeedStore(r.db)
 	if err := store.RemoveFeed(ctx, in.Identifier); err != nil {
-		return tool.ErrorResult(fmt.Sprintf("Could not remove feed: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("フィードを削除できませんでした: %v", err)), nil
 	}
 
-	return tool.TextResult(fmt.Sprintf("Removed RSS feed %q.", in.Identifier)), nil
+	return tool.TextResult(fmt.Sprintf("RSSフィード %q を削除しました。", in.Identifier)), nil
 }
 
 var _ tool.Tool = (*UnsubscribeTool)(nil)
@@ -162,17 +162,17 @@ func (r *ListTool) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolRe
 	}
 
 	if len(feeds) == 0 {
-		return tool.TextResult("No RSS feeds registered."), nil
+		return tool.TextResult("登録されているRSSフィードはありません。"), nil
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Registered feeds (%d):\n", len(feeds))
+	fmt.Fprintf(&sb, "登録フィード (%d件):\n", len(feeds))
 	for _, f := range feeds {
-		status := "enabled"
+		status := "有効"
 		if !f.Enabled {
-			status = "disabled"
+			status = "無効"
 		}
-		lastPolled := "never"
+		lastPolled := "未取得"
 		if f.LastPolled != nil {
 			lastPolled = f.LastPolled.Format("2006-01-02 15:04")
 		}
@@ -221,10 +221,10 @@ type rssPreferenceInput struct {
 func (r *PreferenceTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in rssPreferenceInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("invalid input: " + err.Error()), nil
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 	if in.UserID == "" || in.Preference == "" {
-		return tool.ErrorResult("user_id and preference are required"), nil
+		return tool.ErrorResult("user_id と preference は必須です"), nil
 	}
 
 	mem := &memory.Memory{
@@ -240,7 +240,7 @@ func (r *PreferenceTool) Execute(ctx context.Context, input json.RawMessage) (*t
 		return nil, fmt.Errorf("rss_preference: save: %w", err)
 	}
 
-	return tool.TextResult(fmt.Sprintf("Saved RSS preference: %q", in.Preference)), nil
+	return tool.TextResult(fmt.Sprintf("RSS設定を保存しました: %q", in.Preference)), nil
 }
 
 var _ tool.Tool = (*PreferenceTool)(nil)
