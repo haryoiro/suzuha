@@ -40,7 +40,7 @@ func (s *SQLiteStore) AddBotID(platformUserID string) {
 func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, platformName string) (*User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("user: begin tx: %w", err)
+		return nil, fmt.Errorf("user: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -63,17 +63,17 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 				`UPDATE users SET is_bot = 1, updated_at = ? WHERE id = ?`,
 				time.Now(), userID,
 			); err != nil {
-				return nil, fmt.Errorf("user: mark bot: %w", err)
+				return nil, fmt.Errorf("user: ボットフラグの設定に失敗: %w", err)
 			}
 			u.IsBot = true
 		}
 		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("user: commit: %w", err)
+			return nil, fmt.Errorf("user: コミットに失敗: %w", err)
 		}
 		return u, nil
 	}
 	if err != sql.ErrNoRows {
-		return nil, fmt.Errorf("user: lookup platform link: %w", err)
+		return nil, fmt.Errorf("user: プラットフォームリンクの検索に失敗: %w", err)
 	}
 
 	// User does not exist — create.
@@ -101,7 +101,7 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 		 VALUES (?, '', ?, ?, 0.0, ?, ?)`,
 		u.ID, string(u.Role), u.IsBot, u.CreatedAt, u.UpdatedAt,
 	); err != nil {
-		return nil, fmt.Errorf("user: insert user: %w", err)
+		return nil, fmt.Errorf("user: ユーザーの挿入に失敗: %w", err)
 	}
 
 	linkID := uuid.NewString()
@@ -110,11 +110,11 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		linkID, u.ID, platform, platformUserID, platformName, now,
 	); err != nil {
-		return nil, fmt.Errorf("user: insert platform link: %w", err)
+		return nil, fmt.Errorf("user: プラットフォームリンクの挿入に失敗: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("user: commit: %w", err)
+		return nil, fmt.Errorf("user: コミットに失敗: %w", err)
 	}
 	return u, nil
 }
@@ -143,7 +143,7 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 		&u.Closeness, &u.Trust, &u.Interest,
 		&metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("user: get: %w", err)
+		return nil, fmt.Errorf("user: ユーザー取得に失敗: %w", err)
 	}
 	u.Role = Role(roleStr)
 	if metaJSON.Valid {
@@ -158,11 +158,11 @@ func (s *SQLiteStore) UpdateDisplayName(ctx context.Context, userID, displayName
 		displayName, time.Now(), userID,
 	)
 	if err != nil {
-		return fmt.Errorf("user: update display_name: %w", err)
+		return fmt.Errorf("user: 表示名の更新に失敗: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("user: not found: %s", userID)
+		return fmt.Errorf("user: 見つかりません: %s", userID)
 	}
 	return nil
 }
@@ -182,7 +182,7 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("user: begin tx: %w", err)
+		return fmt.Errorf("user: トランザクション開始に失敗: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -195,7 +195,7 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 		nullTime(evt.GroupStart), nullTime(evt.GroupEnd),
 		evt.CreatedAt,
 	); err != nil {
-		return fmt.Errorf("user: insert affinity event: %w", err)
+		return fmt.Errorf("user: 親密度イベントの挿入に失敗: %w", err)
 	}
 
 	// Update the user's running totals: axis-specific column + legacy affinity.
@@ -212,7 +212,7 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 		axisCol, axisCol,
 	)
 	if _, err := tx.ExecContext(ctx, query, evt.Delta, evt.Delta, now, evt.UserID); err != nil {
-		return fmt.Errorf("user: update affinity: %w", err)
+		return fmt.Errorf("user: 親密度の更新に失敗: %w", err)
 	}
 
 	return tx.Commit()
@@ -226,7 +226,7 @@ func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int)
 		userID, limit,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("user: get affinity: %w", err)
+		return nil, fmt.Errorf("user: 親密度の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -237,7 +237,7 @@ func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int)
 		var idsJSON sql.NullString
 		var groupStart, groupEnd sql.NullTime
 		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &axisStr, &e.Reason, &idsJSON, &groupStart, &groupEnd, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("user: scan affinity: %w", err)
+			return nil, fmt.Errorf("user: 親密度のスキャンに失敗: %w", err)
 		}
 		e.Axis = AffinityAxis(axisStr)
 		if idsJSON.Valid {
@@ -266,7 +266,7 @@ func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, gu
 		 ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
 		guildID, guildName, now,
 	); err != nil {
-		return fmt.Errorf("user: upsert guild: %w", err)
+		return fmt.Errorf("user: ギルドのupsertに失敗: %w", err)
 	}
 
 	// Upsert user-guild-channel association.
@@ -277,7 +277,7 @@ func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, gu
 		   channel_name = excluded.channel_name, last_seen_at = excluded.last_seen_at`,
 		userID, guildID, channelID, channelName, now,
 	); err != nil {
-		return fmt.Errorf("user: upsert user guild channel: %w", err)
+		return fmt.Errorf("user: ユーザーギルドチャンネルのupsertに失敗: %w", err)
 	}
 	return nil
 }
@@ -292,7 +292,7 @@ func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserG
 		userID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("user: get user guilds: %w", err)
+		return nil, fmt.Errorf("user: ユーザーギルドの取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -300,7 +300,7 @@ func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserG
 	for rows.Next() {
 		var ug UserGuild
 		if err := rows.Scan(&ug.GuildID, &ug.GuildName, &ug.ChannelID, &ug.ChannelName, &ug.LastSeenAt); err != nil {
-			return nil, fmt.Errorf("user: scan user guild: %w", err)
+			return nil, fmt.Errorf("user: ユーザーギルドのスキャンに失敗: %w", err)
 		}
 		result = append(result, ug)
 	}
@@ -314,7 +314,7 @@ func (s *SQLiteStore) ResolveExisting(ctx context.Context, platform, platformUse
 		platform, platformUserID,
 	).Scan(&userID)
 	if err != nil {
-		return nil, fmt.Errorf("user: resolve existing: %w", err)
+		return nil, fmt.Errorf("user: 既存ユーザーの解決に失敗: %w", err)
 	}
 	return s.Get(ctx, userID)
 }
@@ -327,7 +327,7 @@ func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, e
 		WHERE u.is_bot = 0 AND u.affinity > 0
 		ORDER BY u.interest DESC, u.closeness DESC`)
 	if err != nil {
-		return nil, fmt.Errorf("user: list mentionable: %w", err)
+		return nil, fmt.Errorf("user: メンション可能ユーザーの一覧取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -335,7 +335,7 @@ func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, e
 	for rows.Next() {
 		var m MentionableUser
 		if err := rows.Scan(&m.DisplayName, &m.DiscordUserID, &m.Affinity, &m.Closeness, &m.Interest); err != nil {
-			return nil, fmt.Errorf("user: scan mentionable: %w", err)
+			return nil, fmt.Errorf("user: メンション可能ユーザーのスキャンに失敗: %w", err)
 		}
 		result = append(result, m)
 	}
@@ -350,14 +350,14 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 	}
 	var total int
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("user: count: %w", err)
+		return nil, 0, fmt.Errorf("user: カウントに失敗: %w", err)
 	}
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
 		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
-		return nil, 0, fmt.Errorf("user: list: %w", err)
+		return nil, 0, fmt.Errorf("user: 一覧取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -369,7 +369,7 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 		if err := rows.Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity,
 			&u.Closeness, &u.Trust, &u.Interest,
 			&metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
-			return nil, 0, fmt.Errorf("user: scan list: %w", err)
+			return nil, 0, fmt.Errorf("user: 一覧のスキャンに失敗: %w", err)
 		}
 		u.Role = Role(roleStr)
 		if metaJSON.Valid {
@@ -396,7 +396,7 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields
 		args = append(args, *fields.IsBot)
 	}
 	if len(sets) == 0 {
-		return fmt.Errorf("user: no fields to update")
+		return fmt.Errorf("user: 更新するフィールドがありません")
 	}
 	sets = append(sets, "updated_at = ?")
 	args = append(args, time.Now())
@@ -413,11 +413,11 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields
 
 	res, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("user: update: %w", err)
+		return fmt.Errorf("user: 更新に失敗: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("user: not found: %s", id)
+		return fmt.Errorf("user: 見つかりません: %s", id)
 	}
 	return nil
 }
@@ -427,7 +427,7 @@ func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]P
 		`SELECT id, user_id, platform, platform_user_id, platform_name, created_at
 		 FROM platform_links WHERE user_id = ?`, userID)
 	if err != nil {
-		return nil, fmt.Errorf("user: list platform links: %w", err)
+		return nil, fmt.Errorf("user: プラットフォームリンク一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -435,7 +435,7 @@ func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]P
 	for rows.Next() {
 		var l PlatformLink
 		if err := rows.Scan(&l.ID, &l.UserID, &l.Platform, &l.PlatformUserID, &l.PlatformName, &l.CreatedAt); err != nil {
-			return nil, fmt.Errorf("user: scan platform link: %w", err)
+			return nil, fmt.Errorf("user: プラットフォームリンクのスキャンに失敗: %w", err)
 		}
 		links = append(links, l)
 	}
@@ -456,7 +456,7 @@ func (s *SQLiteStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {
 		GROUP BY g.id
 		ORDER BY g.updated_at DESC`)
 	if err != nil {
-		return nil, fmt.Errorf("user: list guilds: %w", err)
+		return nil, fmt.Errorf("user: ギルド一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -464,7 +464,7 @@ func (s *SQLiteStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {
 	for rows.Next() {
 		var g GuildSummary
 		if err := rows.Scan(&g.ID, &g.Name, &g.UpdatedAt, &g.MemberCount, &g.ChannelCount); err != nil {
-			return nil, fmt.Errorf("user: scan guild: %w", err)
+			return nil, fmt.Errorf("user: ギルドのスキャンに失敗: %w", err)
 		}
 		guilds = append(guilds, g)
 	}
@@ -479,7 +479,7 @@ func (s *SQLiteStore) ListAllChannels(ctx context.Context) ([]ChannelEntry, erro
 		GROUP BY ugc.channel_id
 		ORDER BY g.name, ugc.channel_name`)
 	if err != nil {
-		return nil, fmt.Errorf("user: list all channels: %w", err)
+		return nil, fmt.Errorf("user: 全チャンネル一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -487,7 +487,7 @@ func (s *SQLiteStore) ListAllChannels(ctx context.Context) ([]ChannelEntry, erro
 	for rows.Next() {
 		var e ChannelEntry
 		if err := rows.Scan(&e.ChannelID, &e.ChannelName, &e.GuildID, &e.GuildName); err != nil {
-			return nil, fmt.Errorf("user: scan channel entry: %w", err)
+			return nil, fmt.Errorf("user: チャンネルエントリのスキャンに失敗: %w", err)
 		}
 		entries = append(entries, e)
 	}
@@ -506,7 +506,7 @@ func (s *SQLiteStore) GetGuildChannels(ctx context.Context, guildID string) ([]G
 		GROUP BY ugc.channel_id
 		ORDER BY last_seen_at DESC`, guildID)
 	if err != nil {
-		return nil, fmt.Errorf("user: get guild channels: %w", err)
+		return nil, fmt.Errorf("user: ギルドチャンネルの取得に失敗: %w", err)
 	}
 	defer rows.Close()
 
@@ -515,7 +515,7 @@ func (s *SQLiteStore) GetGuildChannels(ctx context.Context, guildID string) ([]G
 		var c GuildChannel
 		var lastMsg sql.NullString
 		if err := rows.Scan(&c.ChannelID, &c.ChannelName, &c.UserCount, &c.LastSeenAt, &lastMsg); err != nil {
-			return nil, fmt.Errorf("user: scan guild channel: %w", err)
+			return nil, fmt.Errorf("user: ギルドチャンネルのスキャンに失敗: %w", err)
 		}
 		if lastMsg.Valid {
 			c.LastUserMessageAt = &lastMsg.String
