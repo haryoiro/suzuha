@@ -104,7 +104,7 @@ func (c *Chat) Run(ctx context.Context) error {
 			}
 		}
 
-		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM, m.GuildID, guildName, channelName, imageURLs)
+		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM, m.Author.Bot, m.GuildID, guildName, channelName, imageURLs)
 		c.bus.Publish(evt)
 	})
 
@@ -193,7 +193,7 @@ func (c *Chat) Typing(_ context.Context, channel string) {
 }
 
 // messageToEvent converts a Discord message to an Event.
-func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM bool, guildID, guildName, channelName string, imageURLs []string) event.Event {
+func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM, isBot bool, guildID, guildName, channelName string, imageURLs []string) event.Event {
 	return event.NewMessageEvent("discord", event.MessagePayload{
 		Content:     content,
 		Channel:     channel,
@@ -202,6 +202,7 @@ func (c *Chat) messageToEvent(channel, messageID, userID, userName, content stri
 		UserName:    userName,
 		IsMention:   isMention,
 		IsDM:        isDM,
+		IsBot:       isBot,
 		GuildID:     guildID,
 		GuildName:   guildName,
 		ChannelName: channelName,
