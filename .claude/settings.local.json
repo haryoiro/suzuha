@@ -38,7 +38,18 @@
       "Bash(CGO_ENABLED=1 go run:*)",
       "Bash(git status:*)",
       "Bash(head:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(~/.local/share/mise/installs/python/3.12.13/bin/python3.12:*)",
+      "Bash(source:*)",
+      "Read(//home/haryoiro/.cache/huggingface/hub/models--HauhauCS--Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/**)",
+      "Read(//home/haryoiro/.cache/huggingface/**)",
+      "Bash(mkdir:*)",
+      "Bash(pip3 install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(chmod +x:*)",
+      "Bash(bash:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
