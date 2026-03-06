@@ -378,13 +378,13 @@ func responseDirective(evt event.Event, botID string, closeness, interest float6
 
 	switch {
 	case closeness >= 3.0:
-		return "[LISTEN] 仲の良い人の会話です。" +
-			"友達の会話なので積極的に参加して。相槌・共感・ツッコミ・質問など軽い反応でいいから会話に加わって。" +
-			"本当に何も言うことがないときだけ skip_response で。" +
+		return "[LISTEN] 仲の良い人の会話です。" + skipDefault +
+			"本当に一言言いたいときだけ短く返して。相槌だけの返答はしない。" +
+			reactHint +
 			noEmoji
 	case interest >= 2.0:
-		return "[LISTEN] 気になる人の会話です。" +
-			"話題に興味があったり、自分が詳しいことなら返して。それ以外は skip_response で。" +
+		return "[LISTEN] 気になる人の会話です。" + skipDefault +
+			"自分が詳しい話題や強い意見があるときだけ返して。" +
 			reactHint +
 			noEmoji
 	case closeness <= -1.0:
