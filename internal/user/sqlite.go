@@ -198,24 +198,117 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 		return fmt.Errorf("user: 親密度イベントの挿入に失敗: %w", err)
 	}
 
-	// Update the user's running totals: axis-specific column + legacy affinity.
-	now := time.Now()
+	// Recalculate effective value for this user+axis from all events.
+	if err := s.recalcUserAxis(ctx, tx, evt.UserID, evt.Axis); err != nil {
+		return fmt.Errorf("user: 実効値の再計算に失敗: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// weightedSumSQL is the SQL expression for computing a time-decay weighted sum
+// of affinity deltas. Events are weighted by age: recent=1.0, month=0.6, quarter=0.3, old=0.1.
+const weightedSumSQL = `SELECT COALESCE(SUM(delta * CASE
+	WHEN julianday('now') - julianday(created_at) <= 7 THEN 1.0
+	WHEN julianday('now') - julianday(created_at) <= 28 THEN 0.6
+	WHEN julianday('now') - julianday(created_at) <= 90 THEN 0.3
+	ELSE 0.1
+END), 0.0) FROM affinity_events WHERE user_id = ? AND axis = ?`
+
+// recalcUserAxis recalculates the effective value for a single user+axis
+// and updates the users table within the given transaction.
+func (s *SQLiteStore) recalcUserAxis(ctx context.Context, tx *sql.Tx, userID string, axis AffinityAxis) error {
 	axisCol := "closeness"
-	switch evt.Axis {
+	switch axis {
 	case AxisTrust:
 		axisCol = "trust"
 	case AxisInterest:
 		axisCol = "interest"
 	}
-	query := fmt.Sprintf(
-		`UPDATE users SET %s = %s + ?, affinity = affinity + ?, updated_at = ? WHERE id = ?`,
-		axisCol, axisCol,
-	)
-	if _, err := tx.ExecContext(ctx, query, evt.Delta, evt.Delta, now, evt.UserID); err != nil {
-		return fmt.Errorf("user: 親密度の更新に失敗: %w", err)
+
+	var weighted float64
+	if err := tx.QueryRowContext(ctx, weightedSumSQL, userID, string(axis)).Scan(&weighted); err != nil {
+		return err
+	}
+	effective := EffectiveValue(weighted)
+
+	// Also recalculate legacy affinity as sum of all effective axes.
+	// We read the other two axes' current values and replace the one we're updating.
+	var otherAxes [2]struct {
+		col  string
+		axis AffinityAxis
+	}
+	switch axis {
+	case AxisCloseness:
+		otherAxes = [2]struct {
+			col  string
+			axis AffinityAxis
+		}{{"trust", AxisTrust}, {"interest", AxisInterest}}
+	case AxisTrust:
+		otherAxes = [2]struct {
+			col  string
+			axis AffinityAxis
+		}{{"closeness", AxisCloseness}, {"interest", AxisInterest}}
+	case AxisInterest:
+		otherAxes = [2]struct {
+			col  string
+			axis AffinityAxis
+		}{{"closeness", AxisCloseness}, {"trust", AxisTrust}}
 	}
 
-	return tx.Commit()
+	var other1, other2 float64
+	row := tx.QueryRowContext(ctx,
+		fmt.Sprintf(`SELECT %s, %s FROM users WHERE id = ?`, otherAxes[0].col, otherAxes[1].col),
+		userID)
+	if err := row.Scan(&other1, &other2); err != nil {
+		return err
+	}
+
+	now := time.Now()
+	query := fmt.Sprintf(
+		`UPDATE users SET %s = ?, affinity = ?, updated_at = ? WHERE id = ?`,
+		axisCol,
+	)
+	if _, err := tx.ExecContext(ctx, query, effective, effective+other1+other2, now, userID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RecalculateEffective recomputes effective affinity values for all users
+// from their event history, applying time-based decay and soft cap.
+func (s *SQLiteStore) RecalculateEffective(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM affinity_events`)
+	if err != nil {
+		return fmt.Errorf("user: ユーザー一覧の取得に失敗: %w", err)
+	}
+	var userIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("user: ユーザーIDのスキャンに失敗: %w", err)
+		}
+		userIDs = append(userIDs, id)
+	}
+	rows.Close()
+
+	for _, uid := range userIDs {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("user: トランザクション開始に失敗: %w", err)
+		}
+		for _, axis := range []AffinityAxis{AxisCloseness, AxisTrust, AxisInterest} {
+			if err := s.recalcUserAxis(ctx, tx, uid, axis); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("user: %s/%s の再計算に失敗: %w", uid, axis, err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("user: コミットに失敗: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int) ([]AffinityEvent, error) {

@@ -2,8 +2,36 @@ package user
 
 import (
 	"context"
+	"math"
 	"time"
 )
+
+// Affinity transformation constants.
+const (
+	AffinityCap = 5.0 // soft cap for each axis
+
+	// Time-based decay weights applied to affinity events by age.
+	WeightRecent  = 1.0 // 0-7 days
+	WeightMonth   = 0.6 // 8-28 days
+	WeightQuarter = 0.3 // 29-90 days
+	WeightOld     = 0.1 // 90+ days
+)
+
+// EffectiveValue transforms a time-weighted raw sum into a bounded effective
+// value using a logarithmic soft cap: sign(x) * cap * (1 - exp(-|x|/cap)).
+// Small values pass through nearly linearly; large values asymptote toward cap.
+func EffectiveValue(weightedSum float64) float64 {
+	if weightedSum == 0 {
+		return 0
+	}
+	sign := 1.0
+	abs := weightedSum
+	if weightedSum < 0 {
+		sign = -1.0
+		abs = -weightedSum
+	}
+	return sign * AffinityCap * (1 - math.Exp(-abs/AffinityCap))
+}
 
 // Role represents a user's permission level.
 type Role string
@@ -101,6 +129,10 @@ type Store interface {
 	// Returns sql.ErrNoRows (wrapped) if the user does not exist.
 	// Unlike Resolve, this does NOT create the user.
 	ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error)
+
+	// RecalculateEffective recomputes effective affinity values for all users
+	// from their event history, applying time-based decay and soft cap.
+	RecalculateEffective(ctx context.Context) error
 
 	// ListMentionable returns non-bot users with positive affinity
 	// who have a discord platform link. Used for mention targeting.

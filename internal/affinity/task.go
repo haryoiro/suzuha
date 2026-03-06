@@ -118,7 +118,14 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		}
 	}
 
-	// 6. Update state.
+	// 6. Recalculate effective affinity values (time-decay + soft cap).
+	if cc.Users != nil {
+		if err := cc.Users.RecalculateEffective(ctx); err != nil {
+			cc.Logger.Warn("affinity_eval: 実効値の再計算に失敗", "error", err)
+		}
+	}
+
+	// 7. Update state.
 	now := time.Now()
 	t.lastEvaluatedAt = now
 	if saveErr := scheduler.SaveState(ctx, cc.DB, t.Name(), &persistedState{LastEvaluatedAt: now}); saveErr != nil {

@@ -75,7 +75,8 @@ func (m *mockUsers) ResolveExisting(_ context.Context, _, _ string) (*user.User,
 func (m *mockUsers) ListMentionable(_ context.Context) ([]user.MentionableUser, error) {
 	return nil, nil
 }
-func (m *mockUsers) Close() error { return nil }
+func (m *mockUsers) RecalculateEffective(_ context.Context) error { return nil }
+func (m *mockUsers) Close() error                                { return nil }
 
 var _ user.Store = (*mockUsers)(nil)
 
