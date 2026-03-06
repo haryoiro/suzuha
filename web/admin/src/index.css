@@ -61,6 +61,12 @@ body {
   transition: all 0.2s;
 }
 
+/* Ensure popup containers (Select, DatePicker, etc.) are positioned correctly */
+.ant-select,
+.ant-picker {
+  position: relative;
+}
+
 /* Page headings */
 h2, h3, .ant-typography h3, .ant-typography h2 {
   color: rgba(255, 255, 255, 0.9) !important;

@@ -148,6 +148,7 @@ export function App() {
 
   return (
     <ConfigProvider
+      getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
       theme={{
         algorithm: theme.darkAlgorithm,
         token: {
@@ -198,13 +199,17 @@ export function App() {
         },
       }}
     >
-      <Layout style={{ minHeight: "100vh", background: "#0b1120" }}>
+      <Layout style={{ height: "100vh", background: "#0b1120", overflow: "hidden" }}>
         {!isMobile && (
           <Sider
             width={220}
             style={{
               background: "linear-gradient(180deg, #0d1526 0%, #091018 100%)",
               borderRight: "1px solid rgba(255,255,255,0.06)",
+              height: "100vh",
+              overflow: "auto",
+              position: "sticky",
+              top: 0,
             }}
           >
             <div
@@ -324,7 +329,7 @@ export function App() {
               </span>
             </Header>
           )}
-          <Content style={{ padding: isMobile ? 12 : 24, overflow: "auto" }}>
+          <Content style={{ padding: isMobile ? 12 : 24, overflow: "auto", height: "100vh" }}>
             <ErrorBoundary key={page.key}>
               <Suspense fallback={<Spin style={{ display: "block", margin: "80px auto" }} />}>
                 {renderPage()}

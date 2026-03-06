@@ -34,6 +34,8 @@ const LogRow = memo(function LogRow({ entry }: { entry: LogEntry }) {
         borderBottom: "1px solid rgba(255,255,255,0.06)",
         alignItems: "baseline",
         flexWrap: "wrap",
+        wordBreak: "break-all",
+        minWidth: 0,
       }}
     >
       <span style={{ color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>
@@ -75,7 +77,7 @@ export const LogsPage = memo(function LogsPage() {
   }, [logs, autoScroll]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 88px)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 88px)", minWidth: 0, overflow: "hidden" }}>
       <div
         style={{
           display: "flex",
@@ -84,6 +86,7 @@ export const LogsPage = memo(function LogsPage() {
           marginBottom: 12,
           flexWrap: "wrap",
           gap: 8,
+          minWidth: 0,
         }}
       >
         <Space>
@@ -92,7 +95,7 @@ export const LogsPage = memo(function LogsPage() {
             {connected ? "Connected" : "Disconnected"}
           </Tag>
         </Space>
-        <Space>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <Select
             placeholder="Level"
             allowClear
@@ -117,21 +120,22 @@ export const LogsPage = memo(function LogsPage() {
               { label: "consolidator", value: "consolidator" },
             ]}
           />
-          <Space>
+          <Space size={4}>
             Auto-scroll
             <Switch checked={autoScroll} onChange={setAutoScroll} size="small" />
           </Space>
           <Button icon={<ClearOutlined />} size="small" onClick={clear}>
             Clear
           </Button>
-        </Space>
+        </div>
       </div>
 
       <div
         ref={containerRef}
         style={{
           flex: 1,
-          overflow: "auto",
+          overflowY: "auto",
+          overflowX: "hidden",
           background: "rgba(0,0,0,0.25)",
           borderRadius: 6,
           padding: "8px 12px",
