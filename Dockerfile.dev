@@ -3,6 +3,7 @@ FROM golang:1.26
 # Install build dependencies for CGO (sqlite-vec), protoc, and Node.js (for MCP servers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
+    sqlite3 \
     protobuf-compiler \
     curl \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
