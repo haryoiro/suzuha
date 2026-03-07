@@ -50,6 +50,32 @@ services:
       - SEARXNG_SECRET=suzuha-searxng-secret-key-2024
     restart: unless-stopped
 
+  whisper:
+    image: ghcr.io/ggml-org/whisper.cpp:main-cuda
+    entrypoint: ["/app/build/bin/whisper-server"]
+    command: ["--model", "/models/ggml-large-v3.bin", "--port", "8001", "--host", "0.0.0.0", "--language", "ja"]
+    volumes:
+      - ./models/whisper:/models
+    environment:
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    profiles:
+      - voice
+
+  voicevox:
+    image: voicevox/voicevox_engine:nvidia-latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    profiles:
+      - voice
+
   admin-frontend:
     image: node:22-slim
     working_dir: /app/web/admin

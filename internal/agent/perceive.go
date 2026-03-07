@@ -60,6 +60,7 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 		LastEvent:         lastEvt,
 		Channel:           channel,
 		IsDM:              isDM,
+		IsVoice:           lastEvt.Message.IsVoice,
 		DirectlyAddressed: directlyAddressed,
 		SenderIsBot:       lastEvt.Message.IsBot,
 		MaxCloseness:      userCloseness,

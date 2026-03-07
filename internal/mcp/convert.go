@@ -1,4 +1,4 @@
-package mcpapps
+package mcp
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 
 // SelectPackage picks the best installable package from a server entry.
 // Currently only npm+stdio is supported.
-func SelectPackage(srv ServerJSON) (Package, error) {
+func SelectPackage(srv ServerJSON) (RegistryPackage, error) {
 	// Prefer npm+stdio.
 	for _, pkg := range srv.Packages {
 		if pkg.RegistryType == "npm" && pkg.Transport.Type == "stdio" {
@@ -29,15 +29,15 @@ func SelectPackage(srv ServerJSON) (Package, error) {
 		types = append(types, pkg.RegistryType+"/"+pkg.Transport.Type)
 	}
 	if len(types) == 0 {
-		return Package{}, fmt.Errorf("サーバー %q にパッケージがありません", srv.Name)
+		return RegistryPackage{}, fmt.Errorf("サーバー %q にパッケージがありません", srv.Name)
 	}
-	return Package{}, fmt.Errorf("%q に対応するパッケージタイプがありません (利用可能: %s); npm+stdioのみサポートされています",
+	return RegistryPackage{}, fmt.Errorf("%q に対応するパッケージタイプがありません (利用可能: %s); npm+stdioのみサポートされています",
 		srv.Name, strings.Join(types, ", "))
 }
 
 // ToToolServer converts an MCP Registry Package to a config.ToolServer.
 // userEnv provides user-supplied environment variable values.
-func ToToolServer(serverName string, pkg Package, userEnv map[string]string) (config.ToolServer, error) {
+func ToToolServer(serverName string, pkg RegistryPackage, userEnv map[string]string) (config.ToolServer, error) {
 	if pkg.RegistryType != "npm" {
 		return config.ToolServer{}, fmt.Errorf("サポートされていないレジストリタイプ %q; npmのみサポートされています", pkg.RegistryType)
 	}

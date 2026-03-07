@@ -41,6 +41,7 @@ type Agent struct {
 	logger          *slog.Logger
 	metrics         *observe.Metrics
 	hooks           []PipelineHook
+	voiceSpeaker    chat.VoiceSpeaker
 
 	systemPrompt     string
 	botID            string
@@ -66,6 +67,7 @@ type Perception struct {
 	LastEvent         event.Event
 	Channel           string
 	IsDM              bool
+	IsVoice           bool
 	DirectlyAddressed bool
 	SenderIsBot       bool
 	MaxCloseness      float64
@@ -148,6 +150,11 @@ func (a *Agent) SetBotID(id string) {
 // BotID returns the bot's platform user ID.
 func (a *Agent) BotID() string {
 	return a.botID
+}
+
+// SetVoiceSpeaker sets the voice speaker for voice channel responses.
+func (a *Agent) SetVoiceSpeaker(vs chat.VoiceSpeaker) {
+	a.voiceSpeaker = vs
 }
 
 // SetLocationStore sets the location store for GPS context injection.

@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
 
 // SearchResult represents a single search result from SearXNG.
@@ -74,7 +78,8 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 	return body.Results, nil
 }
 
-// FetchPage retrieves a web page and returns its text content (truncated).
+// FetchPage retrieves a web page, converts HTML to Markdown, and returns
+// the text content (truncated to maxRunes).
 func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes int) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
 	if err != nil {
@@ -92,16 +97,51 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 		return "", fmt.Errorf("fetch page: ステータス %d", resp.StatusCode)
 	}
 
-	// Read limited bytes to avoid huge pages.
-	limited := make([]byte, maxRunes*4) // rough UTF-8 upper bound
-	n, _ := resp.Body.Read(limited)
-	text := string(limited[:n])
+	// Read limited bytes to avoid huge pages (maxRunes * 4 bytes for UTF-8).
+	const maxBytes = 512 * 1024 // 512KB cap
+	limit := maxRunes * 4
+	if limit > maxBytes {
+		limit = maxBytes
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)))
+	if err != nil {
+		return "", fmt.Errorf("fetch page: 読み取りに失敗: %w", err)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	text := string(body)
+
+	// Convert HTML to Markdown for readability.
+	if strings.Contains(contentType, "html") || looksLikeHTML(text) {
+		md, err := htmltomarkdown.ConvertString(text)
+		if err == nil {
+			text = md
+		}
+		// On error, fall through to raw text.
+	}
+
+	// Collapse excessive whitespace.
+	text = collapseWhitespace(text)
 
 	runes := []rune(text)
 	if len(runes) > maxRunes {
 		text = string(runes[:maxRunes])
 	}
 	return text, nil
+}
+
+// looksLikeHTML checks if content appears to be HTML.
+func looksLikeHTML(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<html") || strings.HasPrefix(trimmed, "<HTML")
+}
+
+// collapseWhitespace reduces runs of 3+ newlines to 2.
+func collapseWhitespace(s string) string {
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(s)
 }
 
 // truncateResults formats search results for display in prompts.

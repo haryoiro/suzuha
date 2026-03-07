@@ -35,7 +35,7 @@ var _ tool.Tool = skipResponseTool{}
 // Act runs the LLM completion with tool loop, filters the response,
 // and sends it to chat.
 func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
-	resp, err := a.completeWithTools(ctx, t.Directive, p.Channel, t.Ephemeral)
+	resp, intermediateText, err := a.completeWithTools(ctx, t.Directive, p.Channel, t.Ephemeral)
 	if err != nil {
 		return fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
@@ -64,6 +64,10 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
 			return fmt.Errorf("agent: 送信に失敗: %w", err)
 		}
+	case intermediateText != "" && isSimilarText(intermediateText, text):
+		a.logger.Info("中間応答と類似のため最終応答をスキップ",
+			"intermediate_length", len(intermediateText),
+			"final_length", len(text))
 	case llm.IsSilentResponse(text):
 		a.logger.Info("応答をスキップ (サイレント)",
 			"raw_text", truncate(resp.Text, 100))
@@ -75,9 +79,23 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 		a.logger.Info("応答を送信",
 			"channel", p.Channel,
 			"length", len(text),
+			"is_voice", p.IsVoice,
 			"content", truncate(text, 200))
-		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-			return fmt.Errorf("agent: 送信に失敗: %w", err)
+		// If connected to VC in this guild, speak the response via voice only.
+		guildID := p.LastEvent.Message.GuildID
+		if a.voiceSpeaker != nil && guildID != "" && a.voiceSpeaker.IsConnected(guildID) {
+			a.logger.Info("voice: 音声で応答", "guild", guildID, "length", len(text))
+			if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
+				a.logger.Warn("voice: 音声送信失敗、テキストにフォールバック", "error", err)
+				if err := a.chat.Send(ctx, p.Channel, text); err != nil {
+					return fmt.Errorf("agent: 送信に失敗: %w", err)
+				}
+			}
+		} else {
+			// Send text response.
+			if err := a.chat.Send(ctx, p.Channel, text); err != nil {
+				return fmt.Errorf("agent: 送信に失敗: %w", err)
+			}
 		}
 	}
 
@@ -85,7 +103,7 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 }
 
 // completeWithTools runs the LLM and executes tool calls in a loop.
-func (a *Agent) completeWithTools(ctx context.Context, directive, channel string, ephemeral []llm.Message) (*llm.Response, error) {
+func (a *Agent) completeWithTools(ctx context.Context, directive, channel string, ephemeral []llm.Message) (*llm.Response, string, error) {
 	allTools := a.tools.AllEnabled()
 
 	// Include skip_response tool when the directive allows skipping (not [RESPOND]).
@@ -100,6 +118,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	}
 
 	maxIter := 10
+	var intermediateText string
 
 	for iter := range maxIter {
 		if channel != "" {
@@ -130,7 +149,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 
 		resp, err := a.llm.Complete(ctx, msgs, allTools)
 		if err != nil {
-			return nil, err
+			return nil, intermediateText, err
 		}
 
 		a.logger.Info("LLM応答",
@@ -152,7 +171,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		}
 
 		if !resp.HasToolCalls() {
-			return resp, nil
+			return resp, intermediateText, nil
 		}
 
 		a.ctx.Add(llm.Message{
@@ -164,12 +183,13 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		})
 
 		// Send intermediate text to chat if the LLM returned text alongside tool calls.
-		if intermediateText := llm.StripDirectiveTags(resp.Text); intermediateText != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
+		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
 			a.logger.Info("ツール実行前に中間応答を送信",
-				"channel", channel, "length", len(intermediateText))
-			if err := a.chat.Send(ctx, channel, intermediateText); err != nil {
+				"channel", channel, "length", len(stripped))
+			if err := a.chat.Send(ctx, channel, stripped); err != nil {
 				a.logger.Warn("中間応答の送信に失敗", "error", err)
 			}
+			intermediateText = stripped
 		}
 
 		allStopAfter := true
@@ -250,11 +270,59 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 
 		if allStopAfter {
 			a.logger.Info("全ツールがStopAfterを返したためツールループを終了", "iteration", iter)
-			return resp, nil
+			return resp, intermediateText, nil
 		}
 	}
 
-	return nil, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
+	return nil, intermediateText, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
+}
+
+// isSimilarText returns true if two texts are similar enough to be considered duplicates,
+// using normalized Levenshtein distance. Threshold: 70% similarity.
+func isSimilarText(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == b {
+		return true
+	}
+	ra, rb := []rune(a), []rune(b)
+	dist := levenshtein(ra, rb)
+	maxLen := len(ra)
+	if len(rb) > maxLen {
+		maxLen = len(rb)
+	}
+	similarity := 1.0 - float64(dist)/float64(maxLen)
+	return similarity >= 0.95
+}
+
+// levenshtein computes the Levenshtein distance between two rune slices.
+func levenshtein(a, b []rune) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(b)]
 }
 
 // containsSkipTool returns true if the tool calls include skip_response.

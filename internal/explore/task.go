@@ -217,22 +217,29 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		content = pageContent
 	}
 
-	// --- Step 3: Save exploration summary ---
+	// --- Step 3: Reflect and save ---
 	if len(path) > 0 {
-		summary := buildSummary(path, rememberedItems)
+		// Ask LLM to synthesize a personal takeaway from the exploration.
+		summary, err := reflectOnExploration(ctx, cc.LLM, systemPrompt, path, rememberedItems)
+		if err != nil || summary == "" {
+			cc.Logger.Warn("explore: reflection failed, using fallback summary", "error", err)
+			summary = buildSummary(path, rememberedItems)
+		}
+
 		mem := &memory.Memory{
 			Type:    memory.MemoryTypeWorld,
 			Content: summary,
 			Metadata: map[string]any{
 				"source": "explore",
-				"type":   "summary",
+				"type":   "reflection",
 			},
 		}
 		if saveErr := cc.Memory.Save(ctx, mem); saveErr != nil {
 			cc.Logger.Error("explore: save summary", "error", saveErr)
 		}
 		cc.Logger.Info("explore: finished", "hops", len(path),
-			"remembered", len(rememberedItems))
+			"remembered", len(rememberedItems),
+			"reflection_length", len(summary))
 	}
 
 	// --- Step 4: Persist state ---

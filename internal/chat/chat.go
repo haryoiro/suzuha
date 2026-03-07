@@ -31,3 +31,12 @@ type Typer interface {
 	// Typing sends a typing indicator to the specified channel.
 	Typing(ctx context.Context, channel string)
 }
+
+// VoiceSpeaker is an optional interface for platforms that support voice output.
+type VoiceSpeaker interface {
+	// SpeakText synthesizes and sends voice audio to the channel's guild voice connection.
+	SpeakText(ctx context.Context, guildID, text string) error
+
+	// IsConnected returns true if there is an active voice session for the guild.
+	IsConnected(guildID string) bool
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/voice"
 )
 
 // Compile-time checks for optional interfaces.
@@ -18,12 +19,13 @@ var _ chat.Typer    = (*Chat)(nil)
 
 // Chat implements chat.Interface for Discord using discordgo.
 type Chat struct {
-	token   string
-	botID   string
-	bus     *event.Bus
-	log     *slog.Logger
-	session *discordgo.Session
-	onReady func(*discordgo.Session)
+	token         string
+	botID         string
+	bus           *event.Bus
+	log           *slog.Logger
+	session       *discordgo.Session
+	onReady       func(*discordgo.Session)
+	voicePipeline *voice.Pipeline
 }
 
 // OnReady registers a callback that fires after Discord connection is established.
@@ -45,7 +47,7 @@ func (c *Chat) Run(ctx context.Context) error {
 	}
 	c.session = session
 
-	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
+	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent | discordgo.IntentsGuildVoiceStates
 
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// Ignore own messages.

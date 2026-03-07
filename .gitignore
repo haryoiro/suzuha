@@ -18,6 +18,11 @@ data/
 
 # Dependencies
 .pnpm-store/
+.venv*/
+
+# ML / fine-tuning
+models/
+unsloth_compiled_cache/
 
 # Runtime
 .suzuha/

@@ -16,6 +16,7 @@ type Config struct {
 	Embedding    Embedding    `yaml:"embedding"`
 	Vision       Vision       `yaml:"vision"`
 	Discord      Discord      `yaml:"discord"`
+	Voice        Voice        `yaml:"voice"`
 	ToolServers  []ToolServer `yaml:"tool_servers"`
 	Triggers     []Trigger    `yaml:"triggers"`
 	Memory       Memory       `yaml:"memory"`
@@ -76,6 +77,15 @@ type Embedding struct {
 type Discord struct {
 	Token string `yaml:"token"`
 	BotID string `yaml:"bot_id"`
+}
+
+// Voice configures voice chat integration.
+type Voice struct {
+	Enabled         bool     `yaml:"enabled"`
+	WhisperURL      string   `yaml:"whisper_url"`       // whisper.cpp server URL, e.g. "http://whisper:8001"
+	VoicevoxURL     string   `yaml:"voicevox_url"`      // VOICEVOX engine URL, e.g. "http://voicevox:50021"
+	SpeakerID       int      `yaml:"speaker_id"`        // VOICEVOX speaker ID (e.g. 3 = zundamon)
+	AllowedChannels []string `yaml:"allowed_channels"`  // VC channel IDs where voice is allowed (empty = all)
 }
 
 // Vision configures the vision language model for image understanding.
@@ -266,6 +276,17 @@ func (c *Config) setDefaults() {
 			c.Vision.APIBase = c.Embedding.APIBase
 		case c.LLM.Provider:
 			c.Vision.APIBase = c.LLM.APIBase
+		}
+	}
+	if c.Voice.Enabled {
+		if c.Voice.WhisperURL == "" {
+			c.Voice.WhisperURL = "http://whisper:8001"
+		}
+		if c.Voice.VoicevoxURL == "" {
+			c.Voice.VoicevoxURL = "http://voicevox:50021"
+		}
+		if c.Voice.SpeakerID == 0 {
+			c.Voice.SpeakerID = 3 // zundamon normal
 		}
 	}
 	if c.Memory.DBPath == "" {

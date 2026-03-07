@@ -1,4 +1,4 @@
-package mcpbridge
+package mcp
 
 import (
 	"context"
@@ -16,7 +16,7 @@ func Package(i do.Injector) {
 		logger := do.MustInvoke[*slog.Logger](i)
 		registry := do.MustInvoke[*tool.Registry](i)
 		cfg := do.MustInvoke[*config.Config](i)
-		mgr := New(logger, registry)
+		mgr := NewManager(logger, registry)
 		startCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		mgr.Start(startCtx, cfg.ToolServers)
 		cancel()

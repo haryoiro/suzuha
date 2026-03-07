@@ -23,13 +23,14 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
-	"github.com/haryoiro/suzuha/internal/mcpbridge"
+	"github.com/haryoiro/suzuha/internal/mcp"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/voice"
 	"github.com/samber/do/v2"
 )
 
@@ -57,7 +58,7 @@ func run() error {
 
 	_ = do.MustInvoke[*observe.Metrics](injector)
 
-	mcpMgr := do.MustInvoke[*mcpbridge.Manager](injector)
+	mcpMgr := do.MustInvoke[*mcp.Manager](injector)
 	defer mcpMgr.Close()
 
 	chatIface := do.MustInvoke[chat.Interface](injector)
@@ -126,6 +127,7 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 	userStore := do.MustInvoke[*user.SQLiteStore](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
 	logger := do.MustInvoke[*slog.Logger](injector)
+	cfg := do.MustInvoke[*config.Config](injector)
 
 	dc.OnReady(func(s *discordgo.Session) {
 		// Register Discord-specific tools.
@@ -153,9 +155,24 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 		// Server & threads
 		registry.Register(builtin.NewDiscordServerInfo(s))
 		registry.Register(builtin.NewDiscordCreateThread(s))
+		registry.Register(builtin.NewDiscordRenameServer(s))
+		registry.Register(builtin.NewDiscordSetNickname(s))
 		// Bot presence
 		registry.Register(builtin.NewDiscordUpdateStatus(s))
 		logger.Info("discord tools registered")
+
+		// Voice chat setup.
+		if cfg.Voice.Enabled {
+			sttClient := voice.NewWhisper(cfg.Voice.WhisperURL)
+			ttsClient := voice.NewVoicevox(cfg.Voice.VoicevoxURL, cfg.Voice.SpeakerID)
+			dc.SetupVoice(sttClient, ttsClient)
+			if vp := dc.VoicePipeline(); vp != nil {
+				registry.Register(discord.NewVoiceJoin(vp, cfg.Voice.AllowedChannels, logger))
+				registry.Register(discord.NewVoiceLeave(vp, s, logger))
+				ag.SetVoiceSpeaker(vp)
+				logger.Info("voice tools registered")
+			}
+		}
 
 		// Fetch bot's own identity from Discord and register in Users.
 		me := s.State.User

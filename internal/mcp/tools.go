@@ -1,4 +1,4 @@
-package mcpapps
+package mcp
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/mcpbridge"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
@@ -110,12 +109,12 @@ var _ tool.Tool = (*SearchTool)(nil)
 
 type InstallTool struct {
 	store    *AppStore
-	mcpMgr   *mcpbridge.Manager
+	mcpMgr   *Manager
 	registry *RegistryClient
 	logger   *slog.Logger
 }
 
-func NewInstallTool(store *AppStore, mcpMgr *mcpbridge.Manager, reg *RegistryClient, logger *slog.Logger) *InstallTool {
+func NewInstallTool(store *AppStore, mcpMgr *Manager, reg *RegistryClient, logger *slog.Logger) *InstallTool {
 	return &InstallTool{store: store, mcpMgr: mcpMgr, registry: reg, logger: logger}
 }
 
@@ -233,10 +232,10 @@ var _ tool.Tool = (*InstallTool)(nil)
 
 type UninstallTool struct {
 	store  *AppStore
-	mcpMgr *mcpbridge.Manager
+	mcpMgr *Manager
 }
 
-func NewUninstallTool(store *AppStore, mcpMgr *mcpbridge.Manager) *UninstallTool {
+func NewUninstallTool(store *AppStore, mcpMgr *Manager) *UninstallTool {
 	return &UninstallTool{store: store, mcpMgr: mcpMgr}
 }
 
@@ -283,10 +282,10 @@ var _ tool.Tool = (*UninstallTool)(nil)
 
 type ListAppsTool struct {
 	store  *AppStore
-	mcpMgr *mcpbridge.Manager
+	mcpMgr *Manager
 }
 
-func NewListAppsTool(store *AppStore, mcpMgr *mcpbridge.Manager) *ListAppsTool {
+func NewListAppsTool(store *AppStore, mcpMgr *Manager) *ListAppsTool {
 	return &ListAppsTool{store: store, mcpMgr: mcpMgr}
 }
 

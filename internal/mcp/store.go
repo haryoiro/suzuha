@@ -1,4 +1,4 @@
-package mcpapps
+package mcp
 
 import (
 	"context"

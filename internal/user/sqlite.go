@@ -207,24 +207,29 @@ func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) er
 }
 
 // weightedSumSQL is the SQL expression for computing a time-decay weighted sum
-// of affinity deltas. Events are weighted by age: recent=1.0, month=0.6, quarter=0.3, old=0.1.
-const weightedSumSQL = `SELECT COALESCE(SUM(delta * CASE
-	WHEN julianday('now') - julianday(created_at) <= 7 THEN 1.0
-	WHEN julianday('now') - julianday(created_at) <= 28 THEN 0.6
-	WHEN julianday('now') - julianday(created_at) <= 90 THEN 0.3
-	ELSE 0.1
-END), 0.0) FROM affinity_events WHERE user_id = ? AND axis = ?`
+// of affinity deltas. Uses the Weight* constants from user.go.
+var weightedSumSQL = fmt.Sprintf(`SELECT COALESCE(SUM(delta * CASE
+	WHEN julianday('now') - julianday(created_at) <= 7 THEN %v
+	WHEN julianday('now') - julianday(created_at) <= 28 THEN %v
+	WHEN julianday('now') - julianday(created_at) <= 90 THEN %v
+	ELSE %v
+END), 0.0) FROM affinity_events WHERE user_id = ? AND axis = ?`,
+	WeightRecent, WeightMonth, WeightQuarter, WeightOld)
+
+// axisColumn maps each AffinityAxis to its column name in the users table.
+var axisColumn = map[AffinityAxis]string{
+	AxisCloseness: "closeness",
+	AxisTrust:     "trust",
+	AxisInterest:  "interest",
+}
+
+// allAxes is the ordered list of affinity axes.
+var allAxes = []AffinityAxis{AxisCloseness, AxisTrust, AxisInterest}
 
 // recalcUserAxis recalculates the effective value for a single user+axis
 // and updates the users table within the given transaction.
 func (s *SQLiteStore) recalcUserAxis(ctx context.Context, tx *sql.Tx, userID string, axis AffinityAxis) error {
-	axisCol := "closeness"
-	switch axis {
-	case AxisTrust:
-		axisCol = "trust"
-	case AxisInterest:
-		axisCol = "interest"
-	}
+	col := axisColumn[axis]
 
 	var weighted float64
 	if err := tx.QueryRowContext(ctx, weightedSumSQL, userID, string(axis)).Scan(&weighted); err != nil {
@@ -232,33 +237,19 @@ func (s *SQLiteStore) recalcUserAxis(ctx context.Context, tx *sql.Tx, userID str
 	}
 	effective := EffectiveValue(weighted)
 
-	// Also recalculate legacy affinity as sum of all effective axes.
-	// We read the other two axes' current values and replace the one we're updating.
-	var otherAxes [2]struct {
-		col  string
-		axis AffinityAxis
-	}
-	switch axis {
-	case AxisCloseness:
-		otherAxes = [2]struct {
-			col  string
-			axis AffinityAxis
-		}{{"trust", AxisTrust}, {"interest", AxisInterest}}
-	case AxisTrust:
-		otherAxes = [2]struct {
-			col  string
-			axis AffinityAxis
-		}{{"closeness", AxisCloseness}, {"interest", AxisInterest}}
-	case AxisInterest:
-		otherAxes = [2]struct {
-			col  string
-			axis AffinityAxis
-		}{{"closeness", AxisCloseness}, {"trust", AxisTrust}}
+	// Read the other two axes' current values for legacy affinity sum.
+	var otherCols [2]string
+	idx := 0
+	for _, a := range allAxes {
+		if a != axis {
+			otherCols[idx] = axisColumn[a]
+			idx++
+		}
 	}
 
 	var other1, other2 float64
 	row := tx.QueryRowContext(ctx,
-		fmt.Sprintf(`SELECT %s, %s FROM users WHERE id = ?`, otherAxes[0].col, otherAxes[1].col),
+		fmt.Sprintf(`SELECT %s, %s FROM users WHERE id = ?`, otherCols[0], otherCols[1]),
 		userID)
 	if err := row.Scan(&other1, &other2); err != nil {
 		return err
@@ -267,7 +258,7 @@ func (s *SQLiteStore) recalcUserAxis(ctx context.Context, tx *sql.Tx, userID str
 	now := time.Now()
 	query := fmt.Sprintf(
 		`UPDATE users SET %s = ?, affinity = ?, updated_at = ? WHERE id = ?`,
-		axisCol,
+		col,
 	)
 	if _, err := tx.ExecContext(ctx, query, effective, effective+other1+other2, now, userID); err != nil {
 		return err

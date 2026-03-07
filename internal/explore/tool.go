@@ -137,14 +137,17 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string) (str
 		return "何も見つからなかった", nil
 	}
 
-	summary := buildSummary(path, rememberedItems)
+	summary, err := reflectOnExploration(ctx, t.llm, t.systemPrompt, path, rememberedItems)
+	if err != nil || summary == "" {
+		summary = buildSummary(path, rememberedItems)
+	}
 	if t.mem != nil {
 		mem := &memory.Memory{
 			Type:    memory.MemoryTypeWorld,
 			Content: summary,
 			Metadata: map[string]any{
 				"source": "explore_tool",
-				"type":   "summary",
+				"type":   "reflection",
 			},
 		}
 		_ = t.mem.Save(ctx, mem)

@@ -314,6 +314,7 @@ func buildSelfPrompt(
 	sb.WriteString("- 架空の具体的事柄を捏造しない\n")
 	sb.WriteString("- 短く自然に\n")
 	sb.WriteString("- テキストに絵文字・顔文字は使わない\n")
+	sb.WriteString("- 行動や発言は[現在時刻]の時間帯に合わせる\n")
 
 	return sb.String()
 }

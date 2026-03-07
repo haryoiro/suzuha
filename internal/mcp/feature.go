@@ -1,4 +1,4 @@
-package mcpapps
+package mcp
 
 import (
 	"context"
@@ -6,14 +6,13 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/mcpbridge"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
 // Feature implements scheduler.Feature for the MCP Apps system.
 type Feature struct {
-	mcpMgr   *mcpbridge.Manager
+	mcpMgr   *Manager
 	registry *RegistryClient
 	logger   *slog.Logger
 	store    *AppStore
@@ -21,8 +20,8 @@ type Feature struct {
 
 var _ scheduler.Feature = (*Feature)(nil)
 
-// New creates a new mcpapps Feature.
-func New(mcpMgr *mcpbridge.Manager, logger *slog.Logger) *Feature {
+// NewFeature creates a new MCP apps Feature.
+func NewFeature(mcpMgr *Manager, logger *slog.Logger) *Feature {
 	return &Feature{
 		mcpMgr:   mcpMgr,
 		registry: NewRegistryClient(),

@@ -1,4 +1,4 @@
-package mcpapps
+package mcp
 
 import (
 	"context"
@@ -41,18 +41,18 @@ type ServerResponse struct {
 
 // ServerJSON describes an MCP server in the registry.
 type ServerJSON struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Title       string    `json:"title"`
-	Version     string    `json:"version"`
-	Packages    []Package `json:"packages"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Title       string            `json:"title"`
+	Version     string            `json:"version"`
+	Packages    []RegistryPackage `json:"packages"`
 	Repository  *struct {
 		URL string `json:"url"`
 	} `json:"repository,omitempty"`
 }
 
-// Package describes how to install and run an MCP server.
-type Package struct {
+// RegistryPackage describes how to install and run an MCP server.
+type RegistryPackage struct {
 	RegistryType         string                `json:"registryType"` // npm, pypi, oci
 	Identifier           string                `json:"identifier"`
 	Version              string                `json:"version"`

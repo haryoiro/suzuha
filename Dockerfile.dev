@@ -1,14 +1,30 @@
 FROM golang:1.26
 
-# Install build dependencies for CGO (sqlite-vec), protoc, and Node.js (for MCP servers)
+# Install build dependencies for CGO (sqlite-vec), protoc, Node.js, and libdave
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     sqlite3 \
+    libopus-dev \
+    libopusfile-dev \
+    pkg-config \
     protobuf-compiler \
     curl \
+    unzip \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Install libdave (Discord Audio/Video E2EE) prebuilt binary
+ARG LIBDAVE_VERSION=v1.1.0
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in x86_64) GITHUB_ARCH="X64";; aarch64|arm64) GITHUB_ARCH="ARM64";; esac && \
+    curl -fsSL "https://github.com/discord/libdave/releases/download/${LIBDAVE_VERSION}/cpp/libdave-Linux-${GITHUB_ARCH}-boringssl.zip" -o /tmp/libdave.zip && \
+    mkdir -p /usr/local/lib /usr/local/include /usr/local/lib/pkgconfig && \
+    unzip -j /tmp/libdave.zip "include/dave/dave.h" -d /usr/local/include && \
+    unzip -j /tmp/libdave.zip "lib/libdave.so" -d /usr/local/lib && \
+    rm /tmp/libdave.zip && \
+    ldconfig && \
+    printf 'prefix=/usr/local\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: dave\nDescription: Discord Audio & Video E2EE\nVersion: %s\nLibs: -L${libdir} -ldave\nCflags: -I${includedir}\n' "$LIBDAVE_VERSION" > /usr/local/lib/pkgconfig/dave.pc
 
 # Install Claude Code CLI (for dynamic tool generation)
 RUN npm install -g @anthropic-ai/claude-code

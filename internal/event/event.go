@@ -20,6 +20,7 @@ type MessagePayload struct {
 	IsDM        bool     `json:"is_dm"`
 	IsMention   bool     `json:"is_mention"`
 	IsBot       bool     `json:"is_bot,omitempty"`
+	IsVoice     bool     `json:"is_voice,omitempty"`
 }
 
 // Well-known event sources and types.

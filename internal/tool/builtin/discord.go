@@ -1026,3 +1026,91 @@ func (d *DiscordUpdateStatus) Execute(_ context.Context, input json.RawMessage) 
 }
 
 var _ tool.Tool = (*DiscordUpdateStatus)(nil)
+
+// ───────────────────────────────────────────────
+// Server management
+// ───────────────────────────────────────────────
+
+// DiscordRenameServer changes the server (guild) name.
+type DiscordRenameServer struct{ session *discordgo.Session }
+
+func NewDiscordRenameServer(s *discordgo.Session) *DiscordRenameServer {
+	return &DiscordRenameServer{session: s}
+}
+func (d *DiscordRenameServer) Name() string { return "discord_rename_server" }
+func (d *DiscordRenameServer) Description() string {
+	return "サーバー名を変更する。Manage Server権限が必要。"
+}
+func (d *DiscordRenameServer) InputSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"guild_id": {"type": "string", "description": "The server (guild) ID."},
+			"name":     {"type": "string", "description": "New server name."}
+		},
+		"required": ["guild_id", "name"]
+	}`)
+}
+
+func (d *DiscordRenameServer) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+	var in struct {
+		GuildID string `json:"guild_id"`
+		Name    string `json:"name"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
+	}
+	if in.Name == "" {
+		return tool.ErrorResult("サーバー名は空にできません"), nil
+	}
+	params := discordgo.GuildParams{Name: in.Name}
+	_, err := d.session.GuildEdit(in.GuildID, &params)
+	if err != nil {
+		return tool.ErrorResult("サーバー名変更失敗: " + err.Error()), nil
+	}
+	return tool.TextResult("サーバー名を「" + in.Name + "」に変更しました"), nil
+}
+
+var _ tool.Tool = (*DiscordRenameServer)(nil)
+
+// DiscordSetNickname changes a member's nickname in the server.
+type DiscordSetNickname struct{ session *discordgo.Session }
+
+func NewDiscordSetNickname(s *discordgo.Session) *DiscordSetNickname {
+	return &DiscordSetNickname{session: s}
+}
+func (d *DiscordSetNickname) Name() string { return "discord_set_nickname" }
+func (d *DiscordSetNickname) Description() string {
+	return "サーバー内のメンバーのニックネームを変更する。空文字でリセット。"
+}
+func (d *DiscordSetNickname) InputSchema() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"guild_id": {"type": "string", "description": "The server (guild) ID."},
+			"user_id":  {"type": "string", "description": "The user ID whose nickname to change."},
+			"nickname": {"type": "string", "description": "New nickname. Empty string to reset to username."}
+		},
+		"required": ["guild_id", "user_id", "nickname"]
+	}`)
+}
+
+func (d *DiscordSetNickname) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+	var in struct {
+		GuildID  string `json:"guild_id"`
+		UserID   string `json:"user_id"`
+		Nickname string `json:"nickname"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return tool.ErrorResult("無効な入力: " + err.Error()), nil
+	}
+	if err := d.session.GuildMemberNickname(in.GuildID, in.UserID, in.Nickname); err != nil {
+		return tool.ErrorResult("ニックネーム変更失敗: " + err.Error()), nil
+	}
+	if in.Nickname == "" {
+		return tool.TextResult("ニックネームをリセットしました"), nil
+	}
+	return tool.TextResult("ニックネームを「" + in.Nickname + "」に変更しました"), nil
+}
+
+var _ tool.Tool = (*DiscordSetNickname)(nil)

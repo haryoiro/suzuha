@@ -139,8 +139,9 @@ func TestUpdateAffinity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if updated.Affinity != 0.5 {
-		t.Errorf("expected affinity=0.5, got %f", updated.Affinity)
+	expectedAffinity := EffectiveValue(0.5)
+	if updated.Affinity != expectedAffinity {
+		t.Errorf("expected affinity=%f, got %f", expectedAffinity, updated.Affinity)
 	}
 
 	// Apply a second delta.
@@ -157,8 +158,9 @@ func TestUpdateAffinity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if updated2.Affinity < 0.29 || updated2.Affinity > 0.31 {
-		t.Errorf("expected affinity≈0.3, got %f", updated2.Affinity)
+	expectedAffinity2 := EffectiveValue(0.3)
+	if updated2.Affinity < expectedAffinity2-0.01 || updated2.Affinity > expectedAffinity2+0.01 {
+		t.Errorf("expected affinity≈%f, got %f", expectedAffinity2, updated2.Affinity)
 	}
 }
 

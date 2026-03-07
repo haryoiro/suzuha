@@ -1,15 +1,15 @@
-package mcpbridge
+package mcp
 
 import (
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestConvertResult_TextContent(t *testing.T) {
-	res := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "hello world"},
+	res := &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: "hello world"},
 		},
 	}
 	got := ConvertResult(res)
@@ -25,9 +25,9 @@ func TestConvertResult_TextContent(t *testing.T) {
 }
 
 func TestConvertResult_ErrorFlag(t *testing.T) {
-	res := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "something went wrong"},
+	res := &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: "something went wrong"},
 		},
 		IsError: true,
 	}
@@ -41,20 +41,20 @@ func TestConvertResult_ErrorFlag(t *testing.T) {
 }
 
 func TestConvertResult_Empty(t *testing.T) {
-	res := &mcp.CallToolResult{}
+	res := &mcpsdk.CallToolResult{}
 	got := ConvertResult(res)
 	if len(got.Content) != 1 {
 		t.Fatalf("expected 1 placeholder content, got %d", len(got.Content))
 	}
-	if got.Content[0].Text != "(empty result)" {
+	if got.Content[0].Text != "(空の結果)" {
 		t.Fatalf("unexpected placeholder: %s", got.Content[0].Text)
 	}
 }
 
 func TestConvertResult_ImageContent(t *testing.T) {
-	res := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.ImageContent{MIMEType: "image/png", Data: []byte("fakepng")},
+	res := &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.ImageContent{MIMEType: "image/png", Data: []byte("fakepng")},
 		},
 	}
 	got := ConvertResult(res)
@@ -64,10 +64,10 @@ func TestConvertResult_ImageContent(t *testing.T) {
 }
 
 func TestConvertResult_MultipleContents(t *testing.T) {
-	res := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "line 1"},
-			&mcp.TextContent{Text: "line 2"},
+	res := &mcpsdk.CallToolResult{
+		Content: []mcpsdk.Content{
+			&mcpsdk.TextContent{Text: "line 1"},
+			&mcpsdk.TextContent{Text: "line 2"},
 		},
 	}
 	got := ConvertResult(res)

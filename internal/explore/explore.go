@@ -119,7 +119,51 @@ func pickResult(
 	return &results[idx-1], nil
 }
 
-// buildSummary creates a human-readable exploration summary.
+// reflectOnExploration asks the LLM to synthesize the exploration into
+// a personal takeaway — not just what was found, but what it means to the bot.
+func reflectOnExploration(
+	ctx context.Context,
+	llmClient *llm.Client,
+	systemPrompt string,
+	path []hop,
+	remembered []string,
+) (string, error) {
+	var sb strings.Builder
+
+	sb.WriteString("さっきネットを散歩した。振り返って、自分なりにまとめて。\n\n")
+	sb.WriteString("たどった道:\n")
+	for i, h := range path {
+		fmt.Fprintf(&sb, "%d. 「%s」— %s\n", i+1, h.Title, h.Impression)
+	}
+
+	if len(remembered) > 0 {
+		sb.WriteString("\n特に気になったこと:\n")
+		for _, r := range remembered {
+			fmt.Fprintf(&sb, "- %s\n", r)
+		}
+	}
+
+	sb.WriteString("\nルール:\n")
+	sb.WriteString("- 散歩のログをそのまま繰り返さない\n")
+	sb.WriteString("- 何が面白かったか、何を学んだか、自分の考えを交えて\n")
+	sb.WriteString("- 新しい疑問や興味が生まれたならそれも\n")
+	sb.WriteString("- 2-4文で簡潔に\n")
+
+	messages := []providers.Message{
+		{Role: "user", Content: sb.String()},
+	}
+	if systemPrompt != "" {
+		messages = append([]providers.Message{{Role: "system", Content: systemPrompt}}, messages...)
+	}
+
+	resp, err := llmClient.CompleteRawDefault(ctx, messages)
+	if err != nil {
+		return "", fmt.Errorf("reflect: %w", err)
+	}
+	return strings.TrimSpace(resp.Text), nil
+}
+
+// buildSummary creates a fallback summary when LLM reflection fails.
 func buildSummary(path []hop, remembered []string) string {
 	var sb strings.Builder
 	sb.WriteString("ネット散歩: ")

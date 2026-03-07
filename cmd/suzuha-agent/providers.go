@@ -22,11 +22,11 @@ import (
 	"github.com/haryoiro/suzuha/internal/forget"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
-	"github.com/haryoiro/suzuha/internal/mcpapps"
-	"github.com/haryoiro/suzuha/internal/mcpbridge"
+	"github.com/haryoiro/suzuha/internal/mcp"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/haryoiro/suzuha/internal/preferences"
 	"github.com/haryoiro/suzuha/internal/rss"
 	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -47,7 +47,7 @@ func allPackages(cfgPath string) []func(do.Injector) {
 		tool.Package,
 		memory.Package,
 		llm.Package,
-		mcpbridge.Package,
+		mcp.Package,
 		consolidator.Package,
 		user.Package,
 		channel.Package,
@@ -152,7 +152,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			store := do.MustInvoke[*memory.SQLiteStore](i)
 			registry := do.MustInvoke[*tool.Registry](i)
 			logger := do.MustInvoke[*slog.Logger](i)
-			mcpMgr := do.MustInvoke[*mcpbridge.Manager](i)
+			mcpMgr := do.MustInvoke[*mcp.Manager](i)
 			ag := do.MustInvoke[*agent.Agent](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
 			llmClient := do.MustInvoke[*llm.Client](i)
@@ -182,11 +182,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				rss.New(store.DB(), store),
 				schedule.New(store.DB()),
 				dyntools.New("/data/tools", registry, logger),
-				mcpapps.New(mcpMgr, logger),
+				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
 				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
 				affinity.New(),
 				forget.New(),
+				preferences.New(store.DB()),
 			}
 
 			// Add location feature if enabled.

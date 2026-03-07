@@ -1,4 +1,4 @@
-package mcpbridge
+package mcp
 
 import (
 	"bufio"
@@ -14,12 +14,12 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/tool"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // serverEntry holds a connected MCP server session and its registered tool names.
 type serverEntry struct {
-	session   *mcp.ClientSession
+	session   *mcpsdk.ClientSession
 	toolNames []string // prefixed names: ["server.tool1", "server.tool2"]
 }
 
@@ -31,8 +31,8 @@ type Manager struct {
 	servers  map[string]*serverEntry
 }
 
-// New creates a new MCP bridge Manager.
-func New(logger *slog.Logger, registry *tool.Registry) *Manager {
+// NewManager creates a new MCP bridge Manager.
+func NewManager(logger *slog.Logger, registry *tool.Registry) *Manager {
 	return &Manager{
 		logger:   logger,
 		registry: registry,
@@ -100,12 +100,12 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 		name:   srv.Name,
 	}
 
-	transport := &mcp.IOTransport{
+	transport := &mcpsdk.IOTransport{
 		Reader: filteredReader,
 		Writer: stdinPipe,
 	}
 
-	client := mcp.NewClient(&mcp.Implementation{
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{
 		Name:    "suzuha-agent",
 		Version: "v1.0.0",
 	}, nil)
@@ -117,7 +117,7 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 	}
 
 	// Discover and register tools.
-	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
+	result, err := session.ListTools(ctx, &mcpsdk.ListToolsParams{})
 	if err != nil {
 		session.Close()
 		return nil, fmt.Errorf("ツール一覧の取得に失敗: %w", err)
@@ -254,7 +254,7 @@ type MCPTool struct {
 	mcpName     string // original MCP tool name
 	description string
 	inputSchema json.RawMessage
-	session     *mcp.ClientSession
+	session     *mcpsdk.ClientSession
 }
 
 func (t *MCPTool) Name() string                { return t.name }
@@ -269,7 +269,7 @@ func (t *MCPTool) Execute(ctx context.Context, input json.RawMessage) (*tool.Too
 		}
 	}
 
-	res, err := t.session.CallTool(ctx, &mcp.CallToolParams{
+	res, err := t.session.CallTool(ctx, &mcpsdk.CallToolParams{
 		Name:      t.mcpName,
 		Arguments: args,
 	})
@@ -281,15 +281,15 @@ func (t *MCPTool) Execute(ctx context.Context, input json.RawMessage) (*tool.Too
 }
 
 // ConvertResult converts an MCP CallToolResult to a tool.ToolResult.
-func ConvertResult(res *mcp.CallToolResult) *tool.ToolResult {
+func ConvertResult(res *mcpsdk.CallToolResult) *tool.ToolResult {
 	var contents []tool.Content
 	for _, c := range res.Content {
 		switch v := c.(type) {
-		case *mcp.TextContent:
+		case *mcpsdk.TextContent:
 			contents = append(contents, tool.Content{Type: "text", Text: v.Text})
-		case *mcp.ImageContent:
+		case *mcpsdk.ImageContent:
 			contents = append(contents, tool.Content{Type: "text", Text: "[image: " + v.MIMEType + "]"})
-		case *mcp.AudioContent:
+		case *mcpsdk.AudioContent:
 			contents = append(contents, tool.Content{Type: "text", Text: "[audio: " + v.MIMEType + "]"})
 		default:
 			contents = append(contents, tool.Content{Type: "text", Text: "[サポートされていないコンテンツタイプ]"})
