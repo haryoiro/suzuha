@@ -95,6 +95,13 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	mux.HandleFunc("POST /api/forget/merge", forgetH.Merge)
 	mux.HandleFunc("POST /api/forget/run", forgetH.Run)
 
+	// Preferences.
+	prefH := handler.NewPreferencesHandler(store.DB(), logger)
+	mux.HandleFunc("GET /api/preferences", prefH.List)
+	mux.HandleFunc("GET /api/preferences/stats", prefH.Stats)
+	mux.HandleFunc("PUT /api/preferences/{id}", prefH.Update)
+	mux.HandleFunc("DELETE /api/preferences/{id}", prefH.Delete)
+
 	// RSS feeds CRUD.
 	rssH := handler.NewRSSHandler(store.DB(), logger)
 	mux.HandleFunc("GET /api/feeds", rssH.List)

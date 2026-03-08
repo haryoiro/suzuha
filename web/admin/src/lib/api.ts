@@ -335,6 +335,44 @@ export const feedsApi = {
     fetchJSON<FeedStats>("/api/feeds/stats"),
 };
 
+// Preferences API
+export interface Preference {
+  id: number;
+  category: string;
+  topic: string;
+  stance: "liked" | "disliked" | "curious" | "undecided";
+  confidence: number;
+  reasoning: string;
+  encounters: number;
+  shared: boolean;
+  last_evaluated_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PreferenceStats {
+  total: number;
+  liked: number;
+  disliked: number;
+  curious: number;
+  undecided: number;
+}
+
+export const preferencesApi = {
+  list: (stance?: string) =>
+    fetchJSON<{ data: Preference[]; total: number }>(
+      `/api/preferences${stance ? `?stance=${stance}` : ""}`
+    ),
+  stats: () => fetchJSON<PreferenceStats>("/api/preferences/stats"),
+  update: (id: number, body: { stance?: string; confidence?: number; reasoning?: string }) =>
+    fetchJSON<{ ok: boolean }>(`/api/preferences/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  delete: (id: number) =>
+    fetch(`${BASE_URL}/api/preferences/${id}`, { method: "DELETE" }),
+};
+
 // Metrics API
 export const metricsApi = {
   json: () => fetchJSON<MetricsResponse>("/api/metrics/json"),
