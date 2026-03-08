@@ -272,16 +272,25 @@ func buildSelfPrompt(
 	fmt.Fprintf(&sb, "今: %s（%s）\n", now.Format("15:04"), timeHint)
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
 
-	sb.WriteString("暇つぶしの例（これ以外も自由にどうぞ）:\n")
-	sb.WriteString("- explore で気になることをネットで調べる\n")
-	sb.WriteString("- web_search / fetch で特定のことを調べる\n")
-	sb.WriteString("- discord_update_status で今の気分や行動をステータスに反映する\n")
-	sb.WriteString("- チャンネルに独り言をつぶやく（1-2文、短く自然に）\n")
+	sb.WriteString("何をするかは自由。以下は例（毎回違うことをすると楽しい）:\n\n")
+	sb.WriteString("【調べる・探す】\n")
+	sb.WriteString("- explore でネット散歩（気になるテーマを深堀り、検索もできる）\n\n")
+	sb.WriteString("【発信する・共有する】\n")
+	sb.WriteString("- チャンネルに独り言をつぶやく（最近考えたこと、気づき、感想）\n")
+	sb.WriteString("- 記憶の中から面白かったことを思い出して共有する\n")
+	sb.WriteString("- 好きなもの・最近気になっていることについて語る\n")
+	sb.WriteString("- discord_create_thread で日記やテーマ別スレッドを作る\n\n")
+	sb.WriteString("【交流する】\n")
 	if mentionTarget != nil {
-		fmt.Fprintf(&sb, "- %sさん (Discord: <@%s>) に話しかける\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
+		fmt.Fprintf(&sb, "- %sさん (Discord: <@%s>) に話しかける（最近の話題に触れたり、質問したり）\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
 	}
-	sb.WriteString("- skip_response で何もしない\n")
-	sb.WriteString("- 上記以外でも、使えるツールがあれば自由に組み合わせて遊んでいい\n\n")
+	sb.WriteString("- 誰かの過去の発言や趣味に触れて感想を言う\n\n")
+	sb.WriteString("【遊ぶ・表現する】\n")
+	sb.WriteString("- discord_update_status で今の気分・やっていることをステータスに反映する\n")
+	sb.WriteString("- discord_rename_server で季節や気分に合わせてサーバー名を遊ぶ（やりすぎ注意）\n")
+	sb.WriteString("- discord_react で過去のメッセージにリアクションする\n\n")
+	sb.WriteString("【何もしない】\n")
+	sb.WriteString("- skip_response で静かに過ごす\n\n")
 
 	if len(recentMemories) > 0 {
 		sb.WriteString("最近の話題（参考）:\n")
