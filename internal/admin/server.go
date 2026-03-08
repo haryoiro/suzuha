@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/admin/handler"
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
@@ -24,141 +25,30 @@ type Server struct {
 
 // NewServer creates a new admin Server with all routes configured.
 func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *schedule.Store, logger *slog.Logger) *Server {
+	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
+
+	// Create the ogen handler implementation.
+	adminHandler := NewAdminHandler(store, userStore, schedStore, agentBase, cfg.PromptDir, logger)
+
+	// Create the ogen server (handles all typed API routes).
+	ogenServer, err := api.NewServer(adminHandler)
+	if err != nil {
+		logger.Error("ogen サーバーの作成に失敗", "error", err.Error())
+		panic(err)
+	}
+
 	mux := http.NewServeMux()
 
-	// Health check.
-	mux.HandleFunc("GET /api/health", handler.Health)
+	// Mount ogen server for /api/ routes.
+	mux.Handle("/api/", ogenServer)
 
-	// Memories CRUD.
-	memH := handler.NewMemoryHandler(store, logger)
-	mux.HandleFunc("GET /api/memories", memH.List)
-	mux.HandleFunc("POST /api/memories", memH.Create)
-	mux.HandleFunc("GET /api/memories/{id}", memH.Get)
-	mux.HandleFunc("PUT /api/memories/{id}", memH.Update)
-	mux.HandleFunc("DELETE /api/memories/{id}", memH.Delete)
-	mux.HandleFunc("GET /api/memories/vec-stats", memH.VecStats)
-	mux.HandleFunc("GET /api/memories/with-vec", memH.ListWithVec)
-	mux.HandleFunc("GET /api/memories/duplicates", memH.Duplicates)
-
-	// Metrics (direct SQLite query).
-	metH := handler.NewMetricsHandler(store.DB(), logger)
-	mux.HandleFunc("GET /api/metrics/json", metH.ServeJSON)
-
-	// Users.
-	userH := handler.NewUsersHandler(userStore, store.DB(), logger)
-	mux.HandleFunc("GET /api/users", userH.List)
-	mux.HandleFunc("GET /api/users/{id}", userH.Get)
-	mux.HandleFunc("PUT /api/users/{id}", userH.Update)
-	mux.HandleFunc("GET /api/users/{id}/affinity", userH.AffinityEvents)
-	mux.HandleFunc("GET /api/users/{id}/guilds", userH.Guilds)
-	mux.HandleFunc("GET /api/users/{id}/memories", userH.Memories)
-
-	// Guilds & channels.
-	guildH := handler.NewGuildsHandler(userStore, logger)
-	mux.HandleFunc("GET /api/guilds", guildH.List)
-	mux.HandleFunc("GET /api/channels", guildH.AllChannels)
-	mux.HandleFunc("GET /api/guilds/{id}/channels", guildH.Channels)
-
-	// Channel settings.
-	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
-	chSettingsH := handler.NewChannelSettingsHandler(store.DB(), agentBase, logger)
-	mux.HandleFunc("GET /api/channel-settings", chSettingsH.List)
-	mux.HandleFunc("PUT /api/channel-settings/{channelId}", chSettingsH.Upsert)
-	mux.HandleFunc("DELETE /api/channel-settings/{channelId}", chSettingsH.Delete)
-
-	// Scheduled actions.
-	actionsH := handler.NewActionsHandler(schedStore, logger)
-	mux.HandleFunc("GET /api/scheduled-actions", actionsH.List)
-	mux.HandleFunc("POST /api/scheduled-actions", actionsH.Create)
-	mux.HandleFunc("PUT /api/scheduled-actions/{id}", actionsH.Update)
-	mux.HandleFunc("DELETE /api/scheduled-actions/{id}", actionsH.Delete)
-
-	// Conversation logs (fine-tuning data).
-	convH := handler.NewConversationLogsHandler(store.DB(), logger)
-	mux.HandleFunc("GET /api/conversation-logs", convH.List)
-	mux.HandleFunc("GET /api/conversation-logs/export", convH.Export)
-
-	// Agent operations (compact, etc.).
-	agentH := handler.NewAgentHandler(agentBase, logger)
-	mux.HandleFunc("POST /api/agent/compact", agentH.Compact)
-
-	// Boredom status.
-	boredomH := handler.NewBoredomHandler(store.DB(), logger)
-	mux.HandleFunc("GET /api/boredom", boredomH.Get)
-
-	// Memory deduplication (forget).
-	// Trigger API is now served by the agent process (merged from consolidator).
-	forgetH := handler.NewForgetHandler(store, agentBase, logger)
-	mux.HandleFunc("GET /api/forget/groups", forgetH.Groups)
-	mux.HandleFunc("GET /api/forget/status", forgetH.Status)
-	mux.HandleFunc("POST /api/forget/delete", forgetH.Delete)
-	mux.HandleFunc("POST /api/forget/merge", forgetH.Merge)
-	mux.HandleFunc("POST /api/forget/run", forgetH.Run)
-
-	// Preferences.
-	prefH := handler.NewPreferencesHandler(store.DB(), logger)
-	mux.HandleFunc("GET /api/preferences", prefH.List)
-	mux.HandleFunc("GET /api/preferences/stats", prefH.Stats)
-	mux.HandleFunc("PUT /api/preferences/{id}", prefH.Update)
-	mux.HandleFunc("DELETE /api/preferences/{id}", prefH.Delete)
-
-	// RSS feeds CRUD.
-	rssH := handler.NewRSSHandler(store.DB(), logger)
-	mux.HandleFunc("GET /api/feeds", rssH.List)
-	mux.HandleFunc("POST /api/feeds", rssH.Create)
-	mux.HandleFunc("GET /api/feeds/stats", rssH.Stats)
-	mux.HandleFunc("GET /api/feeds/{id}", rssH.Get)
-	mux.HandleFunc("PUT /api/feeds/{id}", rssH.Update)
-	mux.HandleFunc("DELETE /api/feeds/{id}", rssH.Delete)
-	mux.HandleFunc("GET /api/feeds/{id}/items", rssH.ListItems)
-
-	// Location devices & places.
-	locH := handler.NewLocationHandler(store.DB(), agentBase, logger)
-	mux.HandleFunc("GET /api/location/{userId}", locH.GetLocation)
-	mux.HandleFunc("GET /api/location/devices", locH.ListDevices)
-	mux.HandleFunc("PUT /api/location/devices/{id}", locH.UpsertDevice)
-	mux.HandleFunc("DELETE /api/location/devices/{id}", locH.DeleteDevice)
-	mux.HandleFunc("GET /api/location/places", locH.ListPlaces)
-	mux.HandleFunc("POST /api/location/places", locH.CreatePlace)
-	mux.HandleFunc("PUT /api/location/places/{id}", locH.UpdatePlace)
-	mux.HandleFunc("DELETE /api/location/places/{id}", locH.DeletePlace)
-
-	// Tools (proxy to agent).
-	toolsH := handler.NewToolsHandler(agentBase, logger)
-	mux.HandleFunc("GET /api/tools", toolsH.List)
-	mux.HandleFunc("PUT /api/tools/{name}/enabled", toolsH.ToggleTool)
-
-	// LLM provider (proxy to agent).
-	llmH := handler.NewLLMHandler(agentBase, logger)
-	mux.HandleFunc("GET /api/llm", llmH.Get)
-	mux.HandleFunc("PUT /api/llm", llmH.Put)
-
-	// Prompt files.
-	promptH := handler.NewPromptHandler(cfg.PromptDir, agentBase, logger)
-	mux.HandleFunc("GET /api/prompts", promptH.List)
-	mux.HandleFunc("GET /api/prompts/{name}", promptH.Get)
-	mux.HandleFunc("PUT /api/prompts/{name}", promptH.Update)
-
-	// Agent context proxy.
-	ctxH := handler.NewContextHandler(cfg.AgentContext, logger)
-	mux.HandleFunc("GET /api/context", ctxH.Proxy)
-
-	// Playground proxy (chat with LLM using agent context snapshot).
-	playH := handler.NewPlaygroundHandler(agentBase, logger)
-	mux.HandleFunc("POST /api/playground", playH.Send)
-
-	// Identity proxy (bot's own identity).
-	identityH := handler.NewIdentityHandler(agentBase, logger)
-	mux.HandleFunc("GET /api/identity", identityH.Get)
-
-	// Log streaming (consolidator logs are now part of agent).
+	// SSE log streaming (not in OpenAPI spec, handled separately).
 	logH := handler.NewLogHandler(cfg.AgentLogs, "", logger)
 	mux.HandleFunc("GET /api/logs/stream", logH.Stream)
 
 	// SPA static files.
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
-		// Try default path relative to working directory.
 		staticDir = "web/admin/dist"
 	}
 	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
