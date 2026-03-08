@@ -243,9 +243,8 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 
 	llmClient := do.MustInvoke[*llm.Client](i)
 	store := do.MustInvoke[*memory.SQLiteStore](i)
-	// Scheduler uses a plain logger (no ring buffer) to keep job execution
-	// logs out of the SSE log stream shown in the admin dashboard.
-	logger := observe.NewLogger(do.MustInvoke[*config.Config](i).Observe.LogLevel)
+	ring := do.MustInvoke[*observe.RingBuffer](i)
+	logger := observe.NewLoggerWithRing(do.MustInvoke[*config.Config](i).Observe.LogLevel, ring)
 	chatIface := do.MustInvoke[chat.Interface](i)
 	userStore := do.MustInvoke[*user.SQLiteStore](i)
 	features := do.MustInvoke[[]scheduler.Feature](i)
