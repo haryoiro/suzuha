@@ -359,9 +359,7 @@ func responseDirective(evt event.Event, botID string, closeness, interest float6
 	}
 	const noEmoji = "※テキストに絵文字・顔文字は絶対に入れないで。"
 
-	const reactHint = "スキップする前に、相手のメッセージに discord_react でリアクションを付けることを検討して" +
-		"（テキストに絵文字を書くのではなく、ツールを呼んで相手のメッセージにリアクションを付ける）。" +
-		"何も付けなくてもいいけど、共感・面白い・なるほど等の気持ちがあるなら付けてから skip_response を呼んで。"
+	const reactHint = "リアクションは本当に心が動いたときだけ discord_react で付けてよい。ほとんどの場合はリアクションなしで skip_response だけ呼べばOK。"
 
 	const skipDefault = "基本は skip_response ツールを呼んでスキップしてください。あなたが発言しなくても会話は成り立ちます。"
 
@@ -378,8 +376,7 @@ func responseDirective(evt event.Event, botID string, closeness, interest float6
 
 	switch {
 	case closeness >= 3.0:
-		return "[LISTEN] 仲の良い人の会話です。" + skipDefault +
-			"本当に一言言いたいときだけ短く返して。相槌だけの返答はしない。" +
+		return "[LISTEN] 仲の良い人の会話です。興味がある話題や一言添えたいときは短く返して。相槌だけの返答はしない。特に言うことがなければ skip_response を呼んで。" +
 			reactHint +
 			noEmoji
 	case interest >= 2.0:
