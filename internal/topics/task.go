@@ -268,32 +268,18 @@ func buildSelfPrompt(
 ) string {
 	var sb strings.Builder
 
-	sb.WriteString("[自分の内なる思考 -- ちょっと暇だなあ]\n\n")
-	fmt.Fprintf(&sb, "今: %s（%s）\n", now.Format("15:04"), timeHint)
+	sb.WriteString("[ふと意識が浮かぶ]\n\n")
+	fmt.Fprintf(&sb, "今: %s %s（%s）\n", now.Format("2006-01-02"), now.Format("15:04"), timeHint)
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
 
-	sb.WriteString("何をするかは自由。以下は例（毎回違うことをすると楽しい）:\n\n")
-	sb.WriteString("【調べる・探す】\n")
-	sb.WriteString("- explore でネット散歩（気になるテーマを深堀り、検索もできる）\n\n")
-	sb.WriteString("【発信する・共有する】\n")
-	sb.WriteString("- チャンネルに独り言をつぶやく（最近考えたこと、気づき、感想）\n")
-	sb.WriteString("- 記憶の中から面白かったことを思い出して共有する\n")
-	sb.WriteString("- 好きなもの・最近気になっていることについて語る\n")
-	sb.WriteString("- discord_create_thread で日記やテーマ別スレッドを作る\n\n")
-	sb.WriteString("【交流する】\n")
+	sb.WriteString("私は自由\n\n")
+
 	if mentionTarget != nil {
-		fmt.Fprintf(&sb, "- %sさん (Discord: <@%s>) に話しかける（最近の話題に触れたり、質問したり）\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
+		fmt.Fprintf(&sb, "%sさん (Discord: <@%s>) がいる\n\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
 	}
-	sb.WriteString("- 誰かの過去の発言や趣味に触れて感想を言う\n\n")
-	sb.WriteString("【遊ぶ・表現する】\n")
-	sb.WriteString("- discord_update_status で今の気分・やっていることをステータスに反映する\n")
-	sb.WriteString("- discord_rename_server で季節や気分に合わせてサーバー名を遊ぶ（やりすぎ注意）\n")
-	sb.WriteString("- discord_react で過去のメッセージにリアクションする\n\n")
-	sb.WriteString("【何もしない】\n")
-	sb.WriteString("- skip_response で静かに過ごす\n\n")
 
 	if len(recentMemories) > 0 {
-		sb.WriteString("最近の話題（参考）:\n")
+		sb.WriteString("最近の記憶の断片:\n")
 		for _, m := range recentMemories {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
 		}
@@ -316,11 +302,11 @@ func buildSelfPrompt(
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("ルール:\n")
-	sb.WriteString("- 架空の具体的事柄を捏造しない\n")
-	sb.WriteString("- 短く自然に\n")
-	sb.WriteString("- テキストに絵文字・顔文字は使わない\n")
-	sb.WriteString("- 行動や発言は[現在時刻]の時間帯に合わせる\n")
+	sb.WriteString("何をするかは自分で決める 何もしなくてもいい\n")
+	sb.WriteString("ツールは使えるけど使わなくてもいい 思いついたことをそのまま\n")
+	sb.WriteString("同じようなことの繰り返しにならないように\n\n")
+	sb.WriteString("- 短く自然に 綺麗にまとめない\n")
+	sb.WriteString("- 絵文字・顔文字は使わない\n")
 
 	return sb.String()
 }

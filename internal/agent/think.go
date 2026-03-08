@@ -279,12 +279,12 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 	content := fmt.Sprintf("[User profile: %s (ID=%s) role=%s closeness=%.2f trust=%.2f interest=%.2f]\n",
 		u.DisplayName, u.ID, u.Role, u.Closeness, u.Trust, u.Interest)
 
-	events, err := a.users.GetAffinity(ctx, u.ID, 5)
+	events, err := a.users.GetAffinity(ctx, u.ID, 3)
 	if err != nil {
 		a.logger.Debug("親密度履歴の取得失敗", "error", err)
 	}
 	if len(events) > 0 {
-		content += "Recent affinity history:\n"
+		content += "Affinity:\n"
 		for _, e := range events {
 			content += fmt.Sprintf("  %+.1f (%s): %s (%s)\n", e.Delta, e.Axis, e.Reason, e.GroupEnd.Format("2006-01-02"))
 		}
@@ -377,8 +377,7 @@ func responseDirective(evt event.Event, botID string, closeness, interest float6
 
 	switch {
 	case closeness >= 3.0:
-		return "[LISTEN] 仲の良い人の会話です。興味がある話題や一言添えたいときは短く返して。相槌だけの返答はしない。特に言うことがなければ skip_response を呼んで。" +
-			reactHint +
+		return "[LISTEN] 仲の良い人の会話です。気軽に返して。相槌だけの返答はしない。話すことがなければ skip_response。" +
 			noEmoji
 	case interest >= 2.0:
 		return "[LISTEN] 気になる人の会話です。" + skipDefault +

@@ -166,7 +166,8 @@ type affinityDelta struct {
 	reason         string
 }
 
-const evalPrompt = `以下の短い会話から、各ユーザーに対する好感度の変化を評価してください。
+const evalPrompt = `あなたはassistant（ボット）の視点です。以下の会話を読んで、assistantから見た各ユーザーへの好感度の変化を評価してください。
+assistant自身への評価はしないでください。userロールの人間だけが評価対象です。
 
 フォーマット:
 - [delta] user_id=<id> platform=<platform> axis=<closeness|trust|interest> delta=<+/-float> reason=<(感情) 日本語で簡潔に>

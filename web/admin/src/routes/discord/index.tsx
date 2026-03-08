@@ -27,17 +27,6 @@ import { formatJST } from "../../lib/date";
 
 const { Title, Text } = Typography;
 
-const modeColors: Record<string, string> = {
-  active: "green",
-  listen: "blue",
-  disabled: "red",
-};
-
-const modeLabels: Record<string, string> = {
-  active: "Active",
-  listen: "Listen",
-  disabled: "Disabled",
-};
 
 export const DiscordPage = memo(function DiscordPage() {
   const [guildId, setGuildId] = useState<string | undefined>(undefined);

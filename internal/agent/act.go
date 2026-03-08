@@ -117,15 +117,26 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	var intermediateText string
 
 	for iter := range maxIter {
-		if channel != "" {
+		// Send typing indicator only on subsequent iterations (tool loops),
+		// not on the first call where we don't yet know if we'll respond.
+		if iter > 0 && channel != "" {
 			if typer, ok := a.chat.(chat.Typer); ok {
 				typer.Typing(ctx, channel)
 			}
 		}
 
-		msgs := a.ctx.MessagesWithSystem()
+		var msgs []llm.Message
 		if iter == 0 {
+			// Order: system prompt → ephemeral (profiles, memories) → conversation → time → directive
+			// Ephemeral context before conversation lets the LLM read messages
+			// with knowledge of who the users are and what it remembers.
+			// Directive last for maximum recency effect.
+			sp := a.ctx.SystemPrompt()
+			if sp != "" {
+				msgs = append(msgs, llm.Message{Role: "system", Content: sp})
+			}
 			msgs = append(msgs, ephemeral...)
+			msgs = append(msgs, a.ctx.Messages()...)
 			now := jtime.Now()
 			msgs = append(msgs, llm.Message{
 				Role:      "system",
@@ -139,6 +150,8 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 					Timestamp: now,
 				})
 			}
+		} else {
+			msgs = a.ctx.MessagesWithSystem()
 		}
 		// Trim messages to fit within max context, reserving space for tools.
 		msgs = trimMessagesToFit(msgs, allTools, a.llm.MaxContextTokens())

@@ -55,7 +55,15 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 		// User exists — load and return.
 		u, err := s.getInTx(ctx, tx, userID)
 		if err != nil {
-			return nil, err
+			// Orphaned platform_link: link exists but user row is missing.
+			// Delete the stale link and fall through to create a new user.
+			if _, delErr := tx.ExecContext(ctx,
+				`DELETE FROM platform_links WHERE platform = ? AND platform_user_id = ?`,
+				platform, platformUserID,
+			); delErr != nil {
+				return nil, fmt.Errorf("user: 孤立リンクの削除に失敗: %w", delErr)
+			}
+			goto createUser
 		}
 		// If this is a known bot ID but the user wasn't marked yet, fix it.
 		if s.botUserIDs[platformUserID] && !u.IsBot {
@@ -76,6 +84,7 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 		return nil, fmt.Errorf("user: プラットフォームリンクの検索に失敗: %w", err)
 	}
 
+createUser:
 	// User does not exist — create.
 	isBot := s.botUserIDs[platformUserID]
 	role := RoleMember

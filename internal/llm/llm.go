@@ -51,6 +51,8 @@ func (r *Response) HasToolCalls() bool {
 
 // parseThinkTags separates reasoning content from response text.
 // Handles both "<think>reasoning</think>response" and "reasoning</think>response".
+// If the model puts everything inside think tags (cleaned is empty),
+// the reasoning content is used as the response text.
 func parseThinkTags(text string) (reasoning, cleaned string) {
 	const closeTag = "</think>"
 	idx := strings.LastIndex(text, closeTag)
@@ -67,6 +69,14 @@ func parseThinkTags(text string) (reasoning, cleaned string) {
 	} else {
 		reasoning = strings.TrimSpace(raw)
 	}
+
+	// Some models put the entire response inside think tags.
+	// Fall back to using reasoning as the response text.
+	if cleaned == "" && reasoning != "" {
+		cleaned = reasoning
+		reasoning = ""
+	}
+
 	return reasoning, cleaned
 }
 

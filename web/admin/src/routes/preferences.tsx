@@ -35,19 +35,6 @@ import { formatJST } from "../lib/date";
 
 const { Title, Text } = Typography;
 
-const stanceColors: Record<string, string> = {
-  liked: "green",
-  disliked: "red",
-  curious: "blue",
-  undecided: "default",
-};
-
-const stanceLabels: Record<string, string> = {
-  liked: "Liked",
-  disliked: "Disliked",
-  curious: "Curious",
-  undecided: "Undecided",
-};
 
 function EditableCell({
   value,
