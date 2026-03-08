@@ -22,8 +22,74 @@ func (a *Agent) Reflect(ctx context.Context, p *Perception) {
 	persistContext(ctx, a.db, a.ctx, a.logger)
 }
 
-// compact triggers context compaction via the consolidator or falls back
-// to simple truncation.
+// compactAsync triggers context compaction in a background goroutine.
+// The pipeline continues processing while compaction runs.
+// Only one compaction runs at a time; concurrent requests are skipped.
+func (a *Agent) compactAsync(ctx context.Context) {
+	if !a.compactMu.TryLock() {
+		a.logger.Debug("コンパクション既に実行中、スキップ")
+		return
+	}
+
+	snapshot := a.ctx.Messages()
+	snapshotLen := len(snapshot)
+	target := snapshotLen / 2
+
+	go func() {
+		defer a.compactMu.Unlock()
+		a.logger.Info("バックグラウンドコンパクション開始", "snapshot_len", snapshotLen)
+
+		if a.consol != nil {
+			result, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
+				Messages:    snapshot,
+				TargetCount: target,
+			})
+			if err != nil {
+				a.logger.Warn("コンソリデータの圧縮失敗、切り詰めにフォールバック", "error", err)
+				a.ctx.TruncateOldest(snapshotLen / 2)
+				a.ctx.ResetInjectedUsers()
+				a.ctx.ResetSeenChannels()
+				persistContext(ctx, a.db, a.ctx, a.logger)
+				return
+			}
+
+			if len(result.KeepIndices) == 0 {
+				a.logger.Warn("コンソリデータが保持インデックスを返さず、切り詰めにフォールバック")
+				a.ctx.TruncateOldest(snapshotLen / 2)
+				a.ctx.ResetInjectedUsers()
+				a.ctx.ResetSeenChannels()
+				persistContext(ctx, a.db, a.ctx, a.logger)
+				a.applyAffinityDeltas(ctx, result.AffinityDeltas, snapshot)
+				return
+			}
+
+			var kept []llm.Message
+			for _, idx := range result.KeepIndices {
+				if idx >= 0 && idx < len(snapshot) {
+					kept = append(kept, snapshot[idx])
+				}
+			}
+			a.ctx.CompactReplace(snapshotLen, kept)
+			a.ctx.ResetInjectedUsers()
+			a.ctx.ResetSeenChannels()
+			persistContext(ctx, a.db, a.ctx, a.logger)
+
+			a.applyAffinityDeltas(ctx, result.AffinityDeltas, snapshot)
+			a.logger.Info("バックグラウンドコンパクション完了",
+				"kept", len(kept), "original", snapshotLen)
+			return
+		}
+
+		// No consolidator available — simple truncation fallback.
+		a.ctx.TruncateOldest(snapshotLen / 2)
+		a.ctx.ResetInjectedUsers()
+		a.ctx.ResetSeenChannels()
+		persistContext(ctx, a.db, a.ctx, a.logger)
+		a.logger.Info("バックグラウンド切り詰め完了")
+	}()
+}
+
+// compact triggers context compaction synchronously (used by ForceCompact).
 func (a *Agent) compact(ctx context.Context) {
 	msgs := a.ctx.Messages()
 	target := len(msgs) / 2

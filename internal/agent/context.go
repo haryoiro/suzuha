@@ -284,6 +284,19 @@ func (c *Context) ReplaceAll(msgs []llm.Message) {
 	c.messages = msgs
 }
 
+// CompactReplace atomically replaces the first snapshotLen messages
+// with kept, preserving any messages appended after the snapshot.
+func (c *Context) CompactReplace(snapshotLen int, kept []llm.Message) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var result []llm.Message
+	result = append(result, kept...)
+	if len(c.messages) > snapshotLen {
+		result = append(result, c.messages[snapshotLen:]...)
+	}
+	c.messages = result
+}
+
 // TruncateOldest removes the oldest n messages (simple fallback compaction).
 func (c *Context) TruncateOldest(n int) {
 	c.mu.Lock()

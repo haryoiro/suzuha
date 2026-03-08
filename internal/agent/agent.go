@@ -48,6 +48,8 @@ type Agent struct {
 	contextWindowPct float64
 	drainWindow      time.Duration
 
+	compactMu sync.Mutex // guards background compaction (at most one at a time)
+
 	lastEphemeralMu sync.RWMutex
 	lastEphemeral   []llm.Message
 }
@@ -249,7 +251,7 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 		"calibration", fmt.Sprintf("%.2f", a.ctx.TokenCalibration()))
 	if a.contextWindowPct > 0 && ratio > a.contextWindowPct {
 		a.logger.Info("コンテキスト圧縮を開始", "ratio", fmt.Sprintf("%.2f", ratio))
-		a.compact(ctx)
+		a.compactAsync(ctx)
 	}
 
 	// 3. Think: build ephemeral context and determine directive.
