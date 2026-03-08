@@ -19,6 +19,25 @@ type JobDef struct {
 	Config map[string]any // task-specific config, marshaled to JSON for Execute()
 }
 
+// JobStatus represents the runtime status of a scheduled job.
+type JobStatus struct {
+	Name   string         `json:"name"`
+	Task   string         `json:"task"`
+	Cron   string         `json:"cron"`
+	Config map[string]any `json:"config,omitempty"`
+	Prev   time.Time      `json:"prev"`
+	Next   time.Time      `json:"next"`
+}
+
+// jobMeta holds the mapping between a cron entry ID and job metadata.
+type jobMeta struct {
+	entryID cron.EntryID
+	name    string
+	task    string
+	cronExpr string
+	config  map[string]any
+}
+
 // Scheduler manages periodic CronTask execution in the Consolidator process.
 type Scheduler struct {
 	cron     *cron.Cron
@@ -30,6 +49,7 @@ type Scheduler struct {
 	running bool
 	ctx     context.Context
 	cancel  context.CancelFunc
+	jobs    []jobMeta
 }
 
 // New creates a Scheduler.
@@ -78,7 +98,7 @@ func (s *Scheduler) LoadJobs(jobs []JobDef) error {
 
 		jobName := j.Name
 		taskName := j.Task
-		_, err = s.cron.AddFunc(j.Cron, func() {
+		entryID, err := s.cron.AddFunc(j.Cron, func() {
 			s.logger.Info("scheduler: ジョブを実行中", "job", jobName, "task", taskName)
 			jobCtx := s.ctx
 			if jobCtx == nil {
@@ -91,6 +111,13 @@ func (s *Scheduler) LoadJobs(jobs []JobDef) error {
 		if err != nil {
 			return fmt.Errorf("scheduler: ジョブ %s の追加に失敗 (cron=%q): %w", j.Name, j.Cron, err)
 		}
+		s.jobs = append(s.jobs, jobMeta{
+			entryID:  entryID,
+			name:     j.Name,
+			task:     j.Task,
+			cronExpr: j.Cron,
+			config:   j.Config,
+		})
 		s.logger.Info("scheduler: ジョブを登録しました", "job", j.Name, "task", task.Name(), "cron", j.Cron)
 	}
 	return nil
@@ -125,6 +152,31 @@ func (s *Scheduler) Stop() context.Context {
 // Entries returns the number of registered cron entries (for testing/metrics).
 func (s *Scheduler) Entries() int {
 	return len(s.cron.Entries())
+}
+
+// ListJobs returns the status of all registered jobs including next/prev run times.
+func (s *Scheduler) ListJobs() []JobStatus {
+	entries := s.cron.Entries()
+	entryMap := make(map[cron.EntryID]cron.Entry, len(entries))
+	for _, e := range entries {
+		entryMap[e.ID] = e
+	}
+
+	result := make([]JobStatus, 0, len(s.jobs))
+	for _, jm := range s.jobs {
+		js := JobStatus{
+			Name:   jm.name,
+			Task:   jm.task,
+			Cron:   jm.cronExpr,
+			Config: jm.config,
+		}
+		if e, ok := entryMap[jm.entryID]; ok {
+			js.Prev = e.Prev
+			js.Next = e.Next
+		}
+		result = append(result, js)
+	}
+	return result
 }
 
 // TriggerTask executes a registered task immediately by name.

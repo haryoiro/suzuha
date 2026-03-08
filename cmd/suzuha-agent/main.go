@@ -373,6 +373,14 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			"ephemeral":        ag.LastEphemeral(),
 		})
 	})
+	mux.HandleFunc("GET /internal/scheduler/jobs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if sched == nil {
+			json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": sched.ListJobs()})
+	})
 	mux.HandleFunc("POST /internal/trigger/{task}", func(w http.ResponseWriter, r *http.Request) {
 		if sched == nil {
 			w.Header().Set("Content-Type", "application/json")

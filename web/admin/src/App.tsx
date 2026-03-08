@@ -16,6 +16,7 @@ import {
   ToolOutlined,
   ExperimentOutlined,
   HeartOutlined,
+  ScheduleOutlined,
 } from "@ant-design/icons";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -34,6 +35,7 @@ const LocationPage = lazy(() => import("./routes/location"));
 const ToolsPage = lazy(() => import("./routes/tools"));
 const PlaygroundPage = lazy(() => import("./routes/playground"));
 const PreferencesPage = lazy(() => import("./routes/preferences"));
+const SchedulerPage = lazy(() => import("./routes/scheduler"));
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -50,6 +52,7 @@ type Page =
   | { key: "tools" }
   | { key: "playground" }
   | { key: "preferences" }
+  | { key: "scheduler" }
   | { key: "prompts" }
   | { key: "metrics" }
   | { key: "context" }
@@ -62,7 +65,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "location", "tools", "playground", "preferences", "prompts", "metrics", "context", "logs"];
+  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "location", "tools", "playground", "preferences", "scheduler", "prompts", "metrics", "context", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -96,6 +99,7 @@ export function App() {
     { key: "tools", icon: <ToolOutlined />, label: "Tools" },
     { key: "playground", icon: <ExperimentOutlined />, label: "Playground" },
     { key: "preferences", icon: <HeartOutlined />, label: "Preferences" },
+    { key: "scheduler", icon: <ScheduleOutlined />, label: "Scheduler" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
@@ -130,6 +134,8 @@ export function App() {
         return <PlaygroundPage />;
       case "preferences":
         return <PreferencesPage />;
+      case "scheduler":
+        return <SchedulerPage />;
       case "prompts":
         return <PromptsPage />;
       case "metrics":

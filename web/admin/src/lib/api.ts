@@ -607,6 +607,24 @@ export const identityApi = {
   get: () => fetchJSON<BotIdentity>("/api/identity"),
 };
 
+// Scheduler API
+export interface SchedulerJob {
+  name: string;
+  task: string;
+  cron: string;
+  config?: Record<string, unknown>;
+  prev: string;
+  next: string;
+}
+
+export const schedulerApi = {
+  jobs: () => fetchJSON<{ data: SchedulerJob[] }>("/api/scheduler/jobs"),
+  trigger: (task: string) =>
+    fetchJSON<{ ok: boolean }>(`/api/scheduler/trigger/${encodeURIComponent(task)}`, {
+      method: "POST",
+    }),
+};
+
 // Log stream (SSE)
 export function connectLogStream(params?: {
   level?: string;

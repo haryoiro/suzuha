@@ -117,6 +117,27 @@ func (h *AdminHandler) ForgetStatus(ctx context.Context) (jx.Raw, error) {
 	return jx.Raw(stateJSON), nil
 }
 
+func (h *AdminHandler) proxySchedulerJobs(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyGet(r.Context(), "/internal/scheduler/jobs")
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxySchedulerTrigger(w http.ResponseWriter, r *http.Request) {
+	task := r.PathValue("task")
+	data, err := h.proxyPostRaw(r.Context(), "/internal/trigger/"+task, r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
 // notifyAgentReload tells the agent to reload cached data.
 func (h *AdminHandler) notifyAgentReload(ctx context.Context, path string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.agentBase+path, nil)

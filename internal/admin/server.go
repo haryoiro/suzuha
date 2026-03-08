@@ -46,6 +46,10 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	logH := handler.NewLogHandler(cfg.AgentLogs, "", logger)
 	mux.HandleFunc("GET /api/logs/stream", logH.Stream)
 
+	// Scheduler jobs proxy (not in OpenAPI spec yet).
+	mux.HandleFunc("GET /api/scheduler/jobs", adminHandler.proxySchedulerJobs)
+	mux.HandleFunc("POST /api/scheduler/trigger/{task}", adminHandler.proxySchedulerTrigger)
+
 	// SPA static files.
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
