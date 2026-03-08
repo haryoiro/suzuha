@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/haryoiro/suzuha/internal/jtime"
 )
 
 // MessagePayload carries typed fields for a chat message event.
@@ -45,7 +46,7 @@ func NewMessageEvent(source string, msg MessagePayload) Event {
 		Source:    source,
 		Type:      "message",
 		Message:   msg,
-		Timestamp: time.Now(),
+		Timestamp: jtime.Now(),
 	}
 }
 
@@ -57,7 +58,7 @@ func NewSelfPromptEvent(channel, content string) Event {
 		Source:    SourceInternal,
 		Type:      TypeSelfPrompt,
 		Message:   MessagePayload{Content: content, Channel: channel},
-		Timestamp: time.Now(),
+		Timestamp: jtime.Now(),
 	}
 }
 

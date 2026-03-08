@@ -9,6 +9,7 @@ import (
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -48,7 +49,7 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 			Role:      "assistant",
 			Content:   resp.Text,
 			Channel:   p.Channel,
-			Timestamp: time.Now(),
+			Timestamp: jtime.Now(),
 		})
 	}
 
@@ -125,7 +126,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 		msgs := a.ctx.MessagesWithSystem()
 		if iter == 0 {
 			msgs = append(msgs, ephemeral...)
-			now := time.Now()
+			now := jtime.Now()
 			msgs = append(msgs, llm.Message{
 				Role:      "system",
 				Content:   fmt.Sprintf("[現在時刻: %s]", now.Format("2006-01-02 15:04:05 (Mon)")),
@@ -173,7 +174,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 			Role:      "assistant",
 			Content:   resp.Text,
 			Channel:   channel,
-			Timestamp: time.Now(),
+			Timestamp: jtime.Now(),
 			ToolCalls: resp.ToolCalls,
 		})
 
@@ -202,7 +203,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 					Role:       "tool",
 					Content:    fmt.Sprintf("error: 不明なツール %q", tc.Function.Name),
 					ToolCallID: tc.ID,
-					Timestamp:  time.Now(),
+					Timestamp:  jtime.Now(),
 				})
 				allStopAfter = false
 				continue
@@ -226,7 +227,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 					Role:       "tool",
 					Content:    fmt.Sprintf("error: %v", err),
 					ToolCallID: tc.ID,
-					Timestamp:  time.Now(),
+					Timestamp:  jtime.Now(),
 				})
 				allStopAfter = false
 				continue
@@ -259,7 +260,7 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 				Role:       "tool",
 				Content:    content,
 				ToolCallID: tc.ID,
-				Timestamp:  time.Now(),
+				Timestamp:  jtime.Now(),
 			})
 		}
 

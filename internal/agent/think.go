@@ -10,6 +10,7 @@ import (
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
@@ -109,12 +110,12 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	var ephemeral []llm.Message
 	if memMsg != "" {
 		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: memMsg, Timestamp: time.Now(),
+			Role: "system", Content: memMsg, Timestamp: jtime.Now(),
 		})
 	}
 	if locMsg != "" {
 		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: locMsg, Timestamp: time.Now(),
+			Role: "system", Content: locMsg, Timestamp: jtime.Now(),
 		})
 	}
 	if len(profiles) > 0 {
@@ -132,7 +133,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 			ephemeral = append(ephemeral, llm.Message{
 				Role:      "system",
 				Content:   "ここは自分の住処チャンネルです。リラックスして自由に話して。",
-				Timestamp: time.Now(),
+				Timestamp: jtime.Now(),
 			})
 		}
 	}
@@ -142,7 +143,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	if p.LastEvent.Type == event.TypeSelfPrompt {
 		// Self-prompt content is ephemeral — not persisted in main context.
 		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: p.LastMessage.Content, Timestamp: time.Now(),
+			Role: "system", Content: p.LastMessage.Content, Timestamp: jtime.Now(),
 		})
 		directive = "[SELF_PROMPT] 自分の内なる思考です。使えるツールを自由に組み合わせて暇つぶしして。ステータス変更、ネット散歩、つぶやき、何もしない、なんでもOK。"
 	} else if p.DirectlyAddressed {
@@ -261,7 +262,7 @@ func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
 	out := make([]llm.Message, 0, len(results))
 	for _, r := range results {
 		out = append(out, llm.Message{
-			Role: "system", Content: r.content, Timestamp: time.Now(),
+			Role: "system", Content: r.content, Timestamp: jtime.Now(),
 		})
 	}
 	return out

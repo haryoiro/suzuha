@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
@@ -62,7 +63,7 @@ func (t *Task) now() time.Time {
 	if t.nowFunc != nil {
 		return t.nowFunc()
 	}
-	return time.Now()
+	return jtime.Now()
 }
 
 func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {

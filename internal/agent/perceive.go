@@ -9,6 +9,7 @@ import (
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -228,7 +229,7 @@ func (a *Agent) injectChannelHistory(ctx context.Context, channelID, messageCont
 		a.ctx.Add(llm.Message{
 			Role:      "system",
 			Content:   content,
-			Timestamp: time.Now(),
+			Timestamp: jtime.Now(),
 		})
 		a.logger.Info("チャンネル履歴を注入", "channel", channelID, "length", len(content))
 	}

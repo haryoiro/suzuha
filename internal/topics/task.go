@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -77,7 +78,7 @@ func (t *Task) now() time.Time {
 	if t.nowFunc != nil {
 		return t.nowFunc()
 	}
-	return time.Now()
+	return jtime.Now()
 }
 
 // mutteringConfig holds task-specific configuration from config.yaml.
@@ -122,11 +123,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 
 	// Build context for self-prompt.
-	loc := cc.Timezone
-	if loc == nil {
-		loc = time.UTC
-	}
-	localNow := now.In(loc)
+	localNow := jtime.In(now)
 	timeHint := buildTimeHint(localNow)
 
 	recentMemories := fetchRecentContext(ctx, cc, 8)
