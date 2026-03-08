@@ -278,6 +278,19 @@ func (c *Config) setDefaults() {
 			c.Vision.APIBase = c.LLM.APIBase
 		}
 	}
+	// Preset API key defaults: inherit from matching provider.
+	for i := range c.LLM.Presets {
+		if c.LLM.Presets[i].APIKey == "" {
+			switch c.LLM.Presets[i].Provider {
+			case c.Embedding.Provider:
+				c.LLM.Presets[i].APIKey = c.Embedding.APIKey
+			case c.Vision.Provider:
+				c.LLM.Presets[i].APIKey = c.Vision.APIKey
+			default:
+				c.LLM.Presets[i].APIKey = c.LLM.APIKey
+			}
+		}
+	}
 	if c.Voice.Enabled {
 		if c.Voice.WhisperURL == "" {
 			c.Voice.WhisperURL = "http://whisper:8001"
