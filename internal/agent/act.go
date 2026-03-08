@@ -56,14 +56,9 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 	// Think tags are already parsed in llm.Complete().
 	text := llm.StripDirectiveTags(resp.Text)
 	switch {
-	case containsSkipTool(resp.ToolCalls) && text == "":
-		a.logger.Info("応答をスキップ (skip_responseツール)")
-	case containsSkipTool(resp.ToolCalls) && text != "":
-		a.logger.Warn("skip_responseがテキスト付きで呼ばれたため、そのまま送信します",
-			"text_length", len(text))
-		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-			return fmt.Errorf("agent: 送信に失敗: %w", err)
-		}
+	case containsSkipTool(resp.ToolCalls):
+		a.logger.Info("応答をスキップ (skip_responseツール)",
+			"had_text", text != "")
 	case intermediateText != "" && isSimilarText(intermediateText, text):
 		a.logger.Info("中間応答と類似のため最終応答をスキップ",
 			"intermediate_length", len(intermediateText),
