@@ -47,13 +47,18 @@ func (t *ExploreTool) InputSchema() json.RawMessage {
 			"query": {
 				"type": "string",
 				"description": "探索の出発点となるキーワードやトピック。省略するとランダムなWikipedia記事から始まる。"
+			},
+			"max_depth": {
+				"type": "integer",
+				"description": "最大ホップ数。深く掘りたいなら大きく、軽く見るだけなら小さく。省略時はデフォルト値。"
 			}
 		}
 	}`)
 }
 
 type exploreToolInput struct {
-	Query string `json:"query"`
+	Query    string `json:"query"`
+	MaxDepth int    `json:"max_depth"`
 }
 
 func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
@@ -62,14 +67,22 @@ func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 		_ = json.Unmarshal(input, &in)
 	}
 
-	summary, err := t.doExploration(ctx, in.Query)
+	maxDepth := t.maxDepth
+	if in.MaxDepth > 0 {
+		maxDepth = in.MaxDepth
+		if maxDepth > 20 {
+			maxDepth = 20
+		}
+	}
+
+	summary, err := t.doExploration(ctx, in.Query, maxDepth)
 	if err != nil {
 		return tool.ErrorResult(fmt.Sprintf("explore: 探索に失敗しました: %v", err)), nil
 	}
 	return tool.TextResult(summary), nil
 }
 
-func (t *ExploreTool) doExploration(ctx context.Context, startQuery string) (string, error) {
+func (t *ExploreTool) doExploration(ctx context.Context, startQuery string, maxDepth int) (string, error) {
 	var title, content string
 
 	if startQuery != "" {
@@ -97,7 +110,7 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string) (str
 	var path []hop
 	var rememberedItems []string
 
-	for depth := 0; depth < t.maxDepth; depth++ {
+	for depth := 0; depth < maxDepth; depth++ {
 		eval, err := evaluate(ctx, t.llm, t.systemPrompt, title, content, path)
 		if err != nil {
 			break
@@ -111,7 +124,7 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string) (str
 		if eval.NextQuery == nil || *eval.NextQuery == "" {
 			break
 		}
-		if depth == t.maxDepth-1 {
+		if depth == maxDepth-1 {
 			break
 		}
 

@@ -147,11 +147,21 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	var rememberedItems []string
 
 	for depth := 0; depth < maxDepth; depth++ {
-		// Evaluate the current content.
+		// Evaluate the current content (retry once on transient errors).
 		eval, err := evaluate(ctx, cc.LLM, systemPrompt, title, content, path)
 		if err != nil {
-			cc.Logger.Error("explore: evaluate", "error", err, "depth", depth)
-			break
+			cc.Logger.Warn("explore: evaluate失敗、リトライ中", "error", err, "depth", depth)
+			select {
+			case <-ctx.Done():
+				cc.Logger.Warn("explore: コンテキストがキャンセルされました")
+				return nil
+			case <-time.After(5 * time.Second):
+			}
+			eval, err = evaluate(ctx, cc.LLM, systemPrompt, title, content, path)
+			if err != nil {
+				cc.Logger.Error("explore: evaluate リトライも失敗", "error", err, "depth", depth)
+				break
+			}
 		}
 
 		path = append(path, hop{Title: title, Impression: eval.Impression})
@@ -197,8 +207,17 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 			break
 		}
 
-		// Let LLM pick which result to read.
+		// Let LLM pick which result to read (retry once on transient errors).
 		picked, err := pickResult(ctx, cc.LLM, systemPrompt, nextQuery, results, path)
+		if err != nil {
+			cc.Logger.Warn("explore: pickResult失敗、リトライ中", "query", nextQuery, "error", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+			}
+			picked, err = pickResult(ctx, cc.LLM, systemPrompt, nextQuery, results, path)
+		}
 		if err != nil || picked == nil {
 			cc.Logger.Warn("explore: pick result failed or none interesting",
 				"query", nextQuery, "error", err)
@@ -218,6 +237,9 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 
 	// --- Step 3: Reflect and save ---
+	if len(path) == 0 {
+		cc.Logger.Warn("explore: 探索できずに終了（hopなし）", "start_title", startTitle)
+	}
 	if len(path) > 0 {
 		// Ask LLM to synthesize a personal takeaway from the exploration.
 		summary, err := reflectOnExploration(ctx, cc.LLM, systemPrompt, path, rememberedItems)
