@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/tool"
 )
+
+const jinaReaderPrefix = "https://r.jina.ai/"
 
 const maxBodyBytes = 512 << 10 // 512KB raw read limit
 const maxOutputRunes = 4000   // truncate final output for LLM context
@@ -58,7 +59,13 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 		in.Method = "GET"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, in.Method, in.URL, nil)
+	// Use r.jina.ai reader for GET requests to get clean Markdown.
+	fetchURL := in.URL
+	if in.Method == "GET" {
+		fetchURL = jinaReaderPrefix + in.URL
+	}
+
+	req, err := http.NewRequestWithContext(ctx, in.Method, fetchURL, nil)
 	if err != nil {
 		return tool.ErrorResult("不正なリクエスト: " + err.Error()), nil
 	}
@@ -75,13 +82,7 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 		return tool.ErrorResult("レスポンス読み取り失敗: " + err.Error()), nil
 	}
 
-	ct := resp.Header.Get("Content-Type")
 	text := string(body)
-
-	// Convert HTML to Markdown.
-	if strings.Contains(ct, "text/html") || strings.HasPrefix(text, "<!") || strings.HasPrefix(text, "<html") {
-		text = htmlToMarkdown(text)
-	}
 
 	// Truncate to keep LLM context manageable.
 	runes := []rune(text)

@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
+
+const jinaReaderPrefix = "https://r.jina.ai/"
 
 // SearchResult represents a single search result from SearXNG.
 type SearchResult struct {
@@ -78,10 +78,13 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 	return body.Results, nil
 }
 
-// FetchPage retrieves a web page, converts HTML to Markdown, and returns
-// the text content (truncated to maxRunes).
+// FetchPage retrieves a web page via r.jina.ai reader and returns
+// the Markdown content (truncated to maxRunes).
 func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes int) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+	// Use r.jina.ai reader to get clean Markdown.
+	fetchURL := jinaReaderPrefix + pageURL
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("fetch page: リクエストの作成に失敗: %w", err)
 	}
@@ -108,17 +111,7 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 		return "", fmt.Errorf("fetch page: 読み取りに失敗: %w", err)
 	}
 
-	contentType := resp.Header.Get("Content-Type")
 	text := string(body)
-
-	// Convert HTML to Markdown for readability.
-	if strings.Contains(contentType, "html") || looksLikeHTML(text) {
-		md, err := htmltomarkdown.ConvertString(text)
-		if err == nil {
-			text = md
-		}
-		// On error, fall through to raw text.
-	}
 
 	// Collapse excessive whitespace.
 	text = collapseWhitespace(text)
@@ -128,12 +121,6 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 		text = string(runes[:maxRunes])
 	}
 	return text, nil
-}
-
-// looksLikeHTML checks if content appears to be HTML.
-func looksLikeHTML(s string) bool {
-	trimmed := strings.TrimSpace(s)
-	return strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<html") || strings.HasPrefix(trimmed, "<HTML")
 }
 
 // collapseWhitespace reduces runs of 3+ newlines to 2.

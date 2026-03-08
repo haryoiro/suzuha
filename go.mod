@@ -15,13 +15,10 @@ require (
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/samber/do/v2 v2.0.0
-	golang.org/x/net v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/JohannesKaufmann/dom v0.2.0 // indirect
-	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0 // indirect
 	github.com/disgoorg/godave v0.1.0 // indirect
 	github.com/disgoorg/godave/libdave v0.1.0 // indirect
 	github.com/disgoorg/json/v2 v2.0.0 // indirect
