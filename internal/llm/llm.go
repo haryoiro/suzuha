@@ -349,12 +349,35 @@ func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model
 // convertMessages transforms suzuha Messages to any-llm-go Messages.
 // System messages after the first one are converted to user messages,
 // because some models (e.g. Qwen3.5) only allow a single system message at the start.
+// Orphaned tool messages and unmatched tool_calls are sanitized to satisfy
+// strict providers like OpenAI.
 func convertMessages(msgs []Message) []providers.Message {
-	out := make([]providers.Message, len(msgs))
+	// Collect tool_call IDs that have assistant requests and tool responses.
+	assistantToolCalls := make(map[string]bool)
+	toolResponses := make(map[string]bool)
+	for _, m := range msgs {
+		if m.Role == "assistant" {
+			for _, tc := range m.ToolCalls {
+				assistantToolCalls[tc.ID] = true
+			}
+		}
+		if m.Role == "tool" && m.ToolCallID != "" {
+			toolResponses[m.ToolCallID] = true
+		}
+	}
+
+	out := make([]providers.Message, 0, len(msgs))
 	seenSystem := false
-	for i, m := range msgs {
+
+	for _, m := range msgs {
 		role := m.Role
 		content := m.Content
+
+		// Drop orphaned tool responses (no matching assistant tool_calls).
+		if role == "tool" && m.ToolCallID != "" && !assistantToolCalls[m.ToolCallID] {
+			continue
+		}
+
 		if role == "system" {
 			if seenSystem {
 				role = "user"
@@ -373,12 +396,31 @@ func convertMessages(msgs []Message) []providers.Message {
 			content = fmt.Sprintf("[time=%s server=%s channel=#%s channel_id=%s guild_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
 				ts, m.GuildName, m.ChannelName, m.Channel, m.GuildID, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
 		}
-		out[i] = providers.Message{
+
+		// Strip tool_calls from assistant messages if any response is missing.
+		var toolCalls []providers.ToolCall
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			allPresent := true
+			for _, tc := range m.ToolCalls {
+				if !toolResponses[tc.ID] {
+					allPresent = false
+					break
+				}
+			}
+			if allPresent {
+				toolCalls = m.ToolCalls
+			}
+			// else: drop tool_calls entirely — responses are missing
+		} else {
+			toolCalls = m.ToolCalls
+		}
+
+		out = append(out, providers.Message{
 			Role:       role,
 			Content:    content,
-			ToolCalls:  m.ToolCalls,
+			ToolCalls:  toolCalls,
 			ToolCallID: m.ToolCallID,
-		}
+		})
 	}
 	return out
 }
