@@ -37,6 +37,8 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 
 	cc.Logger.Info("schedule: 期限到来のアクションを処理中", slog.Int("count", len(actions)))
 
+	const maxRetries = 5
+
 	for _, a := range actions {
 		message := a.Content
 
@@ -46,7 +48,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 			if llmErr != nil {
 				cc.Logger.Error("schedule: LLM生成に失敗、リトライします",
 					slog.String("id", a.ID),
-					slog.Any("error", llmErr),
+					slog.String("error", llmErr.Error()),
 				)
 				continue
 			}
@@ -55,12 +57,25 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 
 		_, sendErr := cc.Notifier.Send(ctx, a.ChannelID, message, "schedule")
 		if sendErr != nil {
-			// Don't mark executed — will retry on next run.
-			cc.Logger.Warn("schedule: 送信に失敗、リトライします",
-				slog.String("id", a.ID),
-				slog.String("channel", a.ChannelID),
-				slog.Any("error", sendErr),
-			)
+			newCount := a.RetryCount + 1
+			if newCount >= maxRetries {
+				cc.Logger.Error("schedule: リトライ上限に到達、failedにマーク",
+					slog.String("id", a.ID),
+					slog.String("channel", a.ChannelID),
+					slog.String("error", sendErr.Error()),
+					slog.Int("retries", newCount),
+				)
+				_ = store.MarkFailed(ctx, a.ID, newCount)
+			} else {
+				cc.Logger.Warn("schedule: 送信に失敗、リトライします",
+					slog.String("id", a.ID),
+					slog.String("channel", a.ChannelID),
+					slog.String("error", sendErr.Error()),
+					slog.Int("retry", newCount),
+					slog.Int("max", maxRetries),
+				)
+				_ = store.IncrRetry(ctx, a.ID, newCount)
+			}
 			continue
 		}
 
