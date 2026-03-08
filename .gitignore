@@ -19,6 +19,7 @@ data/
 # Dependencies
 .pnpm-store/
 .venv*/
+api/node_modules/
 
 # ML / fine-tuning
 models/
