@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/affinity"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
@@ -210,6 +211,22 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				}
 			}
 			return features, nil
+		})
+
+		// Schedule store (used by admin server).
+		do.Provide(i, func(i do.Injector) (*schedule.Store, error) {
+			store := do.MustInvoke[*memory.SQLiteStore](i)
+			return schedule.NewStore(store.DB()), nil
+		})
+
+		// Admin server.
+		do.Provide(i, func(i do.Injector) (*admin.Server, error) {
+			cfg := do.MustInvoke[*config.Config](i)
+			store := do.MustInvoke[*memory.SQLiteStore](i)
+			userStore := do.MustInvoke[*user.SQLiteStore](i)
+			schedStore := do.MustInvoke[*schedule.Store](i)
+			logger := do.MustInvoke[*slog.Logger](i)
+			return admin.NewServer(cfg.Admin, store, userStore, schedStore, logger), nil
 		})
 
 		// Scheduler (nil when disabled in config).

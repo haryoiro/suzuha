@@ -6,6 +6,7 @@ services:
     command: ["-c", ".air.agent.toml"]
     ports:
       - "9090:9090"
+      - "8080:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -22,25 +23,6 @@ services:
       - SUZUHA_CONFIG=/app/config.yaml
     stdin_open: true
     tty: true
-
-  admin:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    command: ["-c", ".air.admin.toml"]
-    ports:
-      - "8080:8080"
-    volumes:
-      - .:/app
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
-      - ./data:/data
-    env_file:
-      - .env
-    environment:
-      - SUZUHA_CONFIG=/app/config.yaml
-    depends_on:
-      - agent
 
   searxng:
     image: searxng/searxng:latest
@@ -86,9 +68,9 @@ services:
       - .:/app
       - node-modules:/app/web/admin/node_modules
     environment:
-      - API_URL=http://admin:8080
+      - API_URL=http://agent:8080
     depends_on:
-      - admin
+      - agent
 
 volumes:
   go-mod-cache:

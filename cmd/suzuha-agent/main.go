@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
@@ -85,6 +86,14 @@ func run() error {
 	if cfg.Observe.MetricsAddr != "" {
 		go startInternalHTTP(injector, cfgPath)
 	}
+
+	// Start admin HTTP server.
+	adminSrv := do.MustInvoke[*admin.Server](injector)
+	go func() {
+		if err := adminSrv.ListenAndServe(); err != nil {
+			logger.Error("admin server failed", "error", err)
+		}
+	}()
 
 	// Context with signal handling.
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
