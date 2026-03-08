@@ -219,14 +219,15 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return schedule.NewStore(store.DB()), nil
 		})
 
-		// Admin server.
+		// Admin server (uses a plain logger without ring buffer to avoid
+		// flooding the agent log stream with HTTP access logs).
 		do.Provide(i, func(i do.Injector) (*admin.Server, error) {
 			cfg := do.MustInvoke[*config.Config](i)
 			store := do.MustInvoke[*memory.SQLiteStore](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
 			schedStore := do.MustInvoke[*schedule.Store](i)
-			logger := do.MustInvoke[*slog.Logger](i)
-			return admin.NewServer(cfg.Admin, store, userStore, schedStore, logger), nil
+			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
+			return admin.NewServer(cfg.Admin, store, userStore, schedStore, adminLogger), nil
 		})
 
 		// Scheduler (nil when disabled in config).
@@ -242,7 +243,9 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 
 	llmClient := do.MustInvoke[*llm.Client](i)
 	store := do.MustInvoke[*memory.SQLiteStore](i)
-	logger := do.MustInvoke[*slog.Logger](i)
+	// Scheduler uses a plain logger (no ring buffer) to keep job execution
+	// logs out of the SSE log stream shown in the admin dashboard.
+	logger := observe.NewLogger(do.MustInvoke[*config.Config](i).Observe.LogLevel)
 	chatIface := do.MustInvoke[chat.Interface](i)
 	userStore := do.MustInvoke[*user.SQLiteStore](i)
 	features := do.MustInvoke[[]scheduler.Feature](i)
