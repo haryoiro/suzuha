@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/robfig/cron/v3"
 )
 
@@ -184,13 +185,14 @@ func (s *Store) markDone(ctx context.Context, id string, now time.Time) error {
 }
 
 // nextCronTime parses a cron expression and returns the next occurrence after t.
+// The time is interpreted in the configured timezone.
 func nextCronTime(expr string, t time.Time) (time.Time, error) {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	sched, err := parser.Parse(expr)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("cron式 %q の解析に失敗: %w", expr, err)
 	}
-	return sched.Next(t), nil
+	return sched.Next(jtime.In(t)), nil
 }
 
 func scanActions(rows *sql.Rows) ([]Action, error) {

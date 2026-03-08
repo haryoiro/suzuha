@@ -2,6 +2,10 @@
 # Copy to config.yaml and fill in your values:
 #   cp config.yaml.example config.yaml
 
+# IANA timezone for cron schedules, quiet hours, and time display.
+# Defaults to UTC if omitted.
+timezone: "Asia/Tokyo"
+
 llm:
   provider: "openai"           # "openai", "zhipu", "qwen"
   model: "gpt-4"

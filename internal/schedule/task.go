@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -24,7 +24,7 @@ func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error { return
 
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
 	store := NewStore(cc.DB)
-	now := time.Now()
+	now := jtime.Now()
 
 	// Use wall clock in the scheduler's timezone, but store uses UTC.
 	actions, err := store.FetchDue(ctx, now)

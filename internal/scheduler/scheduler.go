@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron/v3"
 )
@@ -33,7 +34,12 @@ type Scheduler struct {
 
 // New creates a Scheduler.
 func New(registry *TaskRegistry, cc *CronContext, logger *slog.Logger) *Scheduler {
+	loc := cc.Timezone
+	if loc == nil {
+		loc = time.UTC
+	}
 	c := cron.New(
+		cron.WithLocation(loc),
 		cron.WithLogger(cron.VerbosePrintfLogger(slog.NewLogLogger(logger.Handler(), slog.LevelDebug))),
 		cron.WithChain(cron.Recover(cron.VerbosePrintfLogger(slog.NewLogLogger(logger.Handler(), slog.LevelError)))),
 	)

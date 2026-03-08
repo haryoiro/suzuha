@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/robfig/cron/v3"
 )
@@ -29,9 +30,10 @@ func (t *CreateTool) Description() string {
 	return `Schedule a message to be sent to a Discord channel at a specified time.
 Use the channel_id from the message metadata.
 For recurring schedules, provide a cron_expr in standard 5-field cron format (minute hour day month weekday).
+Times and cron expressions are interpreted in the configured timezone (see config.yaml timezone setting).
 If scheduled_at is omitted, the next occurrence is automatically calculated from cron_expr.
 Use random_minutes to add a random offset (0 to N minutes) to each occurrence — useful for natural-feeling recurring messages.
-Examples: cron_expr "0 8 * * *" with random_minutes 240 = every day at a random time between 8:00-12:00 UTC.
+Examples: cron_expr "0 8 * * *" with random_minutes 240 = every day at a random time between 8:00-12:00.
 Set mode to "prompt" to treat content as an instruction — the LLM will generate a response from it before posting. Default mode is "direct" (post content as-is).`
 }
 
@@ -101,7 +103,7 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		}
 	case cronSchedule != nil:
 		// Auto-calculate the next occurrence from the cron expression.
-		scheduledAt = cronSchedule.Next(time.Now())
+		scheduledAt = cronSchedule.Next(jtime.Now())
 	default:
 		return tool.ErrorResult("scheduled_at または cron_expr のいずれかが必須です"), nil
 	}

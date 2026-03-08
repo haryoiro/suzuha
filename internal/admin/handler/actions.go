@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/robfig/cron/v3"
 )
@@ -118,7 +119,7 @@ func (h *ActionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid cron_expr: `+parseErr.Error()+`"}`, http.StatusBadRequest)
 			return
 		}
-		scheduledAt = sched.Next(time.Now()).UTC()
+		scheduledAt = sched.Next(jtime.Now()).UTC()
 	default:
 		http.Error(w, `{"error":"either scheduled_at or cron_expr is required"}`, http.StatusBadRequest)
 		return

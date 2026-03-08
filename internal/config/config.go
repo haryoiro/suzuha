@@ -12,6 +12,7 @@ import (
 
 // Config is the top-level application configuration.
 type Config struct {
+	Timezone     string       `yaml:"timezone"` // IANA timezone (e.g. "Asia/Tokyo"). Defaults to UTC.
 	LLM          LLM          `yaml:"llm"`
 	Embedding    Embedding    `yaml:"embedding"`
 	Vision       Vision       `yaml:"vision"`
@@ -246,6 +247,11 @@ func (c *Config) applyEnv() {
 }
 
 func (c *Config) setDefaults() {
+	// Timezone: fall back to consolidator.scheduler.timezone for backward compat.
+	if c.Timezone == "" && c.Consolidator.Scheduler.Timezone != "" {
+		c.Timezone = c.Consolidator.Scheduler.Timezone
+	}
+
 	// Embedding defaults: inherit from LLM if not set.
 	if c.Embedding.Provider == "" {
 		c.Embedding.Provider = c.LLM.Provider

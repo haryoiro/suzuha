@@ -20,6 +20,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/explore"
 	"github.com/haryoiro/suzuha/internal/forget"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
@@ -233,13 +234,15 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	var notifier notification.Notifier = notification.NewChatNotifier(chatIface, logger)
 
 	schedulerLoc := time.UTC
-	if tz := cfg.Consolidator.Scheduler.Timezone; tz != "" {
+	if tz := cfg.Timezone; tz != "" {
 		if parsed, tzErr := time.LoadLocation(tz); tzErr == nil {
 			schedulerLoc = parsed
 		} else {
 			logger.Warn("scheduler: 無効なタイムゾーンです。UTCを使用します", "timezone", tz, "error", tzErr)
 		}
 	}
+	jtime.Init(schedulerLoc)
+	logger.Info("timezone", "location", schedulerLoc.String())
 
 	if cfg.Consolidator.Scheduler.QuietHours.Enabled {
 		notifier = notification.WithQuietHours(notification.QuietHoursConfig{
