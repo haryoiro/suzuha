@@ -1,5 +1,5 @@
 import { useState, memo, useMemo } from "react";
-import { Table, Typography, Input, Modal, Tag, Descriptions, Card, Select, Switch, Space, message } from "antd";
+import { Table, Typography, Input, Modal, Tag, Descriptions, Card, Select, Switch, Space, Button, Flex, message } from "antd";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
 import { useTools } from "../hooks/useTools";
@@ -9,6 +9,8 @@ import { llmApi, toolsApi } from "../lib/api";
 const { Title, Text } = Typography;
 
 // --- LLM Provider Switcher ---
+
+const PROVIDERS = ["openai", "zhipu", "qwen"] as const;
 
 const LLMProviderSection = memo(function LLMProviderSection() {
   const qc = useQueryClient();
@@ -27,32 +29,78 @@ const LLMProviderSection = memo(function LLMProviderSection() {
     (p) => p.provider === data?.provider && p.model === data?.model,
   );
 
-  const handleSelect = (name: string) => {
+  // Free-form model input state.
+  const [provider, setProvider] = useState<string>("");
+  const [model, setModel] = useState("");
+  const [vision, setVision] = useState(false);
+
+  const handlePresetSelect = (name: string) => {
     mutation.mutate({ preset: name });
+  };
+
+  const handleCustomApply = () => {
+    if (!provider || !model) {
+      message.warning("Provider and model are required");
+      return;
+    }
+    mutation.mutate({ provider, model, vision });
   };
 
   return (
     <Card size="small" style={{ marginBottom: 16 }}>
-      <Space align="center">
-        <Text strong>LLM Provider:</Text>
-        <Select
-          value={currentPreset?.name}
-          loading={isLoading}
-          disabled={mutation.isPending}
-          onChange={handleSelect}
-          style={{ width: 250 }}
-          placeholder="Select provider"
-          options={presets.map((p) => ({
-            value: p.name,
-            label: `${p.name} (${p.model})`,
-          }))}
-        />
-        {data && (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {data.api_base}
-          </Text>
-        )}
-      </Space>
+      <Flex vertical gap={8}>
+        <Flex align="center" gap={8}>
+          <Text strong>Preset:</Text>
+          <Select
+            value={currentPreset?.name}
+            loading={isLoading}
+            disabled={mutation.isPending}
+            onChange={handlePresetSelect}
+            style={{ width: 250 }}
+            placeholder="Select preset"
+            options={presets.map((p) => ({
+              value: p.name,
+              label: `${p.name} (${p.model})`,
+            }))}
+          />
+          {data && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {data.provider}/{data.model} {data.vision && "[vision]"} {data.api_base}
+            </Text>
+          )}
+        </Flex>
+        <Flex align="center" gap={8}>
+          <Text strong>Custom:</Text>
+          <Select
+            value={provider || undefined}
+            onChange={setProvider}
+            style={{ width: 120 }}
+            placeholder="Provider"
+            options={PROVIDERS.map((p) => ({ value: p, label: p }))}
+          />
+          <Input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="Model name (e.g. gpt-4o)"
+            style={{ width: 220 }}
+          />
+          <Switch
+            checked={vision}
+            onChange={setVision}
+            checkedChildren="Vision"
+            unCheckedChildren="Text"
+            size="small"
+          />
+          <Button
+            type="primary"
+            size="small"
+            loading={mutation.isPending}
+            onClick={handleCustomApply}
+          >
+            Apply
+          </Button>
+        </Flex>
+      </Flex>
     </Card>
   );
 });

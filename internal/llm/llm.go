@@ -3,8 +3,10 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
+	llmerrors "github.com/mozilla-ai/any-llm-go/errors"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"github.com/mozilla-ai/any-llm-go/providers/openai"
 )
@@ -33,6 +36,9 @@ type Message struct {
 
 	// ToolCalls is set when the assistant wants to invoke tools.
 	ToolCalls []providers.ToolCall `json:"tool_calls,omitempty"`
+	// ImageURLs holds image URLs attached to this message.
+	// When the active LLM is vision-capable, these are sent as multimodal content parts.
+	ImageURLs []string `json:"image_urls,omitempty"`
 }
 
 // Response wraps an LLM completion response.
@@ -248,11 +254,12 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	c.mu.RLock()
 	prov := c.provider
 	model := c.model
+	vision := c.visionCapable
 	c.mu.RUnlock()
 
 	params := providers.CompletionParams{
 		Model:    model,
-		Messages: convertMessages(messages),
+		Messages: convertMessages(messages, vision),
 		Tools:    convertTools(tools),
 	}
 
@@ -261,8 +268,14 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		"messages", len(messages),
 		"tools", len(tools))
 
+	var resp *providers.ChatCompletion
 	start := time.Now()
-	resp, err := prov.Completion(ctx, params)
+
+	err := retryOnRateLimit(ctx, c.logger, func() error {
+		var callErr error
+		resp, callErr = prov.Completion(ctx, params)
+		return callErr
+	})
 	elapsed := time.Since(start)
 
 	if c.metrics != nil {
@@ -334,7 +347,12 @@ func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model
 		Messages: messages,
 	}
 
-	resp, err := prov.Completion(ctx, params)
+	var resp *providers.ChatCompletion
+	err := retryOnRateLimit(ctx, c.logger, func() error {
+		var callErr error
+		resp, callErr = prov.Completion(ctx, params)
+		return callErr
+	})
 	if err != nil {
 		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
 	}
@@ -361,7 +379,7 @@ func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model
 // because some models (e.g. Qwen3.5) only allow a single system message at the start.
 // Orphaned tool messages and unmatched tool_calls are sanitized to satisfy
 // strict providers like OpenAI.
-func convertMessages(msgs []Message) []providers.Message {
+func convertMessages(msgs []Message, visionCapable bool) []providers.Message {
 	// Collect tool_call IDs that have assistant requests and tool responses.
 	assistantToolCalls := make(map[string]bool)
 	toolResponses := make(map[string]bool)
@@ -425,9 +443,24 @@ func convertMessages(msgs []Message) []providers.Message {
 			toolCalls = m.ToolCalls
 		}
 
+		// Build multimodal content if the LLM supports vision and there are images.
+		var msgContent any = content
+		if visionCapable && len(m.ImageURLs) > 0 && role == "user" {
+			parts := []providers.ContentPart{
+				{Type: "text", Text: content},
+			}
+			for _, u := range m.ImageURLs {
+				parts = append(parts, providers.ContentPart{
+					Type:     "image_url",
+					ImageURL: &providers.ImageURL{URL: u},
+				})
+			}
+			msgContent = parts
+		}
+
 		out = append(out, providers.Message{
 			Role:       role,
-			Content:    content,
+			Content:    msgContent,
 			ToolCalls:  toolCalls,
 			ToolCallID: m.ToolCallID,
 		})
@@ -479,8 +512,14 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 
 	c.logger.Debug("埋め込みリクエスト", "model", c.embeddingModel, "text_length", len(text))
 
+	var resp *providers.EmbeddingResponse
 	start := time.Now()
-	resp, err := ep.Embedding(ctx, params)
+
+	err := retryOnRateLimit(ctx, c.logger, func() error {
+		var callErr error
+		resp, callErr = ep.Embedding(ctx, params)
+		return callErr
+	})
 	elapsed := time.Since(start)
 
 	if c.metrics != nil {
@@ -518,6 +557,14 @@ func (c *Client) HasVision() bool {
 	return c.visionModel != "" && c.visionProv != nil
 }
 
+// IsVisionCapable returns true if the active LLM provider supports vision natively
+// (images can be sent inline in messages).
+func (c *Client) IsVisionCapable() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.visionCapable
+}
+
 // DescribeImage sends an image URL to a vision model and returns a text description.
 // If the active provider is vision-capable, it is used directly; otherwise falls back
 // to the dedicated vision provider from config.
@@ -549,8 +596,14 @@ func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, er
 
 	c.logger.Debug("ビジョンリクエスト", "model", model, "url", imageURL)
 
+	var resp *providers.ChatCompletion
 	start := time.Now()
-	resp, err := prov.Completion(ctx, params)
+
+	err := retryOnRateLimit(ctx, c.logger, func() error {
+		var callErr error
+		resp, callErr = prov.Completion(ctx, params)
+		return callErr
+	})
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -565,6 +618,32 @@ func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, er
 	text := resp.Choices[0].Message.ContentString()
 	c.logger.Info("ビジョン補完完了", "model", model, "elapsed_ms", elapsed.Milliseconds(), "description_length", len(text))
 	return text, nil
+}
+
+// retryOnRateLimit retries fn with exponential backoff when a rate-limit error is returned.
+// maxRetries=3, base delay=1s → waits 1s, 2s, 4s.
+func retryOnRateLimit(ctx context.Context, logger *slog.Logger, fn func() error) error {
+	const maxRetries = 3
+	const baseDelay = time.Second
+
+	var err error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err = fn()
+		if err == nil || !errors.Is(err, llmerrors.ErrRateLimit) {
+			return err
+		}
+		if attempt == maxRetries {
+			break
+		}
+		delay := time.Duration(math.Pow(2, float64(attempt))) * baseDelay
+		logger.Warn("レートリミット、リトライします", "attempt", attempt+1, "delay", delay)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	return err
 }
 
 func truncateStr(s string, maxLen int) string {

@@ -83,7 +83,8 @@ func (t *Task) now() time.Time {
 
 // mutteringConfig holds task-specific configuration from config.yaml.
 type mutteringConfig struct {
-	ChannelID string `json:"channel_id"`
+	ChannelID   string `json:"channel_id"`
+	SkipBoredom bool   `json:"skip_boredom"`
 }
 
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
@@ -116,7 +117,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		"last_interaction", lastInteraction,
 		"channel_id", mc.ChannelID)
 
-	if !shouldPost(boredom) {
+	if !mc.SkipBoredom && !shouldPost(boredom) {
 		cc.Logger.Info("topics: skipping (low boredom or probability miss)",
 			"boredom", fmt.Sprintf("%.1f", boredom))
 		return nil

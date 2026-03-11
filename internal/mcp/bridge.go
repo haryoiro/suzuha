@@ -20,7 +20,7 @@ import (
 // serverEntry holds a connected MCP server session and its registered tool names.
 type serverEntry struct {
 	session   *mcpsdk.ClientSession
-	toolNames []string // prefixed names: ["server.tool1", "server.tool2"]
+	toolNames []string // prefixed names: ["server_tool1", "server_tool2"]
 }
 
 // Manager manages MCP server connections and registers discovered tools.
@@ -125,7 +125,7 @@ func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]s
 
 	var toolNames []string
 	for _, t := range result.Tools {
-		prefixedName := srv.Name + "." + t.Name
+		prefixedName := srv.Name + "_" + t.Name
 		schema, err := json.Marshal(t.InputSchema)
 		if err != nil {
 			m.logger.Warn("MCPツールスキーマのマーシャルに失敗",
@@ -250,7 +250,7 @@ func (f *jsonLineReader) Close() error {
 
 // MCPTool adapts an MCP server tool to the tool.Tool interface.
 type MCPTool struct {
-	name        string // prefixed: "server.toolname"
+	name        string // prefixed: "server_toolname"
 	mcpName     string // original MCP tool name
 	description string
 	inputSchema json.RawMessage

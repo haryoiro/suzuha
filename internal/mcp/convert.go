@@ -92,8 +92,10 @@ func ToToolServer(serverName string, pkg RegistryPackage, userEnv map[string]str
 		return config.ToolServer{}, fmt.Errorf("必須環境変数が不足しています: %s", strings.Join(missing, ", "))
 	}
 
-	// Sanitize server name for use as config name (replace / with -)
+	// Sanitize server name for use as config name and OpenAI function name
+	// (must match ^[a-zA-Z0-9_-]+$).
 	safeName := strings.ReplaceAll(serverName, "/", "-")
+	safeName = strings.ReplaceAll(safeName, ".", "-")
 
 	return config.ToolServer{
 		Name:      safeName,

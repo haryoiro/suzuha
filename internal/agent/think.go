@@ -145,7 +145,8 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 		ephemeral = append(ephemeral, llm.Message{
 			Role: "system", Content: p.LastMessage.Content, Timestamp: jtime.Now(),
 		})
-		directive = "[SELF_PROMPT] 自分の内なる思考です。使えるツールを自由に組み合わせて暇つぶしして。ステータス変更、ネット散歩、つぶやき、何もしない、なんでもOK。"
+		toolNames := strings.Join(a.tools.AllEnabledNames(), ", ")
+		directive = fmt.Sprintf("[SELF_PROMPT] 自分の内なる思考です。以下のツールを自由に組み合わせて遊んでください: %s\n気になることを調べる、誰かが言っていたことを思い出してリマインドする、会話の流れから何か提案する、ステータスを変える、つぶやく、なんでもOK。", toolNames)
 	} else if p.DirectlyAddressed {
 		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。"
 	} else {

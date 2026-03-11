@@ -63,6 +63,19 @@ func (r *Registry) AllEnabled() []Tool {
 	return out
 }
 
+// AllEnabledNames returns the names of all enabled tools.
+func (r *Registry) AllEnabledNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]string, 0, len(r.tools))
+	for _, t := range r.tools {
+		if !r.disabled[t.Name()] {
+			out = append(out, t.Name())
+		}
+	}
+	return out
+}
+
 // SetDisabled replaces the disabled set with the given tool names.
 func (r *Registry) SetDisabled(names []string) {
 	r.mu.Lock()

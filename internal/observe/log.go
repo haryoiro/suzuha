@@ -60,14 +60,14 @@ func (h *RingHandler) Handle(ctx context.Context, record slog.Record) error {
 	if record.NumAttrs() > 0 || len(h.attrs) > 0 {
 		attrs := make(map[string]any)
 		for _, a := range h.attrs {
-			attrs[a.Key] = a.Value.Any()
+			attrs[a.Key] = resolveAttrValue(a)
 		}
 		record.Attrs(func(a slog.Attr) bool {
 			key := a.Key
 			if h.group != "" {
 				key = h.group + "." + key
 			}
-			attrs[key] = a.Value.Any()
+			attrs[key] = resolveAttrValue(a)
 			return true
 		})
 		entry.Attrs = attrs
@@ -76,6 +76,19 @@ func (h *RingHandler) Handle(ctx context.Context, record slog.Record) error {
 
 	// Forward to inner handler (stdout).
 	return h.inner.Handle(ctx, record)
+}
+
+// resolveAttrValue extracts a JSON-safe value from a slog.Attr.
+// error values are converted to their string representation to avoid
+// serializing as "{}" (unexported struct fields).
+func resolveAttrValue(a slog.Attr) any {
+	v := a.Value.Resolve()
+	if v.Kind() == slog.KindAny {
+		if err, ok := v.Any().(error); ok {
+			return err.Error()
+		}
+	}
+	return v.Any()
 }
 
 func (h *RingHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

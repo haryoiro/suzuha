@@ -107,6 +107,7 @@ func (s *Session) Join(ctx context.Context) error {
 	s.conn = voice.NewConn(guildSF, userSF, voiceStateUpdateFunc, func() {}, // removeFunc
 		voice.WithConnLogger(s.logger),
 		voice.WithConnDaveSessionCreateFunc(golibdave.NewSession),
+		voice.WithConnAudioReceiverCreateFunc(NewTolerantAudioReceiver),
 	)
 
 	// Register discordgo handlers to forward voice events to disgo's conn.

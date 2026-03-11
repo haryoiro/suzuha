@@ -161,6 +161,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 			// Register builtin tools.
 			registry.Register(builtin.NewFetch())
+			registry.Register(builtin.NewPythonExec())
 			registry.Register(builtin.NewUpdateUserProfile(userStore, func(userID, newName string) {
 				ag.AgentContext().UpdateUserName(userID, newName)
 			}))

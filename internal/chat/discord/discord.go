@@ -129,13 +129,19 @@ func (c *Chat) Run(ctx context.Context) error {
 }
 
 // Send sends a message to a Discord channel.
+// If the channel ID is actually a user ID (Unknown Channel error), it falls
+// back to creating a DM channel via UserChannelCreate and retries.
 func (c *Chat) Send(_ context.Context, channel string, text string) error {
 	if c.session == nil {
 		return fmt.Errorf("discord: セッションが初期化されていません")
 	}
+	resolved, err := c.resolveChannel(channel)
+	if err != nil {
+		return fmt.Errorf("discord: チャンネル解決に失敗: %w", err)
+	}
 	chunks := splitMessage(text, 2000)
 	for _, chunk := range chunks {
-		if _, err := c.session.ChannelMessageSend(channel, chunk); err != nil {
+		if _, err := c.session.ChannelMessageSend(resolved, chunk); err != nil {
 			return fmt.Errorf("discord: 送信に失敗: %w", err)
 		}
 	}
@@ -147,16 +153,38 @@ func (c *Chat) SendWithID(_ context.Context, channel string, text string) (strin
 	if c.session == nil {
 		return "", fmt.Errorf("discord: セッションが初期化されていません")
 	}
+	resolved, err := c.resolveChannel(channel)
+	if err != nil {
+		return "", fmt.Errorf("discord: チャンネル解決に失敗: %w", err)
+	}
 	chunks := splitMessage(text, 2000)
 	var lastID string
 	for _, chunk := range chunks {
-		msg, err := c.session.ChannelMessageSend(channel, chunk)
+		msg, err := c.session.ChannelMessageSend(resolved, chunk)
 		if err != nil {
 			return "", fmt.Errorf("discord: 送信に失敗: %w", err)
 		}
 		lastID = msg.ID
 	}
 	return lastID, nil
+}
+
+// resolveChannel returns channel as-is if it's in the session state cache.
+// Otherwise it tries UserChannelCreate in case channel is a user ID (for DMs).
+func (c *Chat) resolveChannel(channel string) (string, error) {
+	// Fast path: check in-memory state (no API call).
+	if _, err := c.session.State.Channel(channel); err == nil {
+		return channel, nil
+	}
+	// Not in state cache — could be a user ID for DM.
+	ch, err := c.session.UserChannelCreate(channel)
+	if err != nil {
+		// Not a user ID either. Return the original channel and let the
+		// caller's ChannelMessageSend surface the real Discord error.
+		return channel, nil
+	}
+	c.log.Info("discord: ユーザーIDからDMチャンネルに解決", "user_id", channel, "dm_channel", ch.ID)
+	return ch.ID, nil
 }
 
 // SendReply sends a reply to replyToID and returns the Discord message ID of the last chunk.

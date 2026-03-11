@@ -2,8 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -114,12 +117,21 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 			msg.Channel, time.Now())
 	}
 
-	// Describe attached images via VLM (if configured).
-	if a.llm != nil && a.llm.HasVision() {
+	// Handle attached images.
+	if a.llm != nil {
 		if urls := extractImageURLs(evt); len(urls) > 0 {
-			descriptions := a.describeImages(ctx, urls)
-			if descriptions != "" {
-				msg.Content += "\n" + descriptions
+			if a.llm.IsVisionCapable() {
+				// Vision-capable LLM: convert to base64 data URIs so any provider can read them.
+				dataURIs := a.downloadAsDataURIs(ctx, urls)
+				if len(dataURIs) > 0 {
+					msg.ImageURLs = dataURIs
+				}
+			} else if a.llm.HasVision() {
+				// Separate VLM: describe images as text.
+				descriptions := a.describeImages(ctx, urls)
+				if descriptions != "" {
+					msg.Content += "\n" + descriptions
+				}
 			}
 		}
 	}
@@ -179,6 +191,45 @@ func (a *Agent) describeImages(ctx context.Context, urls []string) string {
 		parts = append(parts, fmt.Sprintf("[添付画像%d: %s]", i+1, desc))
 	}
 	return strings.Join(parts, "\n")
+}
+
+// downloadAsDataURIs downloads images and converts them to base64 data URIs.
+// This avoids provider-side URL access issues (e.g. zhipu can't reach Discord CDN)
+// and URL expiration problems.
+func (a *Agent) downloadAsDataURIs(ctx context.Context, urls []string) []string {
+	const maxImages = 4
+	const maxBytes = 10 * 1024 * 1024 // 10 MB per image
+	if len(urls) > maxImages {
+		urls = urls[:maxImages]
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	var out []string
+	for _, u := range urls {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			a.logger.Warn("画像ダウンロード: リクエスト作成失敗", "url", u, "error", err)
+			continue
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			a.logger.Warn("画像ダウンロード: 取得失敗", "url", u, "error", err)
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
+		resp.Body.Close()
+		if err != nil || len(data) == 0 {
+			a.logger.Warn("画像ダウンロード: 読み取り失敗", "url", u, "error", err)
+			continue
+		}
+		mime := resp.Header.Get("Content-Type")
+		if mime == "" || !strings.HasPrefix(mime, "image/") {
+			mime = "image/png"
+		}
+		dataURI := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
+		out = append(out, dataURI)
+	}
+	return out
 }
 
 // injectChannelHistory fetches recent messages for a channel not yet seen

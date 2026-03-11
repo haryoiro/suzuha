@@ -506,12 +506,29 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			http.Error(w, `{"error":"provider and model required"}`, http.StatusBadRequest)
 			return
 		}
-		// Fall back to config defaults when api_key/api_base/max_ctx are omitted.
+		// Resolve well-known API base per provider.
+		if body.APIBase == "" {
+			switch body.Provider {
+			case "openai":
+				body.APIBase = "https://api.openai.com/v1"
+			case "zhipu":
+				body.APIBase = "https://open.bigmodel.cn/api/paas/v4"
+			case "qwen":
+				body.APIBase = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+			}
+		}
+		// Resolve API key: find a preset whose provider AND api_base match,
+		// then fall back to config default.
+		if body.APIKey == "" {
+			for _, p := range cfg.LLM.Presets {
+				if p.Provider == body.Provider && p.APIBase == body.APIBase && p.APIKey != "" {
+					body.APIKey = p.APIKey
+					break
+				}
+			}
+		}
 		if body.APIKey == "" {
 			body.APIKey = cfg.LLM.APIKey
-		}
-		if body.APIBase == "" {
-			body.APIBase = cfg.LLM.APIBase
 		}
 		if body.MaxCtx <= 0 {
 			body.MaxCtx = cfg.LLM.MaxTokens

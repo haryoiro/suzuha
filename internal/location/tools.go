@@ -237,17 +237,11 @@ type reverseGeocodeInput struct {
 }
 
 type nominatimResponse struct {
-	DisplayName string `json:"display_name"`
-	Address     struct {
-		Road        string `json:"road"`
-		Suburb      string `json:"suburb"`
-		City        string `json:"city"`
-		Town        string `json:"town"`
-		Village     string `json:"village"`
-		State       string `json:"state"`
-		Country     string `json:"country"`
-		Postcode    string `json:"postcode"`
-	} `json:"address"`
+	DisplayName string            `json:"display_name"`
+	Address     map[string]string `json:"address"`
+	Type        string            `json:"type"`
+	Category    string            `json:"category"`
+	Name        string            `json:"name"`
 }
 
 func (t *ReverseGeocode) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
@@ -283,30 +277,27 @@ func (t *ReverseGeocode) Execute(ctx context.Context, input json.RawMessage) (*t
 		return tool.ErrorResult("レスポンスの解析に失敗しました: " + err.Error()), nil
 	}
 
-	a := nr.Address
-	locality := a.City
-	if locality == "" {
-		locality = a.Town
+	var sb strings.Builder
+	sb.WriteString(nr.DisplayName)
+	sb.WriteString("\n")
+	if nr.Category != "" || nr.Type != "" {
+		fmt.Fprintf(&sb, "category=%s type=%s", nr.Category, nr.Type)
+		if nr.Name != "" {
+			fmt.Fprintf(&sb, " name=%s", nr.Name)
+		}
+		sb.WriteString("\n")
 	}
-	if locality == "" {
-		locality = a.Village
-	}
-
-	var parts []string
-	if a.Country != "" {
-		parts = append(parts, a.Country)
-	}
-	if a.State != "" {
-		parts = append(parts, a.State)
-	}
-	if locality != "" {
-		parts = append(parts, locality)
+	if len(nr.Address) > 0 {
+		for k, v := range nr.Address {
+			fmt.Fprintf(&sb, "  %s: %s\n", k, v)
+		}
 	}
 
-	if len(parts) == 0 {
+	out := sb.String()
+	if out == "\n" {
 		return tool.TextResult("地名が見つかりませんでした。"), nil
 	}
-	return tool.TextResult(strings.Join(parts, " ")), nil
+	return tool.TextResult(out), nil
 }
 
 var _ tool.Tool = (*ReverseGeocode)(nil)
