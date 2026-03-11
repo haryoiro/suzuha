@@ -308,6 +308,7 @@ func buildSelfPrompt(
 	sb.WriteString("同じようなことの繰り返しにならないように\n\n")
 	sb.WriteString("- 短く自然に 綺麗にまとめない\n")
 	sb.WriteString("- 絵文字・顔文字は使わない\n")
+	sb.WriteString("- 特に何もなければ skip_response ツールを呼んでスキップしてよい\n")
 
 	return sb.String()
 }
