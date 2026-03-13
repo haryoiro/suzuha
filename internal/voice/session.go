@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -165,6 +166,11 @@ func (s *Session) SendPCM(pcm []byte) error {
 		return fmt.Errorf("voice: VCに接続されていません")
 	}
 
+	// Wait for DAVE key ratchet to be ready before sending.
+	if err := s.waitForDAVEReady(); err != nil {
+		return err
+	}
+
 	// Set speaking flag.
 	ctx := context.Background()
 	if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
@@ -193,9 +199,22 @@ func (s *Session) SendPCM(pcm []byte) error {
 			return fmt.Errorf("voice: Opusエンコード失敗: %w", err)
 		}
 
-		// Send via disgo's UDP connection.
+		// Send via disgo's UDP connection with retry on DAVE key errors.
 		if _, err := udp.Write(opusBuf[:n]); err != nil {
-			return fmt.Errorf("voice: Opus送信失敗: %w", err)
+			if strings.Contains(err.Error(), "missing key ratchet") {
+				// DAVE key transition in progress — wait and retry this frame.
+				s.logger.Debug("voice: DAVE鍵待機中（送信中リトライ）")
+				if waitErr := s.waitForDAVEReady(); waitErr != nil {
+					return waitErr
+				}
+				// Re-set speaking flag after waiting.
+				_ = s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone)
+				if _, err := udp.Write(opusBuf[:n]); err != nil {
+					return fmt.Errorf("voice: Opus送信失敗（リトライ後）: %w", err)
+				}
+			} else {
+				return fmt.Errorf("voice: Opus送信失敗: %w", err)
+			}
 		}
 
 		// Pace at 20ms per frame to avoid flooding.
@@ -205,6 +224,30 @@ func (s *Session) SendPCM(pcm []byte) error {
 	// Clear speaking flag.
 	_ = s.conn.SetSpeaking(ctx, 0)
 	return nil
+}
+
+// waitForDAVEReady probes the UDP connection with a silent Opus frame to check
+// if the DAVE key ratchet is ready. Retries up to 5 seconds.
+func (s *Session) waitForDAVEReady() error {
+	udp := s.conn.UDP()
+
+	// 960 samples of silence encoded as a minimal Opus frame.
+	silenceFrame := []byte{0xF8, 0xFF, 0xFE}
+
+	for i := range 25 { // 25 * 200ms = 5s max
+		_, err := udp.Write(silenceFrame)
+		if err == nil {
+			if i > 0 {
+				s.logger.Info("voice: DAVE鍵準備完了", "waited_ms", i*200)
+			}
+			return nil
+		}
+		if !strings.Contains(err.Error(), "missing key ratchet") {
+			return fmt.Errorf("voice: DAVE鍵待機中にエラー: %w", err)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("voice: DAVE鍵ラチェットが5秒以内に準備できませんでした")
 }
 
 // IsConnected returns true if currently connected to a voice channel.

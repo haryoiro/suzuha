@@ -1,0 +1,17 @@
+dependencies:
+  espressif/esp_websocket_client: "~1.2.0"
+  espressif/esp_wifi_remote:
+    version: "*"
+    rules:
+      - if: "idf_version >=5.5.0"
+      - if: "target in [esp32p4]"
+  espressif/esp32-camera:
+    version: "*"
+    rules:
+      - if: "target in [esp32, esp32s2, esp32s3]"
+  waveshare/esp32_p4_nano:
+    version: "*"
+    rules:
+      - if: "target in [esp32p4]"
+  idf:
+    version: ">=5.5.0"

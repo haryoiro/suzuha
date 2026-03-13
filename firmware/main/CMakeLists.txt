@@ -1,0 +1,25 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "wifi.c"
+        "ws_client.c"
+        "camera_task.c"
+        "audio_task.c"
+        "speaker_task.c"
+        "display_task.c"
+        "servo_task.c"
+    INCLUDE_DIRS "."
+    PRIV_REQUIRES
+        esp_wifi
+        esp_event
+        esp_netif
+        nvs_flash
+        esp_http_client
+        espressif__esp_websocket_client
+        json
+        driver
+        esp_driver_i2s
+        esp_driver_mcpwm
+        esp_driver_gpio
+        esp_timer
+)

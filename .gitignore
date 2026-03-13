@@ -36,6 +36,10 @@ config.suzuha1.yaml
 *.swp
 *.swo
 
+# Firmware build artifacts
+firmware/build-*/
+firmware/build/
+
 # OS
 .DS_Store
 Thumbs.db

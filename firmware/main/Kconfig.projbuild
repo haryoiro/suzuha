@@ -1,0 +1,33 @@
+menu "Suzuha Physical Agent"
+
+    config WIFI_SSID
+        string "WiFi SSID"
+        default ""
+        help
+            WiFi network name.
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default ""
+        help
+            WiFi password.
+
+    config SERVER_URI
+        string "suzuha2 Server WebSocket URI"
+        default "ws://192.168.1.100:9090/ws/device"
+        help
+            WebSocket endpoint on the suzuha2 server.
+
+    config SERVO_PAN_GPIO
+        int "Servo Pan GPIO"
+        default 6
+        help
+            GPIO pin for the pan servo.
+
+    config SERVO_TILT_GPIO
+        int "Servo Tilt GPIO"
+        default 7
+        help
+            GPIO pin for the tilt servo.
+
+endmenu

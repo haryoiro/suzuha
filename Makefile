@@ -1,4 +1,4 @@
-.PHONY: dev-admin dev-admin-api dev-admin-web build-admin proto api
+.PHONY: dev-admin dev-admin-api dev-admin-web build-admin proto api firmware-p4 firmware-esp32 firmware-all
 
 # gRPC コード生成
 proto:
@@ -33,6 +33,15 @@ dev-admin-api:
 # Vite dev server のみ
 dev-admin-web:
 	cd web/admin && pnpm run dev
+
+# ファームウェアビルド
+firmware-p4:
+	docker compose build firmware-p4
+
+firmware-esp32:
+	docker compose build firmware-esp32
+
+firmware-all: firmware-p4 firmware-esp32
 
 # 本番ビルド
 build-admin:

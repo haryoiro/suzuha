@@ -176,7 +176,7 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 			ttsClient := voice.NewVoicevox(cfg.Voice.VoicevoxURL, cfg.Voice.SpeakerID)
 			dc.SetupVoice(sttClient, ttsClient)
 			if vp := dc.VoicePipeline(); vp != nil {
-				registry.Register(discord.NewVoiceJoin(vp, cfg.Voice.AllowedChannels, logger))
+				registry.Register(discord.NewVoiceJoin(vp, s, cfg.Voice.AllowedChannels, logger))
 				registry.Register(discord.NewVoiceLeave(vp, s, logger))
 				ag.SetVoiceSpeaker(vp)
 				logger.Info("voice tools registered")
@@ -517,9 +517,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 				body.APIBase = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 			}
 		}
-		// Resolve API key: find a preset whose provider AND api_base match,
-		// then fall back to config default.
+		// Resolve API key: first try preset with exact provider+api_base match,
+		// then try provider-only match, then fall back to config default
+		// only when the provider matches.
 		if body.APIKey == "" {
+			// Exact match: provider AND api_base.
 			for _, p := range cfg.LLM.Presets {
 				if p.Provider == body.Provider && p.APIBase == body.APIBase && p.APIKey != "" {
 					body.APIKey = p.APIKey
@@ -528,6 +530,15 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			}
 		}
 		if body.APIKey == "" {
+			// Loose match: provider only.
+			for _, p := range cfg.LLM.Presets {
+				if p.Provider == body.Provider && p.APIKey != "" {
+					body.APIKey = p.APIKey
+					break
+				}
+			}
+		}
+		if body.APIKey == "" && body.Provider == cfg.LLM.Provider {
 			body.APIKey = cfg.LLM.APIKey
 		}
 		if body.MaxCtx <= 0 {

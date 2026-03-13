@@ -98,6 +98,22 @@ services:
     depends_on:
       - agent
 
+  firmware-p4:
+    build:
+      context: ./firmware
+      args:
+        TARGET: esp32p4
+    profiles:
+      - firmware
+
+  firmware-esp32:
+    build:
+      context: ./firmware
+      args:
+        TARGET: esp32
+    profiles:
+      - firmware
+
 volumes:
   go-mod-cache:
   go-build-cache:
