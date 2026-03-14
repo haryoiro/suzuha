@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"slices"
 	"strings"
@@ -9,11 +10,48 @@ import (
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
+
+func base64encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+// modalityFromMime returns the embedding Modality for a MIME type.
+func modalityFromMime(mime string) embedding.Modality {
+	switch {
+	case strings.HasPrefix(mime, "image/"):
+		return embedding.ModalityImage
+	case strings.HasPrefix(mime, "audio/"):
+		return embedding.ModalityAudio
+	default:
+		return embedding.ModalityText
+	}
+}
+
+// parseDataURI extracts binary data and MIME type from a data URI.
+// Returns (nil, "") if the URI is not a valid data URI.
+func parseDataURI(uri string) ([]byte, string) {
+	// data:image/png;base64,iVBOR...
+	if !strings.HasPrefix(uri, "data:") {
+		return nil, ""
+	}
+	commaIdx := strings.Index(uri, ",")
+	if commaIdx < 0 {
+		return nil, ""
+	}
+	header := uri[5:commaIdx] // "image/png;base64"
+	mime := strings.TrimSuffix(header, ";base64")
+	data, err := base64.StdEncoding.DecodeString(uri[commaIdx+1:])
+	if err != nil {
+		return nil, ""
+	}
+	return data, mime
+}
 
 // Conversation-state thresholds — tunables for directive priority 2 & 3.
 const (
@@ -81,7 +119,7 @@ func (a *Agent) conversationState(channel string) convState {
 func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	// Build ephemeral context in parallel.
 	var (
-		memMsg   string
+		memMsgs  []llm.Message
 		locMsg   string
 		profiles []llm.Message
 		wg       sync.WaitGroup
@@ -90,7 +128,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			memMsg = a.buildMemoryContext(ctx, p.LastMessage.Content)
+			memMsgs = a.buildMemoryContext(ctx, p.LastMessage.Content, p.LastMessage.ImageURLs)
 		}()
 	}
 	wg.Add(1)
@@ -108,10 +146,8 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	wg.Wait()
 
 	var ephemeral []llm.Message
-	if memMsg != "" {
-		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: memMsg, Timestamp: jtime.Now(),
-		})
+	if len(memMsgs) > 0 {
+		ephemeral = append(ephemeral, memMsgs...)
 	}
 	if locMsg != "" {
 		ephemeral = append(ephemeral, llm.Message{
@@ -170,22 +206,118 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 }
 
 // buildMemoryContext searches long-term memory and returns relevant results
-// as a string. Returns "" if no relevant memories found.
-func (a *Agent) buildMemoryContext(ctx context.Context, query string) string {
-	memories, err := a.memory.Search(ctx, query, 3)
+// as LLM messages. If imageURLs are provided (data URIs from Discord),
+// also performs multimodal vector search. Attachments (images) are loaded
+// from MediaStore and included as data URIs for vision-capable LLMs.
+func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs []string) []llm.Message {
+	memories, err := a.memory.Search(ctx, query, 5)
 	if err != nil {
 		a.logger.Debug("メモリ検索失敗", "error", err)
-		return ""
-	}
-	if len(memories) == 0 {
-		return ""
 	}
 
-	content := "Relevant memories:\n"
-	for _, m := range memories {
-		content += fmt.Sprintf("- [%s] %s\n", m.Type, m.Content)
+	// If media (images/audio) are present, also search by media embedding.
+	if len(imageURLs) > 0 {
+		for _, dataURI := range imageURLs {
+			data, mime := parseDataURI(dataURI)
+			if data == nil {
+				continue
+			}
+			modality := modalityFromMime(mime)
+			parts := []embedding.Part{{
+				Modality: modality,
+				Data:     data,
+				MimeType: mime,
+			}}
+			mediaResults, err := a.memory.SearchByParts(ctx, parts, 5)
+			if err != nil {
+				a.logger.Debug("メディアメモリ検索失敗", "error", err)
+				continue
+			}
+			// Deduplicate with text results.
+			seen := make(map[string]bool, len(memories))
+			for _, m := range memories {
+				seen[m.ID] = true
+			}
+			for _, m := range mediaResults {
+				if !seen[m.ID] {
+					memories = append(memories, m)
+					seen[m.ID] = true
+				}
+			}
+		}
 	}
-	return content
+
+	if len(memories) == 0 {
+		return nil
+	}
+
+	// Build text summary of all memories with attribution.
+	var textParts []string
+	for _, m := range memories {
+		label := string(m.Type)
+		if m.Metadata != nil {
+			if uid, ok := m.Metadata["user_id"].(string); ok && uid != "" {
+				label += " user_id=" + uid
+			}
+			switch v := m.Metadata["participants"].(type) {
+			case []any:
+				var ids []string
+				for _, p := range v {
+					if s, ok := p.(string); ok {
+						ids = append(ids, s)
+					}
+				}
+				if len(ids) > 0 {
+					label += " participants=" + strings.Join(ids, ",")
+				}
+			case []string:
+				if len(v) > 0 {
+					label += " participants=" + strings.Join(v, ",")
+				}
+			}
+			if tone, ok := m.Metadata["emotional_tone"].(string); ok && tone != "" {
+				label += " tone=" + tone
+			}
+		}
+		textParts = append(textParts, fmt.Sprintf("- [%s] %s (%s)", label, m.Content, m.CreatedAt.Format("2006-01-02")))
+	}
+	textContent := "Relevant memories:\n" + strings.Join(textParts, "\n")
+
+	// Collect image data URIs from attachments.
+	var attachedImages []string
+	if a.mediaStore != nil {
+		for _, m := range memories {
+			for _, att := range m.Attachments {
+				if att.Modality != "image" {
+					continue
+				}
+				data, err := a.mediaStore.Get(ctx, att.Key)
+				if err != nil {
+					a.logger.Debug("メモリ添付画像の読み込み失敗", "key", att.Key, "error", err)
+					continue
+				}
+				dataURI := fmt.Sprintf("data:%s;base64,%s",
+					att.MimeType, base64encode(data))
+				attachedImages = append(attachedImages, dataURI)
+			}
+		}
+	}
+
+	if len(attachedImages) > 0 {
+		// Use "user" role so vision-capable LLMs process the images.
+		return []llm.Message{{
+			Role:      "user",
+			Content:   "[Memory context with images]\n" + textContent,
+			ImageURLs: attachedImages,
+			Timestamp: jtime.Now(),
+		}}
+	}
+
+	return []llm.Message{{
+		Role:      "system",
+		Content:   textContent,
+		Timestamp: jtime.Now(),
+	}}
 }
 
 // buildUserProfiles collects ephemeral profile messages for all users

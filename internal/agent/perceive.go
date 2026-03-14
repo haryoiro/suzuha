@@ -110,14 +110,19 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) llm.Message {
 	// Handle attached images.
 	if a.llm != nil {
 		if urls := extractImageURLs(evt); len(urls) > 0 {
+			// Download, persist to MediaStore, and create data URIs.
+			dataURIs, mediaKeys := a.downloadAndPersistImages(ctx, urls, msg.MessageID)
+			if len(dataURIs) > 0 {
+				msg.ImageURLs = dataURIs
+			}
+			if len(mediaKeys) > 0 {
+				msg.MediaKeys = mediaKeys
+			}
+
 			if a.llm.IsVisionCapable() {
-				// Vision-capable LLM: convert to base64 data URIs so any provider can read them.
-				dataURIs := a.downloadAsDataURIs(ctx, urls)
-				if len(dataURIs) > 0 {
-					msg.ImageURLs = dataURIs
-				}
+				// Vision-capable LLM: data URIs already set above.
 			} else if a.llm.HasVision() {
-				// Separate VLM: describe images as text.
+				// Separate VLM: also describe images as text for the main LLM.
 				descriptions := a.describeImages(ctx, urls)
 				if descriptions != "" {
 					msg.Content += "\n" + descriptions
@@ -183,10 +188,9 @@ func (a *Agent) describeImages(ctx context.Context, urls []string) string {
 	return strings.Join(parts, "\n")
 }
 
-// downloadAsDataURIs downloads images and converts them to base64 data URIs.
-// This avoids provider-side URL access issues (e.g. zhipu can't reach Discord CDN)
-// and URL expiration problems.
-func (a *Agent) downloadAsDataURIs(ctx context.Context, urls []string) []string {
+// downloadAndPersistImages downloads images, saves them to MediaStore,
+// and returns both data URIs (for LLM context) and media keys (for memory linking).
+func (a *Agent) downloadAndPersistImages(ctx context.Context, urls []string, messageID string) (dataURIs, mediaKeys []string) {
 	const maxImages = 4
 	const maxBytes = 10 * 1024 * 1024 // 10 MB per image
 	if len(urls) > maxImages {
@@ -194,8 +198,7 @@ func (a *Agent) downloadAsDataURIs(ctx context.Context, urls []string) []string 
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	var out []string
-	for _, u := range urls {
+	for i, u := range urls {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
 			a.logger.Warn("画像ダウンロード: リクエスト作成失敗", "url", u, "error", err)
@@ -217,9 +220,36 @@ func (a *Agent) downloadAsDataURIs(ctx context.Context, urls []string) []string 
 			mime = "image/png"
 		}
 		dataURI := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
-		out = append(out, dataURI)
+		dataURIs = append(dataURIs, dataURI)
+
+		// Persist to MediaStore if available.
+		if a.mediaStore != nil {
+			ext := extFromMimeType(mime)
+			key := fmt.Sprintf("messages/%s/%d%s", messageID, i, ext)
+			if err := a.mediaStore.Put(ctx, key, data); err != nil {
+				a.logger.Warn("画像の永続化に失敗", "key", key, "error", err)
+			} else {
+				mediaKeys = append(mediaKeys, key)
+				a.logger.Debug("画像を永続化", "key", key, "size", len(data))
+			}
+		}
 	}
-	return out
+	return
+}
+
+func extFromMimeType(mime string) string {
+	switch mime {
+	case "image/png":
+		return ".png"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".bin"
+	}
 }
 
 // injectChannelHistory fetches recent messages for a channel not yet seen

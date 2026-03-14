@@ -16,10 +16,12 @@ const jinaReaderPrefix = "https://r.jina.ai/"
 
 // SearchResult represents a single search result from SearXNG.
 type SearchResult struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	Content string `json:"content"` // snippet
-	Engine  string `json:"engine"`
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Content   string `json:"content"`   // snippet
+	Engine    string `json:"engine"`
+	Thumbnail string `json:"thumbnail"` // thumbnail URL (optional)
+	ImgSrc    string `json:"img_src"`   // full image URL (optional, images category)
 }
 
 // SearXNGClient queries a self-hosted SearXNG instance.

@@ -38,6 +38,7 @@ type Agent struct {
 	db              *sql.DB // shared DB for channel activity tracking
 	channelSettings *channelpkg.Store
 	locationStore   *location.Store
+	mediaStore      memory.MediaStore
 	logger          *slog.Logger
 	metrics         *observe.Metrics
 	hooks           []PipelineHook
@@ -173,6 +174,11 @@ func (a *Agent) SetLocationStore(s *location.Store) {
 	a.locationStore = s
 }
 
+// SetMediaStore sets the media store for loading memory attachments.
+func (a *Agent) SetMediaStore(s memory.MediaStore) {
+	a.mediaStore = s
+}
+
 // LastEphemeral returns the most recently injected ephemeral messages.
 func (a *Agent) LastEphemeral() []llm.Message {
 	a.lastEphemeralMu.RLock()
@@ -235,6 +241,20 @@ func (a *Agent) Run(ctx context.Context) error {
 			if err := a.handleBatch(ctx, batch); err != nil {
 				a.logger.Error("イベント処理失敗", "error", err.Error())
 			}
+
+			// After processing, catch up on any events that arrived during
+			// handleBatch. Stale batches are ingested into context (Perceive
+			// + Reflect only); only the latest batch gets full pipeline.
+			if latest := a.catchUpStale(ctx, events); len(latest) > 0 {
+				if a.metrics != nil {
+					for _, e := range latest {
+						a.metrics.EventsTotal.WithLabelValues(e.Source, e.Type).Inc()
+					}
+				}
+				if err := a.handleBatch(ctx, latest); err != nil {
+					a.logger.Error("イベント処理失敗", "error", err.Error())
+				}
+			}
 		}
 	}
 }
@@ -281,6 +301,51 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	a.Reflect(ctx, p)
 	a.runHooks(func(h PipelineHook) error { return h.AfterReflect(ctx, p) })
 	return nil
+}
+
+// catchUpStale drains queued events, ingests them all into context
+// (Perceive-only), and returns only the final batch for full pipeline
+// processing. This keeps conversation history complete while skipping
+// LLM responses to stale messages — critical for voice tempo.
+// Returns nil if no events were queued.
+func (a *Agent) catchUpStale(ctx context.Context, events <-chan event.Event) []event.Event {
+	var latest []event.Event
+	for {
+		select {
+		case evt := <-events:
+			// If we had a previous batch, perceive-only (ingest without responding).
+			if len(latest) > 0 {
+				p := a.Perceive(ctx, latest)
+				if p != nil {
+					a.logger.Info("スキップ: 古いバッチを取り込み済み（応答なし）",
+						"batch_size", len(latest), "channel", p.Channel)
+					a.Reflect(ctx, p)
+				}
+			}
+			// Start a new "latest" batch and drain within the window.
+			latest = []event.Event{evt}
+			if a.drainWindow > 0 {
+				timer := time.NewTimer(a.drainWindow)
+			drainCatchUp:
+				for {
+					select {
+					case e := <-events:
+						latest = append(latest, e)
+						timer.Reset(a.drainWindow)
+					case <-timer.C:
+						break drainCatchUp
+					case <-ctx.Done():
+						timer.Stop()
+						return nil
+					}
+				}
+				timer.Stop()
+			}
+		default:
+			// No more events queued.
+			return latest
+		}
+	}
 }
 
 // ReloadPrompt updates the system prompt.
