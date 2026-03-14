@@ -2,14 +2,20 @@ package voice
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/event"
 )
+
+func base64EncodeBytes(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
+}
 
 // Pipeline bridges voice input/output with the agent's text pipeline.
 // It manages voice sessions, STT, and TTS.
@@ -19,6 +25,7 @@ type Pipeline struct {
 	stt            STT
 	tts            TTS
 	logger         *slog.Logger
+	streamWatcher  *StreamWatcher
 
 	mu       sync.Mutex
 	sessions map[string]*Session // guildID -> Session
@@ -26,13 +33,63 @@ type Pipeline struct {
 
 // NewPipeline creates a voice pipeline.
 func NewPipeline(ds *discordgo.Session, bus *event.Bus, sttClient STT, ttsClient TTS, logger *slog.Logger) *Pipeline {
-	return &Pipeline{
+	p := &Pipeline{
 		discordSession: ds,
 		bus:            bus,
 		stt:            sttClient,
 		tts:            ttsClient,
 		logger:         logger,
 		sessions:       make(map[string]*Session),
+	}
+
+	// Stream preview watcher (disabled for now — debugging voice output).
+	// sw := NewStreamWatcher(ds, logger)
+	// sw.OnPreview(p.handleStreamPreview)
+	// sw.Start()
+	// p.streamWatcher = sw
+
+	return p
+}
+
+// handleStreamPreview is called when a stream preview image is captured.
+func (p *Pipeline) handleStreamPreview(guildID string, jpeg []byte) {
+	if len(jpeg) == 0 {
+		return
+	}
+
+	dataURI := "data:image/jpeg;base64," + base64EncodeBytes(jpeg)
+
+	// Find the voice channel for this guild.
+	var channelID, guildName string
+	p.mu.Lock()
+	if sess, ok := p.sessions[guildID]; ok {
+		channelID = sess.channelID
+	}
+	p.mu.Unlock()
+	if g, err := p.discordSession.State.Guild(guildID); err == nil {
+		guildName = g.Name
+	}
+
+	evt := event.NewMessageEvent("discord", event.MessagePayload{
+		Content:     "[画面共有の映像]",
+		Channel:     channelID,
+		UserID:      "",
+		UserName:    "screen-share",
+		ImageURLs:   []string{dataURI},
+		IsMention:   false,
+		IsVoice:     true,
+		GuildID:     guildID,
+		GuildName:   guildName,
+		ChannelName: "voice",
+	})
+	p.bus.Publish(evt)
+	p.logger.Debug("stream: プレビュー画像をイベントバスに発行", "guild", guildID, "size", len(jpeg))
+}
+
+// SetSpeakerID changes the VOICEVOX speaker ID at runtime.
+func (p *Pipeline) SetSpeakerID(id int) {
+	if vc, ok := p.tts.(*VoicevoxClient); ok {
+		vc.SetSpeakerID(id)
 	}
 }
 
@@ -118,8 +175,9 @@ func (p *Pipeline) handleSpeech(ctx context.Context, guildID, channelID, userID 
 		return
 	}
 
-	if text == "" {
-		p.logger.Debug("voice: 空の文字起こし結果", "user_id", userID)
+	text = strings.TrimSpace(text)
+	if text == "" || isWhisperHallucination(text) {
+		p.logger.Debug("voice: 無視（空またはハルシネーション）", "user_id", userID, "text", text)
 		return
 	}
 
@@ -188,4 +246,27 @@ func monoToStereo(mono []byte) []byte {
 		copy(stereo[i*4+2:], sample) // right
 	}
 	return stereo
+}
+
+// whisperHallucinations contains phrases that Whisper commonly hallucinates
+// when given silence or noise input.
+var whisperHallucinations = []string{
+	"ありがとうございました",
+	"ご視聴ありがとうございました",
+	"チャンネル登録お願いします",
+	"おやすみなさい",
+	"お疲れ様でした",
+	"よろしくお願いします",
+	"ではまた",
+}
+
+// isWhisperHallucination returns true if the text matches a known Whisper hallucination.
+func isWhisperHallucination(text string) bool {
+	normalized := strings.TrimRight(text, "。、！!.… \n")
+	for _, h := range whisperHallucinations {
+		if normalized == h {
+			return true
+		}
+	}
+	return false
 }

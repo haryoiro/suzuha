@@ -166,25 +166,47 @@ func (s *Session) SendPCM(pcm []byte) error {
 		return fmt.Errorf("voice: VCに接続されていません")
 	}
 
+	// 20ms frame at 48kHz stereo = 960 samples * 2 channels = 1920 int16 samples = 3840 bytes.
+	const frameSamples = 960
+	const frameBytes = frameSamples * 2 * 2 // stereo, 16-bit
+
+	// Serialize all sends per session to avoid speaking flag race conditions.
+	s.encoderMu.Lock()
+	defer s.encoderMu.Unlock()
+
 	// Wait for DAVE key ratchet to be ready before sending.
 	if err := s.waitForDAVEReady(); err != nil {
 		return err
 	}
 
-	// Set speaking flag.
+	// Additional delay for DAVE epoch convergence: give other clients time
+	// to process the MLS epoch transition and derive our sender key.
+	time.Sleep(2 * time.Second)
+
+	// Set speaking flag inside lock to prevent concurrent clear/set races.
 	ctx := context.Background()
 	if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
 		s.logger.Warn("voice: speaking flag 設定失敗", "error", err)
 	}
-
-	// 20ms frame at 48kHz stereo = 960 samples * 2 channels = 1920 int16 samples = 3840 bytes.
-	const frameSamples = 960
-	const frameBytes = frameSamples * 2 * 2 // stereo, 16-bit
-
-	s.encoderMu.Lock()
-	defer s.encoderMu.Unlock()
+	defer func() { _ = s.conn.SetSpeaking(ctx, 0) }()
 
 	udp := s.conn.UDP()
+
+	// Send extended silence frames to prime the Discord audio stream
+	// and allow DAVE epoch convergence on receiving clients.
+	silenceFrame := []byte{0xF8, 0xFF, 0xFE}
+	for range 15 {
+		if _, err := udp.Write(silenceFrame); err != nil {
+			s.logger.Warn("voice: silence frame送信失敗", "error", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	totalFrames := len(pcm) / frameBytes
+	s.logger.Debug("voice: SendPCM開始", "pcm_bytes", len(pcm),
+		"frames", totalFrames, "duration_ms", totalFrames*20)
+
+	var sentFrames int
 	for offset := 0; offset+frameBytes <= len(pcm); offset += frameBytes {
 		// Convert bytes to int16 slice.
 		frame := make([]int16, frameSamples*2) // stereo
@@ -217,12 +239,21 @@ func (s *Session) SendPCM(pcm []byte) error {
 			}
 		}
 
+		sentFrames++
+
 		// Pace at 20ms per frame to avoid flooding.
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// Clear speaking flag.
-	_ = s.conn.SetSpeaking(ctx, 0)
+	s.logger.Debug("voice: 全フレーム送信完了", "sent", sentFrames, "total", totalFrames)
+
+	// Send trailing silence frames before clearing speaking flag.
+	for range 5 {
+		_, _ = udp.Write(silenceFrame)
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	s.logger.Debug("voice: SendPCM完了")
 	return nil
 }
 
@@ -234,7 +265,7 @@ func (s *Session) waitForDAVEReady() error {
 	// 960 samples of silence encoded as a minimal Opus frame.
 	silenceFrame := []byte{0xF8, 0xFF, 0xFE}
 
-	for i := range 25 { // 25 * 200ms = 5s max
+	for i := range 50 { // 50 * 200ms = 10s max
 		_, err := udp.Write(silenceFrame)
 		if err == nil {
 			if i > 0 {
@@ -247,7 +278,7 @@ func (s *Session) waitForDAVEReady() error {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return fmt.Errorf("voice: DAVE鍵ラチェットが5秒以内に準備できませんでした")
+	return fmt.Errorf("voice: DAVE鍵ラチェットが10秒以内に準備できませんでした")
 }
 
 // IsConnected returns true if currently connected to a voice channel.

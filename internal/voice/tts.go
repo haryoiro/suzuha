@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -22,7 +23,27 @@ type TTS interface {
 type VoicevoxClient struct {
 	baseURL    string
 	speakerID  int
+	mu         sync.Mutex
 	httpClient *http.Client
+}
+
+// SetSpeakerID changes the VOICEVOX speaker at runtime.
+func (v *VoicevoxClient) SetSpeakerID(id int) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.speakerID = id
+}
+
+// SpeakerID returns the current speaker ID.
+func (v *VoicevoxClient) SpeakerID() int {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.speakerID
+}
+
+// BaseURL returns the VOICEVOX engine URL.
+func (v *VoicevoxClient) BaseURL() string {
+	return v.baseURL
 }
 
 // NewVoicevox creates a VoicevoxClient.
@@ -66,8 +87,11 @@ func (v *VoicevoxClient) Synthesize(ctx context.Context, text string) ([]byte, e
 }
 
 func (v *VoicevoxClient) audioQuery(ctx context.Context, text string) (json.RawMessage, error) {
+	v.mu.Lock()
+	sid := v.speakerID
+	v.mu.Unlock()
 	u := fmt.Sprintf("%s/audio_query?text=%s&speaker=%d",
-		v.baseURL, url.QueryEscape(text), v.speakerID)
+		v.baseURL, url.QueryEscape(text), sid)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
 	if err != nil {
@@ -93,8 +117,11 @@ func (v *VoicevoxClient) audioQuery(ctx context.Context, text string) (json.RawM
 }
 
 func (v *VoicevoxClient) synthesis(ctx context.Context, query json.RawMessage) ([]byte, error) {
+	v.mu.Lock()
+	sid := v.speakerID
+	v.mu.Unlock()
 	u := fmt.Sprintf("%s/synthesis?speaker=%s",
-		v.baseURL, strconv.Itoa(v.speakerID))
+		v.baseURL, strconv.Itoa(sid))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(query))
 	if err != nil {
