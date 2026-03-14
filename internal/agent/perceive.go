@@ -42,14 +42,11 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 	turnStartIdx := a.ctx.Len()
 	var lastMsg llm.Message
 	var lastEvt event.Event
-	var userCloseness, userInterest float64
 	var directlyAddressed bool
 	for _, evt := range batch {
-		msg, closeness, interest := a.ingestEvent(ctx, evt)
+		msg := a.ingestEvent(ctx, evt)
 		lastMsg = msg
 		lastEvt = evt
-		userCloseness = closeness
-		userInterest = interest
 		if isDirectlyAddressed(evt, a.botID) {
 			directlyAddressed = true
 		}
@@ -67,16 +64,13 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 		IsVoice:           lastEvt.Message.IsVoice,
 		DirectlyAddressed: directlyAddressed,
 		SenderIsBot:       lastEvt.Message.IsBot,
-		MaxCloseness:      userCloseness,
-		MaxInterest:       userInterest,
 		TurnStartIdx:      turnStartIdx,
 	}
 }
 
 // ingestEvent processes a single event: resolves the user, adds the message
 // to context, and injects channel history. It does NOT trigger LLM completion.
-// Returns the message and the user's affinity scores.
-func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, float64, float64) {
+func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) llm.Message {
 	msg := eventToMessage(evt)
 
 	a.logger.Info("イベント受信",
@@ -85,7 +79,6 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 		"channel", msg.Channel, "content", truncate(msg.Content, 100))
 
 	// Resolve user identity (auto-create if not exists).
-	var userCloseness, userInterest float64
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
@@ -93,11 +86,8 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 		} else {
 			if u.DisplayName != "" {
 				msg.UserName = u.DisplayName
-				a.logger.Debug("ユーザー解決済み", "display_name", u.DisplayName, "role", u.Role,
-					"closeness", u.Closeness, "trust", u.Trust, "interest", u.Interest)
+				a.logger.Debug("ユーザー解決済み", "display_name", u.DisplayName, "role", u.Role)
 			}
-			userCloseness = u.Closeness
-			userInterest = u.Interest
 			guildID := evt.Message.GuildID
 			guildName := evt.Message.GuildName
 			channelName := evt.Message.ChannelName
@@ -144,7 +134,7 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) (llm.Message, 
 		a.ctx.Add(msg)
 	}
 
-	return msg, userCloseness, userInterest
+	return msg
 }
 
 // eventToMessage converts an event to an llm.Message.

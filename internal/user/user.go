@@ -2,36 +2,8 @@ package user
 
 import (
 	"context"
-	"math"
 	"time"
 )
-
-// Affinity transformation constants.
-const (
-	AffinityCap = 5.0 // soft cap for each axis
-
-	// Time-based decay weights applied to affinity events by age.
-	WeightRecent  = 1.0 // 0-7 days
-	WeightMonth   = 0.6 // 8-28 days
-	WeightQuarter = 0.3 // 29-90 days
-	WeightOld     = 0.1 // 90+ days
-)
-
-// EffectiveValue transforms a time-weighted raw sum into a bounded effective
-// value using a logarithmic soft cap: sign(x) * cap * (1 - exp(-|x|/cap)).
-// Small values pass through nearly linearly; large values asymptote toward cap.
-func EffectiveValue(weightedSum float64) float64 {
-	if weightedSum == 0 {
-		return 0
-	}
-	sign := 1.0
-	abs := weightedSum
-	if weightedSum < 0 {
-		sign = -1.0
-		abs = -weightedSum
-	}
-	return sign * AffinityCap * (1 - math.Exp(-abs/AffinityCap))
-}
 
 // Role represents a user's permission level.
 type Role string
@@ -49,24 +21,10 @@ type User struct {
 	DisplayName string         `json:"display_name"`
 	Role        Role           `json:"role"`
 	IsBot       bool           `json:"is_bot"`
-	Affinity    float64        `json:"affinity"`   // legacy: sum of all axes
-	Closeness   float64        `json:"closeness"`  // 親密度
-	Trust       float64        `json:"trust"`      // 信頼度
-	Interest    float64        `json:"interest"`   // 関心度
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
-
-// AffinityAxis represents an affinity dimension.
-type AffinityAxis string
-
-// Affinity axis dimensions.
-const (
-	AxisCloseness AffinityAxis = "closeness"
-	AxisTrust     AffinityAxis = "trust"
-	AxisInterest  AffinityAxis = "interest"
-)
 
 // PlatformLink connects an internal user to a platform identity.
 type PlatformLink struct {
@@ -76,19 +34,6 @@ type PlatformLink struct {
 	PlatformUserID string    `json:"platform_user_id"`
 	PlatformName   string    `json:"platform_name"`
 	CreatedAt      time.Time `json:"created_at"`
-}
-
-// AffinityEvent records a single affinity change from consolidation.
-type AffinityEvent struct {
-	ID             string       `json:"id"`
-	UserID         string       `json:"user_id"`
-	Delta          float64      `json:"delta"`
-	Axis           AffinityAxis `json:"axis"` // "closeness" | "trust" | "interest"
-	Reason         string       `json:"reason"`
-	InteractionIDs []string     `json:"interaction_ids,omitempty"`
-	GroupStart     time.Time    `json:"group_start"`
-	GroupEnd       time.Time    `json:"group_end"`
-	CreatedAt      time.Time    `json:"created_at"`
 }
 
 // UserGuild represents a guild+channel association for a user.
@@ -113,12 +58,6 @@ type Store interface {
 	// UpdateDisplayName changes the user's nickname.
 	UpdateDisplayName(ctx context.Context, userID, displayName string) error
 
-	// UpdateAffinity atomically applies an affinity delta and records the event.
-	UpdateAffinity(ctx context.Context, evt *AffinityEvent) error
-
-	// GetAffinity returns recent affinity events for a user.
-	GetAffinity(ctx context.Context, userID string, limit int) ([]AffinityEvent, error)
-
 	// TrackGuildChannel records that a user was seen in a guild+channel.
 	TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error
 
@@ -130,11 +69,7 @@ type Store interface {
 	// Unlike Resolve, this does NOT create the user.
 	ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error)
 
-	// RecalculateEffective recomputes effective affinity values for all users
-	// from their event history, applying time-based decay and soft cap.
-	RecalculateEffective(ctx context.Context) error
-
-	// ListMentionable returns non-bot users with positive affinity
+	// ListMentionable returns non-bot users
 	// who have a discord platform link. Used for mention targeting.
 	ListMentionable(ctx context.Context) ([]MentionableUser, error)
 
@@ -156,9 +91,6 @@ type AdminStore interface {
 	// ListPlatformLinks returns all platform links for a user.
 	ListPlatformLinks(ctx context.Context, userID string) ([]PlatformLink, error)
 
-	// ListAffinityEvents returns affinity events for a user with limit.
-	ListAffinityEvents(ctx context.Context, userID string, limit int) ([]AffinityEvent, error)
-
 	// ListGuilds returns all guilds with member and channel counts.
 	ListGuilds(ctx context.Context) ([]GuildSummary, error)
 
@@ -178,11 +110,8 @@ type UpdateFields struct {
 
 // MentionableUser is a lightweight read model for mention targeting.
 type MentionableUser struct {
-	DisplayName   string  `json:"display_name"`
-	DiscordUserID string  `json:"discord_user_id"`
-	Affinity      float64 `json:"affinity"`
-	Closeness     float64 `json:"closeness"`
-	Interest      float64 `json:"interest"`
+	DisplayName   string `json:"display_name"`
+	DiscordUserID string `json:"discord_user_id"`
 }
 
 // GuildSummary is a read model for the guilds list admin view.

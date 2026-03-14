@@ -12,227 +12,6 @@ import (
 )
 
 // Encode implements json.Marshaler.
-func (s *AffinityEvent) Encode(e *jx.Encoder) {
-	e.ObjStart()
-	s.encodeFields(e)
-	e.ObjEnd()
-}
-
-// encodeFields encodes fields.
-func (s *AffinityEvent) encodeFields(e *jx.Encoder) {
-	{
-		e.FieldStart("id")
-		e.Str(s.ID)
-	}
-	{
-		e.FieldStart("user_id")
-		e.Str(s.UserID)
-	}
-	{
-		e.FieldStart("delta")
-		e.Float64(s.Delta)
-	}
-	{
-		e.FieldStart("axis")
-		s.Axis.Encode(e)
-	}
-	{
-		e.FieldStart("reason")
-		e.Str(s.Reason)
-	}
-	{
-		e.FieldStart("created_at")
-		e.Str(s.CreatedAt)
-	}
-}
-
-var jsonFieldsNameOfAffinityEvent = [6]string{
-	0: "id",
-	1: "user_id",
-	2: "delta",
-	3: "axis",
-	4: "reason",
-	5: "created_at",
-}
-
-// Decode decodes AffinityEvent from json.
-func (s *AffinityEvent) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode AffinityEvent to nil")
-	}
-	var requiredBitSet [1]uint8
-
-	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
-		switch string(k) {
-		case "id":
-			requiredBitSet[0] |= 1 << 0
-			if err := func() error {
-				v, err := d.Str()
-				s.ID = string(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"id\"")
-			}
-		case "user_id":
-			requiredBitSet[0] |= 1 << 1
-			if err := func() error {
-				v, err := d.Str()
-				s.UserID = string(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"user_id\"")
-			}
-		case "delta":
-			requiredBitSet[0] |= 1 << 2
-			if err := func() error {
-				v, err := d.Float64()
-				s.Delta = float64(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"delta\"")
-			}
-		case "axis":
-			requiredBitSet[0] |= 1 << 3
-			if err := func() error {
-				if err := s.Axis.Decode(d); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"axis\"")
-			}
-		case "reason":
-			requiredBitSet[0] |= 1 << 4
-			if err := func() error {
-				v, err := d.Str()
-				s.Reason = string(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"reason\"")
-			}
-		case "created_at":
-			requiredBitSet[0] |= 1 << 5
-			if err := func() error {
-				v, err := d.Str()
-				s.CreatedAt = string(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"created_at\"")
-			}
-		default:
-			return d.Skip()
-		}
-		return nil
-	}); err != nil {
-		return errors.Wrap(err, "decode AffinityEvent")
-	}
-	// Validate required fields.
-	var failures []validate.FieldError
-	for i, mask := range [1]uint8{
-		0b00111111,
-	} {
-		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
-			// Mask only required fields and check equality to mask using XOR.
-			//
-			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
-			// Bits of fields which would be set are actually bits of missed fields.
-			missed := bits.OnesCount8(result)
-			for bitN := 0; bitN < missed; bitN++ {
-				bitIdx := bits.TrailingZeros8(result)
-				fieldIdx := i*8 + bitIdx
-				var name string
-				if fieldIdx < len(jsonFieldsNameOfAffinityEvent) {
-					name = jsonFieldsNameOfAffinityEvent[fieldIdx]
-				} else {
-					name = strconv.Itoa(fieldIdx)
-				}
-				failures = append(failures, validate.FieldError{
-					Name:  name,
-					Error: validate.ErrFieldRequired,
-				})
-				// Reset bit.
-				result &^= 1 << bitIdx
-			}
-		}
-	}
-	if len(failures) > 0 {
-		return &validate.Error{Fields: failures}
-	}
-
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s *AffinityEvent) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *AffinityEvent) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode encodes AffinityEventAxis as json.
-func (s AffinityEventAxis) Encode(e *jx.Encoder) {
-	e.Str(string(s))
-}
-
-// Decode decodes AffinityEventAxis from json.
-func (s *AffinityEventAxis) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode AffinityEventAxis to nil")
-	}
-	v, err := d.StrBytes()
-	if err != nil {
-		return err
-	}
-	// Try to use constant string.
-	switch AffinityEventAxis(v) {
-	case AffinityEventAxisCloseness:
-		*s = AffinityEventAxisCloseness
-	case AffinityEventAxisTrust:
-		*s = AffinityEventAxisTrust
-	case AffinityEventAxisInterest:
-		*s = AffinityEventAxisInterest
-	default:
-		*s = AffinityEventAxis(v)
-	}
-
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s AffinityEventAxis) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *AffinityEventAxis) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode implements json.Marshaler.
 func (s *BoredomStatus) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -7868,18 +7647,6 @@ func (s *User) encodeFields(e *jx.Encoder) {
 		e.Bool(s.IsBot)
 	}
 	{
-		e.FieldStart("closeness")
-		e.Float64(s.Closeness)
-	}
-	{
-		e.FieldStart("trust")
-		e.Float64(s.Trust)
-	}
-	{
-		e.FieldStart("interest")
-		e.Float64(s.Interest)
-	}
-	{
 		if s.Metadata.Set {
 			e.FieldStart("metadata")
 			s.Metadata.Encode(e)
@@ -7903,18 +7670,15 @@ func (s *User) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUser = [11]string{
-	0:  "id",
-	1:  "display_name",
-	2:  "role",
-	3:  "is_bot",
-	4:  "closeness",
-	5:  "trust",
-	6:  "interest",
-	7:  "metadata",
-	8:  "created_at",
-	9:  "updated_at",
-	10: "platforms",
+var jsonFieldsNameOfUser = [8]string{
+	0: "id",
+	1: "display_name",
+	2: "role",
+	3: "is_bot",
+	4: "metadata",
+	5: "created_at",
+	6: "updated_at",
+	7: "platforms",
 }
 
 // Decode decodes User from json.
@@ -7922,7 +7686,7 @@ func (s *User) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode User to nil")
 	}
-	var requiredBitSet [2]uint8
+	var requiredBitSet [1]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -7972,42 +7736,6 @@ func (s *User) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"is_bot\"")
 			}
-		case "closeness":
-			requiredBitSet[0] |= 1 << 4
-			if err := func() error {
-				v, err := d.Float64()
-				s.Closeness = float64(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"closeness\"")
-			}
-		case "trust":
-			requiredBitSet[0] |= 1 << 5
-			if err := func() error {
-				v, err := d.Float64()
-				s.Trust = float64(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"trust\"")
-			}
-		case "interest":
-			requiredBitSet[0] |= 1 << 6
-			if err := func() error {
-				v, err := d.Float64()
-				s.Interest = float64(v)
-				if err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"interest\"")
-			}
 		case "metadata":
 			if err := func() error {
 				s.Metadata.Reset()
@@ -8019,7 +7747,7 @@ func (s *User) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"metadata\"")
 			}
 		case "created_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Str()
 				s.CreatedAt = string(v)
@@ -8031,7 +7759,7 @@ func (s *User) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"created_at\"")
 			}
 		case "updated_at":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				v, err := d.Str()
 				s.UpdatedAt = string(v)
@@ -8043,7 +7771,7 @@ func (s *User) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"updated_at\"")
 			}
 		case "platforms":
-			requiredBitSet[1] |= 1 << 2
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				s.Platforms = make([]Platform, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
@@ -8069,9 +7797,8 @@ func (s *User) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [2]uint8{
-		0b01111111,
-		0b00000111,
+	for i, mask := range [1]uint8{
+		0b11101111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -8757,112 +8484,6 @@ func (s UserRole) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *UserRole) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode implements json.Marshaler.
-func (s *UsersAffinityOK) Encode(e *jx.Encoder) {
-	e.ObjStart()
-	s.encodeFields(e)
-	e.ObjEnd()
-}
-
-// encodeFields encodes fields.
-func (s *UsersAffinityOK) encodeFields(e *jx.Encoder) {
-	{
-		e.FieldStart("data")
-		e.ArrStart()
-		for _, elem := range s.Data {
-			elem.Encode(e)
-		}
-		e.ArrEnd()
-	}
-}
-
-var jsonFieldsNameOfUsersAffinityOK = [1]string{
-	0: "data",
-}
-
-// Decode decodes UsersAffinityOK from json.
-func (s *UsersAffinityOK) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode UsersAffinityOK to nil")
-	}
-	var requiredBitSet [1]uint8
-
-	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
-		switch string(k) {
-		case "data":
-			requiredBitSet[0] |= 1 << 0
-			if err := func() error {
-				s.Data = make([]AffinityEvent, 0)
-				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem AffinityEvent
-					if err := elem.Decode(d); err != nil {
-						return err
-					}
-					s.Data = append(s.Data, elem)
-					return nil
-				}); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrap(err, "decode field \"data\"")
-			}
-		default:
-			return d.Skip()
-		}
-		return nil
-	}); err != nil {
-		return errors.Wrap(err, "decode UsersAffinityOK")
-	}
-	// Validate required fields.
-	var failures []validate.FieldError
-	for i, mask := range [1]uint8{
-		0b00000001,
-	} {
-		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
-			// Mask only required fields and check equality to mask using XOR.
-			//
-			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
-			// Bits of fields which would be set are actually bits of missed fields.
-			missed := bits.OnesCount8(result)
-			for bitN := 0; bitN < missed; bitN++ {
-				bitIdx := bits.TrailingZeros8(result)
-				fieldIdx := i*8 + bitIdx
-				var name string
-				if fieldIdx < len(jsonFieldsNameOfUsersAffinityOK) {
-					name = jsonFieldsNameOfUsersAffinityOK[fieldIdx]
-				} else {
-					name = strconv.Itoa(fieldIdx)
-				}
-				failures = append(failures, validate.FieldError{
-					Name:  name,
-					Error: validate.ErrFieldRequired,
-				})
-				// Reset bit.
-				result &^= 1 << bitIdx
-			}
-		}
-	}
-	if len(failures) > 0 {
-		return &validate.Error{Fields: failures}
-	}
-
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s *UsersAffinityOK) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UsersAffinityOK) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }

@@ -311,27 +311,12 @@ func buildSelfPrompt(
 }
 
 // selectMentionTarget probabilistically picks a user to mention based on boredom.
-// The boredom threshold is lowered when high-interest users are available.
-// Selection is weighted by interest (who we want to talk to).
+// Selection is uniformly random among mentionable users.
 func selectMentionTarget(boredom float64, users []user.MentionableUser) *user.MentionableUser {
 	if len(users) == 0 {
 		return nil
 	}
-	// Find the highest interest among mentionable users.
-	var maxInterest float64
-	for _, u := range users {
-		if u.Interest > maxInterest {
-			maxInterest = u.Interest
-		}
-	}
-	// Lower the boredom threshold for high-interest users.
 	threshold := mentionBoredomMin
-	switch {
-	case maxInterest >= 5.0:
-		threshold = 30.0
-	case maxInterest >= 3.0:
-		threshold = 40.0
-	}
 	if boredom < threshold {
 		return nil
 	}
@@ -339,27 +324,7 @@ func selectMentionTarget(boredom float64, users []user.MentionableUser) *user.Me
 	if rand.Float64() >= prob {
 		return nil
 	}
-	// Weighted random: use interest as weight (minimum 0.1 to give everyone a chance).
-	var totalWeight float64
-	for _, u := range users {
-		w := u.Interest
-		if w < 0.1 {
-			w = 0.1
-		}
-		totalWeight += w
-	}
-	r := rand.Float64() * totalWeight
-	for _, u := range users {
-		w := u.Interest
-		if w < 0.1 {
-			w = 0.1
-		}
-		r -= w
-		if r <= 0 {
-			return &u
-		}
-	}
-	return &users[0]
+	return &users[rand.IntN(len(users))]
 }
 
 // findHomeChannel looks up the home channel from channel_settings.

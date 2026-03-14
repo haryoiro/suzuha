@@ -16,14 +16,6 @@ export function useUser(id: string) {
   });
 }
 
-export function useAffinityEvents(userId: string, limit?: number) {
-  return useQuery({
-    queryKey: ["affinity-events", userId, limit],
-    queryFn: () => usersApi.affinityEvents(userId, limit),
-    enabled: !!userId,
-  });
-}
-
 export function useUserGuilds(userId: string) {
   return useQuery({
     queryKey: ["user-guilds", userId],

@@ -23,9 +23,6 @@ func userToAPI(u user.User, links []user.PlatformLink) api.User {
 		DisplayName: u.DisplayName,
 		Role:        api.UserRole(u.Role),
 		IsBot:       u.IsBot,
-		Closeness:   u.Closeness,
-		Trust:       u.Trust,
-		Interest:    u.Interest,
 		CreatedAt:   u.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt:   u.UpdatedAt.Format("2006-01-02 15:04:05"),
 		Platforms:   platforms,
@@ -78,28 +75,6 @@ func (h *AdminHandler) UsersUpdate(ctx context.Context, req *api.UpdateUserReque
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.OkResponse{Ok: true}, nil
-}
-
-func (h *AdminHandler) UsersAffinity(ctx context.Context, params api.UsersAffinityParams) (*api.UsersAffinityOK, error) {
-	limit := int(params.Limit.Or(50))
-	events, err := h.userStore.ListAffinityEvents(ctx, params.ID, limit)
-	if err != nil {
-		h.logger.Error("親密度イベントの取得に失敗", "error", err.Error())
-		return nil, fmt.Errorf("internal error")
-	}
-
-	data := make([]api.AffinityEvent, 0, len(events))
-	for _, e := range events {
-		data = append(data, api.AffinityEvent{
-			ID:        e.ID,
-			UserID:    e.UserID,
-			Delta:     e.Delta,
-			Axis:      api.AffinityEventAxis(e.Axis),
-			Reason:    e.Reason,
-			CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
-	}
-	return &api.UsersAffinityOK{Data: data}, nil
 }
 
 func (h *AdminHandler) UsersGuilds(ctx context.Context, params api.UsersGuildsParams) (*api.UsersGuildsOK, error) {

@@ -9,124 +9,6 @@ import (
 	"github.com/go-faster/jx"
 )
 
-// Ref: #/components/schemas/AffinityEvent
-type AffinityEvent struct {
-	ID        string            `json:"id"`
-	UserID    string            `json:"user_id"`
-	Delta     float64           `json:"delta"`
-	Axis      AffinityEventAxis `json:"axis"`
-	Reason    string            `json:"reason"`
-	CreatedAt string            `json:"created_at"`
-}
-
-// GetID returns the value of ID.
-func (s *AffinityEvent) GetID() string {
-	return s.ID
-}
-
-// GetUserID returns the value of UserID.
-func (s *AffinityEvent) GetUserID() string {
-	return s.UserID
-}
-
-// GetDelta returns the value of Delta.
-func (s *AffinityEvent) GetDelta() float64 {
-	return s.Delta
-}
-
-// GetAxis returns the value of Axis.
-func (s *AffinityEvent) GetAxis() AffinityEventAxis {
-	return s.Axis
-}
-
-// GetReason returns the value of Reason.
-func (s *AffinityEvent) GetReason() string {
-	return s.Reason
-}
-
-// GetCreatedAt returns the value of CreatedAt.
-func (s *AffinityEvent) GetCreatedAt() string {
-	return s.CreatedAt
-}
-
-// SetID sets the value of ID.
-func (s *AffinityEvent) SetID(val string) {
-	s.ID = val
-}
-
-// SetUserID sets the value of UserID.
-func (s *AffinityEvent) SetUserID(val string) {
-	s.UserID = val
-}
-
-// SetDelta sets the value of Delta.
-func (s *AffinityEvent) SetDelta(val float64) {
-	s.Delta = val
-}
-
-// SetAxis sets the value of Axis.
-func (s *AffinityEvent) SetAxis(val AffinityEventAxis) {
-	s.Axis = val
-}
-
-// SetReason sets the value of Reason.
-func (s *AffinityEvent) SetReason(val string) {
-	s.Reason = val
-}
-
-// SetCreatedAt sets the value of CreatedAt.
-func (s *AffinityEvent) SetCreatedAt(val string) {
-	s.CreatedAt = val
-}
-
-type AffinityEventAxis string
-
-const (
-	AffinityEventAxisCloseness AffinityEventAxis = "closeness"
-	AffinityEventAxisTrust     AffinityEventAxis = "trust"
-	AffinityEventAxisInterest  AffinityEventAxis = "interest"
-)
-
-// AllValues returns all AffinityEventAxis values.
-func (AffinityEventAxis) AllValues() []AffinityEventAxis {
-	return []AffinityEventAxis{
-		AffinityEventAxisCloseness,
-		AffinityEventAxisTrust,
-		AffinityEventAxisInterest,
-	}
-}
-
-// MarshalText implements encoding.TextMarshaler.
-func (s AffinityEventAxis) MarshalText() ([]byte, error) {
-	switch s {
-	case AffinityEventAxisCloseness:
-		return []byte(s), nil
-	case AffinityEventAxisTrust:
-		return []byte(s), nil
-	case AffinityEventAxisInterest:
-		return []byte(s), nil
-	default:
-		return nil, errors.Errorf("invalid value: %q", s)
-	}
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (s *AffinityEventAxis) UnmarshalText(data []byte) error {
-	switch AffinityEventAxis(data) {
-	case AffinityEventAxisCloseness:
-		*s = AffinityEventAxisCloseness
-		return nil
-	case AffinityEventAxisTrust:
-		*s = AffinityEventAxisTrust
-		return nil
-	case AffinityEventAxisInterest:
-		*s = AffinityEventAxisInterest
-		return nil
-	default:
-		return errors.Errorf("invalid value: %q", data)
-	}
-}
-
 // Ref: #/components/schemas/BoredomStatus
 type BoredomStatus struct {
 	Boredom         float64   `json:"boredom"`
@@ -3010,9 +2892,6 @@ type User struct {
 	DisplayName string          `json:"display_name"`
 	Role        UserRole        `json:"role"`
 	IsBot       bool            `json:"is_bot"`
-	Closeness   float64         `json:"closeness"`
-	Trust       float64         `json:"trust"`
-	Interest    float64         `json:"interest"`
 	Metadata    OptUserMetadata `json:"metadata"`
 	CreatedAt   string          `json:"created_at"`
 	UpdatedAt   string          `json:"updated_at"`
@@ -3037,21 +2916,6 @@ func (s *User) GetRole() UserRole {
 // GetIsBot returns the value of IsBot.
 func (s *User) GetIsBot() bool {
 	return s.IsBot
-}
-
-// GetCloseness returns the value of Closeness.
-func (s *User) GetCloseness() float64 {
-	return s.Closeness
-}
-
-// GetTrust returns the value of Trust.
-func (s *User) GetTrust() float64 {
-	return s.Trust
-}
-
-// GetInterest returns the value of Interest.
-func (s *User) GetInterest() float64 {
-	return s.Interest
 }
 
 // GetMetadata returns the value of Metadata.
@@ -3092,21 +2956,6 @@ func (s *User) SetRole(val UserRole) {
 // SetIsBot sets the value of IsBot.
 func (s *User) SetIsBot(val bool) {
 	s.IsBot = val
-}
-
-// SetCloseness sets the value of Closeness.
-func (s *User) SetCloseness(val float64) {
-	s.Closeness = val
-}
-
-// SetTrust sets the value of Trust.
-func (s *User) SetTrust(val float64) {
-	s.Trust = val
-}
-
-// SetInterest sets the value of Interest.
-func (s *User) SetInterest(val float64) {
-	s.Interest = val
 }
 
 // SetMetadata sets the value of Metadata.
@@ -3396,20 +3245,6 @@ func (s *UserRole) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
-}
-
-type UsersAffinityOK struct {
-	Data []AffinityEvent `json:"data"`
-}
-
-// GetData returns the value of Data.
-func (s *UsersAffinityOK) GetData() []AffinityEvent {
-	return s.Data
-}
-
-// SetData sets the value of Data.
-func (s *UsersAffinityOK) SetData(val []AffinityEvent) {
-	s.Data = val
 }
 
 type UsersGetOK struct {

@@ -5,12 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/user"
 )
 
 // Reflect logs the conversation turn, persists context to DB,
@@ -59,7 +57,7 @@ func (a *Agent) compactAsync(ctx context.Context) {
 				a.ctx.ResetInjectedUsers()
 				a.ctx.ResetSeenChannels()
 				persistContext(ctx, a.db, a.ctx, a.logger)
-				a.applyAffinityDeltas(ctx, result.AffinityDeltas, snapshot)
+	
 				return
 			}
 
@@ -74,7 +72,7 @@ func (a *Agent) compactAsync(ctx context.Context) {
 			a.ctx.ResetSeenChannels()
 			persistContext(ctx, a.db, a.ctx, a.logger)
 
-			a.applyAffinityDeltas(ctx, result.AffinityDeltas, snapshot)
+
 			a.logger.Info("バックグラウンドコンパクション完了",
 				"kept", len(kept), "original", snapshotLen)
 			return
@@ -114,7 +112,7 @@ func (a *Agent) compact(ctx context.Context) {
 			a.ctx.ResetInjectedUsers()
 			a.ctx.ResetSeenChannels()
 			persistContext(ctx, a.db, a.ctx, a.logger)
-			a.applyAffinityDeltas(ctx, result.AffinityDeltas, msgs)
+	
 			return
 		}
 
@@ -129,7 +127,7 @@ func (a *Agent) compact(ctx context.Context) {
 		a.ctx.ResetSeenChannels()
 		persistContext(ctx, a.db, a.ctx, a.logger)
 
-		a.applyAffinityDeltas(ctx, result.AffinityDeltas, msgs)
+
 		return
 	}
 
@@ -138,50 +136,6 @@ func (a *Agent) compact(ctx context.Context) {
 	a.ctx.ResetInjectedUsers()
 	a.ctx.ResetSeenChannels()
 	persistContext(ctx, a.db, a.ctx, a.logger)
-}
-
-// applyAffinityDeltas records affinity changes and updates user scores.
-func (a *Agent) applyAffinityDeltas(ctx context.Context, deltas []consolidator.AffinityDelta, originalMsgs []llm.Message) {
-	if a.users == nil || len(deltas) == 0 {
-		return
-	}
-	for _, d := range deltas {
-		u, err := a.users.Resolve(ctx, d.Platform, d.PlatformUserID, "")
-		if err != nil {
-			a.logger.Warn("親密度更新用のユーザー解決失敗", "error", err)
-			continue
-		}
-
-		var interactionIDs []string
-		var groupStart, groupEnd time.Time
-		for _, idx := range d.MessageIndices {
-			if idx >= 0 && idx < len(originalMsgs) {
-				m := originalMsgs[idx]
-				if m.MessageID != "" {
-					interactionIDs = append(interactionIDs, m.MessageID)
-				}
-				if groupStart.IsZero() || m.Timestamp.Before(groupStart) {
-					groupStart = m.Timestamp
-				}
-				if groupEnd.IsZero() || m.Timestamp.After(groupEnd) {
-					groupEnd = m.Timestamp
-				}
-			}
-		}
-
-		evt := &user.AffinityEvent{
-			UserID:         u.ID,
-			Delta:          d.Delta,
-			Axis:           user.AffinityAxis(d.Axis),
-			Reason:         d.Reason,
-			InteractionIDs: interactionIDs,
-			GroupStart:     groupStart,
-			GroupEnd:       groupEnd,
-		}
-		if err := a.users.UpdateAffinity(ctx, evt); err != nil {
-			a.logger.Warn("親密度更新失敗", "error", err)
-		}
-	}
 }
 
 // logConversationTurn logs all messages added during the current turn

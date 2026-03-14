@@ -61,10 +61,6 @@ func (m *mockUsers) Get(_ context.Context, _ string) (*user.User, error) {
 	return &user.User{ID: "u1"}, nil
 }
 func (m *mockUsers) UpdateDisplayName(_ context.Context, _, _ string) error   { return nil }
-func (m *mockUsers) UpdateAffinity(_ context.Context, _ *user.AffinityEvent) error { return nil }
-func (m *mockUsers) GetAffinity(_ context.Context, _ string, _ int) ([]user.AffinityEvent, error) {
-	return nil, nil
-}
 func (m *mockUsers) TrackGuildChannel(_ context.Context, _, _, _, _, _ string) error { return nil }
 func (m *mockUsers) GetUserGuilds(_ context.Context, _ string) ([]user.UserGuild, error) {
 	return nil, nil
@@ -75,8 +71,7 @@ func (m *mockUsers) ResolveExisting(_ context.Context, _, _ string) (*user.User,
 func (m *mockUsers) ListMentionable(_ context.Context) ([]user.MentionableUser, error) {
 	return nil, nil
 }
-func (m *mockUsers) RecalculateEffective(_ context.Context) error { return nil }
-func (m *mockUsers) Close() error                                { return nil }
+func (m *mockUsers) Close() error { return nil }
 
 var _ user.Store = (*mockUsers)(nil)
 

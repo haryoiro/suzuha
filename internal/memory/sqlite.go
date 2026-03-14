@@ -97,6 +97,9 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
 	}
 
+	// Delete stale FTS entry if it exists (INSERT OR REPLACE on memories may change rowid).
+	tx.ExecContext(ctx,
+		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, mem.ID)
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO memories_fts (rowid, content) VALUES (
 			(SELECT rowid FROM memories WHERE id = ?), ?
@@ -148,6 +151,9 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
 	}
 
+	// Delete stale FTS entry if it exists (INSERT OR REPLACE on memories may change rowid).
+	tx.ExecContext(ctx,
+		`DELETE FROM memories_fts WHERE rowid = (SELECT rowid FROM memories WHERE id = ?)`, mem.ID)
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO memories_fts (rowid, content) VALUES (
 			(SELECT rowid FROM memories WHERE id = ?), ?

@@ -1143,38 +1143,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateUserRequest'
-  /api/users/{id}/affinity:
-    get:
-      operationId: Users_affinity
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-          explode: false
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AffinityEvent'
-                required:
-                  - data
-      tags:
-        - Users
   /api/users/{id}/guilds:
     get:
       operationId: Users_guilds
@@ -1234,33 +1202,6 @@ paths:
         - Users
 components:
   schemas:
-    AffinityEvent:
-      type: object
-      required:
-        - id
-        - user_id
-        - delta
-        - axis
-        - reason
-        - created_at
-      properties:
-        id:
-          type: string
-        user_id:
-          type: string
-        delta:
-          type: number
-          format: double
-        axis:
-          type: string
-          enum:
-            - closeness
-            - trust
-            - interest
-        reason:
-          type: string
-        created_at:
-          type: string
     BoredomStatus:
       type: object
       required:
@@ -1799,9 +1740,6 @@ components:
         - display_name
         - role
         - is_bot
-        - closeness
-        - trust
-        - interest
         - created_at
         - updated_at
         - platforms
@@ -1818,15 +1756,6 @@ components:
             - guest
         is_bot:
           type: boolean
-        closeness:
-          type: number
-          format: double
-        trust:
-          type: number
-          format: double
-        interest:
-          type: number
-          format: double
         metadata:
           type: object
           additionalProperties: {}

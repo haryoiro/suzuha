@@ -73,8 +73,6 @@ type Perception struct {
 	IsVoice           bool
 	DirectlyAddressed bool
 	SenderIsBot       bool
-	MaxCloseness      float64
-	MaxInterest       float64
 	TurnStartIdx      int
 }
 

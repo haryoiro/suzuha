@@ -126,10 +126,6 @@ export interface User {
   display_name: string;
   role: string;
   is_bot: boolean;
-  affinity: number;
-  closeness: number;
-  trust: number;
-  interest: number;
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -140,15 +136,6 @@ export interface PlatformLink {
   platform: string;
   platform_user_id: string;
   platform_name: string;
-}
-
-export interface AffinityEvent {
-  id: string;
-  user_id: string;
-  delta: number;
-  axis: string;
-  reason: string;
-  created_at: string;
 }
 
 export interface UserGuildChannel {
@@ -176,10 +163,6 @@ export const usersApi = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
-  affinityEvents: (id: string, limit?: number) =>
-    fetchJSON<{ data: AffinityEvent[] }>(
-      `/api/users/${id}/affinity${limit ? `?limit=${limit}` : ""}`
-    ),
   guilds: (id: string) =>
     fetchJSON<{ data: UserGuildChannel[] }>(`/api/users/${id}/guilds`),
   memories: (id: string, limit?: number) =>

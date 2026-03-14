@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/haryoiro/suzuha/internal/memory"
 )
@@ -43,9 +42,6 @@ func TestResolve_AutoCreate(t *testing.T) {
 	}
 	if u.Role != RoleMember {
 		t.Errorf("expected role=member, got %s", u.Role)
-	}
-	if u.Affinity != 0 {
-		t.Errorf("expected affinity=0, got %f", u.Affinity)
 	}
 }
 
@@ -104,86 +100,6 @@ func TestUpdateDisplayName(t *testing.T) {
 	}
 	if updated.DisplayName != "みっちゃん" {
 		t.Errorf("expected display_name=みっちゃん, got %s", updated.DisplayName)
-	}
-}
-
-func TestUpdateAffinity(t *testing.T) {
-	store := newTestStore(t)
-	ctx := context.Background()
-
-	u, err := store.Resolve(ctx, "discord", "12345", "TestUser")
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-
-	now := time.Now()
-	evt := &AffinityEvent{
-		UserID:         u.ID,
-		Delta:          0.5,
-		Reason:         "楽しい会話をした",
-		InteractionIDs: []string{"msg1", "msg2"},
-		GroupStart:     now.Add(-5 * time.Minute),
-		GroupEnd:       now,
-	}
-	if err := store.UpdateAffinity(ctx, evt); err != nil {
-		t.Fatalf("UpdateAffinity: %v", err)
-	}
-
-	// Event should have an ID.
-	if evt.ID == "" {
-		t.Fatal("expected event ID to be set")
-	}
-
-	// User affinity should be updated.
-	updated, err := store.Get(ctx, u.ID)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	expectedAffinity := EffectiveValue(0.5)
-	if updated.Affinity != expectedAffinity {
-		t.Errorf("expected affinity=%f, got %f", expectedAffinity, updated.Affinity)
-	}
-
-	// Apply a second delta.
-	evt2 := &AffinityEvent{
-		UserID: u.ID,
-		Delta:  -0.2,
-		Reason: "ちょっと失礼だった",
-	}
-	if err := store.UpdateAffinity(ctx, evt2); err != nil {
-		t.Fatalf("UpdateAffinity second: %v", err)
-	}
-
-	updated2, err := store.Get(ctx, u.ID)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	expectedAffinity2 := EffectiveValue(0.3)
-	if updated2.Affinity < expectedAffinity2-0.01 || updated2.Affinity > expectedAffinity2+0.01 {
-		t.Errorf("expected affinity≈%f, got %f", expectedAffinity2, updated2.Affinity)
-	}
-}
-
-func TestGetAffinity(t *testing.T) {
-	store := newTestStore(t)
-	ctx := context.Background()
-
-	u, _ := store.Resolve(ctx, "discord", "12345", "TestUser")
-
-	// Add two events.
-	store.UpdateAffinity(ctx, &AffinityEvent{UserID: u.ID, Delta: 0.3, Reason: "reason1"})
-	store.UpdateAffinity(ctx, &AffinityEvent{UserID: u.ID, Delta: 0.2, Reason: "reason2"})
-
-	events, err := store.GetAffinity(ctx, u.ID, 10)
-	if err != nil {
-		t.Fatalf("GetAffinity: %v", err)
-	}
-	if len(events) != 2 {
-		t.Fatalf("expected 2 events, got %d", len(events))
-	}
-	// Most recent first.
-	if events[0].Reason != "reason2" {
-		t.Errorf("expected reason2 first, got %s", events[0].Reason)
 	}
 }
 

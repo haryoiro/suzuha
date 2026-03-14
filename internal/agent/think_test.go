@@ -114,7 +114,7 @@ func TestConversationState_DifferentChannel(t *testing.T) {
 
 func TestResponseDirective_DirectlyAddressed(t *testing.T) {
 	evt := makeMentionEvent("hello", "ch1", "user1")
-	d := responseDirective(evt, "bot123", 0, 0, convState{})
+	d := responseDirective(evt, "bot123", convState{}, episodeSig{})
 	if !strings.HasPrefix(d, "[RESPOND]") {
 		t.Errorf("expected [RESPOND] for mention, got: %s", d)
 	}
@@ -127,7 +127,7 @@ func TestResponseDirective_ActiveConversation(t *testing.T) {
 		messagesSinceBotSpoke: 1,
 		recentDistinctUsers:   1,
 	}
-	d := responseDirective(evt, "bot123", 5.0, 5.0, cs) // high closeness should be overridden
+	d := responseDirective(evt, "bot123", cs, episodeSig{})
 	if !strings.HasPrefix(d, "[RESPOND]") {
 		t.Errorf("expected [RESPOND] for active conversation, got: %s", d)
 	}
@@ -143,7 +143,7 @@ func TestResponseDirective_RecentConversation1on1(t *testing.T) {
 		messagesSinceBotSpoke: 4,
 		recentDistinctUsers:   1, // 1-on-1
 	}
-	d := responseDirective(evt, "bot123", 5.0, 5.0, cs)
+	d := responseDirective(evt, "bot123", cs, episodeSig{})
 	if !strings.HasPrefix(d, "[LISTEN]") {
 		t.Errorf("expected [LISTEN] for recent 1-on-1, got: %s", d)
 	}
@@ -159,49 +159,51 @@ func TestResponseDirective_RecentConversationMultiUser(t *testing.T) {
 		messagesSinceBotSpoke: 4,
 		recentDistinctUsers:   2, // not 1-on-1
 	}
-	// Should fall through to closeness-based directive.
-	d := responseDirective(evt, "bot123", 5.0, 5.0, cs)
-	if !strings.Contains(d, "仲の良い人") {
-		t.Errorf("expected closeness-based directive for multi-user, got: %s", d)
+	// Should fall through to episode or default.
+	d := responseDirective(evt, "bot123", cs, episodeSig{})
+	if !strings.Contains(d, "チャンネルの会話") {
+		t.Errorf("expected channel directive for multi-user with no episodes, got: %s", d)
 	}
 }
 
-func TestResponseDirective_FallbackCloseness(t *testing.T) {
-	evt := makeMessageEvent("hi", "ch1", "user1")
-	cs := convState{
-		botLastSpokeAgo:       10 * time.Minute, // outside both windows
-		messagesSinceBotSpoke: 20,
-		recentDistinctUsers:   1,
-	}
-	d := responseDirective(evt, "bot123", 4.0, 0, cs)
-	if !strings.Contains(d, "仲の良い人") {
-		t.Errorf("expected closeness fallback, got: %s", d)
-	}
-}
-
-func TestResponseDirective_FallbackInterest(t *testing.T) {
+func TestResponseDirective_CloseRelationship(t *testing.T) {
 	evt := makeMessageEvent("hi", "ch1", "user1")
 	cs := convState{
 		botLastSpokeAgo:       10 * time.Minute,
 		messagesSinceBotSpoke: 20,
 		recentDistinctUsers:   1,
 	}
-	d := responseDirective(evt, "bot123", 0, 3.0, cs)
-	if !strings.Contains(d, "気になる人") {
-		t.Errorf("expected interest fallback, got: %s", d)
+	es := episodeSig{count: 5, hasRecent: true}
+	d := responseDirective(evt, "bot123", cs, es)
+	if !strings.Contains(d, "仲の良い人") {
+		t.Errorf("expected close relationship directive, got: %s", d)
 	}
 }
 
-func TestResponseDirective_FallbackNegativeCloseness(t *testing.T) {
+func TestResponseDirective_Acquaintance(t *testing.T) {
 	evt := makeMessageEvent("hi", "ch1", "user1")
 	cs := convState{
 		botLastSpokeAgo:       10 * time.Minute,
 		messagesSinceBotSpoke: 20,
 		recentDistinctUsers:   1,
 	}
-	d := responseDirective(evt, "bot123", -2.0, 0, cs)
-	if !strings.Contains(d, "スキップしてください") {
-		t.Errorf("expected negative closeness skip, got: %s", d)
+	es := episodeSig{count: 2, hasRecent: false}
+	d := responseDirective(evt, "bot123", cs, es)
+	if !strings.Contains(d, "知り合い") {
+		t.Errorf("expected acquaintance directive, got: %s", d)
+	}
+}
+
+func TestResponseDirective_FallbackDefault(t *testing.T) {
+	evt := makeMessageEvent("hi", "ch1", "user1")
+	cs := convState{
+		botLastSpokeAgo:       10 * time.Minute,
+		messagesSinceBotSpoke: 20,
+		recentDistinctUsers:   1,
+	}
+	d := responseDirective(evt, "bot123", cs, episodeSig{})
+	if !strings.Contains(d, "チャンネルの会話") {
+		t.Errorf("expected default channel directive, got: %s", d)
 	}
 }
 
@@ -213,7 +215,7 @@ func TestResponseDirective_ActiveButTooManyMessages(t *testing.T) {
 		recentDistinctUsers:   1,
 	}
 	// Should NOT match priority 2 or 3 (too many messages for both).
-	d := responseDirective(evt, "bot123", 4.0, 0, cs)
+	d := responseDirective(evt, "bot123", cs, episodeSig{})
 	if strings.Contains(d, "会話の続き") || strings.Contains(d, "最近この会話に参加") {
 		t.Errorf("expected fallback, not active conversation directive, got: %s", d)
 	}
@@ -223,7 +225,7 @@ func TestResponseDirective_SelfPromptBypass(t *testing.T) {
 	// Self-prompts are handled in Think before calling responseDirective,
 	// but isDirectlyAddressed returns true for them.
 	evt := event.NewSelfPromptEvent("ch1", "bored")
-	d := responseDirective(evt, "bot123", 0, 0, convState{})
+	d := responseDirective(evt, "bot123", convState{}, episodeSig{})
 	if !strings.HasPrefix(d, "[RESPOND]") {
 		t.Errorf("expected [RESPOND] for self-prompt, got: %s", d)
 	}

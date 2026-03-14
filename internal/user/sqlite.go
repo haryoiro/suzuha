@@ -100,14 +100,13 @@ createUser:
 		ID:        uuid.NewString(),
 		Role:      role,
 		IsBot:     isBot,
-		Affinity:  0,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO users (id, display_name, role, is_bot, affinity, created_at, updated_at)
-		 VALUES (?, '', ?, ?, 0.0, ?, ?)`,
+		`INSERT INTO users (id, display_name, role, is_bot, created_at, updated_at)
+		 VALUES (?, '', ?, ?, ?, ?)`,
 		u.ID, string(u.Role), u.IsBot, u.CreatedAt, u.UpdatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("user: ユーザーの挿入に失敗: %w", err)
@@ -146,10 +145,9 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 	var metaJSON sql.NullString
 
 	err := q.QueryRowContext(ctx,
-		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, metadata, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity,
-		&u.Closeness, &u.Trust, &u.Interest,
+	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot,
 		&metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("user: ユーザー取得に失敗: %w", err)
@@ -174,177 +172,6 @@ func (s *SQLiteStore) UpdateDisplayName(ctx context.Context, userID, displayName
 		return fmt.Errorf("user: 見つかりません: %s", userID)
 	}
 	return nil
-}
-
-func (s *SQLiteStore) UpdateAffinity(ctx context.Context, evt *AffinityEvent) error {
-	if evt.ID == "" {
-		evt.ID = uuid.NewString()
-	}
-	if evt.CreatedAt.IsZero() {
-		evt.CreatedAt = time.Now()
-	}
-	if evt.Axis == "" {
-		evt.Axis = AxisCloseness
-	}
-
-	interactionJSON, _ := json.Marshal(evt.InteractionIDs)
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("user: トランザクション開始に失敗: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Insert the affinity event with axis.
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO affinity_events (id, user_id, delta, axis, reason, interaction_ids, group_start, group_end, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		evt.ID, evt.UserID, evt.Delta, string(evt.Axis), evt.Reason,
-		string(interactionJSON),
-		nullTime(evt.GroupStart), nullTime(evt.GroupEnd),
-		evt.CreatedAt,
-	); err != nil {
-		return fmt.Errorf("user: 親密度イベントの挿入に失敗: %w", err)
-	}
-
-	// Recalculate effective value for this user+axis from all events.
-	if err := s.recalcUserAxis(ctx, tx, evt.UserID, evt.Axis); err != nil {
-		return fmt.Errorf("user: 実効値の再計算に失敗: %w", err)
-	}
-
-	return tx.Commit()
-}
-
-// weightedSumSQL is the SQL expression for computing a time-decay weighted sum
-// of affinity deltas. Uses the Weight* constants from user.go.
-var weightedSumSQL = fmt.Sprintf(`SELECT COALESCE(SUM(delta * CASE
-	WHEN julianday('now') - julianday(created_at) <= 7 THEN %v
-	WHEN julianday('now') - julianday(created_at) <= 28 THEN %v
-	WHEN julianday('now') - julianday(created_at) <= 90 THEN %v
-	ELSE %v
-END), 0.0) FROM affinity_events WHERE user_id = ? AND axis = ?`,
-	WeightRecent, WeightMonth, WeightQuarter, WeightOld)
-
-// axisColumn maps each AffinityAxis to its column name in the users table.
-var axisColumn = map[AffinityAxis]string{
-	AxisCloseness: "closeness",
-	AxisTrust:     "trust",
-	AxisInterest:  "interest",
-}
-
-// allAxes is the ordered list of affinity axes.
-var allAxes = []AffinityAxis{AxisCloseness, AxisTrust, AxisInterest}
-
-// recalcUserAxis recalculates the effective value for a single user+axis
-// and updates the users table within the given transaction.
-func (s *SQLiteStore) recalcUserAxis(ctx context.Context, tx *sql.Tx, userID string, axis AffinityAxis) error {
-	col := axisColumn[axis]
-
-	var weighted float64
-	if err := tx.QueryRowContext(ctx, weightedSumSQL, userID, string(axis)).Scan(&weighted); err != nil {
-		return err
-	}
-	effective := EffectiveValue(weighted)
-
-	// Read the other two axes' current values for legacy affinity sum.
-	var otherCols [2]string
-	idx := 0
-	for _, a := range allAxes {
-		if a != axis {
-			otherCols[idx] = axisColumn[a]
-			idx++
-		}
-	}
-
-	var other1, other2 float64
-	row := tx.QueryRowContext(ctx,
-		fmt.Sprintf(`SELECT %s, %s FROM users WHERE id = ?`, otherCols[0], otherCols[1]),
-		userID)
-	if err := row.Scan(&other1, &other2); err != nil {
-		return err
-	}
-
-	now := time.Now()
-	query := fmt.Sprintf(
-		`UPDATE users SET %s = ?, affinity = ?, updated_at = ? WHERE id = ?`,
-		col,
-	)
-	if _, err := tx.ExecContext(ctx, query, effective, effective+other1+other2, now, userID); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RecalculateEffective recomputes effective affinity values for all users
-// from their event history, applying time-based decay and soft cap.
-func (s *SQLiteStore) RecalculateEffective(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM affinity_events`)
-	if err != nil {
-		return fmt.Errorf("user: ユーザー一覧の取得に失敗: %w", err)
-	}
-	var userIDs []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return fmt.Errorf("user: ユーザーIDのスキャンに失敗: %w", err)
-		}
-		userIDs = append(userIDs, id)
-	}
-	rows.Close()
-
-	for _, uid := range userIDs {
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("user: トランザクション開始に失敗: %w", err)
-		}
-		for _, axis := range []AffinityAxis{AxisCloseness, AxisTrust, AxisInterest} {
-			if err := s.recalcUserAxis(ctx, tx, uid, axis); err != nil {
-				tx.Rollback()
-				return fmt.Errorf("user: %s/%s の再計算に失敗: %w", uid, axis, err)
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("user: コミットに失敗: %w", err)
-		}
-	}
-	return nil
-}
-
-func (s *SQLiteStore) GetAffinity(ctx context.Context, userID string, limit int) ([]AffinityEvent, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, user_id, delta, axis, reason, interaction_ids, group_start, group_end, created_at
-		 FROM affinity_events WHERE user_id = ?
-		 ORDER BY created_at DESC LIMIT ?`,
-		userID, limit,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("user: 親密度の取得に失敗: %w", err)
-	}
-	defer rows.Close()
-
-	var events []AffinityEvent
-	for rows.Next() {
-		var e AffinityEvent
-		var axisStr string
-		var idsJSON sql.NullString
-		var groupStart, groupEnd sql.NullTime
-		if err := rows.Scan(&e.ID, &e.UserID, &e.Delta, &axisStr, &e.Reason, &idsJSON, &groupStart, &groupEnd, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("user: 親密度のスキャンに失敗: %w", err)
-		}
-		e.Axis = AffinityAxis(axisStr)
-		if idsJSON.Valid {
-			_ = json.Unmarshal([]byte(idsJSON.String), &e.InteractionIDs)
-		}
-		if groupStart.Valid {
-			e.GroupStart = groupStart.Time
-		}
-		if groupEnd.Valid {
-			e.GroupEnd = groupEnd.Time
-		}
-		events = append(events, e)
-	}
-	return events, rows.Err()
 }
 
 func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error {
@@ -414,11 +241,11 @@ func (s *SQLiteStore) ResolveExisting(ctx context.Context, platform, platformUse
 
 func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT u.display_name, pl.platform_user_id, u.affinity, u.closeness, u.interest
+		SELECT u.display_name, pl.platform_user_id
 		FROM users u
 		JOIN platform_links pl ON pl.user_id = u.id AND pl.platform = 'discord'
-		WHERE u.is_bot = 0 AND u.affinity > 0
-		ORDER BY u.interest DESC, u.closeness DESC`)
+		WHERE u.is_bot = 0
+		ORDER BY u.display_name`)
 	if err != nil {
 		return nil, fmt.Errorf("user: メンション可能ユーザーの一覧取得に失敗: %w", err)
 	}
@@ -427,7 +254,7 @@ func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, e
 	var result []MentionableUser
 	for rows.Next() {
 		var m MentionableUser
-		if err := rows.Scan(&m.DisplayName, &m.DiscordUserID, &m.Affinity, &m.Closeness, &m.Interest); err != nil {
+		if err := rows.Scan(&m.DisplayName, &m.DiscordUserID); err != nil {
 			return nil, fmt.Errorf("user: メンション可能ユーザーのスキャンに失敗: %w", err)
 		}
 		result = append(result, m)
@@ -447,7 +274,7 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, display_name, role, is_bot, affinity, closeness, trust, interest, metadata, created_at, updated_at
+		`SELECT id, display_name, role, is_bot, metadata, created_at, updated_at
 		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("user: 一覧取得に失敗: %w", err)
@@ -459,8 +286,7 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 		var u User
 		var roleStr string
 		var metaJSON sql.NullString
-		if err := rows.Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot, &u.Affinity,
-			&u.Closeness, &u.Trust, &u.Interest,
+		if err := rows.Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot,
 			&metaJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("user: 一覧のスキャンに失敗: %w", err)
 		}
@@ -533,10 +359,6 @@ func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]P
 		links = append(links, l)
 	}
 	return links, rows.Err()
-}
-
-func (s *SQLiteStore) ListAffinityEvents(ctx context.Context, userID string, limit int) ([]AffinityEvent, error) {
-	return s.GetAffinity(ctx, userID, limit)
 }
 
 func (s *SQLiteStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {

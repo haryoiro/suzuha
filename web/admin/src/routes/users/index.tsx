@@ -3,7 +3,7 @@ import { Table, Tag, Input, Space, Typography, Card, Descriptions, Modal, List, 
 import { SearchOutlined, RobotOutlined, EditOutlined } from "@ant-design/icons";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
-import { useUsers, useUser, useAffinityEvents, useUserGuilds, useUserMemories } from "../../hooks/useUsers";
+import { useUsers, useUser, useUserGuilds, useUserMemories } from "../../hooks/useUsers";
 import { usersApi, type User, type PlatformLink, type UserGuildChannel } from "../../lib/api";
 import { formatJST } from "../../lib/date";
 
@@ -32,13 +32,11 @@ const UserDetailModal = memo(function UserDetailModal({
 }) {
   const queryClient = useQueryClient();
   const { data: userData } = useUser(userId ?? "");
-  const { data: eventsData } = useAffinityEvents(userId ?? "", 20);
   const { data: guildsData } = useUserGuilds(userId ?? "");
   const { data: memoriesData } = useUserMemories(userId ?? "", 20);
   const [editing, setEditing] = useState(false);
 
   const user = userData?.data;
-  const events = eventsData?.data ?? [];
   const guildEntries = guildsData?.data ?? [];
   const memories = memoriesData?.data ?? [];
 
@@ -109,21 +107,6 @@ const UserDetailModal = memo(function UserDetailModal({
                 <Descriptions.Item label="Role">
                   <Tag>{user.role}</Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="Closeness">
-                  <Text style={{ color: user.closeness > 0 ? "#52c41a" : user.closeness < 0 ? "#ff4d4f" : "#8c8c8c" }}>
-                    {user.closeness.toFixed(1)}
-                  </Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="Trust">
-                  <Text style={{ color: user.trust > 0 ? "#52c41a" : user.trust < 0 ? "#ff4d4f" : "#8c8c8c" }}>
-                    {user.trust.toFixed(1)}
-                  </Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="Interest">
-                  <Text style={{ color: user.interest > 0 ? "#52c41a" : user.interest < 0 ? "#ff4d4f" : "#8c8c8c" }}>
-                    {user.interest.toFixed(1)}
-                  </Text>
-                </Descriptions.Item>
                 <Descriptions.Item label="Created">
                   {formatJST(user.created_at)}
                 </Descriptions.Item>
@@ -184,39 +167,6 @@ const UserDetailModal = memo(function UserDetailModal({
             </Card>
           )}
 
-          {events.length > 0 && (
-            <Card title="Affinity History" size="small">
-              <List
-                size="small"
-                dataSource={events}
-                renderItem={(e) => (
-                  <List.Item style={{ padding: "8px 0" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Tag color={e.axis === "trust" ? "orange" : e.axis === "interest" ? "purple" : "blue"} style={{ margin: 0 }}>
-                          {e.axis || "closeness"}
-                        </Tag>
-                        <Text
-                          style={{
-                            color: e.delta > 0 ? "#52c41a" : "#ff4d4f",
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {e.delta > 0 ? "+" : ""}{e.delta.toFixed(1)}
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap", marginLeft: "auto" }}>
-                          {formatJST(e.created_at)}
-                        </Text>
-                      </div>
-                      <Text type="secondary" style={{ fontSize: 13 }}>{e.reason}</Text>
-                    </div>
-                  </List.Item>
-                )}
-              />
-            </Card>
-          )}
-
           {user.metadata && Object.keys(user.metadata).length > 0 && (
             <Card title="Metadata" size="small">
               <pre style={{ margin: 0, fontSize: 12 }}>
@@ -258,39 +208,6 @@ export const UsersPage = memo(function UsersPage() {
       render: (role: string) => {
         const color = role === "owner" ? "red" : role === "admin" ? "orange" : "blue";
         return <Tag color={color}>{role}</Tag>;
-      },
-    },
-    {
-      title: "Closeness",
-      dataIndex: "closeness",
-      key: "closeness",
-      width: 90,
-      sorter: (a: User, b: User) => a.closeness - b.closeness,
-      render: (val: number) => {
-        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
-        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
-      },
-    },
-    {
-      title: "Trust",
-      dataIndex: "trust",
-      key: "trust",
-      width: 80,
-      sorter: (a: User, b: User) => a.trust - b.trust,
-      render: (val: number) => {
-        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
-        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
-      },
-    },
-    {
-      title: "Interest",
-      dataIndex: "interest",
-      key: "interest",
-      width: 80,
-      sorter: (a: User, b: User) => a.interest - b.interest,
-      render: (val: number) => {
-        const color = val > 0 ? "#52c41a" : val < 0 ? "#ff4d4f" : "#8c8c8c";
-        return <Text style={{ color }}>{val.toFixed(1)}</Text>;
       },
     },
     {

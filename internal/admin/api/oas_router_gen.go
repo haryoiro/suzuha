@@ -1369,33 +1369,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							break
 						}
 						switch elem[0] {
-						case 'a': // Prefix: "affinity"
-
-							if l := len("affinity"); len(elem) >= l && elem[0:l] == "affinity" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								// Leaf node.
-								switch r.Method {
-								case "GET":
-									s.handleUsersAffinityRequest([1]string{
-										args[0],
-									}, elemIsEscaped, w, r)
-								default:
-									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "GET",
-										allowedHeaders: nil,
-										acceptPost:     "",
-										acceptPatch:    "",
-									})
-								}
-
-								return
-							}
-
 						case 'g': // Prefix: "guilds"
 
 							if l := len("guilds"); len(elem) >= l && elem[0:l] == "guilds" {
@@ -2864,31 +2837,6 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							break
 						}
 						switch elem[0] {
-						case 'a': // Prefix: "affinity"
-
-							if l := len("affinity"); len(elem) >= l && elem[0:l] == "affinity" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								// Leaf node.
-								switch method {
-								case "GET":
-									r.name = UsersAffinityOperation
-									r.summary = ""
-									r.operationID = "Users_affinity"
-									r.operationGroup = ""
-									r.pathPattern = "/api/users/{id}/affinity"
-									r.args = args
-									r.count = 1
-									return r, true
-								default:
-									return
-								}
-							}
-
 						case 'g': // Prefix: "guilds"
 
 							if l := len("guilds"); len(elem) >= l && elem[0:l] == "guilds" {

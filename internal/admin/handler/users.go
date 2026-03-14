@@ -27,10 +27,6 @@ type userJSON struct {
 	DisplayName string         `json:"display_name"`
 	Role        string         `json:"role"`
 	IsBot       bool           `json:"is_bot"`
-	Affinity    float64        `json:"affinity"`
-	Closeness   float64        `json:"closeness"`
-	Trust       float64        `json:"trust"`
-	Interest    float64        `json:"interest"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
@@ -44,25 +40,12 @@ type platformLinkJSON struct {
 	PlatformName   string `json:"platform_name"`
 }
 
-type affinityEventJSON struct {
-	ID        string  `json:"id"`
-	UserID    string  `json:"user_id"`
-	Delta     float64 `json:"delta"`
-	Axis      string  `json:"axis"`
-	Reason    string  `json:"reason"`
-	CreatedAt string  `json:"created_at"`
-}
-
 func userToJSON(u user.User) userJSON {
 	return userJSON{
 		ID:          u.ID,
 		DisplayName: u.DisplayName,
 		Role:        string(u.Role),
 		IsBot:       u.IsBot,
-		Affinity:    u.Affinity,
-		Closeness:   u.Closeness,
-		Trust:       u.Trust,
-		Interest:    u.Interest,
 		Metadata:    u.Metadata,
 		CreatedAt:   u.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt:   u.UpdatedAt.Format("2006-01-02 15:04:05"),
@@ -170,36 +153,6 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-// AffinityEvents handles GET /api/users/{id}/affinity.
-func (h *UsersHandler) AffinityEvents(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 {
-		limit = 50
-	}
-
-	events, err := h.users.ListAffinityEvents(r.Context(), id, limit)
-	if err != nil {
-		h.logger.Error("親密度イベントの取得に失敗", "error", err)
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-
-	result := make([]affinityEventJSON, 0, len(events))
-	for _, e := range events {
-		result = append(result, affinityEventJSON{
-			ID:        e.ID,
-			UserID:    e.UserID,
-			Delta:     e.Delta,
-			Axis:      string(e.Axis),
-			Reason:    e.Reason,
-			CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"data": result})
 }
 
 // Guilds handles GET /api/users/{id}/guilds.

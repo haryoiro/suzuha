@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin"
-	"github.com/haryoiro/suzuha/internal/affinity"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
@@ -185,7 +184,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
 				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
-				affinity.New(),
 				forget.New(),
 			}
 

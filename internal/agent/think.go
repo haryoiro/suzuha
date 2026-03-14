@@ -148,10 +148,11 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 		toolNames := strings.Join(a.tools.AllEnabledNames(), ", ")
 		directive = fmt.Sprintf("[SELF_PROMPT] 自分の内なる思考です。以下のツールを自由に組み合わせて遊んでください: %s\n気になることを調べる、誰かが言っていたことを思い出してリマインドする、会話の流れから何か提案する、ステータスを変える、つぶやく、なんでもOK。", toolNames)
 	} else if p.DirectlyAddressed {
-		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は2〜3行以内に収めて。長文禁止。"
+		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。"
 	} else {
 		cs := a.conversationState(p.Channel)
-		directive = responseDirective(p.LastEvent, a.botID, p.MaxCloseness, p.MaxInterest, cs)
+		es := a.episodeSignal(ctx, p.LastMessage.Source, p.LastMessage.UserID)
+		directive = responseDirective(p.LastEvent, a.botID, cs, es)
 	}
 	a.logger.Info("LLMリクエスト", "message_count", len(a.ctx.Messages()),
 		"ephemeral_count", len(ephemeral), "directive", directive)
@@ -277,19 +278,8 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 		return ""
 	}
 
-	content := fmt.Sprintf("[User profile: %s (ID=%s) role=%s closeness=%.2f trust=%.2f interest=%.2f]\n",
-		u.DisplayName, u.ID, u.Role, u.Closeness, u.Trust, u.Interest)
-
-	events, err := a.users.GetAffinity(ctx, u.ID, 3)
-	if err != nil {
-		a.logger.Debug("親密度履歴の取得失敗", "error", err)
-	}
-	if len(events) > 0 {
-		content += "Affinity:\n"
-		for _, e := range events {
-			content += fmt.Sprintf("  %+.1f (%s): %s (%s)\n", e.Delta, e.Axis, e.Reason, e.GroupEnd.Format("2006-01-02"))
-		}
-	}
+	content := fmt.Sprintf("[User profile: %s (ID=%s) role=%s]\n",
+		u.DisplayName, u.ID, u.Role)
 
 	if a.memory != nil {
 		memories, err := a.memory.ListByUser(ctx, u.ID, 5)
@@ -353,15 +343,37 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 	return content
 }
 
+// episodeSig summarises the episode-based relationship with a user.
+type episodeSig struct {
+	count     int  // total shared episodes
+	hasRecent bool // at least one episode within the last 7 days
+}
+
+// episodeSignal queries shared episodes for a user and returns a summary.
+func (a *Agent) episodeSignal(ctx context.Context, platform, platformUserID string) episodeSig {
+	if a.memory == nil || platformUserID == "" || platformUserID == a.botID {
+		return episodeSig{}
+	}
+	episodes, err := a.memory.ListEpisodesByParticipant(ctx, platformUserID, 5)
+	if err != nil {
+		return episodeSig{}
+	}
+	sig := episodeSig{count: len(episodes)}
+	if len(episodes) > 0 {
+		sig.hasRecent = time.Since(episodes[0].UpdatedAt) < 7*24*time.Hour
+	}
+	return sig
+}
+
 // responseDirective returns a system instruction telling the LLM whether
 // it must respond or may stay silent.
-func responseDirective(evt event.Event, botID string, closeness, interest float64, cs convState) string {
+func responseDirective(evt event.Event, botID string, cs convState, es episodeSig) string {
 	if isDirectlyAddressed(evt, botID) {
-		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は2〜3行以内に収めて。長文禁止。"
+		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。"
 	}
 	const noEmoji = "※テキストに絵文字・顔文字は絶対に入れないで。"
 
-	const brevity = "※返答は2〜3行以内に収めて。長文禁止。"
+	const brevity = "※返答は1〜2行に収めて。長文禁止。"
 
 	const reactHint = "リアクションは本当に心が動いたときだけ discord_react で付けてよい。ほとんどの場合はリアクションなしで skip_response だけ呼べばOK。"
 
@@ -378,20 +390,18 @@ func responseDirective(evt event.Event, botID string, closeness, interest float6
 			brevity + reactHint + noEmoji
 	}
 
-	switch {
-	case closeness >= 3.0:
+	// Episode-based relationship: many shared episodes with recent activity → close relationship.
+	if es.count >= 3 && es.hasRecent {
 		return "[LISTEN] 仲の良い人の会話です。気軽に返して。相槌だけの返答はしない。話すことがなければ skip_response。" +
 			brevity + noEmoji
-	case interest >= 2.0:
-		return "[LISTEN] 気になる人の会話です。" + skipDefault +
+	}
+	if es.count >= 1 {
+		return "[LISTEN] 知り合いの会話です。" + skipDefault +
 			"自分が詳しい話題や強い意見があるときだけ返して。" +
 			brevity + reactHint + noEmoji
-	case closeness <= -1.0:
-		return "[LISTEN] チャンネルの会話です。skip_response ツールを呼んでスキップしてください。" +
-			brevity + noEmoji
-	default:
-		return "[LISTEN] チャンネルの会話です。" + skipDefault +
-			"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
-			brevity + reactHint + noEmoji
 	}
+
+	return "[LISTEN] チャンネルの会話です。" + skipDefault +
+		"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
+		brevity + reactHint + noEmoji
 }

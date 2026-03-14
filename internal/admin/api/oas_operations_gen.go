@@ -53,7 +53,6 @@ const (
 	ScheduledActionsUpdateOperation OperationName = "ScheduledActionsUpdate"
 	ToolsListOperation              OperationName = "ToolsList"
 	ToolsSetEnabledOperation        OperationName = "ToolsSetEnabled"
-	UsersAffinityOperation          OperationName = "UsersAffinity"
 	UsersGetOperation               OperationName = "UsersGet"
 	UsersGuildsOperation            OperationName = "UsersGuilds"
 	UsersListOperation              OperationName = "UsersList"

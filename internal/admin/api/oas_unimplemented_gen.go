@@ -345,13 +345,6 @@ func (UnimplementedHandler) ToolsSetEnabled(ctx context.Context, req jx.Raw, par
 	return r, ht.ErrNotImplemented
 }
 
-// UsersAffinity implements Users_affinity operation.
-//
-// GET /api/users/{id}/affinity
-func (UnimplementedHandler) UsersAffinity(ctx context.Context, params UsersAffinityParams) (r *UsersAffinityOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // UsersGet implements Users_get operation.
 //
 // GET /api/users/{id}

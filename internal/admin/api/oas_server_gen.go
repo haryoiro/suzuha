@@ -200,10 +200,6 @@ type Handler interface {
 	//
 	// PUT /api/tools/{name}/enabled
 	ToolsSetEnabled(ctx context.Context, req jx.Raw, params ToolsSetEnabledParams) (jx.Raw, error)
-	// UsersAffinity implements Users_affinity operation.
-	//
-	// GET /api/users/{id}/affinity
-	UsersAffinity(ctx context.Context, params UsersAffinityParams) (*UsersAffinityOK, error)
 	// UsersGet implements Users_get operation.
 	//
 	// GET /api/users/{id}
