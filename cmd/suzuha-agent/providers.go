@@ -17,7 +17,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/chat/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/consolidator"
-	"github.com/haryoiro/suzuha/internal/dyntools"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/explore"
 	"github.com/haryoiro/suzuha/internal/forget"
@@ -186,7 +185,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 			features := []scheduler.Feature{
 				schedule.New(store.DB()),
-				dyntools.New("/data/tools", registry, logger),
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
 				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
