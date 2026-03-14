@@ -9,8 +9,6 @@ tags:
   - name: Guilds
   - name: Channels
   - name: Scheduled Actions
-  - name: RSS Feeds
-  - name: Preferences
   - name: Location
   - name: Prompts
   - name: Metrics
@@ -192,179 +190,6 @@ paths:
                 type: string
       tags:
         - Logs
-  /api/feeds:
-    get:
-      operationId: Feeds_list
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - data
-                  - total
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Feed'
-                  total:
-                    type: integer
-                    format: int32
-                description: Paginated list wrapper.
-      tags:
-        - RSS Feeds
-    post:
-      operationId: Feeds_create
-      parameters: []
-      responses:
-        '201':
-          description: The request has succeeded and a new resource has been created as a result.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Feed'
-                required:
-                  - data
-      tags:
-        - RSS Feeds
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateFeedRequest'
-  /api/feeds/stats:
-    get:
-      operationId: Feeds_stats
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeedStats'
-      tags:
-        - RSS Feeds
-  /api/feeds/{id}:
-    get:
-      operationId: Feeds_get
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int32
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Feed'
-                required:
-                  - data
-      tags:
-        - RSS Feeds
-    put:
-      operationId: Feeds_update
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int32
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Feed'
-                required:
-                  - data
-      tags:
-        - RSS Feeds
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateFeedRequest'
-    delete:
-      operationId: Feeds_delete
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int32
-      responses:
-        '204':
-          description: 'There is no content to send for this request, but the headers may be useful. '
-      tags:
-        - RSS Feeds
-  /api/feeds/{id}/items:
-    get:
-      operationId: Feeds_items
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int32
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-          explode: false
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-          explode: false
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - data
-                  - total
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/FeedItem'
-                  total:
-                    type: integer
-                    format: int32
-                description: Paginated list wrapper.
-      tags:
-        - RSS Feeds
   /api/forget/delete:
     post:
       operationId: Forget_delete
@@ -1033,89 +858,6 @@ paths:
         content:
           application/json:
             schema: {}
-  /api/preferences:
-    get:
-      operationId: Preferences_list
-      parameters:
-        - name: stance
-          in: query
-          required: false
-          schema:
-            type: string
-          explode: false
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - data
-                  - total
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Preference'
-                  total:
-                    type: integer
-                    format: int32
-                description: Paginated list wrapper.
-      tags:
-        - Preferences
-  /api/preferences/stats:
-    get:
-      operationId: Preferences_stats
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PreferenceStats'
-      tags:
-        - Preferences
-  /api/preferences/{id}:
-    put:
-      operationId: Preferences_update
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int32
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-      tags:
-        - Preferences
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdatePreferenceRequest'
-    delete:
-      operationId: Preferences_delete
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int32
-      responses:
-        '204':
-          description: 'There is no content to send for this request, but the headers may be useful. '
-      tags:
-        - Preferences
   /api/prompts:
     get:
       operationId: Prompts_list
@@ -1628,19 +1370,6 @@ components:
           type: string
         cron_expr:
           type: string
-    CreateFeedRequest:
-      type: object
-      required:
-        - name
-        - url
-        - channel_id
-      properties:
-        name:
-          type: string
-        url:
-          type: string
-        channel_id:
-          type: string
     CreateMemoryRequest:
       type: object
       required:
@@ -1708,71 +1437,6 @@ components:
       properties:
         error:
           type: string
-    Feed:
-      type: object
-      required:
-        - id
-        - name
-        - url
-        - channel_id
-        - enabled
-        - created_at
-        - updated_at
-      properties:
-        id:
-          type: integer
-          format: int32
-        name:
-          type: string
-        url:
-          type: string
-        channel_id:
-          type: string
-        enabled:
-          type: boolean
-        last_fetched_at:
-          type: string
-        created_at:
-          type: string
-        updated_at:
-          type: string
-    FeedItem:
-      type: object
-      required:
-        - id
-        - feed_id
-        - title
-        - url
-        - created_at
-      properties:
-        id:
-          type: integer
-          format: int32
-        feed_id:
-          type: integer
-          format: int32
-        title:
-          type: string
-        url:
-          type: string
-        content:
-          type: string
-        published_at:
-          type: string
-        created_at:
-          type: string
-    FeedStats:
-      type: object
-      required:
-        - total
-        - enabled
-      properties:
-        total:
-          type: integer
-          format: int32
-        enabled:
-          type: integer
-          format: int32
     ForgetDeleteRequest:
       type: object
       required:
@@ -1986,74 +1650,6 @@ components:
           type: string
         platform_name:
           type: string
-    Preference:
-      type: object
-      required:
-        - id
-        - category
-        - topic
-        - stance
-        - confidence
-        - reasoning
-        - encounters
-        - shared
-        - created_at
-        - updated_at
-      properties:
-        id:
-          type: integer
-          format: int32
-        category:
-          type: string
-        topic:
-          type: string
-        stance:
-          type: string
-          enum:
-            - liked
-            - disliked
-            - curious
-            - undecided
-        confidence:
-          type: number
-          format: double
-        reasoning:
-          type: string
-        encounters:
-          type: integer
-          format: int32
-        shared:
-          type: boolean
-        last_evaluated_at:
-          type: string
-        created_at:
-          type: string
-        updated_at:
-          type: string
-    PreferenceStats:
-      type: object
-      required:
-        - total
-        - liked
-        - disliked
-        - curious
-        - undecided
-      properties:
-        total:
-          type: integer
-          format: int32
-        liked:
-          type: integer
-          format: int32
-        disliked:
-          type: integer
-          format: int32
-        curious:
-          type: integer
-          format: int32
-        undecided:
-          type: integer
-          format: int32
     PromptFile:
       type: object
       required:
@@ -2152,17 +1748,6 @@ components:
           type: string
         user_id:
           type: string
-    UpdateFeedRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        url:
-          type: string
-        channel_id:
-          type: string
-        enabled:
-          type: boolean
     UpdateMemoryRequest:
       type: object
       properties:
@@ -2187,21 +1772,6 @@ components:
         radius_m:
           type: number
           format: double
-    UpdatePreferenceRequest:
-      type: object
-      properties:
-        stance:
-          type: string
-          enum:
-            - liked
-            - disliked
-            - curious
-            - undecided
-        confidence:
-          type: number
-          format: double
-        reasoning:
-          type: string
     UpdatePromptRequest:
       type: object
       required:

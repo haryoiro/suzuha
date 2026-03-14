@@ -79,55 +79,6 @@ func (UnimplementedHandler) ConversationLogsList(ctx context.Context) (r *Conver
 	return r, ht.ErrNotImplemented
 }
 
-// FeedsCreate implements Feeds_create operation.
-//
-// POST /api/feeds
-func (UnimplementedHandler) FeedsCreate(ctx context.Context, req *CreateFeedRequest) (r *FeedsCreateCreated, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// FeedsDelete implements Feeds_delete operation.
-//
-// DELETE /api/feeds/{id}
-func (UnimplementedHandler) FeedsDelete(ctx context.Context, params FeedsDeleteParams) error {
-	return ht.ErrNotImplemented
-}
-
-// FeedsGet implements Feeds_get operation.
-//
-// GET /api/feeds/{id}
-func (UnimplementedHandler) FeedsGet(ctx context.Context, params FeedsGetParams) (r *FeedsGetOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// FeedsItems implements Feeds_items operation.
-//
-// GET /api/feeds/{id}/items
-func (UnimplementedHandler) FeedsItems(ctx context.Context, params FeedsItemsParams) (r *FeedsItemsOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// FeedsList implements Feeds_list operation.
-//
-// GET /api/feeds
-func (UnimplementedHandler) FeedsList(ctx context.Context) (r *FeedsListOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// FeedsStats implements Feeds_stats operation.
-//
-// GET /api/feeds/stats
-func (UnimplementedHandler) FeedsStats(ctx context.Context) (r *FeedStats, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// FeedsUpdate implements Feeds_update operation.
-//
-// PUT /api/feeds/{id}
-func (UnimplementedHandler) FeedsUpdate(ctx context.Context, req *UpdateFeedRequest, params FeedsUpdateParams) (r *FeedsUpdateOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // ForgetDelete implements Forget_delete operation.
 //
 // POST /api/forget/delete
@@ -328,34 +279,6 @@ func (UnimplementedHandler) MetricsJSON(ctx context.Context) (r *MetricsJSONOK, 
 //
 // POST /api/playground
 func (UnimplementedHandler) PlaygroundChat(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// PreferencesDelete implements Preferences_delete operation.
-//
-// DELETE /api/preferences/{id}
-func (UnimplementedHandler) PreferencesDelete(ctx context.Context, params PreferencesDeleteParams) error {
-	return ht.ErrNotImplemented
-}
-
-// PreferencesList implements Preferences_list operation.
-//
-// GET /api/preferences
-func (UnimplementedHandler) PreferencesList(ctx context.Context, params PreferencesListParams) (r *PreferencesListOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// PreferencesStats implements Preferences_stats operation.
-//
-// GET /api/preferences/stats
-func (UnimplementedHandler) PreferencesStats(ctx context.Context) (r *PreferenceStats, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// PreferencesUpdate implements Preferences_update operation.
-//
-// PUT /api/preferences/{id}
-func (UnimplementedHandler) PreferencesUpdate(ctx context.Context, req *UpdatePreferenceRequest, params PreferencesUpdateParams) (r *OkResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

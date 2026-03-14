@@ -62,13 +62,6 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 | GET | `/api/channel-settings` | チャンネル設定一覧 |
 | PUT | `/api/channel-settings/:id` | チャンネル設定更新 |
 | DELETE | `/api/channel-settings/:id` | チャンネル設定削除 |
-| GET | `/api/feeds` | RSS フィード一覧 |
-| GET | `/api/feeds/:id` | フィード詳細 |
-| POST | `/api/feeds` | フィード作成 |
-| PUT | `/api/feeds/:id` | フィード更新 |
-| DELETE | `/api/feeds/:id` | フィード削除 |
-| GET | `/api/feeds/:id/items` | フィードアイテム一覧 |
-| GET | `/api/feeds/stats` | フィード統計 |
 | GET | `/api/metrics/json` | メトリクス（JSON） |
 | GET | `/api/prompts` | プロンプトファイル一覧 |
 | GET | `/api/prompts/:name` | プロンプトファイル取得 |
@@ -129,7 +122,6 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 | Dashboard | `#` | 概要・統計 |
 | Memories | `#memories` | 記憶一覧・CRUD・検索 |
 | Memory Detail | `#memory/:id` | 記憶詳細・編集 |
-| Feeds | `#feeds` | RSS フィード管理 |
 | Discord | `#discord` | チャンネル設定・ギルド管理 |
 | Users | `#users` | ユーザー管理・好感度 |
 | Actions | `#actions` | 予約アクション管理 |
@@ -152,7 +144,6 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 memoriesApi.list({ offset, limit, type, q })
 usersApi.get(id)
 channelSettingsApi.upsert(channelId, { mode, home })
-feedsApi.create({ name, url, channel_id })
 toolsApi.toggle(name, enabled)
 llmApi.update({ preset: "local-qwen" })
 playgroundApi.send(message)

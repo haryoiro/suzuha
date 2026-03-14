@@ -27,7 +27,6 @@ const typeColors: Record<string, string> = {
   user: "blue",
   world: "green",
   tool: "orange",
-  rss: "cyan",
   episode: "purple",
   self: "magenta",
 };

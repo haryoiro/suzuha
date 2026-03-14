@@ -86,9 +86,6 @@ consolidator:
         cron: "@every 10m"
         config:
           channel_id: ""    # 未指定時は home チャンネルを自動検出
-      - name: "RSS巡回"
-        task: rss
-        cron: "@every 30m"
       - name: "ウェブ探索"
         task: explore
         cron: "@every 2h"

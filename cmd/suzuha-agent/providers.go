@@ -28,7 +28,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
-	"github.com/haryoiro/suzuha/internal/rss"
 	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -181,7 +180,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			features := []scheduler.Feature{
-				rss.New(store.DB(), store),
 				schedule.New(store.DB()),
 				dyntools.New("/data/tools", registry, logger),
 				mcp.NewFeature(mcpMgr, logger),

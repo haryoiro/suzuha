@@ -22,7 +22,6 @@ Feature が `agent.PipelineHook` も実装していれば、パイプライン�
 
 ```go
 features := []scheduler.Feature{
-    rss.New(store.DB(), store),
     schedule.New(store.DB()),
     dyntools.New("/data/tools", registry, logger),
     mcp.NewFeature(mcpMgr, logger),
@@ -69,26 +68,13 @@ boredom = hours_since_last_interaction × 8.0  (上限 100)
 **処理フロー:**
 1. 最後のユーザーインタラクション時刻を取得
 2. 退屈度を計算、確率的に投稿するか判定
-3. コンテキスト収集: 最近の記憶、過去の独り言、RSS 記事
+3. コンテキスト収集: 最近の記憶、過去の独り言
 4. メンション対象をinterest加重で選択（退屈度が高い場合）
 5. セルフプロンプトイベントをイベントバスに発行
 
 **メンション選択:** 退屈度 ≥ 50（高 interest ユーザーがいる場合は ≥ 30）で確率的にメンション。interest をウェイトとした重み付きランダム。
 
-### 2. RSS
-
-**パッケージ:** `internal/rss/`
-
-RSS フィードを定期的にポーリングし、新着記事をメモリに保存・通知する。
-
-**ツール:**
-- `rss_add`: フィード追加
-- `rss_list`: フィード一覧
-- `rss_remove`: フィード削除
-
-**タスク:** RSS ポーリング（cron 定期実行）
-
-### 3. Explore（ウェブ探索）
+### 2. Explore（ウェブ探索）
 
 **パッケージ:** `internal/explore/`
 
@@ -102,13 +88,13 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 5. `next_query` があれば次の検索に進む（max_depth まで）
 6. 最後に探索全体を LLM に要約させる
 
-### 4. Affinity（好感度評価）
+### 3. Affinity（好感度評価）
 
 **パッケージ:** `internal/affinity/`
 
 コンテキスト圧縮時に好感度の変動を評価する。`PipelineHook` を実装。
 
-### 5. Forget（記憶重複削除）
+### 4. Forget（記憶重複削除）
 
 **パッケージ:** `internal/forget/`
 
@@ -120,7 +106,7 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 - `POST /api/forget/merge`: 複数の記憶をマージ
 - `POST /api/forget/run`: 自動重複削除実行
 
-### 6. Schedule（予約アクション）
+### 5. Schedule（予約アクション）
 
 **パッケージ:** `internal/schedule/`
 
@@ -128,13 +114,13 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 
 **ツール:** `schedule_action`
 
-### 7. Dynamic Tools
+### 6. Dynamic Tools
 
 **パッケージ:** `internal/dyntools/`
 
 `/data/tools/` ディレクトリ内のスクリプトファイルを動的にツール化。YAML フロントマターでメタデータを記述。
 
-### 8. MCP Apps
+### 7. MCP Apps
 
 **パッケージ:** `internal/mcp/`
 
@@ -148,7 +134,7 @@ MCP (Model Context Protocol) ツールサーバーの管理。
 
 **永続化:** インストールしたアプリは DB に保存され、再起動時に自動再接続。
 
-### 9. Location
+### 8. Location
 
 **パッケージ:** `internal/location/`
 
@@ -208,9 +194,6 @@ consolidator:
         cron: "@every 10m"
         config:
           channel_id: "123456"
-      - name: "RSS巡回"
-        task: rss
-        cron: "@every 30m"
       - name: "ウェブ探索"
         task: explore
         cron: "@every 2h"

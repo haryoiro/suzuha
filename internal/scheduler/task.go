@@ -16,9 +16,9 @@ import (
 )
 
 // CronTask is a pluggable periodic job, analogous to tool.Tool for agent tools.
-// Each implementation handles a specific kind of scheduled work (RSS, TODO, etc.).
+// Each implementation handles a specific kind of scheduled work (topics, explore, etc.).
 type CronTask interface {
-	// Name returns a unique identifier for this task type (e.g. "rss", "todo").
+	// Name returns a unique identifier for this task type (e.g. "topics", "explore").
 	// This is matched against the "task" field in config.yaml job definitions.
 	Name() string
 

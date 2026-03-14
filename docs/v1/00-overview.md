@@ -9,7 +9,7 @@ suzuha2 は **自律型 Discord Bot エージェント** である。LLM を頭�
 - **4 段パイプライン**: Perceive → Think → Act → Reflect
 - **長期記憶**: SQLite + ベクトル埋め込みによるセマンティック検索
 - **好感度システム**: closeness / trust / interest の 3 軸でユーザーとの関係を追跡
-- **自発的行動**: 退屈度ベースの独り言、RSS 巡回、ウェブ探索
+- **自発的行動**: 退屈度ベースの独り言、ウェブ探索
 - **音声チャット**: Whisper (STT) + VOICEVOX (TTS) で Discord VC に参加
 - **物理エージェント**: ESP32 カメラ + サーボで「見る」「首を振る」「表情を変える」
 - **MCP アプリ**: MCP プロトコル対応ツールサーバーを動的にインストール
@@ -65,7 +65,7 @@ suzuha2 は **自律型 Discord Bot エージェント** である。LLM を頭�
 
 ┌──────────────────────────┐  ┌───────────────────┐
 │     Scheduler            │  │   Admin Server    │
-│  topics, rss, explore,   │  │   (React SPA)     │
+│  topics, explore,        │  │   (React SPA)     │
 │  affinity, forget, ...   │  │                   │
 └──────────────────────────┘  └───────────────────┘
 
@@ -100,7 +100,6 @@ suzuha2/
 │   ├── memory/             # 長期記憶ストア (SQLite + ベクトル検索)
 │   ├── notification/       # 通知ミドルウェア (静寂時間, チャンネル設定)
 │   ├── observe/            # メトリクス, ログ, リングバッファ
-│   ├── rss/                # RSS フィード巡回
 │   ├── schedule/           # スケジュールアクション (予約投稿)
 │   ├── scheduler/          # cron スケジューラー
 │   ├── tool/               # ツールインターフェース + builtin/ (Discord, fetch, python, user_profile)

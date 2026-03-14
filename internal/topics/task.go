@@ -129,7 +129,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	recentMemories := fetchRecentContext(ctx, cc, 8)
 	pastMutterings := fetchPastMutterings(ctx, cc, 8)
-	rssDiscoveries := fetchRecentRSSFromStore(ctx, cc, 5)
 
 	var mentionables []user.MentionableUser
 	if cc.Users != nil {
@@ -138,7 +137,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	mentionTarget := selectMentionTarget(boredom, mentionables)
 
 	// Publish self-prompt event to agent pipeline.
-	prompt := buildSelfPrompt(localNow, timeHint, boredom, recentMemories, pastMutterings, rssDiscoveries, mentionTarget)
+	prompt := buildSelfPrompt(localNow, timeHint, boredom, recentMemories, pastMutterings, mentionTarget)
 	evt := event.NewSelfPromptEvent(mc.ChannelID, prompt)
 	cc.Bus.Publish(evt)
 
@@ -264,7 +263,6 @@ func buildSelfPrompt(
 	boredom float64,
 	recentMemories []memory.Memory,
 	pastMutterings []memory.Memory,
-	rssDiscoveries []string,
 	mentionTarget *user.MentionableUser,
 ) string {
 	var sb strings.Builder
@@ -283,14 +281,6 @@ func buildSelfPrompt(
 		sb.WriteString("最近の記憶の断片:\n")
 		for _, m := range recentMemories {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(rssDiscoveries) > 0 {
-		sb.WriteString("最近見つけた記事:\n")
-		for _, content := range rssDiscoveries {
-			fmt.Fprintf(&sb, "- %s\n", truncateStr(content, 120))
 		}
 		sb.WriteString("\n")
 	}
@@ -318,21 +308,6 @@ func buildSelfPrompt(
 	}
 
 	return sb.String()
-}
-
-// fetchRecentRSSFromStore retrieves recent RSS memory content from the store.
-func fetchRecentRSSFromStore(ctx context.Context, cc *scheduler.CronContext, limit int) []string {
-	since := time.Now().Add(-24 * time.Hour)
-	mems, err := cc.Memory.ListRecentByType(ctx, memory.MemoryTypeRSS, since, limit)
-	if err != nil {
-		cc.Logger.Debug("topics: list recent RSS", "error", err)
-		return nil
-	}
-	items := make([]string, 0, len(mems))
-	for _, m := range mems {
-		items = append(items, m.Content)
-	}
-	return items
 }
 
 // selectMentionTarget probabilistically picks a user to mention based on boredom.

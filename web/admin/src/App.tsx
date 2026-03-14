@@ -8,7 +8,6 @@ import {
   EditOutlined,
   TeamOutlined,
   MessageOutlined,
-  WifiOutlined,
   ClockCircleOutlined,
   MenuOutlined,
   ApiOutlined,
@@ -28,7 +27,6 @@ const MetricsPage = lazy(() => import("./routes/metrics"));
 const LogsPage = lazy(() => import("./routes/logs"));
 const UsersPage = lazy(() => import("./routes/users/index"));
 const ContextPage = lazy(() => import("./routes/context"));
-const FeedsPage = lazy(() => import("./routes/feeds/index"));
 const DiscordPage = lazy(() => import("./routes/discord/index"));
 const PromptsPage = lazy(() => import("./routes/prompts"));
 const ActionsPage = lazy(() => import("./routes/actions"));
@@ -46,7 +44,6 @@ type Page =
   | { key: "dashboard" }
   | { key: "memories" }
   | { key: "memory-detail"; id: string }
-  | { key: "feeds" }
   | { key: "discord" }
   | { key: "users" }
   | { key: "actions" }
@@ -68,7 +65,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "feeds", "discord", "users", "actions", "location", "tools", "playground", "scheduler", "prompts", "metrics", "context", "device", "voice", "logs"];
+  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "playground", "scheduler", "prompts", "metrics", "context", "device", "voice", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -94,7 +91,6 @@ export function App() {
   const menuItems = [
     { key: "dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
     { key: "memories", icon: <DatabaseOutlined />, label: "Memories" },
-    { key: "feeds", icon: <WifiOutlined />, label: "Feeds" },
     { key: "discord", icon: <ApiOutlined />, label: "Discord" },
     { key: "users", icon: <TeamOutlined />, label: "Users" },
     { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
@@ -122,8 +118,6 @@ export function App() {
         return <MemoriesPage onViewDetail={navigateToMemory} />;
       case "memory-detail":
         return <MemoryDetailPage id={page.id} onBack={navigateBack} />;
-      case "feeds":
-        return <FeedsPage />;
       case "discord":
         return <DiscordPage />;
       case "users":

@@ -14,7 +14,6 @@ const (
 	MemoryTypeUser    MemoryType = "user"
 	MemoryTypeWorld   MemoryType = "world"
 	MemoryTypeTool    MemoryType = "tool"
-	MemoryTypeRSS     MemoryType = "rss"
 	MemoryTypeEpisode MemoryType = "episode"
 	MemoryTypeSelf    MemoryType = "self"
 )

@@ -86,7 +86,6 @@ type ToolResult struct {
 
 | Feature | ツール | 説明 |
 |---------|--------|------|
-| RSS (`internal/rss/`) | `rss_add`, `rss_list`, `rss_remove` | RSS フィード管理 |
 | Schedule (`internal/schedule/`) | `schedule_action` | 予約アクション登録 |
 | MCP Apps (`internal/mcp/`) | `mcp_search`, `mcp_install`, `mcp_uninstall`, `mcp_list_apps` | MCP ツールサーバー管理 |
 | Explore (`internal/explore/`) | `explore` | ウェブ探索（SearXNG 検索 + LLM 評価） |

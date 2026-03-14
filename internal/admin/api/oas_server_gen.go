@@ -48,34 +48,6 @@ type Handler interface {
 	//
 	// GET /api/conversation-logs
 	ConversationLogsList(ctx context.Context) (*ConversationLogsListOK, error)
-	// FeedsCreate implements Feeds_create operation.
-	//
-	// POST /api/feeds
-	FeedsCreate(ctx context.Context, req *CreateFeedRequest) (*FeedsCreateCreated, error)
-	// FeedsDelete implements Feeds_delete operation.
-	//
-	// DELETE /api/feeds/{id}
-	FeedsDelete(ctx context.Context, params FeedsDeleteParams) error
-	// FeedsGet implements Feeds_get operation.
-	//
-	// GET /api/feeds/{id}
-	FeedsGet(ctx context.Context, params FeedsGetParams) (*FeedsGetOK, error)
-	// FeedsItems implements Feeds_items operation.
-	//
-	// GET /api/feeds/{id}/items
-	FeedsItems(ctx context.Context, params FeedsItemsParams) (*FeedsItemsOK, error)
-	// FeedsList implements Feeds_list operation.
-	//
-	// GET /api/feeds
-	FeedsList(ctx context.Context) (*FeedsListOK, error)
-	// FeedsStats implements Feeds_stats operation.
-	//
-	// GET /api/feeds/stats
-	FeedsStats(ctx context.Context) (*FeedStats, error)
-	// FeedsUpdate implements Feeds_update operation.
-	//
-	// PUT /api/feeds/{id}
-	FeedsUpdate(ctx context.Context, req *UpdateFeedRequest, params FeedsUpdateParams) (*FeedsUpdateOK, error)
 	// ForgetDelete implements Forget_delete operation.
 	//
 	// POST /api/forget/delete
@@ -192,22 +164,6 @@ type Handler interface {
 	//
 	// POST /api/playground
 	PlaygroundChat(ctx context.Context, req jx.Raw) (jx.Raw, error)
-	// PreferencesDelete implements Preferences_delete operation.
-	//
-	// DELETE /api/preferences/{id}
-	PreferencesDelete(ctx context.Context, params PreferencesDeleteParams) error
-	// PreferencesList implements Preferences_list operation.
-	//
-	// GET /api/preferences
-	PreferencesList(ctx context.Context, params PreferencesListParams) (*PreferencesListOK, error)
-	// PreferencesStats implements Preferences_stats operation.
-	//
-	// GET /api/preferences/stats
-	PreferencesStats(ctx context.Context) (*PreferenceStats, error)
-	// PreferencesUpdate implements Preferences_update operation.
-	//
-	// PUT /api/preferences/{id}
-	PreferencesUpdate(ctx context.Context, req *UpdatePreferenceRequest, params PreferencesUpdateParams) (*OkResponse, error)
 	// PromptsGet implements Prompts_get operation.
 	//
 	// GET /api/prompts/{name}

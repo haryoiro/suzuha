@@ -10,7 +10,7 @@
 | 01 | [pipeline](01-pipeline.md) | 4段パイプライン（Perceive/Think/Act/Reflect）の詳細 |
 | 02 | [prompt-assembly](02-prompt-assembly.md) | プロンプト組み立てフロー、情報注入ポイント、メッセージ順序 |
 | 03 | [tools](03-tools.md) | ツールインターフェース、全ツール一覧、skip_response、MCP |
-| 04 | [features](04-features.md) | Feature システム、Topics/RSS/Explore/Affinity/Forget 等 |
+| 04 | [features](04-features.md) | Feature システム、Topics/Explore/Affinity/Forget 等 |
 | 05 | [memory](05-memory.md) | 記憶システム、ベクトル検索、DB スキーマ、コンテキスト永続化 |
 | 06 | [voice](06-voice.md) | 音声チャット（Whisper STT + VOICEVOX TTS + DAVE E2EE） |
 | 07 | [device](07-device.md) | 物理デバイス（ESP32 カメラ + サーボ + YOLO） |

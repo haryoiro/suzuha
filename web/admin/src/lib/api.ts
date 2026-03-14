@@ -14,7 +14,7 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 // Types
 export interface Memory {
   id: string;
-  type: "user" | "world" | "tool" | "rss" | "episode" | "self";
+  type: "user" | "world" | "tool" | "episode" | "self";
   content: string;
   metadata?: Record<string, unknown>;
   created_at: string;
@@ -279,60 +279,6 @@ export const actionsApi = {
     }),
   delete: (id: string) =>
     fetch(`${BASE_URL}/api/scheduled-actions/${id}`, { method: "DELETE" }),
-};
-
-// Feeds API
-export interface Feed {
-  id: string;
-  name: string;
-  url: string;
-  channel_id: string;
-  created_by: string;
-  enabled: boolean;
-  last_polled?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface FeedItem {
-  id: string;
-  feed_id: string;
-  guid: string;
-  title: string;
-  link: string;
-  description: string;
-  published_at?: string;
-  memory_id: string;
-  notified: boolean;
-  created_at: string;
-}
-
-export interface FeedStats {
-  total: number;
-  enabled: number;
-}
-
-export const feedsApi = {
-  list: () =>
-    fetchJSON<{ data: Feed[]; total: number }>("/api/feeds"),
-  get: (id: string) =>
-    fetchJSON<{ data: Feed }>(`/api/feeds/${id}`),
-  create: (body: { name: string; url: string; channel_id: string }) =>
-    fetchJSON<{ data: Feed }>("/api/feeds", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  update: (id: string, body: { name?: string; url?: string; channel_id?: string; enabled?: boolean }) =>
-    fetchJSON<{ data: Feed }>(`/api/feeds/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }),
-  delete: (id: string) =>
-    fetch(`${BASE_URL}/api/feeds/${id}`, { method: "DELETE" }),
-  items: (id: string, params: { offset?: number; limit?: number }) =>
-    fetchJSON<{ data: FeedItem[]; total: number }>(`/api/feeds/${id}/items${toQuery(params)}`),
-  stats: () =>
-    fetchJSON<FeedStats>("/api/feeds/stats"),
 };
 
 // VOICEVOX API

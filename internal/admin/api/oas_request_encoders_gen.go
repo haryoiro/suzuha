@@ -24,34 +24,6 @@ func encodeChannelSettingsUpdateRequest(
 	return nil
 }
 
-func encodeFeedsCreateRequest(
-	req *CreateFeedRequest,
-	r *http.Request,
-) error {
-	const contentType = "application/json"
-	e := new(jx.Encoder)
-	{
-		req.Encode(e)
-	}
-	encoded := e.Bytes()
-	ht.SetBody(r, bytes.NewReader(encoded), contentType)
-	return nil
-}
-
-func encodeFeedsUpdateRequest(
-	req *UpdateFeedRequest,
-	r *http.Request,
-) error {
-	const contentType = "application/json"
-	e := new(jx.Encoder)
-	{
-		req.Encode(e)
-	}
-	encoded := e.Bytes()
-	ht.SetBody(r, bytes.NewReader(encoded), contentType)
-	return nil
-}
-
 func encodeForgetDeleteRequest(
 	req *ForgetDeleteRequest,
 	r *http.Request,
@@ -176,20 +148,6 @@ func encodePlaygroundChatRequest(
 		if len(req) != 0 {
 			e.Raw(req)
 		}
-	}
-	encoded := e.Bytes()
-	ht.SetBody(r, bytes.NewReader(encoded), contentType)
-	return nil
-}
-
-func encodePreferencesUpdateRequest(
-	req *UpdatePreferenceRequest,
-	r *http.Request,
-) error {
-	const contentType = "application/json"
-	e := new(jx.Encoder)
-	{
-		req.Encode(e)
 	}
 	encoded := e.Bytes()
 	ht.SetBody(r, bytes.NewReader(encoded), contentType)
