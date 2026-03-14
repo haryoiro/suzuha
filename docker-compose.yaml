@@ -60,30 +60,6 @@ services:
     profiles:
       - voice
 
-  suzuha1:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    command: ["-c", ".air.agent.toml"]
-    ports:
-      - "9091:9090"
-      - "8082:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - .:/app
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
-      - ./data/suzuha1:/data
-      - ./.suzuha1:/app/.suzuha1:ro
-      - npm-cache:/root/.npm
-    env_file:
-      - .env
-    environment:
-      - SUZUHA_CONFIG=/app/config.suzuha1.yaml
-    profiles:
-      - suzuha1
-
   admin-frontend:
     image: node:22-slim
     working_dir: /app/web/admin
