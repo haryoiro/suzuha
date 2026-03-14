@@ -24,11 +24,11 @@ type Server struct {
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *schedule.Store, logger *slog.Logger) *Server {
+func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *schedule.Store, mediaStore memory.MediaStore, logger *slog.Logger) *Server {
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 
 	// Create the ogen handler implementation.
-	adminHandler := NewAdminHandler(store, userStore, schedStore, agentBase, cfg.PromptDir, logger)
+	adminHandler := NewAdminHandler(store, userStore, schedStore, mediaStore, agentBase, cfg.PromptDir, logger)
 
 	// Create the ogen server (handles all typed API routes).
 	ogenServer, err := api.NewServer(adminHandler)
@@ -73,6 +73,11 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	})
+
+	// Media serve, upload, and image search (binary, not in OpenAPI spec).
+	mux.HandleFunc("GET /api/media/", adminHandler.serveMedia)
+	mux.HandleFunc("POST /api/memories/{id}/media", adminHandler.uploadMedia)
+	mux.HandleFunc("POST /api/memories/search-image", adminHandler.searchByImage)
 
 	// VOICEVOX speaker proxy.
 	mux.HandleFunc("GET /api/voicevox/speakers", adminHandler.proxyVoicevoxSpeakers)

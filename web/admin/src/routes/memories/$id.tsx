@@ -1,4 +1,4 @@
-import { useEffect, memo } from "react";
+import { useEffect, useRef, memo } from "react";
 import {
   Card,
   Form,
@@ -7,11 +7,16 @@ import {
   Button,
   Space,
   Spin,
+  Upload,
+  Image,
   message,
   Descriptions,
 } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, UploadOutlined, PaperClipOutlined } from "@ant-design/icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemory, useUpdateMemory, useDeleteMemory } from "../../hooks/useMemories";
+import { memoriesApi, getMediaURL, getAttachments } from "../../lib/api";
+import type { MemoryAttachment } from "../../lib/api";
 import { formatJST } from "../../lib/date";
 
 const { TextArea } = Input;
@@ -22,6 +27,7 @@ interface Props {
 }
 
 export const MemoryDetailPage = memo(function MemoryDetailPage({ id, onBack }: Props) {
+  const queryClient = useQueryClient();
   const { data: memory, isLoading } = useMemory(id);
   const updateMutation = useUpdateMemory();
   const deleteMutation = useDeleteMemory();
@@ -140,6 +146,58 @@ export const MemoryDetailPage = memo(function MemoryDetailPage({ id, onBack }: P
             </Space>
           </Form.Item>
         </Form>
+      </Card>
+
+      <Card
+        title={<><PaperClipOutlined /> Attachments</>}
+        size="small"
+        style={{ marginTop: 16 }}
+        extra={
+          <Upload
+            showUploadList={false}
+            accept="image/*,audio/*"
+            customRequest={async ({ file, onSuccess, onError }) => {
+              try {
+                await memoriesApi.uploadMedia(id, file as File);
+                queryClient.invalidateQueries({ queryKey: ["memory", id] });
+                message.success("Uploaded");
+                onSuccess?.(null);
+              } catch (err) {
+                message.error("Upload failed");
+                onError?.(err as Error);
+              }
+            }}
+          >
+            <Button icon={<UploadOutlined />} size="small">Upload</Button>
+          </Upload>
+        }
+      >
+        {getAttachments(memory).length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {getAttachments(memory).map((att: MemoryAttachment) => (
+              <div key={att.key} style={{ textAlign: "center" }}>
+                {att.modality === "image" ? (
+                  <Image
+                    src={getMediaURL(att.key)}
+                    alt={att.key}
+                    width={120}
+                    height={120}
+                    style={{ objectFit: "cover", borderRadius: 4 }}
+                  />
+                ) : (
+                  <audio controls src={getMediaURL(att.key)} style={{ width: 200 }} />
+                )}
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 4 }}>
+                  {att.mime_type}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ color: "rgba(255,255,255,0.3)", padding: 12, textAlign: "center" }}>
+            No attachments
+          </div>
+        )}
       </Card>
     </div>
   );

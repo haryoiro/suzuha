@@ -12,6 +12,12 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Types
+export interface MemoryAttachment {
+  key: string;
+  modality: "image" | "audio";
+  mime_type: string;
+}
+
 export interface Memory {
   id: string;
   type: "user" | "world" | "tool" | "episode" | "self";
@@ -19,6 +25,15 @@ export interface Memory {
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+/** Extract attachments from metadata (stored as metadata.attachments in DB). */
+export function getAttachments(mem: Memory): MemoryAttachment[] {
+  const raw = mem.metadata?.attachments;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (a): a is MemoryAttachment => typeof a === "object" && a !== null && "key" in a
+  );
 }
 
 export interface ListParams {
@@ -93,7 +108,22 @@ export const memoriesApi = {
     fetchJSON<DuplicatesResponse>(
       `/api/memories/duplicates${threshold != null ? `?threshold=${threshold}` : ""}`
     ),
+  uploadMedia: async (memoryId: string, file: File, modality?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (modality) form.append("modality", modality);
+    const res = await fetch(`${BASE_URL}/api/memories/${memoryId}/media`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    return res.json() as Promise<MemoryAttachment>;
+  },
 };
+
+export function getMediaURL(key: string): string {
+  return `${BASE_URL}/api/media/${key}`;
+}
 
 export interface VecStatsResponse {
   total_memories: number;

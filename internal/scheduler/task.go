@@ -49,6 +49,9 @@ type CronContext struct {
 	ChannelActivity channel.ActivityStore  // Channel activity reads.
 	MemoryAdmin     memory.AdminStore      // Admin-level memory operations (batch delete, etc.).
 
+	// Media storage
+	MediaStore memory.MediaStore // Binary media storage (images, audio). May be nil.
+
 	// Event injection
 	Bus *event.Bus // Agent event bus for publishing self-prompt events. May be nil.
 

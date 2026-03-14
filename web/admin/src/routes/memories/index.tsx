@@ -8,22 +8,26 @@ import {
   Tag,
   Modal,
   Form,
+  Upload,
   message,
   Popconfirm,
   Statistic,
   Progress,
   Segmented,
 } from "antd";
+import type { UploadFile } from "antd";
 import {
   PlusOutlined,
   SearchOutlined,
   DeleteOutlined,
   EyeOutlined,
   CopyOutlined,
+  PaperClipOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useMemories, useCreateMemory, useDeleteMemory } from "../../hooks/useMemories";
-import { memoriesApi } from "../../lib/api";
+import { memoriesApi, getAttachments } from "../../lib/api";
 import type { Memory } from "../../lib/api";
 import { DedupView } from "../forget";
 import type { ColumnsType } from "antd/es/table";
@@ -51,6 +55,8 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
   const [query, setQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createFiles, setCreateFiles] = useState<UploadFile[]>([]);
+  const [creating, setCreating] = useState(false);
   const [form] = Form.useForm();
 
   const { data: stats } = useQuery({
@@ -82,6 +88,14 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
       title: "Content",
       dataIndex: "content",
       ellipsis: true,
+      render: (text: string, record: Memory) => (
+        <Space>
+          {getAttachments(record).length > 0 && (
+            <PaperClipOutlined style={{ color: "#8c8c8c" }} />
+          )}
+          {text}
+        </Space>
+      ),
     },
     {
       title: "Updated",
@@ -119,12 +133,31 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
   const handleCreate = async () => {
     try {
       const values = await form.validateFields();
-      await createMutation.mutateAsync(values);
+      setCreating(true);
+      const result = await createMutation.mutateAsync(values);
+      const memId = result?.data?.id;
+
+      // Upload attached files if any.
+      if (memId && createFiles.length > 0) {
+        for (const f of createFiles) {
+          if (f.originFileObj) {
+            try {
+              await memoriesApi.uploadMedia(memId, f.originFileObj);
+            } catch {
+              message.warning(`Failed to upload: ${f.name}`);
+            }
+          }
+        }
+      }
+
       message.success("Created");
       setCreateOpen(false);
+      setCreateFiles([]);
       form.resetFields();
     } catch {
       // validation error
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -251,8 +284,8 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
         title="New Memory"
         open={createOpen}
         onOk={handleCreate}
-        onCancel={() => setCreateOpen(false)}
-        confirmLoading={createMutation.isPending}
+        onCancel={() => { setCreateOpen(false); setCreateFiles([]); }}
+        confirmLoading={creating}
       >
         <Form form={form} layout="vertical" initialValues={{ type: "user" }}>
           <Form.Item
@@ -265,6 +298,8 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
                 { label: "user", value: "user" },
                 { label: "world", value: "world" },
                 { label: "tool", value: "tool" },
+                { label: "episode", value: "episode" },
+                { label: "self", value: "self" },
               ]}
             />
           </Form.Item>
@@ -274,6 +309,29 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
             rules={[{ required: true }]}
           >
             <TextArea rows={4} />
+          </Form.Item>
+          <Form.Item label="Attachments">
+            <Upload
+              multiple
+              accept="image/*,audio/*"
+              fileList={createFiles}
+              beforeUpload={(file) => {
+                const uf: UploadFile = {
+                  uid: file.uid,
+                  name: file.name,
+                  status: "done",
+                  originFileObj: file,
+                };
+                setCreateFiles((prev) => [...prev, uf]);
+                return false; // prevent auto upload
+              }}
+              onRemove={(file) => {
+                setCreateFiles((prev) => prev.filter((f) => f.uid !== file.uid));
+              }}
+              listType="picture"
+            >
+              <Button icon={<UploadOutlined />}>Add File</Button>
+            </Upload>
           </Form.Item>
         </Form>
       </Modal>

@@ -19,6 +19,7 @@ type AdminHandler struct {
 	memStore   memory.AdminStore
 	userStore  user.AdminStore
 	schedStore *schedule.Store
+	mediaStore memory.MediaStore
 	db         *sql.DB
 	agentBase  string // e.g. "http://agent:9090"
 	promptDir  string
@@ -32,6 +33,7 @@ func NewAdminHandler(
 	memStore memory.AdminStore,
 	userStore user.AdminStore,
 	schedStore *schedule.Store,
+	mediaStore memory.MediaStore,
 	agentBase string,
 	promptDir string,
 	logger *slog.Logger,
@@ -40,6 +42,7 @@ func NewAdminHandler(
 		memStore:   memStore,
 		userStore:  userStore,
 		schedStore: schedStore,
+		mediaStore: mediaStore,
 		db:         memStore.DB(),
 		agentBase:  agentBase,
 		promptDir:  promptDir,
