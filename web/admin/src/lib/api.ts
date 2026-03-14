@@ -335,42 +335,26 @@ export const feedsApi = {
     fetchJSON<FeedStats>("/api/feeds/stats"),
 };
 
-// Preferences API
-export interface Preference {
+// VOICEVOX API
+export interface VoicevoxStyle {
+  name: string;
   id: number;
-  category: string;
-  topic: string;
-  stance: "liked" | "disliked" | "curious" | "undecided";
-  confidence: number;
-  reasoning: string;
-  encounters: number;
-  shared: boolean;
-  last_evaluated_at?: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface PreferenceStats {
-  total: number;
-  liked: number;
-  disliked: number;
-  curious: number;
-  undecided: number;
+export interface VoicevoxSpeaker {
+  name: string;
+  speaker_uuid: string;
+  styles: VoicevoxStyle[];
 }
 
-export const preferencesApi = {
-  list: (stance?: string) =>
-    fetchJSON<{ data: Preference[]; total: number }>(
-      `/api/preferences${stance ? `?stance=${stance}` : ""}`
-    ),
-  stats: () => fetchJSON<PreferenceStats>("/api/preferences/stats"),
-  update: (id: number, body: { stance?: string; confidence?: number; reasoning?: string }) =>
-    fetchJSON<{ ok: boolean }>(`/api/preferences/${id}`, {
+export const voicevoxApi = {
+  speakers: () => fetchJSON<VoicevoxSpeaker[]>("/api/voicevox/speakers"),
+  currentSpeaker: () => fetchJSON<{ speaker_id: number }>("/api/voicevox/speaker"),
+  setSpeaker: (speakerId: number) =>
+    fetchJSON<{ ok: boolean }>("/api/voicevox/speaker", {
       method: "PUT",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ speaker_id: speakerId }),
     }),
-  delete: (id: number) =>
-    fetch(`${BASE_URL}/api/preferences/${id}`, { method: "DELETE" }),
 };
 
 // Metrics API
@@ -633,3 +617,35 @@ export function connectLogStream(params?: {
   const qs = toQuery(params ?? {});
   return new EventSource(`${BASE_URL}/api/logs/stream${qs}`);
 }
+
+// Device API
+export interface DeviceDetection {
+  label: string;
+  confidence: number;
+  bbox: [number, number, number, number]; // x1, y1, x2, y2
+}
+
+export interface DeviceDetectionEvent {
+  detections: DeviceDetection[];
+  inference_ms: number;
+  timestamp: number;
+  frame_width: number;
+  frame_height: number;
+}
+
+export function getDeviceFrameURL(): string {
+  return `${BASE_URL}/api/device/frame`;
+}
+
+export function connectDetectionStream(): EventSource {
+  return new EventSource(`${BASE_URL}/api/device/detections`);
+}
+
+export const deviceVisionApi = {
+  get: () => fetchJSON<{ enabled: boolean }>("/api/device/vision"),
+  set: (enabled: boolean) =>
+    fetchJSON<{ ok: boolean }>("/api/device/vision", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+};
