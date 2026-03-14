@@ -841,23 +841,6 @@ paths:
                   - metrics
       tags:
         - Metrics
-  /api/playground:
-    post:
-      operationId: Playground_chat
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema: {}
-      tags:
-        - Agent
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {}
   /api/prompts:
     get:
       operationId: Prompts_list

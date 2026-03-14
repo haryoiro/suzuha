@@ -138,22 +138,6 @@ func encodeMemoriesUpdateRequest(
 	return nil
 }
 
-func encodePlaygroundChatRequest(
-	req jx.Raw,
-	r *http.Request,
-) error {
-	const contentType = "application/json"
-	e := new(jx.Encoder)
-	{
-		if len(req) != 0 {
-			e.Raw(req)
-		}
-	}
-	encoded := e.Bytes()
-	ht.SetBody(r, bytes.NewReader(encoded), contentType)
-	return nil
-}
-
 func encodePromptsUpdateRequest(
 	req *UpdatePromptRequest,
 	r *http.Request,

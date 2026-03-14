@@ -520,25 +520,6 @@ export const llmApi = {
     }),
 };
 
-// Playground API
-export interface PlaygroundResponse {
-  text: string;
-  reasoning: string;
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-  elapsed_ms: number;
-  tok_per_sec: number;
-  context_messages: number;
-  error?: string;
-}
-
-export const playgroundApi = {
-  send: (message: string) =>
-    fetchJSON<PlaygroundResponse>("/api/playground", {
-      method: "POST",
-      body: JSON.stringify({ message }),
-    }),
-};
-
 // Identity API
 export interface BotIdentity {
   bot_platform_id: string;

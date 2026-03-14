@@ -27,13 +27,6 @@ interface Context {
   @get op get(): unknown;
 }
 
-// Playground (proxy to agent)
-@route("/api/playground")
-@tag("Agent")
-interface Playground {
-  @post op chat(@body body: unknown): unknown;
-}
-
 // Forget / Deduplication
 model ForgetGroup {
   type: string;

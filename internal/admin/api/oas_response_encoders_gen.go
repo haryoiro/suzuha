@@ -518,22 +518,6 @@ func encodeMetricsJSONResponse(response *MetricsJSONOK, w http.ResponseWriter, s
 	return nil
 }
 
-func encodePlaygroundChatResponse(response jx.Raw, w http.ResponseWriter, span trace.Span) error {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(200)
-	span.SetStatus(codes.Ok, http.StatusText(200))
-
-	e := new(jx.Encoder)
-	if len(response) != 0 {
-		e.Raw(response)
-	}
-	if _, err := e.WriteTo(w); err != nil {
-		return errors.Wrap(err, "write")
-	}
-
-	return nil
-}
-
 func encodePromptsGetResponse(response *PromptFile, w http.ResponseWriter, span trace.Span) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)

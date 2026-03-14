@@ -43,7 +43,6 @@ const (
 	MemoriesUpdateOperation         OperationName = "MemoriesUpdate"
 	MemoriesVecStatsOperation       OperationName = "MemoriesVecStats"
 	MetricsJSONOperation            OperationName = "MetricsJSON"
-	PlaygroundChatOperation         OperationName = "PlaygroundChat"
 	PromptsGetOperation             OperationName = "PromptsGet"
 	PromptsListOperation            OperationName = "PromptsList"
 	PromptsUpdateOperation          OperationName = "PromptsUpdate"

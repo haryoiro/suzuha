@@ -13,7 +13,6 @@ import {
   ApiOutlined,
   EnvironmentOutlined,
   ToolOutlined,
-  ExperimentOutlined,
   ScheduleOutlined,
   CameraOutlined,
   SoundOutlined,
@@ -32,7 +31,6 @@ const PromptsPage = lazy(() => import("./routes/prompts"));
 const ActionsPage = lazy(() => import("./routes/actions"));
 const LocationPage = lazy(() => import("./routes/location"));
 const ToolsPage = lazy(() => import("./routes/tools"));
-const PlaygroundPage = lazy(() => import("./routes/playground"));
 const SchedulerPage = lazy(() => import("./routes/scheduler"));
 const DevicePage = lazy(() => import("./routes/device"));
 const VoicePage = lazy(() => import("./routes/voice"));
@@ -49,7 +47,6 @@ type Page =
   | { key: "actions" }
   | { key: "location" }
   | { key: "tools" }
-  | { key: "playground" }
   | { key: "scheduler" }
   | { key: "prompts" }
   | { key: "metrics" }
@@ -65,7 +62,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "playground", "scheduler", "prompts", "metrics", "context", "device", "voice", "logs"];
+  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "scheduler", "prompts", "metrics", "context", "device", "voice", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -96,7 +93,6 @@ export function App() {
     { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
     { key: "location", icon: <EnvironmentOutlined />, label: "Location" },
     { key: "tools", icon: <ToolOutlined />, label: "Tools" },
-    { key: "playground", icon: <ExperimentOutlined />, label: "Playground" },
     { key: "scheduler", icon: <ScheduleOutlined />, label: "Scheduler" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
     { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
@@ -128,8 +124,6 @@ export function App() {
         return <LocationPage />;
       case "tools":
         return <ToolsPage />;
-      case "playground":
-        return <PlaygroundPage />;
       case "scheduler":
         return <SchedulerPage />;
       case "prompts":

@@ -480,56 +480,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 	})
 
 	// Playground: chat with LLM using current context snapshot (read-only).
-	mux.HandleFunc("POST /internal/playground", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Message string `json:"message"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Message == "" {
-			http.Error(w, `{"error":"message required"}`, http.StatusBadRequest)
-			return
-		}
-
-		// Snapshot current context + last ephemeral (does not mutate agent state).
-		snapshot := ag.AgentContext().MessagesWithSystem()
-		ephemeral := ag.LastEphemeral()
-		msgs := make([]llm.Message, 0, len(snapshot)+len(ephemeral)+1)
-		msgs = append(msgs, snapshot...)
-		msgs = append(msgs, ephemeral...)
-		msgs = append(msgs, llm.Message{
-			Role:    "user",
-			Content: body.Message,
-		})
-
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
-		defer cancel()
-
-		start := time.Now()
-		resp, err := llmClient.Complete(ctx, msgs, nil)
-		elapsed := time.Since(start)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
-			return
-		}
-
-		elapsedMs := elapsed.Milliseconds()
-		tokPerSec := float64(0)
-		if elapsedMs > 0 && resp.Usage.CompletionTokens > 0 {
-			tokPerSec = float64(resp.Usage.CompletionTokens) / elapsed.Seconds()
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"text":       resp.Text,
-			"reasoning":  resp.Reasoning,
-			"usage":      resp.Usage,
-			"elapsed_ms": elapsedMs,
-			"tok_per_sec": tokPerSec,
-			"context_messages": len(msgs) - 1,
-		})
-	})
-
 	// Tool registry listing + enable/disable.
 	registry := do.MustInvoke[*tool.Registry](injector)
 

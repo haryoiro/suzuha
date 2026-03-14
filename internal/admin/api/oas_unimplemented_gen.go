@@ -275,13 +275,6 @@ func (UnimplementedHandler) MetricsJSON(ctx context.Context) (r *MetricsJSONOK, 
 	return r, ht.ErrNotImplemented
 }
 
-// PlaygroundChat implements Playground_chat operation.
-//
-// POST /api/playground
-func (UnimplementedHandler) PlaygroundChat(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // PromptsGet implements Prompts_get operation.
 //
 // GET /api/prompts/{name}

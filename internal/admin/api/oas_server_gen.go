@@ -160,10 +160,6 @@ type Handler interface {
 	//
 	// GET /api/metrics/json
 	MetricsJSON(ctx context.Context) (*MetricsJSONOK, error)
-	// PlaygroundChat implements Playground_chat operation.
-	//
-	// POST /api/playground
-	PlaygroundChat(ctx context.Context, req jx.Raw) (jx.Raw, error)
 	// PromptsGet implements Prompts_get operation.
 	//
 	// GET /api/prompts/{name}

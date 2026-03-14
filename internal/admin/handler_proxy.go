@@ -98,10 +98,6 @@ func (h *AdminHandler) LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error
 	return h.proxyPutRaw(ctx, "/internal/llm", jxReader(req))
 }
 
-func (h *AdminHandler) PlaygroundChat(ctx context.Context, req jx.Raw) (jx.Raw, error) {
-	return h.proxyPostRaw(ctx, "/internal/playground", jxReader(req))
-}
-
 func (h *AdminHandler) ForgetRun(ctx context.Context) (jx.Raw, error) {
 	return h.proxyPostRaw(ctx, "/internal/trigger/forget", nil)
 }
