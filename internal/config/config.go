@@ -270,7 +270,7 @@ func (c *Config) setDefaults() {
 		c.Embedding.APIBase = c.LLM.APIBase
 	}
 	if c.Embedding.Dims == 0 {
-		c.Embedding.Dims = 1024
+		c.Embedding.Dims = 1536
 	}
 	// Vision defaults: inherit from embedding if same provider, otherwise from LLM.
 	if c.Vision.Provider == "" {

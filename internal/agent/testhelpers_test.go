@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/consolidator"
+	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -36,6 +37,9 @@ func (m *mockMemory) ListByType(_ context.Context, _ memory.MemoryType, _ int) (
 	return nil, nil
 }
 func (m *mockMemory) ListRecentByType(_ context.Context, _ memory.MemoryType, _ time.Time, _ int) ([]memory.Memory, error) {
+	return nil, nil
+}
+func (m *mockMemory) SearchByParts(_ context.Context, _ []embedding.Part, _ int) ([]memory.Memory, error) {
 	return nil, nil
 }
 func (m *mockMemory) IsDuplicate(_ context.Context, _ string, _ memory.MemoryType) (string, error) {

@@ -16,6 +16,7 @@ import (
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	llmerrors "github.com/mozilla-ai/any-llm-go/errors"
 	"github.com/mozilla-ai/any-llm-go/providers"
+	"github.com/mozilla-ai/any-llm-go/providers/gemini"
 	"github.com/mozilla-ai/any-llm-go/providers/openai"
 )
 
@@ -39,6 +40,10 @@ type Message struct {
 	// ImageURLs holds image URLs attached to this message.
 	// When the active LLM is vision-capable, these are sent as multimodal content parts.
 	ImageURLs []string `json:"image_urls,omitempty"`
+
+	// MediaKeys holds MediaStore keys for persisted media attachments.
+	// Used by the consolidator to attach media to extracted memories.
+	MediaKeys []string `json:"media_keys,omitempty"`
 }
 
 // Response wraps an LLM completion response.
@@ -235,6 +240,13 @@ func newProvider(providerName, apiKey, apiBase string) (providers.Provider, erro
 	switch providerName {
 	case "openai", "zhipu", "qwen":
 		p, err := openai.New(opts...)
+		if err != nil {
+			return nil, fmt.Errorf("llm: プロバイダ %s の初期化に失敗: %w", providerName, err)
+		}
+		return p, nil
+	case "gemini":
+		geminiOpts := []anyllm.Option{anyllm.WithAPIKey(apiKey)}
+		p, err := gemini.New(geminiOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("llm: プロバイダ %s の初期化に失敗: %w", providerName, err)
 		}

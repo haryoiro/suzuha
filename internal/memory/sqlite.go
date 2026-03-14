@@ -12,6 +12,7 @@ import (
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/google/uuid"
+	"github.com/haryoiro/suzuha/internal/embedding"
 	_ "github.com/mattn/go-sqlite3" // register sqlite3 driver
 )
 
@@ -21,17 +22,21 @@ func init() {
 
 // SQLiteStore implements Store using SQLite + sqlite-vec + FTS5.
 type SQLiteStore struct {
-	db       *sql.DB
-	embedFn  EmbedFunc
-	onSave   func() // optional hook called on successful Save
-	logger   *slog.Logger
-	embedSig chan struct{} // signals the background embedding worker
+	db         *sql.DB
+	embedder   embedding.Embedder
+	mediaStore MediaStore
+	onSave     func() // optional hook called on successful Save
+	logger     *slog.Logger
+	embedSig   chan struct{} // signals the background embedding worker
 }
+
+// SetMediaStore sets the media store for loading attachments during embedding.
+func (s *SQLiteStore) SetMediaStore(ms MediaStore) { s.mediaStore = ms }
 
 // NewSQLiteStore opens or creates a SQLite database at dbPath.
 // If runMigrations is true, pending schema migrations are applied.
 // Typically only the agent process should run migrations to avoid race conditions.
-func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool, logger *slog.Logger) (*SQLiteStore, error) {
+func NewSQLiteStore(dbPath string, embedder embedding.Embedder, runMigrations bool, logger *slog.Logger) (*SQLiteStore, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -53,7 +58,7 @@ func NewSQLiteStore(dbPath string, embedFn EmbedFunc, runMigrations bool, logger
 		}
 	}
 
-	return &SQLiteStore{db: db, embedFn: embedFn, logger: logger, embedSig: make(chan struct{}, 1)}, nil
+	return &SQLiteStore{db: db, embedder: embedder, logger: logger, embedSig: make(chan struct{}, 1)}, nil
 }
 
 // SetOnSave registers a callback invoked after each successful Save.
@@ -172,6 +177,7 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 }
 
 // initMemFields sets ID and timestamps if not already set.
+// Also packs Attachments into Metadata for JSON storage.
 func (s *SQLiteStore) initMemFields(mem *Memory) {
 	if mem.ID == "" {
 		mem.ID = uuid.NewString()
@@ -181,6 +187,64 @@ func (s *SQLiteStore) initMemFields(mem *Memory) {
 		mem.CreatedAt = now
 	}
 	mem.UpdatedAt = now
+	packAttachments(mem)
+}
+
+// packAttachments writes mem.Attachments into mem.Metadata["attachments"].
+// If Attachments is empty, removes the key.
+func packAttachments(mem *Memory) {
+	if len(mem.Attachments) == 0 {
+		if mem.Metadata != nil {
+			delete(mem.Metadata, "attachments")
+		}
+		return
+	}
+	if mem.Metadata == nil {
+		mem.Metadata = make(map[string]any)
+	}
+	raw := make([]map[string]string, len(mem.Attachments))
+	for i, a := range mem.Attachments {
+		raw[i] = map[string]string{
+			"key":       a.Key,
+			"modality":  a.Modality,
+			"mime_type": a.MimeType,
+		}
+	}
+	mem.Metadata["attachments"] = raw
+}
+
+// unpackAttachments extracts Attachments from Metadata["attachments"].
+func unpackAttachments(mem *Memory) {
+	if mem.Metadata == nil {
+		return
+	}
+	raw, ok := mem.Metadata["attachments"]
+	if !ok {
+		return
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return
+	}
+	for _, item := range arr {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		a := Attachment{}
+		if v, ok := m["key"].(string); ok {
+			a.Key = v
+		}
+		if v, ok := m["modality"].(string); ok {
+			a.Modality = v
+		}
+		if v, ok := m["mime_type"].(string); ok {
+			a.MimeType = v
+		}
+		if a.Key != "" {
+			mem.Attachments = append(mem.Attachments, a)
+		}
+	}
 }
 
 // notifyEmbedWorker sends a non-blocking signal to wake up the embedding worker.
@@ -232,6 +296,39 @@ func (s *SQLiteStore) Search(ctx context.Context, query string, limit int) ([]Me
 	return s.searchInternal(ctx, query, "", limit, time.Time{})
 }
 
+func (s *SQLiteStore) SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]Memory, error) {
+	if s.embedder == nil {
+		return nil, fmt.Errorf("memory: embedder が設定されていません")
+	}
+	emb, err := s.embedder.Embed(ctx, parts)
+	if err != nil {
+		return nil, fmt.Errorf("memory: パーツの埋め込み生成に失敗: %w", err)
+	}
+	vecResults, err := s.searchVecByEmbedding(ctx, emb, "", limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(vecResults) == 0 {
+		return nil, nil
+	}
+	// Load full memories.
+	ids := make([]string, len(vecResults))
+	for i, r := range vecResults {
+		ids[i] = r.id
+	}
+	loaded, err := s.loadMemoriesByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	var results []Memory
+	for _, id := range ids {
+		if m, ok := loaded[id]; ok {
+			results = append(results, m)
+		}
+	}
+	return results, nil
+}
+
 func (s *SQLiteStore) SearchByType(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error) {
 	return s.searchInternal(ctx, query, memType, limit, time.Time{})
 }
@@ -253,10 +350,10 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 	// 1. FTS keyword search.
 	ftsResults, ftsErr := s.searchFTS(ctx, query, memType, limit*2, since)
 
-	// 2. Vector similarity search (if embedFn is available).
+	// 2. Vector similarity search (if embedder is available).
 	var vecResults []scoredID
 	var vecErr error
-	if s.embedFn != nil {
+	if s.embedder != nil {
 		vecResults, vecErr = s.searchVec(ctx, query, memType, limit*2)
 		// Non-fatal: degrade to FTS-only on vec failure.
 	}
@@ -351,17 +448,30 @@ func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType Memor
 	return scanMemories(rows)
 }
 
-// searchVec performs KNN vector search via sqlite-vec.
+// Modality boost factors for vec search distance scaling.
+// Lower distance = higher similarity, so we multiply distance by 1/boost
+// to rank multimodal memories higher.
+const (
+	boostImage = 1.5
+	boostAudio = 1.4
+)
+
+// searchVec performs KNN vector search via sqlite-vec using a text query.
 func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType MemoryType, limit int) ([]scoredID, error) {
-	embedding, err := s.embedFn(ctx, query)
+	emb, err := s.embedder.Embed(ctx, []embedding.Part{embedding.TextPart(query)})
 	if err != nil {
 		return nil, fmt.Errorf("memory: クエリの埋め込み生成に失敗: %w", err)
 	}
-	if len(embedding) == 0 {
+	return s.searchVecByEmbedding(ctx, emb, memType, limit)
+}
+
+// searchVecByEmbedding performs KNN vector search with a pre-computed embedding.
+func (s *SQLiteStore) searchVecByEmbedding(ctx context.Context, emb []float32, memType MemoryType, limit int) ([]scoredID, error) {
+	if len(emb) == 0 {
 		return nil, nil
 	}
 
-	blob, err := sqlite_vec.SerializeFloat32(embedding)
+	blob, err := sqlite_vec.SerializeFloat32(emb)
 	if err != nil {
 		return nil, fmt.Errorf("memory: 埋め込みのシリアライズに失敗: %w", err)
 	}
@@ -401,7 +511,91 @@ func (s *SQLiteStore) searchVec(ctx context.Context, query string, memType Memor
 		}
 	}
 
+	// Apply modality boost: reduce distance for memories with attachments
+	// so they rank higher in RRF merge.
+	if len(results) > 0 {
+		results = s.applyModalityBoost(ctx, results)
+	}
+
 	return results, nil
+}
+
+// applyModalityBoost adjusts vec distances for multimodal memories.
+// Memories with image/audio attachments get their distance divided by a boost factor,
+// effectively ranking them higher in search results.
+func (s *SQLiteStore) applyModalityBoost(ctx context.Context, results []scoredID) []scoredID {
+	if len(results) == 0 {
+		return results
+	}
+
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.id
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	// Find which IDs have attachments in their metadata.
+	q := fmt.Sprintf(
+		`SELECT id, json_extract(metadata, '$.attachments') FROM memories WHERE id IN (%s)`,
+		placeholders)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return results // non-fatal
+	}
+	defer rows.Close()
+
+	boosts := make(map[string]float64)
+	for rows.Next() {
+		var id string
+		var attJSON sql.NullString
+		if err := rows.Scan(&id, &attJSON); err != nil {
+			continue
+		}
+		if !attJSON.Valid || attJSON.String == "" || attJSON.String == "null" {
+			continue
+		}
+		// Determine boost from attachment modalities.
+		var atts []Attachment
+		if err := json.Unmarshal([]byte(attJSON.String), &atts); err != nil {
+			continue
+		}
+		for _, a := range atts {
+			switch a.Modality {
+			case "image":
+				if boosts[id] < boostImage {
+					boosts[id] = boostImage
+				}
+			case "audio":
+				if boosts[id] < boostAudio {
+					boosts[id] = boostAudio
+				}
+			}
+		}
+	}
+
+	if len(boosts) == 0 {
+		return results
+	}
+
+	// Apply boost: divide distance by boost factor.
+	for i, r := range results {
+		if b, ok := boosts[r.id]; ok && b > 0 {
+			results[i].distance /= float32(b)
+		}
+	}
+
+	// Re-sort by boosted distance.
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].distance < results[j].distance
+	})
+
+	return results
 }
 
 // filterVecByType filters vec results by memory type using a DB lookup.
@@ -610,6 +804,7 @@ func scanMemories(rows *sql.Rows) ([]Memory, error) {
 		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
 			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 		}
+		unpackAttachments(&m)
 		results = append(results, m)
 	}
 	return results, rows.Err()
@@ -654,15 +849,15 @@ func (s *SQLiteStore) ListEpisodesByParticipant(ctx context.Context, userID stri
 const dupDistanceThreshold = 0.15
 
 func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, error) {
-	if s.embedFn == nil {
+	if s.embedder == nil {
 		return "", nil
 	}
-	embedding, err := s.embedFn(ctx, content)
-	if err != nil || len(embedding) == 0 {
+	emb, err := s.embedder.Embed(ctx, []embedding.Part{embedding.TextPart(content)})
+	if err != nil || len(emb) == 0 {
 		return "", nil // can't check, assume not duplicate
 	}
 
-	blob, err := sqlite_vec.SerializeFloat32(embedding)
+	blob, err := sqlite_vec.SerializeFloat32(emb)
 	if err != nil {
 		return "", nil
 	}
@@ -787,6 +982,7 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (*Memory, error) {
 
 func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 	mem.UpdatedAt = time.Now()
+	packAttachments(mem)
 
 	metadataJSON, err := json.Marshal(mem.Metadata)
 	if err != nil {
@@ -996,14 +1192,14 @@ func (s *SQLiteStore) SaveRaw(ctx context.Context, mem *Memory) error {
 }
 
 // BackfillEmbeddings generates embeddings for memories that don't have them yet.
-// Returns the number of memories processed.
+// Uses EmbedBatch for efficient bulk processing. Returns the number of memories processed.
 func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (int, error) {
-	if s.embedFn == nil {
+	if s.embedder == nil {
 		return 0, nil
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT m.id, m.content FROM memories m
+		`SELECT m.id, m.content, m.metadata FROM memories m
 		 WHERE m.id NOT IN (SELECT id FROM memories_vec)
 		 LIMIT ?`, batchSize)
 	if err != nil {
@@ -1011,32 +1207,77 @@ func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (in
 	}
 	defer rows.Close()
 
-	var count int
+	type entry struct {
+		id      string
+		content string
+		atts    []Attachment
+	}
+	var entries []entry
 	for rows.Next() {
-		var id, content string
-		if err := rows.Scan(&id, &content); err != nil {
-			return count, fmt.Errorf("memory: バックフィルのスキャンに失敗: %w", err)
+		var e entry
+		var metaJSON sql.NullString
+		if err := rows.Scan(&e.id, &e.content, &metaJSON); err != nil {
+			return 0, fmt.Errorf("memory: バックフィルのスキャンに失敗: %w", err)
 		}
+		// Extract attachments from metadata.
+		if metaJSON.Valid && metaJSON.String != "" {
+			var m Memory
+			m.Metadata = make(map[string]any)
+			if err := json.Unmarshal([]byte(metaJSON.String), &m.Metadata); err == nil {
+				unpackAttachments(&m)
+				e.atts = m.Attachments
+			}
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(entries) == 0 {
+		return 0, nil
+	}
 
-		emb, err := s.embedFn(ctx, content)
-		if err != nil || len(emb) == 0 {
+	// Build batch inputs, including image attachments from MediaStore.
+	inputs := make([][]embedding.Part, len(entries))
+	for i, e := range entries {
+		parts := []embedding.Part{embedding.TextPart(e.content)}
+		if s.mediaStore != nil {
+			for _, att := range e.atts {
+				if att.Modality == "image" {
+					data, err := s.mediaStore.Get(ctx, att.Key)
+					if err != nil {
+						continue
+					}
+					parts = append(parts, embedding.ImagePart(data, att.MimeType))
+				}
+			}
+		}
+		inputs[i] = parts
+	}
+
+	vectors, err := s.embedder.EmbedBatch(ctx, inputs)
+	if err != nil {
+		return 0, fmt.Errorf("memory: バッチ埋め込みに失敗: %w", err)
+	}
+
+	var count int
+	for i, vec := range vectors {
+		if len(vec) == 0 {
 			continue
 		}
-
-		blob, err := sqlite_vec.SerializeFloat32(emb)
+		blob, err := sqlite_vec.SerializeFloat32(vec)
 		if err != nil {
 			continue
 		}
-
 		if _, err := s.db.ExecContext(ctx,
 			`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
-			id, blob,
+			entries[i].id, blob,
 		); err != nil {
 			continue
 		}
 		count++
 	}
-	return count, rows.Err()
+	return count, nil
 }
 
 // DB returns the underlying *sql.DB for sharing with other stores (e.g. user.Store).

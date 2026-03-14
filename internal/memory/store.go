@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/haryoiro/suzuha/internal/embedding"
 )
 
 // MemoryType categorizes memory entries.
@@ -18,15 +20,35 @@ const (
 	MemoryTypeSelf    MemoryType = "self"
 )
 
+// Attachment is a reference to a media file stored in MediaStore.
+type Attachment struct {
+	Key      string `json:"key"`       // storage key (e.g. "memories/abc123/0.png")
+	Modality string `json:"modality"`  // "image" or "audio"
+	MimeType string `json:"mime_type"` // "image/png", "audio/wav", etc.
+}
+
 // Memory is a single long-term memory entry.
 type Memory struct {
-	ID        string         `json:"id"`
-	Type      MemoryType     `json:"type"`
-	Content   string         `json:"content"`
-	Embedding []float32      `json:"embedding,omitempty"`
-	Metadata  map[string]any `json:"metadata,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
+	ID          string         `json:"id"`
+	Type        MemoryType     `json:"type"`
+	Content     string         `json:"content"`
+	Attachments []Attachment   `json:"attachments,omitempty"`
+	Embedding   []float32      `json:"embedding,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// MediaStore stores and retrieves binary media data.
+type MediaStore interface {
+	// Put stores data under the given key.
+	Put(ctx context.Context, key string, data []byte) error
+
+	// Get retrieves data by key. Returns os.ErrNotExist if not found.
+	Get(ctx context.Context, key string) ([]byte, error)
+
+	// Delete removes data by key. No error if not found.
+	Delete(ctx context.Context, key string) error
 }
 
 // Store is the long-term memory storage interface.
@@ -57,6 +79,10 @@ type Store interface {
 
 	// ListRecentByType returns memories of a specific type created after since, up to limit.
 	ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error)
+
+	// SearchByParts performs vector search using multimodal input (e.g. image).
+	// The parts are embedded and used for KNN similarity search.
+	SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]Memory, error)
 
 	// IsDuplicate checks if a very similar memory already exists.
 	// Returns the existing memory ID if found, or empty string if no duplicate.
@@ -117,6 +143,3 @@ type ListOpts struct {
 	OrderDir string     // "asc" | "desc", default "desc"
 }
 
-// EmbedFunc generates an embedding vector for the given text.
-// It is injected from outside to avoid circular dependency with the llm package.
-type EmbedFunc func(ctx context.Context, text string) ([]float32, error)

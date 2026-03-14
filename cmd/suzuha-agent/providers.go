@@ -10,6 +10,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/chat/cli"
@@ -61,12 +62,17 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Named value: config file path.
 		do.ProvideNamedValue(i, "config-path", cfgPath)
 
-		// EmbedFunc bridges memory.EmbedFunc → llm.Client.Embed.
-		// Uses closure so memory package doesn't need to import llm.
-		do.ProvideNamed(i, "embed-func", func(i do.Injector) (memory.EmbedFunc, error) {
-			return func(ctx context.Context, text string) ([]float32, error) {
-				return do.MustInvoke[*llm.Client](i).Embed(ctx, text)
-			}, nil
+		// Embedder bridges the embedding interface to the configured provider.
+		do.ProvideNamed(i, "embedder", func(i do.Injector) (embedding.Embedder, error) {
+			cfg := do.MustInvoke[*config.Config](i)
+			switch cfg.Embedding.Provider {
+			case "gemini":
+				return embedding.NewGeminiEmbedder(cfg.Embedding.APIKey, cfg.Embedding.Model, cfg.Embedding.Dims)
+			default:
+				// OpenAI etc: llm.Client satisfies embedding.TextEmbedClient.
+				llmClient := do.MustInvoke[*llm.Client](i)
+				return embedding.NewTextOnlyEmbedder(llmClient, cfg.Embedding.Dims), nil
+			}
 		})
 
 		// Shared DB extracted from memory store.
@@ -193,6 +199,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				features = append(features, location.NewFeature(locStore))
 				ag.SetLocationStore(locStore)
 			}
+
+			// Set media store for memory attachment loading.
+			ag.SetMediaStore(do.MustInvoke[memory.MediaStore](i))
 			for _, f := range features {
 				if err := f.Setup(context.Background(), store.DB()); err != nil {
 					logger.Error("フィーチャーのセットアップに失敗しました", "feature", f.Name(), "error", err)
@@ -214,6 +223,17 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return schedule.NewStore(store.DB()), nil
 		})
 
+		// Media store for binary attachments (images, audio).
+		do.Provide(i, func(i do.Injector) (memory.MediaStore, error) {
+			ms, err := memory.NewLocalMediaStore("/data/media")
+			if err != nil {
+				return nil, err
+			}
+			// Wire media store into memory store for embedding with attachments.
+			do.MustInvoke[*memory.SQLiteStore](i).SetMediaStore(ms)
+			return ms, nil
+		})
+
 		// Admin server (uses a plain logger without ring buffer to avoid
 		// flooding the agent log stream with HTTP access logs).
 		do.Provide(i, func(i do.Injector) (*admin.Server, error) {
@@ -221,8 +241,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			store := do.MustInvoke[*memory.SQLiteStore](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
 			schedStore := do.MustInvoke[*schedule.Store](i)
+			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
-			return admin.NewServer(cfg.Admin, store, userStore, schedStore, adminLogger), nil
+			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger), nil
 		})
 
 		// Scheduler (nil when disabled in config).
@@ -284,6 +305,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	// Build CronContext.
 	bus := do.MustInvoke[*event.Bus](i)
 	activityStore := channel.NewActivityStore(store.DB())
+	mediaStore := do.MustInvoke[memory.MediaStore](i)
 	cc := &scheduler.CronContext{
 		LLM:             llmClient,
 		Memory:          store,
@@ -293,6 +315,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 		Users:           userStore,
 		ChannelActivity: activityStore,
 		MemoryAdmin:     store,
+		MediaStore:      mediaStore,
 		Bus:             bus,
 		Timezone:        schedulerLoc,
 		SystemPrompt:    cfg.Agent.SystemPrompt,
