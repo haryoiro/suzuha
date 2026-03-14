@@ -3,7 +3,7 @@ import { Card, Typography, Tag, Input, List, Button, message } from "antd";
 import { SoundOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import { voicevoxApi, type VoicevoxSpeaker } from "../lib/api";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 export default function VoicePage() {
   const [speakers, setSpeakers] = useState<VoicevoxSpeaker[]>([]);
