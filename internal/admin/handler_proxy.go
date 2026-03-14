@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -98,8 +100,16 @@ func (h *AdminHandler) LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error
 	return h.proxyPutRaw(ctx, "/internal/llm", jxReader(req))
 }
 
-func (h *AdminHandler) ForgetRun(ctx context.Context) (jx.Raw, error) {
-	return h.proxyPostRaw(ctx, "/internal/trigger/forget", nil)
+func (h *AdminHandler) ForgetRun(ctx context.Context, req api.OptForgetRunReq) (jx.Raw, error) {
+	var body io.Reader
+	if req.IsSet() {
+		if st, ok := req.Value.GetSimilarityThreshold().Get(); ok {
+			cfg := map[string]any{"config": map[string]any{"similarity_threshold": st}}
+			data, _ := json.Marshal(cfg)
+			body = bytes.NewReader(data)
+		}
+	}
+	return h.proxyPostRaw(ctx, "/internal/trigger/forget", body)
 }
 
 func (h *AdminHandler) ForgetStatus(ctx context.Context) (jx.Raw, error) {

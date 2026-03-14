@@ -51,5 +51,5 @@ interface Forget {
   @route("delete") @post op delete(@body body: ForgetDeleteRequest): { deleted: int32 };
   @route("merge") @post op merge(@body body: ForgetMergeRequest): { deleted: int32; merged: boolean };
   @route("status") @get op status(): unknown;
-  @route("run") @post op run(): unknown;
+  @route("run") @post op run(@body body?: { similarity_threshold?: float64 }): unknown;
 }

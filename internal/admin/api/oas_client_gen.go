@@ -81,7 +81,7 @@ type Invoker interface {
 	// ForgetRun invokes Forget_run operation.
 	//
 	// POST /api/forget/run
-	ForgetRun(ctx context.Context) (jx.Raw, error)
+	ForgetRun(ctx context.Context, request OptForgetRunReq) (jx.Raw, error)
 	// ForgetStatus invokes Forget_status operation.
 	//
 	// GET /api/forget/status
@@ -1286,12 +1286,12 @@ func (c *Client) sendForgetMerge(ctx context.Context, request *ForgetMergeReques
 // ForgetRun invokes Forget_run operation.
 //
 // POST /api/forget/run
-func (c *Client) ForgetRun(ctx context.Context) (jx.Raw, error) {
-	res, err := c.sendForgetRun(ctx)
+func (c *Client) ForgetRun(ctx context.Context, request OptForgetRunReq) (jx.Raw, error) {
+	res, err := c.sendForgetRun(ctx, request)
 	return res, err
 }
 
-func (c *Client) sendForgetRun(ctx context.Context) (res jx.Raw, err error) {
+func (c *Client) sendForgetRun(ctx context.Context, request OptForgetRunReq) (res jx.Raw, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("Forget_run"),
 		semconv.HTTPRequestMethodKey.String("POST"),
@@ -1336,6 +1336,9 @@ func (c *Client) sendForgetRun(ctx context.Context) (res jx.Raw, err error) {
 	r, err := ht.NewRequest(ctx, "POST", u)
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeForgetRunRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
 	}
 
 	stage = "SendRequest"

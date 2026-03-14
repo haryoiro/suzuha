@@ -47,7 +47,7 @@ export const DedupView = memo(function DedupView() {
   });
 
   const runMutation = useMutation({
-    mutationFn: forgetApi.run,
+    mutationFn: () => forgetApi.run(threshold),
     onSuccess: (res) => {
       if (res.ok) {
         message.success("AI Dedup completed");

@@ -809,6 +809,20 @@ func (s *ForgetMergeRequest) SetType(val string) {
 	s.Type = val
 }
 
+type ForgetRunReq struct {
+	SimilarityThreshold OptFloat64 `json:"similarity_threshold"`
+}
+
+// GetSimilarityThreshold returns the value of SimilarityThreshold.
+func (s *ForgetRunReq) GetSimilarityThreshold() OptFloat64 {
+	return s.SimilarityThreshold
+}
+
+// SetSimilarityThreshold sets the value of SimilarityThreshold.
+func (s *ForgetRunReq) SetSimilarityThreshold(val OptFloat64) {
+	s.SimilarityThreshold = val
+}
+
 // Ref: #/components/schemas/Guild
 type Guild struct {
 	ID           string `json:"id"`
@@ -1605,6 +1619,52 @@ func (o OptFloat64) Get() (v float64, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptFloat64) Or(d float64) float64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptForgetRunReq returns new OptForgetRunReq with value set to v.
+func NewOptForgetRunReq(v ForgetRunReq) OptForgetRunReq {
+	return OptForgetRunReq{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptForgetRunReq is optional ForgetRunReq.
+type OptForgetRunReq struct {
+	Value ForgetRunReq
+	Set   bool
+}
+
+// IsSet returns true if OptForgetRunReq was set.
+func (o OptForgetRunReq) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptForgetRunReq) Reset() {
+	var v ForgetRunReq
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptForgetRunReq) SetTo(v ForgetRunReq) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptForgetRunReq) Get() (v ForgetRunReq, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptForgetRunReq) Or(d ForgetRunReq) ForgetRunReq {
 	if v, ok := o.Get(); ok {
 		return v
 	}

@@ -425,9 +425,12 @@ export const forgetApi = {
       method: "POST",
       body: JSON.stringify({ delete_ids: deleteIds, merged_content: mergedContent, type }),
     }),
-  run: () =>
+  run: (similarityThreshold?: number) =>
     fetchJSON<{ ok: boolean; error?: string }>("/api/forget/run", {
       method: "POST",
+      body: similarityThreshold != null
+        ? JSON.stringify({ similarity_threshold: similarityThreshold })
+        : undefined,
     }),
 };
 

@@ -1724,10 +1724,29 @@ func (s *Server) handleForgetRunRequest(args [0]string, argsEscaped bool, w http
 
 			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
 		}
-		err error
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ForgetRunOperation,
+			ID:   "Forget_run",
+		}
 	)
 
 	var rawBody []byte
+	request, rawBody, close, err := s.decodeForgetRunRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
 
 	var response jx.Raw
 	if m := s.cfg.Middleware; m != nil {
@@ -1736,14 +1755,14 @@ func (s *Server) handleForgetRunRequest(args [0]string, argsEscaped bool, w http
 			OperationName:    ForgetRunOperation,
 			OperationSummary: "",
 			OperationID:      "Forget_run",
-			Body:             nil,
+			Body:             request,
 			RawBody:          rawBody,
 			Params:           middleware.Parameters{},
 			Raw:              r,
 		}
 
 		type (
-			Request  = struct{}
+			Request  = OptForgetRunReq
 			Params   = struct{}
 			Response = jx.Raw
 		)
@@ -1756,12 +1775,12 @@ func (s *Server) handleForgetRunRequest(args [0]string, argsEscaped bool, w http
 			mreq,
 			nil,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.ForgetRun(ctx)
+				response, err = s.h.ForgetRun(ctx, request)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.ForgetRun(ctx)
+		response, err = s.h.ForgetRun(ctx, request)
 	}
 	if err != nil {
 		defer recordError("Internal", err)

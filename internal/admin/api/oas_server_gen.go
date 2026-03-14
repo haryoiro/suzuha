@@ -63,7 +63,7 @@ type Handler interface {
 	// ForgetRun implements Forget_run operation.
 	//
 	// POST /api/forget/run
-	ForgetRun(ctx context.Context) (jx.Raw, error)
+	ForgetRun(ctx context.Context, req OptForgetRunReq) (jx.Raw, error)
 	// ForgetStatus implements Forget_status operation.
 	//
 	// GET /api/forget/status

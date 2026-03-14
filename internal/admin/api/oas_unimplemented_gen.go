@@ -103,7 +103,7 @@ func (UnimplementedHandler) ForgetMerge(ctx context.Context, req *ForgetMergeReq
 // ForgetRun implements Forget_run operation.
 //
 // POST /api/forget/run
-func (UnimplementedHandler) ForgetRun(ctx context.Context) (r jx.Raw, _ error) {
+func (UnimplementedHandler) ForgetRun(ctx context.Context, req OptForgetRunReq) (r jx.Raw, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

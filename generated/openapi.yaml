@@ -287,6 +287,16 @@ paths:
               schema: {}
       tags:
         - Forget
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                similarity_threshold:
+                  type: number
+                  format: double
   /api/forget/status:
     get:
       operationId: Forget_status
