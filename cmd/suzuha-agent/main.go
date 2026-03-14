@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +23,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/chat/discord"
 	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/device"
+	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
@@ -701,6 +704,92 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"ok":true}`)
 	})
+
+	// VOICEVOX speaker management.
+	if cfg.Voice.Enabled && cfg.Voice.VoicevoxURL != "" {
+		voicevoxURL := cfg.Voice.VoicevoxURL
+		mux.HandleFunc("GET /internal/voicevox/speakers", func(w http.ResponseWriter, r *http.Request) {
+			resp, err := http.Get(voicevoxURL + "/speakers")
+			if err != nil {
+				http.Error(w, `{"error":"voicevox unreachable"}`, http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+			w.Header().Set("Content-Type", "application/json")
+			io.Copy(w, resp.Body)
+		})
+		mux.HandleFunc("GET /internal/voicevox/speaker", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"speaker_id": cfg.Voice.SpeakerID})
+		})
+		mux.HandleFunc("PUT /internal/voicevox/speaker", func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				SpeakerID int `json:"speaker_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+				return
+			}
+			cfg.Voice.SpeakerID = body.SpeakerID
+			// Update the voice pipeline's TTS client if available.
+			dc := do.MustInvoke[*discord.Chat](injector)
+			if dc != nil {
+				if vp := dc.VoicePipeline(); vp != nil {
+					vp.SetSpeakerID(body.SpeakerID)
+				}
+			}
+			logger.Info("voicevox: speaker変更", "speaker_id", body.SpeakerID)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"ok":true}`)
+		})
+	}
+
+	// Physical device (ESP32) WebSocket endpoint.
+	{
+		bus := do.MustInvoke[*event.Bus](injector)
+		var ttsClient voice.TTS
+		if cfg.Voice.Enabled && cfg.Voice.VoicevoxURL != "" {
+			ttsClient = voice.NewVoicevox(cfg.Voice.VoicevoxURL, cfg.Voice.SpeakerID)
+		}
+		yoloURL := os.Getenv("YOLO_URL")
+		if yoloURL == "" {
+			yoloURL = "http://yolo:8002"
+		}
+		// Look up home channel from DB.
+		var deviceChannel string
+		db := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
+		_ = db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = 1 LIMIT 1").Scan(&deviceChannel)
+		hub := device.NewHub(bus, ttsClient, yoloURL, deviceChannel, logger)
+		mux.HandleFunc("GET /ws/device", hub.Handler())
+		mux.HandleFunc("GET /internal/device/frame", hub.Frames().FrameHandler())
+		mux.HandleFunc("GET /internal/device/detections", hub.Frames().DetectionStreamHandler())
+		ag.SetDeviceSpeaker(hub)
+		registry.Register(device.NewServoTool(hub))
+		registry.Register(device.NewCaptureTool(hub))
+		registry.Register(device.NewFaceTool(hub))
+		registry.Register(device.NewLookTool(hub, do.MustInvoke[*llm.Client](injector)))
+		mux.HandleFunc("GET /internal/device/vision", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"enabled": hub.ChangeDetector().Enabled()})
+		})
+		mux.HandleFunc("PUT /internal/device/vision", func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+				return
+			}
+			hub.ChangeDetector().SetEnabled(body.Enabled)
+			logger.Info("device: 視界変化検出の切り替え", "enabled", body.Enabled)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"ok":true}`)
+		})
+		// Start periodic capture loop (333ms = ~3fps).
+		captureCtx, _ := context.WithCancel(context.Background())
+		hub.StartCaptureLoop(captureCtx, 333)
+		logger.Info("device: WebSocketエンドポイント有効 (/ws/device)")
+	}
 
 	// Overland location tracking endpoint.
 	locStore := do.MustInvoke[*location.Store](injector)
