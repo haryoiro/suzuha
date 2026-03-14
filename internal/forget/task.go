@@ -431,9 +431,18 @@ func judgeBatch(ctx context.Context, cc *scheduler.CronContext, groups []memoryG
 }
 
 const judgeSystemPrompt = `あなたは記憶の管理者です。類似した記憶のグループを評価し、重複を判定してください。
-同じ事柄を別の言い回しで記録したものは重複です。
-異なる時点の出来事や、補完し合う情報を含む記憶は統合（merge）してください。
-類似しているが別の事柄である場合は skip してください。`
+
+判定ルール:
+- keep: まったく同じ事柄を別の言い回しで記録したもの → 最も情報量が多いものを残す
+- merge: 異なる時点だが同一の事柄・文脈で、統合すると情報が増える場合のみ
+- skip: 以下に該当する場合は必ず skip にすること
+  - 話題やキーワードが似ているだけで、具体的な内容が異なる
+  - 同じ人物についてだが、別の事実や出来事を記録している
+  - user_id や participants が異なる
+  - 日付が大きく離れている（同じ話題でも別の機会の出来事）
+  - 片方が一般的な事実、もう片方が特定のエピソード
+
+重要: 迷ったら skip にしてください。誤って削除・統合すると情報が失われます。`
 
 func buildJudgePrompt(groups []memoryGroup) string {
 	var sb strings.Builder
@@ -443,9 +452,14 @@ func buildJudgePrompt(groups []memoryGroup) string {
 	for gi, g := range groups {
 		fmt.Fprintf(&sb, "=== グループ %d（型: %s, %d件）===\n", gi+1, g.memType, len(g.members))
 		for mi, m := range g.members {
-			age := time.Since(m.createdAt).Hours() / 24
 			content := truncateRunes(m.content, 200)
-			fmt.Fprintf(&sb, "[%d-%d] id=%s (%.0f日前)\n%s\n\n", gi+1, mi+1, m.id, age, content)
+			date := m.createdAt.Format("2006-01-02")
+			meta := formatMetadata(m.metadata)
+			if meta != "" {
+				fmt.Fprintf(&sb, "[%d-%d] id=%s date=%s %s\n%s\n\n", gi+1, mi+1, m.id, date, meta, content)
+			} else {
+				fmt.Fprintf(&sb, "[%d-%d] id=%s date=%s\n%s\n\n", gi+1, mi+1, m.id, date, content)
+			}
 		}
 	}
 
@@ -532,6 +546,37 @@ func parseDecisions(raw string, groups []memoryGroup) ([]decision, error) {
 }
 
 // --- helpers ---
+
+// formatMetadata extracts key metadata fields for LLM display.
+func formatMetadata(meta map[string]any) string {
+	if meta == nil {
+		return ""
+	}
+	var parts []string
+	if uid, ok := meta["user_id"].(string); ok && uid != "" {
+		parts = append(parts, "user_id="+uid)
+	}
+	switch v := meta["participants"].(type) {
+	case []any:
+		var ids []string
+		for _, p := range v {
+			if s, ok := p.(string); ok {
+				ids = append(ids, s)
+			}
+		}
+		if len(ids) > 0 {
+			parts = append(parts, "participants="+strings.Join(ids, ","))
+		}
+	case []string:
+		if len(v) > 0 {
+			parts = append(parts, "participants="+strings.Join(v, ","))
+		}
+	}
+	if tone, ok := meta["emotional_tone"].(string); ok && tone != "" {
+		parts = append(parts, "tone="+tone)
+	}
+	return strings.Join(parts, " ")
+}
 
 func truncateRunes(s string, maxRunes int) string {
 	runes := []rune(s)
