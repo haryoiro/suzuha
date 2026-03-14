@@ -28,7 +28,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
-	"github.com/haryoiro/suzuha/internal/preferences"
 	"github.com/haryoiro/suzuha/internal/rss"
 	"github.com/haryoiro/suzuha/internal/schedule"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -190,7 +189,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
 				affinity.New(),
 				forget.New(),
-				preferences.New(store.DB()),
 			}
 
 			// Add location feature if enabled.

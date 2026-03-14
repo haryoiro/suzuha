@@ -9,7 +9,6 @@ import "./guilds.tsp";
 import "./channels.tsp";
 import "./actions.tsp";
 import "./feeds.tsp";
-import "./preferences.tsp";
 import "./location.tsp";
 import "./prompts.tsp";
 import "./tools.tsp";
