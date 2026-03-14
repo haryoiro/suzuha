@@ -50,6 +50,35 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	mux.HandleFunc("GET /api/scheduler/jobs", adminHandler.proxySchedulerJobs)
 	mux.HandleFunc("POST /api/scheduler/trigger/{task}", adminHandler.proxySchedulerTrigger)
 
+	// Device camera/detection proxy to internal server.
+	mux.HandleFunc("GET /api/device/frame", adminHandler.proxyDeviceFrame)
+	mux.HandleFunc("GET /api/device/detections", adminHandler.proxyDeviceDetections)
+
+	// Device vision toggle proxy.
+	mux.HandleFunc("GET /api/device/vision", func(w http.ResponseWriter, r *http.Request) {
+		data, err := adminHandler.proxyGet(r.Context(), "/internal/device/vision")
+		if err != nil {
+			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+	mux.HandleFunc("PUT /api/device/vision", func(w http.ResponseWriter, r *http.Request) {
+		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/vision", r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+
+	// VOICEVOX speaker proxy.
+	mux.HandleFunc("GET /api/voicevox/speakers", adminHandler.proxyVoicevoxSpeakers)
+	mux.HandleFunc("GET /api/voicevox/speaker", adminHandler.proxyVoicevoxCurrentSpeaker)
+	mux.HandleFunc("PUT /api/voicevox/speaker", adminHandler.proxyVoicevoxSetSpeaker)
+
 	// SPA static files.
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
@@ -78,6 +107,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	// Wrap with middleware.
 	h := middleware.Logging(logger, mux)
 	h = middleware.CORS(h)
+	h = middleware.BasicAuth(cfg.Auth.Username, cfg.Auth.Password, h)
 
 	return &Server{handler: h, cfg: cfg, logger: logger}
 }

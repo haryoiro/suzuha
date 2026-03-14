@@ -138,6 +138,91 @@ func (h *AdminHandler) proxySchedulerTrigger(w http.ResponseWriter, r *http.Requ
 	w.Write(data)
 }
 
+func (h *AdminHandler) proxyVoicevoxSpeakers(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyGet(r.Context(), "/internal/voicevox/speakers")
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyVoicevoxCurrentSpeaker(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyGet(r.Context(), "/internal/voicevox/speaker")
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyVoicevoxSetSpeaker(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyPutRaw(r.Context(), "/internal/voicevox/speaker", r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// proxyDeviceFrame proxies the latest camera frame from the internal server.
+func (h *AdminHandler) proxyDeviceFrame(w http.ResponseWriter, r *http.Request) {
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, h.agentBase+"/internal/device/frame", nil)
+	if err != nil {
+		http.Error(w, "proxy error", http.StatusInternalServerError)
+		return
+	}
+	resp, err := h.client.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// proxyDeviceDetections proxies the SSE detection stream from the internal server.
+func (h *AdminHandler) proxyDeviceDetections(w http.ResponseWriter, r *http.Request) {
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, h.agentBase+"/internal/device/detections", nil)
+	if err != nil {
+		http.Error(w, "proxy error", http.StatusInternalServerError)
+		return
+	}
+	resp, err := h.longClient.Do(req)
+	if err != nil {
+		http.Error(w, "agent unreachable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			w.Write(buf[:n])
+			flusher.Flush()
+		}
+		if readErr != nil {
+			return
+		}
+	}
+}
+
 // notifyAgentReload tells the agent to reload cached data.
 func (h *AdminHandler) notifyAgentReload(ctx context.Context, path string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.agentBase+path, nil)
