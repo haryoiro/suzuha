@@ -270,7 +270,7 @@ func buildSelfPrompt(
 	var sb strings.Builder
 
 	sb.WriteString("[ふと意識が浮かぶ]\n\n")
-	fmt.Fprintf(&sb, "今: %s %s（%s）\n", now.Format("2006-01-02"), now.Format("15:04"), timeHint)
+	fmt.Fprintf(&sb, "今: %s %s\n", now.Format("2006-01-02"), now.Format("15:04"))
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
 
 	sb.WriteString("私は自由\n\n")
@@ -308,7 +308,14 @@ func buildSelfPrompt(
 	sb.WriteString("同じようなことの繰り返しにならないように\n\n")
 	sb.WriteString("- 短く自然に 綺麗にまとめない\n")
 	sb.WriteString("- 絵文字・顔文字は使わない\n")
-	sb.WriteString("- 特に何もなければ skip_response ツールを呼んでスキップしてよい\n")
+	sb.WriteString("- 時報禁止（「0時。」「もう3時か」等、時刻を報告するだけの発言はしない）\n")
+	sb.WriteString("- ツールを使ったことを報告しない（「調べてみた」「検索した」「記録した」等のメタ発言禁止）\n")
+	hour := now.Hour()
+	if hour >= 22 || hour < 6 {
+		sb.WriteString("- 基本的に skip_response でスキップ。本当に言いたいことがあるときだけ発言\n")
+	} else {
+		sb.WriteString("- 特に何もなければ skip_response ツールを呼んでスキップしてよい\n")
+	}
 
 	return sb.String()
 }

@@ -42,6 +42,7 @@ type Agent struct {
 	metrics         *observe.Metrics
 	hooks           []PipelineHook
 	voiceSpeaker    chat.VoiceSpeaker
+	deviceSpeaker   DeviceSpeaker
 
 	systemPrompt     string
 	botID            string
@@ -154,9 +155,19 @@ func (a *Agent) BotID() string {
 	return a.botID
 }
 
+// DeviceSpeaker is the interface for sending TTS to a physical device.
+type DeviceSpeaker interface {
+	SpeakText(ctx context.Context, text string) error
+}
+
 // SetVoiceSpeaker sets the voice speaker for voice channel responses.
 func (a *Agent) SetVoiceSpeaker(vs chat.VoiceSpeaker) {
 	a.voiceSpeaker = vs
+}
+
+// SetDeviceSpeaker sets the device speaker for physical agent TTS responses.
+func (a *Agent) SetDeviceSpeaker(ds DeviceSpeaker) {
+	a.deviceSpeaker = ds
 }
 
 // SetLocationStore sets the location store for GPS context injection.

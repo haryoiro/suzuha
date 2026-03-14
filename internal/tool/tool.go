@@ -18,6 +18,7 @@ type ToolResult struct {
 	Content   []Content `json:"content"`
 	IsError   bool      `json:"isError"`
 	StopAfter bool      `json:"-"` // If true, stop the tool loop without making another LLM call.
+	ImageURLs []string  `json:"-"` // Optional: images to attach to the tool result message (data URIs).
 }
 
 // Content is a single piece of content in a tool result.

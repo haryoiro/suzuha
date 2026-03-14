@@ -119,44 +119,39 @@ func pickResult(
 	return &results[idx-1], nil
 }
 
-// reflectOnExploration asks the LLM to synthesize the exploration into
-// a personal takeaway — not just what was found, but what it means to the bot.
+// reflectOnExploration summarises the exploration as factual material.
+// No character voice — the calling agent LLM adds personality when it
+// turns this tool result into a Discord message.
 func reflectOnExploration(
 	ctx context.Context,
 	llmClient *llm.Client,
-	systemPrompt string,
+	_ string, // systemPrompt intentionally ignored
 	path []hop,
 	remembered []string,
 ) (string, error) {
 	var sb strings.Builder
 
-	sb.WriteString("さっきネットを散歩した。振り返って、自分なりにまとめて。\n\n")
+	sb.WriteString("以下の探索結果を要約して。\n\n")
 	sb.WriteString("たどった道:\n")
 	for i, h := range path {
 		fmt.Fprintf(&sb, "%d. 「%s」— %s\n", i+1, h.Title, h.Impression)
 	}
 
 	if len(remembered) > 0 {
-		sb.WriteString("\n特に気になったこと:\n")
+		sb.WriteString("\n特に注目した点:\n")
 		for _, r := range remembered {
 			fmt.Fprintf(&sb, "- %s\n", r)
 		}
 	}
 
 	sb.WriteString("\nルール:\n")
-	sb.WriteString("- 散歩のログをそのまま繰り返さない\n")
-	sb.WriteString("- 何が面白かったか、何を学んだか、自分の考えを交えて\n")
-	sb.WriteString("- 新しい疑問や興味が生まれたならそれも\n")
+	sb.WriteString("- 客観的な事実・発見だけまとめる\n")
+	sb.WriteString("- キャラクターの口調や感想は入れない\n")
 	sb.WriteString("- 2-4文で簡潔に\n")
 
-	messages := []providers.Message{
+	resp, err := llmClient.CompleteRawDefault(ctx, []providers.Message{
 		{Role: "user", Content: sb.String()},
-	}
-	if systemPrompt != "" {
-		messages = append([]providers.Message{{Role: "system", Content: systemPrompt}}, messages...)
-	}
-
-	resp, err := llmClient.CompleteRawDefault(ctx, messages)
+	})
 	if err != nil {
 		return "", fmt.Errorf("reflect: %w", err)
 	}
@@ -166,17 +161,16 @@ func reflectOnExploration(
 // buildSummary creates a fallback summary when LLM reflection fails.
 func buildSummary(path []hop, remembered []string) string {
 	var sb strings.Builder
-	sb.WriteString("ネット散歩: ")
 
-	titles := make([]string, len(path))
-	for i, h := range path {
-		titles[i] = h.Title
+	for _, h := range path {
+		fmt.Fprintf(&sb, "- %s: %s\n", h.Title, h.Impression)
 	}
-	sb.WriteString(strings.Join(titles, " → "))
 
 	if len(remembered) > 0 {
-		sb.WriteString("\n覚えたこと: ")
-		sb.WriteString(strings.Join(remembered, " / "))
+		sb.WriteString("\n注目点:\n")
+		for _, r := range remembered {
+			fmt.Fprintf(&sb, "- %s\n", r)
+		}
 	}
 
 	return sb.String()

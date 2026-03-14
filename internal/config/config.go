@@ -167,16 +167,23 @@ type Observe struct {
 	MetricsAddr string `yaml:"metrics_addr"` // e.g. ":9090"
 }
 
+// AdminAuth configures Basic authentication for the admin dashboard.
+type AdminAuth struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 // Admin configures the admin dashboard service.
 type Admin struct {
-	Addr            string `yaml:"addr"`             // e.g. ":8080"
-	AgentMetrics    string `yaml:"agent_metrics"`    // e.g. "http://agent:9090/metrics"
-	AgentLogs       string `yaml:"agent_logs"`       // e.g. "http://agent:9090/internal/logs"
-	AgentContext    string `yaml:"agent_context"`    // e.g. "http://agent:9090/internal/context"
-	ConsolLogs      string `yaml:"consol_logs"`      // e.g. "http://consolidator:9090/internal/logs"
-	ConsolidatorAPI string `yaml:"consolidator_api"` // e.g. "http://consolidator:9091"
-	StaticDir       string `yaml:"static_dir"`       // path to built SPA assets
-	PromptDir       string `yaml:"prompt_dir"`       // path to prompt files (IDENTITY.md, SOUL.md)
+	Addr            string    `yaml:"addr"`             // e.g. ":8080"
+	AgentMetrics    string    `yaml:"agent_metrics"`    // e.g. "http://agent:9090/metrics"
+	AgentLogs       string    `yaml:"agent_logs"`       // e.g. "http://agent:9090/internal/logs"
+	AgentContext    string    `yaml:"agent_context"`    // e.g. "http://agent:9090/internal/context"
+	ConsolLogs      string    `yaml:"consol_logs"`      // e.g. "http://consolidator:9090/internal/logs"
+	ConsolidatorAPI string    `yaml:"consolidator_api"` // e.g. "http://consolidator:9091"
+	StaticDir       string    `yaml:"static_dir"`       // path to built SPA assets
+	PromptDir       string    `yaml:"prompt_dir"`       // path to prompt files (IDENTITY.md, SOUL.md)
+	Auth            AdminAuth `yaml:"auth"`             // Basic authentication (optional)
 }
 
 // Load reads and parses a config file from the given path.

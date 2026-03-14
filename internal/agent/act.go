@@ -77,9 +77,16 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 			"length", len(text),
 			"is_voice", p.IsVoice,
 			"content", truncate(text, 200))
-		// If connected to VC in this guild, speak the response via voice only.
-		guildID := p.LastEvent.Message.GuildID
-		if a.voiceSpeaker != nil && guildID != "" && a.voiceSpeaker.IsConnected(guildID) {
+		// Route response to the appropriate output.
+		if a.deviceSpeaker != nil && p.LastEvent.Source == "device" {
+			// Physical device: send TTS audio instead of text.
+			a.logger.Info("device: TTSで応答", "length", len(text))
+			if err := a.deviceSpeaker.SpeakText(ctx, text); err != nil {
+				a.logger.Warn("device: TTS送信失敗", "error", err)
+			}
+		} else if a.voiceSpeaker != nil && p.LastEvent.Message.GuildID != "" && a.voiceSpeaker.IsConnected(p.LastEvent.Message.GuildID) {
+			// Discord voice channel: speak via voice.
+			guildID := p.LastEvent.Message.GuildID
 			a.logger.Info("voice: 音声で応答", "guild", guildID, "length", len(text))
 			if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
 				a.logger.Warn("voice: 音声送信失敗、テキストにフォールバック", "error", err)
@@ -275,6 +282,17 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 				ToolCallID: tc.ID,
 				Timestamp:  jtime.Now(),
 			})
+
+			// If the tool returned images, inject them as a user message
+			// (OpenAI API only supports multimodal content in user messages).
+			if len(result.ImageURLs) > 0 {
+				a.ctx.Add(llm.Message{
+					Role:      "user",
+					Content:   content,
+					ImageURLs: result.ImageURLs,
+					Timestamp: jtime.Now(),
+				})
+			}
 		}
 
 		if allStopAfter {
