@@ -14,7 +14,7 @@ services:
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
       - ./data:/data
-      - ./.suzuha:/app/.suzuha:ro
+      - ./.suzuha:/app/.suzuha
       - npm-cache:/root/.npm
       - ~/.claude:/root/.claude
     env_file:
@@ -97,6 +97,10 @@ services:
       - API_URL=http://agent:8080
     depends_on:
       - agent
+
+  yolo:
+    build: ./yolo
+    restart: unless-stopped
 
   firmware-p4:
     build:
