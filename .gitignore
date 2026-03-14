@@ -44,3 +44,4 @@ firmware/build/
 .DS_Store
 Thumbs.db
 .claude/settings.local.json
+current_frame.jpg
