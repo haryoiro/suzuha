@@ -33,7 +33,7 @@ func NewChangeDetector(bus *event.Bus, cooldown time.Duration, defaultChannel st
 		cooldown:       cooldown,
 		bus:            bus,
 		defaultChannel: defaultChannel,
-		enabled:        true,
+		enabled:        false,
 	}
 }
 
