@@ -143,34 +143,9 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 
 	dc.OnReady(func(s *discordgo.Session) {
 		// Register Discord-specific tools.
-		registry.Register(builtin.NewDiscordReact(s))
-		registry.Register(builtin.NewDiscordReply(s))
-		registry.Register(builtin.NewDiscordGetHistory(s))
-		registry.Register(builtin.NewDiscordSendDM(s))
-		// Channel management
-		registry.Register(builtin.NewDiscordCreateChannel(s))
-		registry.Register(builtin.NewDiscordEditChannel(s))
-		registry.Register(builtin.NewDiscordDeleteChannel(s))
-		registry.Register(builtin.NewDiscordListChannels(s))
-		// Member management
-		registry.Register(builtin.NewDiscordKickMember(s))
-		registry.Register(builtin.NewDiscordBanMember(s))
-		registry.Register(builtin.NewDiscordTimeoutMember(s))
-		registry.Register(builtin.NewDiscordListMembers(s))
-		// Message management
-		registry.Register(builtin.NewDiscordDeleteMessage(s))
-		registry.Register(builtin.NewDiscordPinMessage(s))
-		// Role management
-		registry.Register(builtin.NewDiscordAddRole(s))
-		registry.Register(builtin.NewDiscordRemoveRole(s))
-		registry.Register(builtin.NewDiscordListRoles(s))
-		// Server & threads
-		registry.Register(builtin.NewDiscordServerInfo(s))
-		registry.Register(builtin.NewDiscordCreateThread(s))
-		registry.Register(builtin.NewDiscordRenameServer(s))
-		registry.Register(builtin.NewDiscordSetNickname(s))
-		// Bot presence
-		registry.Register(builtin.NewDiscordUpdateStatus(s))
+		for _, t := range builtin.NewDiscordTools(s) {
+			registry.Register(t)
+		}
 		logger.Info("discord tools registered")
 
 		// Voice chat setup.
@@ -643,6 +618,28 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"ok":true}`)
 		})
+		mux.HandleFunc("POST /internal/device/servo", func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Pan  int `json:"pan"`
+				Tilt int `json:"tilt"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+				return
+			}
+			dev := hub.Device()
+			if dev == nil {
+				http.Error(w, `{"error":"device not connected"}`, http.StatusServiceUnavailable)
+				return
+			}
+			if err := dev.SendCommand(map[string]any{"cmd": "servo", "pan": body.Pan, "tilt": body.Tilt}); err != nil {
+				http.Error(w, `{"error":"send failed"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"ok":true,"pan":%d,"tilt":%d}`, body.Pan, body.Tilt)
+		})
+
 		// Start periodic capture loop (333ms = ~3fps).
 		captureCtx, _ := context.WithCancel(context.Background())
 		hub.StartCaptureLoop(captureCtx, 333)
