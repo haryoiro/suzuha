@@ -27,7 +27,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
-	"github.com/haryoiro/suzuha/internal/schedule"
+	"github.com/haryoiro/suzuha/internal/action"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
@@ -184,7 +184,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			features := []scheduler.Feature{
-				schedule.New(store.DB()),
+				action.New(store.DB()),
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
 				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
@@ -216,9 +216,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		})
 
 		// Schedule store (used by admin server).
-		do.Provide(i, func(i do.Injector) (*schedule.Store, error) {
+		do.Provide(i, func(i do.Injector) (*action.Store, error) {
 			store := do.MustInvoke[*memory.SQLiteStore](i)
-			return schedule.NewStore(store.DB()), nil
+			return action.NewStore(store.DB()), nil
 		})
 
 		// Media store for binary attachments (images, audio).
@@ -238,7 +238,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			cfg := do.MustInvoke[*config.Config](i)
 			store := do.MustInvoke[*memory.SQLiteStore](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
-			schedStore := do.MustInvoke[*schedule.Store](i)
+			schedStore := do.MustInvoke[*action.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
 			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger), nil
