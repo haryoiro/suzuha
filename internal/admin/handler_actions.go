@@ -7,11 +7,11 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/jtime"
-	"github.com/haryoiro/suzuha/internal/schedule"
+	"github.com/haryoiro/suzuha/internal/action"
 	"github.com/robfig/cron/v3"
 )
 
-func actionToAPI(a schedule.Action) api.ScheduledAction {
+func actionToAPI(a action.Action) api.ScheduledAction {
 	sa := api.ScheduledAction{
 		ID:          a.ID,
 		ChannelID:   a.ChannelID,
@@ -37,7 +37,7 @@ func actionToAPI(a schedule.Action) api.ScheduledAction {
 func (h *AdminHandler) ScheduledActionsList(ctx context.Context, params api.ScheduledActionsListParams) (*api.ScheduledActionsListOK, error) {
 	limit := int(params.Limit.Or(50))
 
-	actions, err := h.schedStore.List(ctx, schedule.ActionListOpts{
+	actions, err := h.schedStore.List(ctx, action.ActionListOpts{
 		Status: params.Status.Or(""),
 		Limit:  limit,
 	})
@@ -76,7 +76,7 @@ func (h *AdminHandler) ScheduledActionsCreate(ctx context.Context, req *api.Crea
 	mode := string(req.Mode.Or(api.CreateActionRequestModePrompt))
 	cronExpr := req.CronExpr.Or("")
 
-	a := &schedule.Action{
+	a := &action.Action{
 		ChannelID:   req.ChannelID,
 		Content:     req.Content,
 		Mode:        mode,
@@ -94,7 +94,7 @@ func (h *AdminHandler) ScheduledActionsCreate(ctx context.Context, req *api.Crea
 }
 
 func (h *AdminHandler) ScheduledActionsUpdate(ctx context.Context, req *api.UpdateActionRequest, params api.ScheduledActionsUpdateParams) (*api.OkResponse, error) {
-	fields := schedule.ActionUpdateFields{}
+	fields := action.ActionUpdateFields{}
 
 	if v, ok := req.ChannelID.Get(); ok {
 		fields.ChannelID = &v

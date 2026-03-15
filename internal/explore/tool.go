@@ -37,7 +37,7 @@ func NewExploreTool(searxngURL string, llmClient *llm.Client, memStore memory.St
 
 func (t *ExploreTool) Name() string { return "explore" }
 func (t *ExploreTool) Description() string {
-	return "ネットを散歩して情報を探索する。気になるトピックから出発して関連情報を芋づる式にたどる。結果はメモリに保存される。"
+	return "ネットを散歩して情報を探索する。気になるトピックから出発して関連情報を芋づる式にたどる。結果はメモリに保存されるが、結果はみんなに共有されていないので共有したかったら知ったことを共有しよう。"
 }
 
 func (t *ExploreTool) InputSchema() json.RawMessage {

@@ -104,6 +104,7 @@ func StripDirectiveTags(text string) string {
 	return strings.TrimSpace(text)
 }
 
+
 // IsSilentResponse returns true if the LLM chose not to respond
 // (empty text or contains [SKIP]).
 func IsSilentResponse(text string) bool {

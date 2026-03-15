@@ -31,66 +31,26 @@ func (a *Agent) compactAsync(ctx context.Context) {
 
 	snapshot := a.ctx.Messages()
 	snapshotLen := len(snapshot)
-	target := snapshotLen / 2
 
 	go func() {
 		defer a.compactMu.Unlock()
 		a.logger.Info("バックグラウンドコンパクション開始", "snapshot_len", snapshotLen)
-
-		if a.consol != nil {
-			result, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
-				Messages:    snapshot,
-				TargetCount: target,
-			})
-			if err != nil {
-				a.logger.Warn("コンソリデータの圧縮失敗、切り詰めにフォールバック", "error", err)
-				a.ctx.TruncateOldest(snapshotLen / 2)
-				a.ctx.ResetInjectedUsers()
-				a.ctx.ResetSeenChannels()
-				persistContext(ctx, a.db, a.ctx, a.logger)
-				return
-			}
-
-			if len(result.KeepIndices) == 0 {
-				a.logger.Warn("コンソリデータが保持インデックスを返さず、切り詰めにフォールバック")
-				a.ctx.TruncateOldest(snapshotLen / 2)
-				a.ctx.ResetInjectedUsers()
-				a.ctx.ResetSeenChannels()
-				persistContext(ctx, a.db, a.ctx, a.logger)
-	
-				return
-			}
-
-			var kept []llm.Message
-			for _, idx := range result.KeepIndices {
-				if idx >= 0 && idx < len(snapshot) {
-					kept = append(kept, snapshot[idx])
-				}
-			}
-			a.ctx.CompactReplace(snapshotLen, kept)
-			a.ctx.ResetInjectedUsers()
-			a.ctx.ResetSeenChannels()
-			persistContext(ctx, a.db, a.ctx, a.logger)
-
-
-			a.logger.Info("バックグラウンドコンパクション完了",
-				"kept", len(kept), "original", snapshotLen)
-			return
-		}
-
-		// No consolidator available — simple truncation fallback.
-		a.ctx.TruncateOldest(snapshotLen / 2)
-		a.ctx.ResetInjectedUsers()
-		a.ctx.ResetSeenChannels()
-		persistContext(ctx, a.db, a.ctx, a.logger)
-		a.logger.Info("バックグラウンド切り詰め完了")
+		a.doCompact(ctx, snapshot, true)
 	}()
 }
 
 // compact triggers context compaction synchronously (used by ForceCompact).
 func (a *Agent) compact(ctx context.Context) {
 	msgs := a.ctx.Messages()
-	target := len(msgs) / 2
+	a.doCompact(ctx, msgs, false)
+}
+
+// doCompact performs the actual compaction logic.
+// If async is true, new messages appended during compaction are preserved via CompactReplace;
+// otherwise the context is fully replaced via ReplaceAll.
+func (a *Agent) doCompact(ctx context.Context, msgs []llm.Message, async bool) {
+	n := len(msgs)
+	target := n / 2
 
 	if a.consol != nil {
 		result, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
@@ -99,40 +59,42 @@ func (a *Agent) compact(ctx context.Context) {
 		})
 		if err != nil {
 			a.logger.Warn("コンソリデータの圧縮失敗、切り詰めにフォールバック", "error", err)
-			a.ctx.TruncateOldest(len(msgs) / 2)
-			a.ctx.ResetInjectedUsers()
-			a.ctx.ResetSeenChannels()
-			persistContext(ctx, a.db, a.ctx, a.logger)
+			a.ctx.TruncateOldest(n / 2)
+			a.resetAndPersist(ctx)
 			return
 		}
 
 		if len(result.KeepIndices) == 0 {
 			a.logger.Warn("コンソリデータが保持インデックスを返さず、切り詰めにフォールバック")
-			a.ctx.TruncateOldest(len(msgs) / 2)
-			a.ctx.ResetInjectedUsers()
-			a.ctx.ResetSeenChannels()
-			persistContext(ctx, a.db, a.ctx, a.logger)
-	
+			a.ctx.TruncateOldest(n / 2)
+			a.resetAndPersist(ctx)
 			return
 		}
 
 		var kept []llm.Message
 		for _, idx := range result.KeepIndices {
-			if idx >= 0 && idx < len(msgs) {
+			if idx >= 0 && idx < n {
 				kept = append(kept, msgs[idx])
 			}
 		}
-		a.ctx.ReplaceAll(kept)
-		a.ctx.ResetInjectedUsers()
-		a.ctx.ResetSeenChannels()
-		persistContext(ctx, a.db, a.ctx, a.logger)
-
-
+		if async {
+			a.ctx.CompactReplace(n, kept)
+		} else {
+			a.ctx.ReplaceAll(kept)
+		}
+		a.resetAndPersist(ctx)
+		a.logger.Info("コンパクション完了", "kept", len(kept), "original", n)
 		return
 	}
 
 	// No consolidator available — simple truncation fallback.
-	a.ctx.TruncateOldest(len(msgs) / 2)
+	a.ctx.TruncateOldest(n / 2)
+	a.resetAndPersist(ctx)
+	a.logger.Info("切り詰め完了", "original", n)
+}
+
+// resetAndPersist clears injected state and saves context to DB.
+func (a *Agent) resetAndPersist(ctx context.Context) {
 	a.ctx.ResetInjectedUsers()
 	a.ctx.ResetSeenChannels()
 	persistContext(ctx, a.db, a.ctx, a.logger)

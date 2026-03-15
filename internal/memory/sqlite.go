@@ -260,13 +260,21 @@ func (s *SQLiteStore) notifyEmbedWorker() {
 func (s *SQLiteStore) RunEmbeddingWorker(ctx context.Context) {
 	const batchSize = 20
 	const pollInterval = 30 * time.Second
+	const maxBackoff = 10 * time.Minute
+
+	backoff := time.Duration(0)
 
 	for {
+		wait := pollInterval
+		if backoff > 0 {
+			wait = backoff
+		}
+
 		select {
 		case <-ctx.Done():
 			return
 		case <-s.embedSig:
-		case <-time.After(pollInterval):
+		case <-time.After(wait):
 		}
 
 		// Drain any extra signals.
@@ -282,8 +290,19 @@ func (s *SQLiteStore) RunEmbeddingWorker(ctx context.Context) {
 			n, err := s.BackfillEmbeddings(ctx, batchSize)
 			if err != nil {
 				s.logger.Warn("embedding worker: バックフィルでエラー発生", "error", err)
+				// Exponential backoff on error.
+				if backoff == 0 {
+					backoff = pollInterval
+				} else {
+					backoff *= 2
+				}
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				s.logger.Info("embedding worker: 次回リトライまで待機", "backoff", backoff)
 				break
 			}
+			backoff = 0 // reset on success
 			if n == 0 {
 				break
 			}
@@ -404,6 +423,14 @@ func (s *SQLiteStore) searchInternal(ctx context.Context, query string, memType 
 	return s.rrfMerge(ctx, ftsResults, vecResults, limit)
 }
 
+// escapeFTS5Query escapes a raw string for use in an FTS5 MATCH clause.
+// Wraps the query in double quotes so FTS5 treats it as a literal phrase,
+// escaping any embedded double quotes.
+func escapeFTS5Query(query string) string {
+	escaped := strings.ReplaceAll(query, `"`, `""`)
+	return `"` + escaped + `"`
+}
+
 // searchFTS performs keyword search via FTS5 (trigram) or LIKE fallback.
 func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType MemoryType, limit int, since time.Time) ([]Memory, error) {
 	var q string
@@ -414,7 +441,7 @@ func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType Memor
 		     FROM memories m
 		     JOIN memories_fts f ON f.rowid = m.rowid
 		     WHERE memories_fts MATCH ?`
-		args = []any{query}
+		args = []any{escapeFTS5Query(query)}
 	} else {
 		q = `SELECT m.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
 		     FROM memories m
@@ -600,52 +627,16 @@ func (s *SQLiteStore) applyModalityBoost(ctx context.Context, results []scoredID
 
 // filterVecByType filters vec results by memory type using a DB lookup.
 func (s *SQLiteStore) filterVecByType(ctx context.Context, results []scoredID, memType MemoryType, limit int) ([]scoredID, error) {
-	ids := make([]string, len(results))
-	for i, r := range results {
-		ids[i] = r.id
-	}
-	placeholders := strings.Repeat("?,", len(ids))
-	placeholders = placeholders[:len(placeholders)-1]
-
-	args := make([]any, 0, len(ids)+1)
-	for _, id := range ids {
-		args = append(args, id)
-	}
-	args = append(args, string(memType))
-
-	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND type = ?`, placeholders)
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, fmt.Errorf("memory: タイプによるフィルタに失敗: %w", err)
-	}
-	defer rows.Close()
-
-	allowed := make(map[string]bool)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		allowed[id] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	var filtered []scoredID
-	for _, r := range results {
-		if allowed[r.id] {
-			filtered = append(filtered, r)
-		}
-		if len(filtered) >= limit {
-			break
-		}
-	}
-	return filtered, nil
+	return s.filterVecResults(ctx, results, "type = ?", string(memType), limit)
 }
 
 // filterVecBySince filters vec results by creation time.
 func (s *SQLiteStore) filterVecBySince(ctx context.Context, results []scoredID, since time.Time, limit int) ([]scoredID, error) {
+	return s.filterVecResults(ctx, results, "created_at >= ?", since, limit)
+}
+
+// filterVecResults filters vec results by an arbitrary WHERE clause on the memories table.
+func (s *SQLiteStore) filterVecResults(ctx context.Context, results []scoredID, whereClause string, whereArg any, limit int) ([]scoredID, error) {
 	ids := make([]string, len(results))
 	for i, r := range results {
 		ids[i] = r.id
@@ -657,12 +648,12 @@ func (s *SQLiteStore) filterVecBySince(ctx context.Context, results []scoredID, 
 	for _, id := range ids {
 		args = append(args, id)
 	}
-	args = append(args, since)
+	args = append(args, whereArg)
 
-	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND created_at >= ?`, placeholders)
+	q := fmt.Sprintf(`SELECT id FROM memories WHERE id IN (%s) AND %s`, placeholders, whereClause)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("memory: 時間によるフィルタに失敗: %w", err)
+		return nil, fmt.Errorf("memory: フィルタに失敗 (%s): %w", whereClause, err)
 	}
 	defer rows.Close()
 
@@ -848,21 +839,100 @@ func (s *SQLiteStore) ListEpisodesByParticipant(ctx context.Context, userID stri
 // considered duplicates. Lower = stricter. Cosine distance typically ranges 0–2.
 const dupDistanceThreshold = 0.15
 
-func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, error) {
+func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, []float32, error) {
+	// Phase 1: cheap FTS pre-check — skip embedding API call for exact text matches.
+	if ftsID := s.ftsExactMatch(ctx, content, memType); ftsID != "" {
+		return ftsID, nil, nil
+	}
+
 	if s.embedder == nil {
-		return "", nil
+		return "", nil, nil
 	}
 	emb, err := s.embedder.Embed(ctx, []embedding.Part{embedding.TextPart(content)})
 	if err != nil || len(emb) == 0 {
-		return "", nil // can't check, assume not duplicate
+		return "", nil, nil // can't check, assume not duplicate
 	}
 
+	dupID := s.knnDupCheck(ctx, emb, memType)
+	return dupID, emb, nil
+}
+
+// IsDuplicateBatch checks multiple candidates in a single batch to minimise
+// embedding API calls. FTS pre-check is applied first, and remaining
+// candidates are embedded in one EmbedBatch call.
+func (s *SQLiteStore) IsDuplicateBatch(ctx context.Context, candidates []DupCandidate) ([]DupResult, error) {
+	results := make([]DupResult, len(candidates))
+
+	// Phase 1: FTS pre-check.
+	var needEmbed []int
+	for i, c := range candidates {
+		if ftsID := s.ftsExactMatch(ctx, c.Content, c.Type); ftsID != "" {
+			results[i].DupID = ftsID
+		} else {
+			needEmbed = append(needEmbed, i)
+		}
+	}
+
+	if len(needEmbed) == 0 || s.embedder == nil {
+		return results, nil
+	}
+
+	// Phase 2: batch embed.
+	inputs := make([][]embedding.Part, len(needEmbed))
+	for j, idx := range needEmbed {
+		inputs[j] = []embedding.Part{embedding.TextPart(candidates[idx].Content)}
+	}
+
+	vectors, err := s.embedder.EmbedBatch(ctx, inputs)
+	if err != nil {
+		// Non-fatal: return FTS results, rest treated as non-duplicate w/o embedding.
+		s.logger.Warn("memory: バッチ埋め込みに失敗 (dedup)", "error", err)
+		return results, nil
+	}
+
+	// Phase 3: KNN check per embedding.
+	for j, idx := range needEmbed {
+		emb := vectors[j]
+		results[idx].Embedding = emb
+		if len(emb) == 0 {
+			continue
+		}
+		if dupID := s.knnDupCheck(ctx, emb, candidates[idx].Type); dupID != "" {
+			results[idx].DupID = dupID
+		}
+	}
+
+	return results, nil
+}
+
+// ftsExactMatch does a cheap FTS5 phrase search to find an existing memory
+// with identical text. Returns the matching ID or empty string.
+func (s *SQLiteStore) ftsExactMatch(ctx context.Context, content string, memType MemoryType) string {
+	if len([]rune(content)) < 3 {
+		return ""
+	}
+	var id string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT m.id FROM memories m
+		 JOIN memories_fts f ON f.rowid = m.rowid
+		 WHERE memories_fts MATCH ? AND m.type = ?
+		 LIMIT 1`,
+		escapeFTS5Query(content), string(memType),
+	).Scan(&id)
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
+// knnDupCheck performs KNN vector search and returns the ID of a same-type
+// memory within dupDistanceThreshold, or empty string.
+func (s *SQLiteStore) knnDupCheck(ctx context.Context, emb []float32, memType MemoryType) string {
 	blob, err := sqlite_vec.SerializeFloat32(emb)
 	if err != nil {
-		return "", nil
+		return ""
 	}
 
-	// KNN search for nearest neighbor, then check type and distance.
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT v.id, v.distance, m.type FROM memories_vec v
 		 JOIN memories m ON m.id = v.id
@@ -870,7 +940,7 @@ func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType M
 		blob,
 	)
 	if err != nil {
-		return "", nil // non-fatal
+		return ""
 	}
 	defer rows.Close()
 
@@ -882,10 +952,10 @@ func (s *SQLiteStore) IsDuplicate(ctx context.Context, content string, memType M
 			continue
 		}
 		if MemoryType(typ) == memType && distance < dupDistanceThreshold {
-			return id, nil
+			return id
 		}
 	}
-	return "", nil
+	return ""
 }
 
 func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, error) {
@@ -921,7 +991,7 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 
 	if opts.Query != "" {
 		where += " AND m.rowid IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?)"
-		args = append(args, opts.Query)
+		args = append(args, escapeFTS5Query(opts.Query))
 	}
 
 	// Count total.
@@ -1238,8 +1308,17 @@ func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (in
 	}
 
 	// Build batch inputs, including image attachments from MediaStore.
-	inputs := make([][]embedding.Part, len(entries))
+	// Filter out entries with empty content to avoid API errors.
+	type indexedInput struct {
+		idx   int
+		parts []embedding.Part
+	}
+	var valid []indexedInput
 	for i, e := range entries {
+		if strings.TrimSpace(e.content) == "" {
+			s.logger.Warn("embedding backfill: 空コンテンツをスキップ", "id", e.id)
+			continue
+		}
 		parts := []embedding.Part{embedding.TextPart(e.content)}
 		if s.mediaStore != nil {
 			for _, att := range e.atts {
@@ -1252,11 +1331,26 @@ func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (in
 				}
 			}
 		}
-		inputs[i] = parts
+		valid = append(valid, indexedInput{idx: i, parts: parts})
+	}
+	if len(valid) == 0 {
+		return 0, nil
+	}
+
+	inputs := make([][]embedding.Part, len(valid))
+	for i, v := range valid {
+		inputs[i] = v.parts
 	}
 
 	vectors, err := s.embedder.EmbedBatch(ctx, inputs)
 	if err != nil {
+		// Log which entries were in the batch for debugging.
+		for _, v := range valid {
+			s.logger.Warn("embedding backfill: バッチ内エントリ",
+				"id", entries[v.idx].id,
+				"content_len", len(entries[v.idx].content),
+				"attachments", len(entries[v.idx].atts))
+		}
 		return 0, fmt.Errorf("memory: バッチ埋め込みに失敗: %w", err)
 	}
 
@@ -1269,9 +1363,10 @@ func (s *SQLiteStore) BackfillEmbeddings(ctx context.Context, batchSize int) (in
 		if err != nil {
 			continue
 		}
+		entryID := entries[valid[i].idx].id
 		if _, err := s.db.ExecContext(ctx,
 			`INSERT OR REPLACE INTO memories_vec (id, embedding) VALUES (?, ?)`,
-			entries[i].id, blob,
+			entryID, blob,
 		); err != nil {
 			continue
 		}

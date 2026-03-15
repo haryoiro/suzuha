@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agnivade/levenshtein"
+
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/jtime"
@@ -55,8 +57,10 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 
 	// Send response (strip directive tags and silent markers).
 	// Think tags are already parsed in llm.Complete().
-	text := llm.StripDirectiveTags(resp.Text)
+	text := strings.TrimSpace(llm.StripDirectiveTags(resp.Text))
 	switch {
+	case text == "":
+		a.logger.Debug("空の応答をスキップ")
 	case containsSkipTool(resp.ToolCalls):
 		a.logger.Info("応答をスキップ (skip_responseツール)",
 			"had_text", text != "")
@@ -134,22 +138,20 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 
 		var msgs []llm.Message
 		if iter == 0 {
-			// Order: system prompt → ephemeral (profiles, memories) → conversation → time → directive
+			// Order: system prompt (with time) → ephemeral (profiles, memories) → conversation → directive
 			// Ephemeral context before conversation lets the LLM read messages
 			// with knowledge of who the users are and what it remembers.
 			// Directive last for maximum recency effect.
+			// Time is embedded in the system prompt so the LLM knows the time
+			// without being tempted to report it.
+			now := jtime.Now()
 			sp := a.ctx.SystemPrompt()
 			if sp != "" {
+				sp += fmt.Sprintf("\n\n[現在時刻: %s]", now.Format("2006-01-02 15:04:05 (Mon)"))
 				msgs = append(msgs, llm.Message{Role: "system", Content: sp})
 			}
 			msgs = append(msgs, ephemeral...)
 			msgs = append(msgs, a.ctx.Messages()...)
-			now := jtime.Now()
-			msgs = append(msgs, llm.Message{
-				Role:      "system",
-				Content:   fmt.Sprintf("[現在時刻: %s]", now.Format("2006-01-02 15:04:05 (Mon)")),
-				Timestamp: now,
-			})
 			if directive != "" {
 				msgs = append(msgs, llm.Message{
 					Role:      "system",
@@ -304,52 +306,20 @@ func (a *Agent) completeWithTools(ctx context.Context, directive, channel string
 	return nil, intermediateText, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
 }
 
-// isSimilarText returns true if two texts are similar enough to be considered duplicates,
-// using normalized Levenshtein distance. Threshold: 70% similarity.
+// isSimilarText returns true if two texts are similar enough to be considered duplicates.
+// Used for intra-turn dedup (intermediate text vs final response). Threshold: 95%.
 func isSimilarText(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
 	if a == "" || b == "" {
 		return false
 	}
-	a = strings.TrimSpace(a)
-	b = strings.TrimSpace(b)
 	if a == b {
 		return true
 	}
-	ra, rb := []rune(a), []rune(b)
-	dist := levenshtein(ra, rb)
-	maxLen := len(ra)
-	if len(rb) > maxLen {
-		maxLen = len(rb)
-	}
-	similarity := 1.0 - float64(dist)/float64(maxLen)
-	return similarity >= 0.95
-}
-
-// levenshtein computes the Levenshtein distance between two rune slices.
-func levenshtein(a, b []rune) int {
-	if len(a) == 0 {
-		return len(b)
-	}
-	if len(b) == 0 {
-		return len(a)
-	}
-	prev := make([]int, len(b)+1)
-	curr := make([]int, len(b)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(a); i++ {
-		curr[0] = i
-		for j := 1; j <= len(b); j++ {
-			cost := 1
-			if a[i-1] == b[j-1] {
-				cost = 0
-			}
-			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
-		}
-		prev, curr = curr, prev
-	}
-	return prev[len(b)]
+	dist := levenshtein.ComputeDistance(a, b)
+	maxLen := max(len([]rune(a)), len([]rune(b)))
+	return 1.0-float64(dist)/float64(maxLen) >= 0.95
 }
 
 // containsSkipTool returns true if the tool calls include skip_response.

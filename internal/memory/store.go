@@ -85,11 +85,29 @@ type Store interface {
 	SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]Memory, error)
 
 	// IsDuplicate checks if a very similar memory already exists.
-	// Returns the existing memory ID if found, or empty string if no duplicate.
-	IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, error)
+	// Returns the existing memory ID if found (or empty string), and the
+	// computed embedding (which the caller can attach to the Memory before
+	// Save to avoid a redundant backfill).
+	IsDuplicate(ctx context.Context, content string, memType MemoryType) (dupID string, emb []float32, err error)
+
+	// IsDuplicateBatch checks multiple candidates for duplicates in a single
+	// batch, minimising embedding API calls.
+	IsDuplicateBatch(ctx context.Context, candidates []DupCandidate) ([]DupResult, error)
 
 	// Close releases database resources.
 	Close() error
+}
+
+// DupCandidate is a single input for batch duplicate checking.
+type DupCandidate struct {
+	Content string
+	Type    MemoryType
+}
+
+// DupResult is the output per candidate from IsDuplicateBatch.
+type DupResult struct {
+	DupID     string    // non-empty if a duplicate was found
+	Embedding []float32 // computed embedding (nil if FTS pre-check caught it)
 }
 
 // DuplicateGroup is a cluster of similar memories found by vector distance.

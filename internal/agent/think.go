@@ -60,6 +60,9 @@ const (
 	convRecentWindow   = 5 * time.Minute // priority 3: bot spoke within this window
 	convRecentMaxMsgs  = 6               // priority 3: max user messages since bot spoke
 	convScanLimit      = 50              // max messages to scan backwards
+
+	// noTimeReport is appended to all directives.
+	noTimeReport = "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
 )
 
 // convState captures dynamic conversation signals derived from the message history.
@@ -182,9 +185,9 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 			Role: "system", Content: p.LastMessage.Content, Timestamp: jtime.Now(),
 		})
 		toolNames := strings.Join(a.tools.AllEnabledNames(), ", ")
-		directive = fmt.Sprintf("[SELF_PROMPT] 自分の内なる思考です。以下のツールを自由に組み合わせて遊んでください: %s\n気になることを調べる、誰かが言っていたことを思い出してリマインドする、会話の流れから何か提案する、ステータスを変える、つぶやく、なんでもOK。", toolNames)
+		directive = fmt.Sprintf("[SELF_PROMPT] 自分の内なる思考です。以下のツールを自由に組み合わせて遊んでください: %s\n気になることを調べる、誰かが言っていたことを思い出してリマインドする、会話の流れから何か提案する、ステータスを変える、つぶやく、なんでもOK。\n※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。", toolNames)
 	} else if p.DirectlyAddressed {
-		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。"
+		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
 	} else {
 		cs := a.conversationState(p.Channel)
 		es := a.episodeSignal(ctx, p.LastMessage.Source, p.LastMessage.UserID)
@@ -501,7 +504,7 @@ func (a *Agent) episodeSignal(ctx context.Context, platform, platformUserID stri
 // it must respond or may stay silent.
 func responseDirective(evt event.Event, botID string, cs convState, es episodeSig) string {
 	if isDirectlyAddressed(evt, botID) {
-		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。"
+		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + noTimeReport
 	}
 	const noEmoji = "※テキストに絵文字・顔文字は絶対に入れないで。"
 
@@ -513,27 +516,27 @@ func responseDirective(evt event.Event, botID string, cs convState, es episodeSi
 
 	// Priority 2: Bot was actively speaking in this conversation very recently.
 	if cs.botLastSpokeAgo > 0 && cs.botLastSpokeAgo < convActiveWindow && cs.messagesSinceBotSpoke <= convActiveMaxMsgs {
-		return "[RESPOND] 直前まであなたが参加していた会話の続きです。返答してください。" + brevity + noEmoji
+		return "[RESPOND] 直前まであなたが参加していた会話の続きです。返答してください。" + brevity + noEmoji + noTimeReport
 	}
 
 	// Priority 3: Bot spoke recently and it's a 1-on-1 thread.
 	if cs.botLastSpokeAgo > 0 && cs.botLastSpokeAgo < convRecentWindow && cs.messagesSinceBotSpoke <= convRecentMaxMsgs && cs.recentDistinctUsers == 1 {
 		return "[LISTEN] 最近この会話に参加していました。続ける価値があれば短く返してください。なければ skip_response を呼んで。" +
-			brevity + reactHint + noEmoji
+			brevity + reactHint + noEmoji + noTimeReport
 	}
 
 	// Episode-based relationship: many shared episodes with recent activity → close relationship.
 	if es.count >= 3 && es.hasRecent {
 		return "[LISTEN] 仲の良い人の会話です。気軽に返して。相槌だけの返答はしない。話すことがなければ skip_response。" +
-			brevity + noEmoji
+			brevity + noEmoji + noTimeReport
 	}
 	if es.count >= 1 {
 		return "[LISTEN] 知り合いの会話です。" + skipDefault +
 			"自分が詳しい話題や強い意見があるときだけ返して。" +
-			brevity + reactHint + noEmoji
+			brevity + reactHint + noEmoji + noTimeReport
 	}
 
 	return "[LISTEN] チャンネルの会話です。" + skipDefault +
 		"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
-		brevity + reactHint + noEmoji
+		brevity + reactHint + noEmoji + noTimeReport
 }

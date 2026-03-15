@@ -58,7 +58,7 @@ static esp_err_t init_servo_channel(int gpio, mcpwm_cmpr_handle_t *out_cmp)
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
 
     // Center position
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(*out_cmp, degree_to_pulsewidth(90)));
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(*out_cmp, degree_to_pulsewidth(95)));
 
     return ESP_OK;
 }
@@ -81,13 +81,17 @@ static void servo_task(void *arg)
 
 esp_err_t servo_task_start(void)
 {
-    s_cmd_queue = xQueueCreate(4, sizeof(servo_cmd_t));
+    s_cmd_queue = xQueueCreate(1, sizeof(servo_cmd_t));
     if (!s_cmd_queue) {
         return ESP_ERR_NO_MEM;
     }
 
     ESP_ERROR_CHECK(init_servo_channel(SERVO_PAN_GPIO, &s_pan_cmp));
+#if SERVO_TILT_GPIO >= 0
     ESP_ERROR_CHECK(init_servo_channel(SERVO_TILT_GPIO, &s_tilt_cmp));
+#else
+    ESP_LOGI(TAG, "Tilt servo disabled");
+#endif
 
     BaseType_t created = xTaskCreatePinnedToCore(
         servo_task, "servo", 2048, NULL, 3, NULL, 1);

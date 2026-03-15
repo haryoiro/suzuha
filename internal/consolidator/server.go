@@ -140,19 +140,30 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 	// Build per-message-index media key map.
 	mediaByIndex := collectMediaKeysByIndex(req.Messages)
 
-	// Save extracted memories to long-term store (skip duplicates).
+	// Attach media to all candidates first.
+	for i := range result.Memories {
+		attachMediaByIndices(&result.Memories[i], mediaByIndex)
+	}
+
+	// Batch dedup check — single embedding API call for all candidates.
+	candidates := make([]memory.DupCandidate, len(result.Memories))
+	for i, mem := range result.Memories {
+		candidates[i] = memory.DupCandidate{Content: mem.Content, Type: mem.Type}
+	}
+	dupResults, dupErr := s.store.IsDuplicateBatch(ctx, candidates)
+	if dupErr != nil {
+		s.logger.Warn("consolidator: バッチ重複チェックに失敗", "error", dupErr)
+	}
+
+	// Save non-duplicate memories, reusing embeddings from the dedup check.
 	for i := range result.Memories {
 		mem := &result.Memories[i]
-
-		// Attach media based on image_indices from LLM output.
-		attachMediaByIndices(mem, mediaByIndex)
-		dupID, dupErr := s.store.IsDuplicate(ctx, mem.Content, mem.Type)
-		if dupErr != nil {
-			s.logger.Warn("consolidator: 重複チェックに失敗しました", "error", dupErr)
-		}
-		if dupID != "" {
-			s.logger.Debug("consolidator: 重複メモリをスキップ", "existing_id", dupID, "content", mem.Content)
+		if dupResults != nil && dupResults[i].DupID != "" {
+			s.logger.Debug("consolidator: 重複メモリをスキップ", "existing_id", dupResults[i].DupID, "content", mem.Content)
 			continue
+		}
+		if dupResults != nil && len(dupResults[i].Embedding) > 0 {
+			mem.Embedding = dupResults[i].Embedding
 		}
 		if err := s.store.Save(ctx, mem); err != nil {
 			s.logger.Warn("consolidator: メモリの保存に失敗しました", "error", err)

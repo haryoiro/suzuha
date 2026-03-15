@@ -76,8 +76,8 @@ void app_main(void)
     ESP_ERROR_CHECK(speaker_task_start());
     ESP_ERROR_CHECK(camera_task_start());
 
-    // Servo (uncomment when ready)
-    // ESP_ERROR_CHECK(servo_task_start());
+    // Servo
+    ESP_ERROR_CHECK(servo_task_start());
 
     ESP_LOGI(TAG, "suzuha physical agent ready");
 }

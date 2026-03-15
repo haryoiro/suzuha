@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/haryoiro/suzuha/internal/embedding"
 )
 
 func newTestStore(t *testing.T) *SQLiteStore {
@@ -108,17 +110,34 @@ func TestSaveAutoGeneratesTimestamps(t *testing.T) {
 	}
 }
 
+// testEmbedder is a minimal Embedder for tests.
+type testEmbedder struct {
+	called bool
+	dims   int
+}
+
+func (e *testEmbedder) Embed(_ context.Context, _ []embedding.Part) ([]float32, error) {
+	e.called = true
+	return make([]float32, e.dims), nil
+}
+func (e *testEmbedder) EmbedBatch(_ context.Context, inputs [][]embedding.Part) ([][]float32, error) {
+	e.called = true
+	out := make([][]float32, len(inputs))
+	for i := range inputs {
+		out[i] = make([]float32, e.dims)
+	}
+	return out, nil
+}
+func (e *testEmbedder) Dimensions() int                  { return e.dims }
+func (e *testEmbedder) Modalities() []embedding.Modality { return []embedding.Modality{embedding.ModalityText} }
+
 func TestSaveWithEmbedFunc(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 
-	called := false
-	embedFn := func(ctx context.Context, text string) ([]float32, error) {
-		called = true
-		return make([]float32, 768), nil
-	}
+	emb := &testEmbedder{dims: 768}
 
-	store, err := NewSQLiteStore(dbPath, embedFn, true, nil)
+	store, err := NewSQLiteStore(dbPath, emb, true, nil)
 	if err != nil {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
@@ -127,8 +146,8 @@ func TestSaveWithEmbedFunc(t *testing.T) {
 	ctx := context.Background()
 	store.Save(ctx, &Memory{Type: MemoryTypeUser, Content: "embed test"})
 
-	if !called {
-		t.Error("expected embedFn to be called")
+	if !emb.called {
+		t.Error("expected embedder to be called")
 	}
 }
 
