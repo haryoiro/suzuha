@@ -66,7 +66,7 @@ suzuha2 は **自律型 Discord Bot エージェント** である。LLM を頭�
 ┌──────────────────────────┐  ┌───────────────────┐
 │     Scheduler            │  │   Admin Server    │
 │  topics, explore,        │  │   (React SPA)     │
-│  affinity, forget, ...   │  │                   │
+│  forget, schedule, ...   │  │                   │
 └──────────────────────────┘  └───────────────────┘
 
 ┌──────────────┐  ┌───────────┐  ┌──────────────┐
@@ -83,13 +83,12 @@ suzuha2/
 ├── internal/
 │   ├── agent/              # 4段パイプライン (perceive/think/act/reflect/context/hook)
 │   ├── admin/              # 管理ダッシュボード HTTP サーバー (ogen + handler)
-│   ├── affinity/           # 好感度評価タスク
 │   ├── channel/            # チャンネル設定・アクティビティ追跡
 │   ├── chat/               # チャットインターフェース (discord/, cli/)
 │   ├── config/             # YAML 設定読み込み
 │   ├── consolidator/       # コンテキスト圧縮 (LLM ベース)
 │   ├── device/             # 物理デバイス (ESP32 WebSocket, サーボ, カメラ, YOLO)
-│   ├── dyntools/           # 動的スクリプトツール (/data/tools/)
+│   ├── action/             # スケジュールアクション (予約投稿)
 │   ├── event/              # イベントバス
 │   ├── explore/            # ウェブ探索 (SearXNG + LLM 評価)
 │   ├── forget/             # 記憶重複削除
@@ -100,7 +99,6 @@ suzuha2/
 │   ├── memory/             # 長期記憶ストア (SQLite + ベクトル検索)
 │   ├── notification/       # 通知ミドルウェア (静寂時間, チャンネル設定)
 │   ├── observe/            # メトリクス, ログ, リングバッファ
-│   ├── schedule/           # スケジュールアクション (予約投稿)
 │   ├── scheduler/          # cron スケジューラー
 │   ├── tool/               # ツールインターフェース + builtin/ (Discord, fetch, python, user_profile)
 │   ├── topics/             # 独り言 (退屈度ベース)

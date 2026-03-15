@@ -22,12 +22,10 @@ Feature が `agent.PipelineHook` も実装していれば、パイプライン�
 
 ```go
 features := []scheduler.Feature{
-    schedule.New(store.DB()),
-    dyntools.New("/data/tools", registry, logger),
+    action.New(store.DB()),
     mcp.NewFeature(mcpMgr, logger),
     topics.New(),
     explore.New(searxURL, llmClient, store, systemPrompt, maxDepth),
-    affinity.New(),
     forget.New(),
     location.NewFeature(locStore),  // 有効時のみ
 }
@@ -88,13 +86,7 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 5. `next_query` があれば次の検索に進む（max_depth まで）
 6. 最後に探索全体を LLM に要約させる
 
-### 3. Affinity（好感度評価）
-
-**パッケージ:** `internal/affinity/`
-
-コンテキスト圧縮時に好感度の変動を評価する。`PipelineHook` を実装。
-
-### 4. Forget（記憶重複削除）
+### 3. Forget（記憶重複削除）
 
 **パッケージ:** `internal/forget/`
 
@@ -106,21 +98,15 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 - `POST /api/forget/merge`: 複数の記憶をマージ
 - `POST /api/forget/run`: 自動重複削除実行
 
-### 5. Schedule（予約アクション）
+### 4. Schedule（予約アクション）
 
-**パッケージ:** `internal/schedule/`
+**パッケージ:** `internal/action/`
 
 特定の日時やcron式で発言を予約する。
 
-**ツール:** `schedule_action`
+**ツール:** `schedule_create`, `schedule_list`, `schedule_cancel`
 
-### 6. Dynamic Tools
-
-**パッケージ:** `internal/dyntools/`
-
-`/data/tools/` ディレクトリ内のスクリプトファイルを動的にツール化。YAML フロントマターでメタデータを記述。
-
-### 7. MCP Apps
+### 5. MCP Apps
 
 **パッケージ:** `internal/mcp/`
 
@@ -134,7 +120,7 @@ MCP (Model Context Protocol) ツールサーバーの管理。
 
 **永続化:** インストールしたアプリは DB に保存され、再起動時に自動再接続。
 
-### 8. Location
+### 6. Location
 
 **パッケージ:** `internal/location/`
 
@@ -166,9 +152,10 @@ type CronContext struct {
     Notifier        notification.Notifier
     DB              *sql.DB
     Logger          *slog.Logger
-    Users           *user.SQLiteStore
-    ChannelActivity *channel.ActivityStore
+    Users           user.Store
+    ChannelActivity channel.ActivityStore
     MemoryAdmin     memory.AdminStore
+    MediaStore      memory.MediaStore
     Bus             *event.Bus
     Timezone        *time.Location
     SystemPrompt    string

@@ -19,18 +19,22 @@
 ```go
 // internal/memory/store.go
 type Store interface {
-    Save(ctx, Memory) error
-    Get(ctx, id) (*Memory, error)
-    Search(ctx, query, topK) ([]Memory, error)
-    SearchRecent(ctx, query, topK, since) ([]Memory, error)
-    SearchByType(ctx, query, type, topK) ([]Memory, error)
+    Save(ctx, *Memory) error
+    Search(ctx, query, limit) ([]Memory, error)
+    SearchByType(ctx, query, memType, limit) ([]Memory, error)
+    SearchRecent(ctx, query, limit, since) ([]Memory, error)
+    SearchByParts(ctx, parts, limit) ([]Memory, error)
     ListByUser(ctx, userID, limit) ([]Memory, error)
-    ListByType(ctx, type, limit) ([]Memory, error)
-    ListEpisodesByParticipant(ctx, platformUserID, limit) ([]Memory, error)
-    ListRecentByType(ctx, type, since, limit) ([]Memory, error)
-    Delete(ctx, id) error
+    ListByType(ctx, memType, limit) ([]Memory, error)
+    ListEpisodesByParticipant(ctx, userID, limit) ([]Memory, error)
+    ListRecentByType(ctx, memType, since, limit) ([]Memory, error)
+    IsDuplicate(ctx, content, memType) (dupID, emb, error)
+    IsDuplicateBatch(ctx, candidates) ([]DupResult, error)
+    Close() error
 }
 ```
+
+`Get`, `Delete` 等は `AdminStore` インターフェースに定義されている。
 
 **実装:** `SQLiteStore`（`internal/memory/sqlite.go`）
 
@@ -41,15 +45,17 @@ type Store interface {
 `store.RunEmbeddingWorker(ctx)` がバックグラウンドで動作し、埋め込みが未生成の記憶に対してベクトルを計算する。
 
 **フロー:**
-1. `memory_embeddings` テーブルに存在しない記憶を検出
-2. `llm.Client.Embed(ctx, text)` で埋め込みベクトルを取得
-3. ベクトルを DB に保存
+1. `memories_vec` に存在しない記憶を検出（バッチサイズ 20）
+2. `embedder.EmbedBatch()` でベクトルを一括生成（マルチモーダル対応: テキスト + 画像添付）
+3. ベクトルを `memories_vec` に保存
+4. エラー時はエクスポネンシャルバックオフ（最大 10 分）
 
-### セマンティック検索
+### ハイブリッド検索
 
-1. クエリテキストを埋め込みベクトルに変換
-2. コサイン類似度で全記憶とのスコアを計算
-3. 上位 topK 件を返却
+1. **FTS5**: trigram トークナイザーによるキーワード検索
+2. **KNN**: sqlite-vec によるベクトル類似度検索
+3. **RRF マージ**: 両方の結果を Reciprocal Rank Fusion (K=60) で統合
+4. マルチモーダルブースト: 画像/音声添付のある記憶は距離を 1.5x/1.4x で割り引き
 
 ## DB スキーマ
 
@@ -66,11 +72,11 @@ CREATE TABLE memories (
     updated_at DATETIME
 );
 
--- ベクトル埋め込み
-CREATE TABLE memory_embeddings (
-    memory_id TEXT PRIMARY KEY REFERENCES memories(id),
-    embedding BLOB NOT NULL  -- float32 配列
-);
+-- ベクトル埋め込み (sqlite-vec 仮想テーブル)
+-- memories_vec は sqlite-vec の KNN 検索用
+
+-- 全文検索 (FTS5 trigram)
+-- memories_fts は FTS5 仮想テーブル
 
 -- ユーザー情報
 CREATE TABLE users (

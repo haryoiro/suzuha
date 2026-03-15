@@ -92,9 +92,6 @@ consolidator:
         config:
           searxng_url: "http://searxng:8080"
           max_depth: 3
-      - name: "好感度更新"
-        task: affinity
-        cron: "@every 6h"
       - name: "記憶整理"
         task: forget
         cron: "0 4 * * *"   # 毎日 4:00
@@ -209,7 +206,6 @@ func allPackages(cfgPath string) []func(do.Injector) {
 | `yolo` | - | YOLO 物体検出 | (デフォルト) |
 | `whisper` | - | Whisper STT (CUDA) | `voice` |
 | `voicevox` | 50021 | VOICEVOX TTS (CUDA) | `voice` |
-| `suzuha1` | 9091, 8082 | 2 体目のエージェント | `suzuha1` |
 | `firmware-esp32` | - | ESP32 ファームウェアビルド | `firmware` |
 | `firmware-p4` | - | ESP32-P4 ファームウェアビルド | `firmware` |
 

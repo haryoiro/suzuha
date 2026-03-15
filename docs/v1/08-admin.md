@@ -96,7 +96,6 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 | PUT | `/api/tools/:name/enabled` | `/internal/tools/:name/enabled` | ツール有効/無効 |
 | GET | `/api/llm` | `/internal/llm` | LLM プロバイダー情報 |
 | PUT | `/api/llm` | `/internal/llm` | LLM プロバイダー切り替え |
-| POST | `/api/playground` | `/internal/playground` | プレイグラウンド |
 | GET | `/api/logs/stream` | `/internal/logs` (SSE) | ログストリーム |
 | GET | `/api/scheduler/jobs` | `/internal/scheduler/jobs` | スケジューラージョブ |
 | POST | `/api/scheduler/trigger/:task` | `/internal/trigger/:task` | タスク手動実行 |
@@ -127,7 +126,6 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 | Actions | `#actions` | 予約アクション管理 |
 | Location | `#location` | GPS デバイス・場所管理 |
 | Tools | `#tools` | ツール一覧・有効/無効切り替え |
-| Playground | `#playground` | LLM プレイグラウンド（現在のコンテキスト + メッセージ） |
 | Scheduler | `#scheduler` | cron ジョブ一覧・手動実行 |
 | Prompts | `#prompts` | プロンプトファイル編集 |
 | Metrics | `#metrics` | メトリクスグラフ |
@@ -146,7 +144,6 @@ usersApi.get(id)
 channelSettingsApi.upsert(channelId, { mode, home })
 toolsApi.toggle(name, enabled)
 llmApi.update({ preset: "local-qwen" })
-playgroundApi.send(message)
 schedulerApi.trigger(task)
 // etc.
 ```

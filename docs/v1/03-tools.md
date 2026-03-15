@@ -86,14 +86,10 @@ type ToolResult struct {
 
 | Feature | ツール | 説明 |
 |---------|--------|------|
-| Schedule (`internal/schedule/`) | `schedule_action` | 予約アクション登録 |
+| Schedule (`internal/action/`) | `schedule_create`, `schedule_list`, `schedule_cancel` | 予約アクション管理 |
 | MCP Apps (`internal/mcp/`) | `mcp_search`, `mcp_install`, `mcp_uninstall`, `mcp_list_apps` | MCP ツールサーバー管理 |
 | Explore (`internal/explore/`) | `explore` | ウェブ探索（SearXNG 検索 + LLM 評価） |
 | Location (`internal/location/`) | ロケーション関連ツール | GPS 位置情報 |
-
-### Dynamic Tools（`internal/dyntools/`）
-
-`/data/tools/` ディレクトリ内のスクリプトファイルを動的にツールとして登録。YAML フロントマターでツール定義を記述し、シェルスクリプトとして実行。
 
 ### MCP ツール（`internal/mcp/`）
 
