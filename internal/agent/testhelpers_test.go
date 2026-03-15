@@ -42,8 +42,11 @@ func (m *mockMemory) ListRecentByType(_ context.Context, _ memory.MemoryType, _ 
 func (m *mockMemory) SearchByParts(_ context.Context, _ []embedding.Part, _ int) ([]memory.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) IsDuplicate(_ context.Context, _ string, _ memory.MemoryType) (string, error) {
-	return "", nil
+func (m *mockMemory) IsDuplicate(_ context.Context, _ string, _ memory.MemoryType) (string, []float32, error) {
+	return "", nil, nil
+}
+func (m *mockMemory) IsDuplicateBatch(_ context.Context, candidates []memory.DupCandidate) ([]memory.DupResult, error) {
+	return make([]memory.DupResult, len(candidates)), nil
 }
 func (m *mockMemory) Close() error { return nil }
 

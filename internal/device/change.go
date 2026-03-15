@@ -65,23 +65,27 @@ func (cd *ChangeDetector) Update(detections []Detection) bool {
 
 	appeared, disappeared := diff(cd.prev, curr)
 
-	// Update state regardless of cooldown.
-	cd.prev = curr
-
 	if len(appeared) == 0 && len(disappeared) == 0 {
+		// No change — still update prev so state stays current.
+		cd.prev = curr
 		return false
 	}
 
 	// Respect cooldown to avoid spamming the agent.
 	if time.Since(cd.lastSent) < cd.cooldown {
+		// Don't update prev — preserve the baseline so the real diff
+		// is computed correctly when cooldown expires.
 		return false
 	}
 
 	msg := buildChangeMessage(appeared, disappeared)
 	if msg == "" {
+		cd.prev = curr
 		return false
 	}
 
+	// Commit state only when actually publishing.
+	cd.prev = curr
 	cd.lastSent = time.Now()
 	cd.bus.Publish(event.Event{
 		ID:     uuid.NewString(),

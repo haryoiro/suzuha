@@ -27,7 +27,8 @@ func (p *PythonExec) Name() string { return "python_exec" }
 func (p *PythonExec) Description() string {
 	return `Execute Python code and return stdout/stderr. Use this to run calculations, solve problems, verify code output, or fetch data from the web.
 Timeout: 30 seconds. Network access is available. Max output: 4000 characters.
-pip is available — use subprocess to install packages if needed (e.g. subprocess.run(["pip","install","requests"])).`
+pip is available — use subprocess to install packages if needed (e.g. subprocess.run(["pip","install","requests"])).
+IMPORTANT: The output is only visible to you, NOT to the user. If you want to share results, include them in your response text.`
 }
 
 func (p *PythonExec) InputSchema() json.RawMessage {

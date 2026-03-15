@@ -1,14 +1,18 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/image/webp"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
@@ -222,6 +226,18 @@ func (a *Agent) downloadAndPersistImages(ctx context.Context, urls []string, mes
 		dataURI := fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
 		dataURIs = append(dataURIs, dataURI)
 
+		// Convert webp to png for Gemini embedding compatibility.
+		if mime == "image/webp" {
+			if converted, err := convertWebPToPNG(data); err != nil {
+				a.logger.Warn("webp→png変換失敗、元データで保存", "error", err)
+			} else {
+				data = converted
+				mime = "image/png"
+				// Rebuild data URI with converted data.
+				dataURIs[len(dataURIs)-1] = fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data))
+			}
+		}
+
 		// Persist to MediaStore if available.
 		if a.mediaStore != nil {
 			ext := extFromMimeType(mime)
@@ -235,6 +251,19 @@ func (a *Agent) downloadAndPersistImages(ctx context.Context, urls []string, mes
 		}
 	}
 	return
+}
+
+// convertWebPToPNG decodes webp data and re-encodes as PNG.
+func convertWebPToPNG(data []byte) ([]byte, error) {
+	img, err := webp.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("webp decode: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, fmt.Errorf("png encode: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 func extFromMimeType(mime string) string {
