@@ -32,8 +32,8 @@ brand:
 search:
   # Filter results. 0: None, 1: Moderate, 2: Strict
   safe_search: 0
-  # Existing autocomplete backends: "360search", "baidu", "brave", "dbpedia", "duckduckgo", "google", "yandex",
-  # "mwmbl", "naver", "seznam", "sogou", "startpage", "stract", "swisscows", "quark", "qwant", "wikipedia" -
+  # Existing autocomplete backends: "360search", "baidu", "bing", "brave", "dbpedia", "duckduckgo", "google",
+  # "yandex", "mwmbl", "naver", "seznam", "sogou", "startpage", "swisscows", "quark", "qwant", "wikipedia" -
   # leave blank to turn it off by default.
   autocomplete: ""
   # minimun characters to type before autocompleter starts
@@ -357,8 +357,10 @@ engines:
   - name: annas archive
     engine: annas_archive
     base_url:
-      - https://annas-archive.li
       - https://annas-archive.gl
+      - https://annas-archive.vg
+      - https://annas-archive.pk
+      - https://annas-archive.gd
     disabled: true
     shortcut: aa
     timeout: 5
@@ -1790,24 +1792,6 @@ engines:
     # https://docs.searxng.org/dev/engines/online/reuters.html
     # sort_order = "relevance"
 
-  - name: right dao
-    engine: xpath
-    paging: true
-    page_size: 12
-    search_url: https://rightdao.com/search?q={query}&start={pageno}
-    results_xpath: //div[contains(@class, "description")]
-    url_xpath: ../div[contains(@class, "title")]/a/@href
-    title_xpath: ../div[contains(@class, "title")]
-    content_xpath: .
-    categories: general
-    shortcut: rd
-    disabled: true
-    about:
-      website: https://rightdao.com/
-      use_official_api: false
-      require_api_key: false
-      results: HTML
-
   - name: rottentomatoes
     engine: rottentomatoes
     shortcut: rt
@@ -1915,12 +1899,6 @@ engines:
     categories: [it, q&a]
     base_url: 'https://discourse.pi-hole.net'
     disabled: true
-
-  - name: searchcode code
-    engine: searchcode_code
-    shortcut: scc
-    disabled: true
-    inactive: true
 
   # - name: searx
   #   engine: searx_engine
@@ -2480,13 +2458,6 @@ engines:
     disabled: true
     inactive: true
 
-  - name: livespace
-    engine: livespace
-    shortcut: ls
-    categories: videos
-    disabled: true
-    timeout: 5.0
-
   - name: wordnik
     engine: wordnik
     shortcut: wnik
@@ -2510,11 +2481,6 @@ engines:
       require_api_key: false
       results: HTML
       language: de
-
-  - name: stract
-    engine: stract
-    shortcut: str
-    disabled: true
 
   - name: svgrepo
     engine: svgrepo
