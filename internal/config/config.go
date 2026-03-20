@@ -26,6 +26,12 @@ type Config struct {
 	Observe      Observe      `yaml:"observe"`
 	Admin        Admin        `yaml:"admin"`
 	Location     Location     `yaml:"location"`
+	SelfImprove  SelfImprove  `yaml:"self_improve"`
+}
+
+// SelfImprove configures the self-improvement channel for Claude Code collaboration.
+type SelfImprove struct {
+	ChannelID string `yaml:"channel_id"` // Discord channel ID for improvement requests.
 }
 
 // Location configures the Overland GPS tracking integration.
@@ -82,11 +88,27 @@ type Discord struct {
 
 // Voice configures voice chat integration.
 type Voice struct {
-	Enabled         bool     `yaml:"enabled"`
-	WhisperURL      string   `yaml:"whisper_url"`       // whisper.cpp server URL, e.g. "http://whisper:8001"
-	VoicevoxURL     string   `yaml:"voicevox_url"`      // VOICEVOX engine URL, e.g. "http://voicevox:50021"
-	SpeakerID       int      `yaml:"speaker_id"`        // VOICEVOX speaker ID (e.g. 3 = zundamon)
-	AllowedChannels []string `yaml:"allowed_channels"`  // VC channel IDs where voice is allowed (empty = all)
+	Enabled         bool          `yaml:"enabled"`
+	STT             []STTProvider `yaml:"stt"`              // STT providers in priority order (first = highest)
+	TTS             []TTSProvider `yaml:"tts"`              // TTS providers in priority order (first = highest)
+	AllowedChannels []string      `yaml:"allowed_channels"` // VC channel IDs where voice is allowed (empty = all)
+}
+
+// STTProvider configures a single STT provider.
+type STTProvider struct {
+	Provider string `yaml:"provider"` // "deepgram", "whispercpp"
+	APIKey   string `yaml:"api_key"`  // API key (deepgram)
+	Model    string `yaml:"model"`    // Model name (deepgram: "nova-3")
+	URL      string `yaml:"url"`      // Server URL (whispercpp: "http://whisper:8001")
+}
+
+// TTSProvider configures a single TTS provider.
+type TTSProvider struct {
+	Provider  string `yaml:"provider"`   // "voicevox", "sbv2"
+	URL       string `yaml:"url"`        // Server URL
+	SpeakerID int    `yaml:"speaker_id"` // VOICEVOX speaker ID
+	Model     string `yaml:"model"`      // SBV2 model name
+	Style     string `yaml:"style"`      // SBV2 style name
 }
 
 // Vision configures the vision language model for image understanding.
@@ -251,6 +273,13 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("OVERLAND_TOKEN"); v != "" {
 		c.Location.Token = v
 	}
+	if v := os.Getenv("DEEPGRAM_API_KEY"); v != "" {
+		for i := range c.Voice.STT {
+			if c.Voice.STT[i].Provider == "deepgram" {
+				c.Voice.STT[i].APIKey = v
+			}
+		}
+	}
 }
 
 func (c *Config) setDefaults() {
@@ -304,15 +333,10 @@ func (c *Config) setDefaults() {
 			}
 		}
 	}
-	if c.Voice.Enabled {
-		if c.Voice.WhisperURL == "" {
-			c.Voice.WhisperURL = "http://whisper:8001"
-		}
-		if c.Voice.VoicevoxURL == "" {
-			c.Voice.VoicevoxURL = "http://voicevox:50021"
-		}
-		if c.Voice.SpeakerID == 0 {
-			c.Voice.SpeakerID = 3 // zundamon normal
+	// Voice defaults: set default speaker_id for voicevox providers.
+	for i := range c.Voice.TTS {
+		if c.Voice.TTS[i].Provider == "voicevox" && c.Voice.TTS[i].SpeakerID == 0 {
+			c.Voice.TTS[i].SpeakerID = 3 // zundamon normal
 		}
 	}
 	if c.Memory.DBPath == "" {

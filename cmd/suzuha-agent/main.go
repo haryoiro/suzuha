@@ -31,6 +31,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/selfimprove"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -148,16 +149,50 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 		}
 		logger.Info("discord tools registered")
 
+		// Self-improvement tools.
+		if cfg.SelfImprove.ChannelID != "" {
+			registry.Register(selfimprove.NewImproveTool(s, cfg.SelfImprove.ChannelID))
+			registry.Register(selfimprove.NewStatusTool("/app"))
+			logger.Info("self-improve tools registered", "channel_id", cfg.SelfImprove.ChannelID)
+		}
+
 		// Voice chat setup.
 		if cfg.Voice.Enabled {
-			sttClient := voice.NewWhisper(cfg.Voice.WhisperURL)
-			ttsClient := voice.NewVoicevox(cfg.Voice.VoicevoxURL, cfg.Voice.SpeakerID)
-			dc.SetupVoice(sttClient, ttsClient)
-			if vp := dc.VoicePipeline(); vp != nil {
-				registry.Register(discord.NewVoiceJoin(vp, s, cfg.Voice.AllowedChannels, logger))
-				registry.Register(discord.NewVoiceLeave(vp, s, logger))
-				ag.SetVoiceSpeaker(vp)
-				logger.Info("voice tools registered")
+			sttConfigs := make([]voice.STTProviderConfig, len(cfg.Voice.STT))
+			for i, p := range cfg.Voice.STT {
+				sttConfigs[i] = voice.STTProviderConfig{
+					Provider: p.Provider,
+					APIKey:   p.APIKey,
+					Model:    p.Model,
+					URL:      p.URL,
+				}
+			}
+			sttClient, err := voice.NewSTTChain(sttConfigs, logger)
+			if err != nil {
+				logger.Error("voice: STT初期化失敗", "error", err)
+			} else {
+				ttsConfigs := make([]voice.TTSProviderConfig, len(cfg.Voice.TTS))
+				for i, p := range cfg.Voice.TTS {
+					ttsConfigs[i] = voice.TTSProviderConfig{
+						Provider:  p.Provider,
+						URL:       p.URL,
+						SpeakerID: p.SpeakerID,
+						Model:     p.Model,
+						Style:     p.Style,
+					}
+				}
+				ttsClient, ttsErr := voice.NewTTSChain(ttsConfigs, logger)
+				if ttsErr != nil {
+					logger.Error("voice: TTS初期化失敗", "error", ttsErr)
+				} else {
+					dc.SetupVoice(sttClient, ttsClient)
+					if vp := dc.VoicePipeline(); vp != nil {
+						registry.Register(discord.NewVoiceJoin(vp, s, cfg.Voice.AllowedChannels, logger))
+						registry.Register(discord.NewVoiceLeave(vp, s, logger))
+						ag.SetVoiceSpeaker(vp)
+						logger.Info("voice tools registered")
+					}
+				}
 			}
 		}
 
@@ -538,9 +573,16 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		fmt.Fprint(w, `{"ok":true}`)
 	})
 
-	// VOICEVOX speaker management.
-	if cfg.Voice.Enabled && cfg.Voice.VoicevoxURL != "" {
-		voicevoxURL := cfg.Voice.VoicevoxURL
+	// VOICEVOX speaker management (find voicevox config from TTS providers).
+	var voicevoxCfg *config.TTSProvider
+	for i := range cfg.Voice.TTS {
+		if cfg.Voice.TTS[i].Provider == "voicevox" {
+			voicevoxCfg = &cfg.Voice.TTS[i]
+			break
+		}
+	}
+	if cfg.Voice.Enabled && voicevoxCfg != nil && voicevoxCfg.URL != "" {
+		voicevoxURL := voicevoxCfg.URL
 		mux.HandleFunc("GET /internal/voicevox/speakers", func(w http.ResponseWriter, r *http.Request) {
 			resp, err := http.Get(voicevoxURL + "/speakers")
 			if err != nil {
@@ -553,7 +595,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		})
 		mux.HandleFunc("GET /internal/voicevox/speaker", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"speaker_id": cfg.Voice.SpeakerID})
+			json.NewEncoder(w).Encode(map[string]any{"speaker_id": voicevoxCfg.SpeakerID})
 		})
 		mux.HandleFunc("PUT /internal/voicevox/speaker", func(w http.ResponseWriter, r *http.Request) {
 			var body struct {
@@ -563,8 +605,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 				return
 			}
-			cfg.Voice.SpeakerID = body.SpeakerID
-			// Update the voice pipeline's TTS client if available.
+			voicevoxCfg.SpeakerID = body.SpeakerID
 			dc := do.MustInvoke[*discord.Chat](injector)
 			if dc != nil {
 				if vp := dc.VoicePipeline(); vp != nil {
@@ -581,8 +622,18 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 	{
 		bus := do.MustInvoke[*event.Bus](injector)
 		var ttsClient voice.TTS
-		if cfg.Voice.Enabled && cfg.Voice.VoicevoxURL != "" {
-			ttsClient = voice.NewVoicevox(cfg.Voice.VoicevoxURL, cfg.Voice.SpeakerID)
+		if cfg.Voice.Enabled && len(cfg.Voice.TTS) > 0 {
+			deviceTTSConfigs := make([]voice.TTSProviderConfig, len(cfg.Voice.TTS))
+			for i, p := range cfg.Voice.TTS {
+				deviceTTSConfigs[i] = voice.TTSProviderConfig{
+					Provider:  p.Provider,
+					URL:       p.URL,
+					SpeakerID: p.SpeakerID,
+					Model:     p.Model,
+					Style:     p.Style,
+				}
+			}
+			ttsClient, _ = voice.NewTTSChain(deviceTTSConfigs, logger)
 		}
 		yoloURL := os.Getenv("YOLO_URL")
 		if yoloURL == "" {
@@ -592,7 +643,23 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		var deviceChannel string
 		db := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
 		_ = db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = 1 LIMIT 1").Scan(&deviceChannel)
-		hub := device.NewHub(bus, ttsClient, yoloURL, deviceChannel, logger)
+		var sttClient voice.STT
+		if cfg.Voice.Enabled && len(cfg.Voice.STT) > 0 {
+			sttClient, _ = voice.NewSTT(voice.STTProviderConfig{
+				Provider: cfg.Voice.STT[0].Provider,
+				APIKey:   cfg.Voice.STT[0].APIKey,
+				Model:    cfg.Voice.STT[0].Model,
+				URL:      cfg.Voice.STT[0].URL,
+			})
+		}
+		// Look up owner from DB
+		var ownerID, ownerName string
+		_ = db.QueryRow("SELECT id, display_name FROM users WHERE role = 'owner' LIMIT 1").Scan(&ownerID, &ownerName)
+		if ownerID == "" {
+			ownerID = "owner"
+			ownerName = "オーナー"
+		}
+		hub := device.NewHub(bus, ttsClient, sttClient, yoloURL, deviceChannel, ownerID, ownerName, logger)
 		mux.HandleFunc("GET /ws/device", hub.Handler())
 		mux.HandleFunc("GET /internal/device/frame", hub.Frames().FrameHandler())
 		mux.HandleFunc("GET /internal/device/detections", hub.Frames().DetectionStreamHandler())
@@ -638,6 +705,27 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"ok":true,"pan":%d,"tilt":%d}`, body.Pan, body.Tilt)
+		})
+
+		mux.HandleFunc("PUT /internal/device/volume", func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Level int `json:"level"` // 0-100
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+				return
+			}
+			dev := hub.Device()
+			if dev == nil {
+				http.Error(w, `{"error":"device not connected"}`, http.StatusServiceUnavailable)
+				return
+			}
+			if err := dev.SendCommand(map[string]any{"cmd": "volume", "level": body.Level}); err != nil {
+				http.Error(w, `{"error":"send failed"}`, http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"ok":true,"level":%d}`, body.Level)
 		})
 
 		// Start periodic capture loop (333ms = ~3fps).

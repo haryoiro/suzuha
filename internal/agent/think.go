@@ -179,7 +179,13 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 
 	// Determine response directive.
 	var directive string
-	if p.LastEvent.Type == event.TypeSelfPrompt {
+	if p.LastEvent.Source == "device" {
+		// Physical device: always respond, spoken conversation style.
+		directive = "[RESPOND] 物理デバイス経由の音声対話です。必ず返答してください。" +
+			"話し言葉で自然に返して。1〜2文で短く。" +
+			"skip_response は使わないで。" +
+			"※テキストに絵文字・顔文字は入れない。音声で読まれるので句読点や記号は控えめに。"
+	} else if p.LastEvent.Type == event.TypeSelfPrompt {
 		// Self-prompt content is ephemeral — not persisted in main context.
 		ephemeral = append(ephemeral, llm.Message{
 			Role: "system", Content: p.LastMessage.Content, Timestamp: jtime.Now(),
