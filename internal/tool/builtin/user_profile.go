@@ -27,7 +27,7 @@ func NewUpdateUserProfile(users user.Store, onUpdate ContextUpdater) *UpdateUser
 func (u *UpdateUserProfile) Name() string { return "update_user_profile" }
 
 func (u *UpdateUserProfile) Description() string {
-	return `Update a user's display name (nickname). Use this when a user asks to be called by a specific name (e.g. "〇〇と呼んで", "call me X"). Use the user_id and platform values from the message metadata (e.g. user_id=646795450577453058 platform=discord).`
+	return `ユーザーの表示名（ニックネーム）を変更する。「〇〇と呼んで」と言われたときに使う。メッセージのuser_idとplatformの値を使うこと。`
 }
 
 func (u *UpdateUserProfile) InputSchema() json.RawMessage {

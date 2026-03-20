@@ -73,7 +73,7 @@ func newDiscordReact(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_react",
-		desc:    "Add an emoji reaction to a Discord message. Use this to react to what the user said.",
+		desc:    "メッセージにリアクションをつける。気持ちを絵文字で伝えたいときに。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -104,7 +104,7 @@ func newDiscordReply(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_reply",
-		desc:    "Reply to a specific Discord message. The reply will be visually linked to the original message.",
+		desc:    "特定のメッセージに返信する。元のメッセージと紐付けて表示される。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -139,7 +139,7 @@ func newDiscordGetHistory(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_get_history",
-		desc:    "Get recent messages from a Discord channel to understand the conversation context.",
+		desc:    "チャンネルの最近の会話を見て、流れを把握する。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -190,7 +190,7 @@ func newDiscordSendDM(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_send_dm",
-		desc:    "Send a direct message to a Discord user by their user ID.",
+		desc:    "ユーザーにDMを送る。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -224,7 +224,7 @@ func newDiscordDeleteMessage(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_delete_message",
-		desc:    "Delete a message from a channel.",
+		desc:    "メッセージを削除する。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -253,7 +253,7 @@ func newDiscordPinMessage(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_pin_message",
-		desc:    "Pin or unpin a message in a channel.",
+		desc:    "メッセージをピン留め、またはピン留め解除する。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -297,7 +297,7 @@ func newDiscordCreateChannel(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_create_channel",
-		desc:    "Create a new text channel in the server.",
+		desc:    "サーバーに新しいテキストチャンネルを作る。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -340,7 +340,7 @@ func newDiscordEditChannel(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_edit_channel",
-		desc:    "Edit a channel's name or topic.",
+		desc:    "チャンネルの名前やトピックを変える。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -379,7 +379,7 @@ func newDiscordDeleteChannel(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_delete_channel",
-		desc:    "Delete a channel. This is irreversible — use with caution.",
+		desc:    "チャンネルを削除する。元に戻せないので慎重に。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -407,7 +407,7 @@ func newDiscordListChannels(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_list_channels",
-		desc:    "List all channels in the server.",
+		desc:    "サーバーのチャンネル一覧を見る。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -465,7 +465,7 @@ func newDiscordKickMember(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_kick_member",
-		desc:    "Kick a member from the server. Requires Kick Members permission.",
+		desc:    "メンバーをサーバーからキックする。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -496,7 +496,7 @@ func newDiscordBanMember(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_ban_member",
-		desc:    "Ban a member from the server. Requires Ban Members permission.",
+		desc:    "メンバーをサーバーからBANする。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -529,7 +529,7 @@ func newDiscordTimeoutMember(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_timeout_member",
-		desc:    "Timeout (mute) a member for a specified duration. Set minutes to 0 to remove timeout.",
+		desc:    "メンバーをタイムアウト（ミュート）する。0分で解除。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -571,7 +571,7 @@ func newDiscordListMembers(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_list_members",
-		desc:    "List members in the server (up to 100).",
+		desc:    "サーバーのメンバー一覧を見る（最大100人）。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -626,7 +626,7 @@ func newDiscordAddRole(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_add_role",
-		desc:    "Add a role to a server member.",
+		desc:    "メンバーにロールを付与する。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -657,7 +657,7 @@ func newDiscordRemoveRole(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_remove_role",
-		desc:    "Remove a role from a server member.",
+		desc:    "メンバーからロールを外す。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -688,7 +688,7 @@ func newDiscordListRoles(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_list_roles",
-		desc:    "List all roles in the server.",
+		desc:    "サーバーのロール一覧を見る。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -730,7 +730,7 @@ func newDiscordServerInfo(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_server_info",
-		desc:    "Get basic information about the server (name, member count, owner, etc.).",
+		desc:    "サーバーの基本情報を見る（名前、人数、オーナーなど）。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -837,7 +837,7 @@ func newDiscordCreateThread(s *discordgo.Session) tool.Tool {
 	return &discordTool{
 		session: s,
 		name:    "discord_create_thread",
-		desc:    "Create a thread in a channel, optionally attached to an existing message.",
+		desc:    "チャンネルにスレッドを作る。既存のメッセージに紐付けることもできる。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {

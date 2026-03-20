@@ -27,14 +27,13 @@ func NewCreateTool(store *Store) *CreateTool {
 func (t *CreateTool) Name() string { return "schedule_create" }
 
 func (t *CreateTool) Description() string {
-	return `Schedule a message to be sent to a Discord channel at a specified time.
-Use the channel_id from the message metadata.
-For recurring schedules, provide a cron_expr in standard 5-field cron format (minute hour day month weekday).
-Times and cron expressions are interpreted in the configured timezone (see config.yaml timezone setting).
-If scheduled_at is omitted, the next occurrence is automatically calculated from cron_expr.
-Use random_minutes to add a random offset (0 to N minutes) to each occurrence — useful for natural-feeling recurring messages.
-Examples: cron_expr "0 8 * * *" with random_minutes 240 = every day at a random time between 8:00-12:00.
-Set mode to "prompt" to treat content as an instruction — the LLM will generate a response from it before posting. Default mode is "direct" (post content as-is).`
+	return `指定した時間にDiscordチャンネルへメッセージを送る予約をする。channel_idはメッセージのメタデータから取得すること。
+繰り返し予約にはcron_exprを使う（5フィールド形式: 分 時 日 月 曜日）。
+時刻やcron式は設定済みのタイムゾーン（config.yamlのtimezone）で解釈される。
+scheduled_atを省略した場合、cron_exprから次の実行時刻を自動計算する。
+random_minutesで0〜N分のランダムなずれを加えられる。自然な感じの繰り返し投稿に便利。
+例: cron_expr "0 8 * * *" + random_minutes 240 = 毎日8:00〜12:00のランダムな時間に投稿。
+modeを"prompt"にするとcontentをLLMへの指示として扱い、生成された応答を投稿する。デフォルトは"direct"（そのまま投稿）。`
 }
 
 func (t *CreateTool) InputSchema() json.RawMessage {
@@ -151,7 +150,7 @@ func NewListTool(store *Store) *ListTool {
 func (t *ListTool) Name() string { return "schedule_list" }
 
 func (t *ListTool) Description() string {
-	return "List pending scheduled messages. Optionally filter by created_by user ID."
+	return "予約済みのメッセージ一覧を見る。ユーザーIDで絞り込みもできる。"
 }
 
 func (t *ListTool) InputSchema() json.RawMessage {
@@ -216,7 +215,7 @@ func NewCancelTool(store *Store) *CancelTool {
 func (t *CancelTool) Name() string { return "schedule_cancel" }
 
 func (t *CancelTool) Description() string {
-	return "Cancel a pending scheduled message by ID. Also stops recurring schedules."
+	return "予約済みのメッセージをIDで取り消す。繰り返し予約も止まる。"
 }
 
 func (t *CancelTool) InputSchema() json.RawMessage {

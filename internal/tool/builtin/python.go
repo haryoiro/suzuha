@@ -25,10 +25,10 @@ func NewPythonExec() *PythonExec {
 func (p *PythonExec) Name() string { return "python_exec" }
 
 func (p *PythonExec) Description() string {
-	return `Execute Python code and return stdout/stderr. Use this to run calculations, solve problems, verify code output, or fetch data from the web.
-Timeout: 30 seconds. Network access is available. Max output: 4000 characters.
-pip is available — use subprocess to install packages if needed (e.g. subprocess.run(["pip","install","requests"])).
-IMPORTANT: The output is only visible to you, NOT to the user. If you want to share results, include them in your response text.`
+	return `Pythonコードを実行して結果を返す。計算、問題解決、コードの検証、Webからのデータ取得などに使える。
+タイムアウト: 30秒。ネットワークアクセス可能。出力上限: 4000文字。
+pipも使える。必要ならsubprocessでパッケージをインストールできる（例: subprocess.run(["pip","install","requests"])）。
+重要: 出力は自分にしか見えない。ユーザーに結果を伝えたい場合は、返答テキストに含めること。`
 }
 
 func (p *PythonExec) InputSchema() json.RawMessage {

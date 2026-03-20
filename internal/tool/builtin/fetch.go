@@ -30,7 +30,7 @@ func NewFetch() *Fetch {
 
 func (f *Fetch) Name() string        { return "fetch" }
 func (f *Fetch) Description() string {
-	return "Fetch a URL and return its content as Markdown. HTML pages are automatically cleaned (scripts, styles, navigation removed)."
+	return "URLの内容を取得してMarkdownで返す。Webページは自動で整形される。"
 }
 
 func (f *Fetch) InputSchema() json.RawMessage {
