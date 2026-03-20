@@ -82,7 +82,7 @@ func (p *Pipeline) handleStreamPreview(guildID string, jpeg []byte) {
 		ChannelName: "voice",
 	})
 	p.bus.Publish(evt)
-	p.logger.Debug("stream: プレビュー画像をイベントバスに発行", "guild", guildID, "size", len(jpeg))
+	p.logger.Debug("プレビュー画像を共有した", "guild", guildID, "size", len(jpeg))
 }
 
 // SetSpeakerID changes the VOICEVOX speaker ID at runtime.
@@ -127,7 +127,7 @@ func (p *Pipeline) Leave(guildID string) error {
 
 	err := sess.Leave()
 	delete(p.sessions, guildID)
-	p.logger.Info("voice: VC離脱", "guild", guildID)
+	p.logger.Info("ボイスチャンネルから出た", "guild", guildID)
 	return err
 }
 
@@ -169,24 +169,24 @@ func (p *Pipeline) handleSpeech(ctx context.Context, guildID, channelID, userID 
 	// Transcribe speech to text.
 	// PCM is 48kHz mono from the receiver.
 	durationMs := len(pcm) * 1000 / (48000 * 2)
-	p.logger.Debug("voice: STTリクエスト", "user_id", userID, "pcm_bytes", len(pcm), "duration_ms", durationMs)
+	p.logger.Debug("声を聞き取り中", "user_id", userID, "pcm_bytes", len(pcm), "duration_ms", durationMs)
 
 	// Normalize volume before STT (Discord voice can be very quiet).
 	pcm = NormalizePCM(pcm, 16000)
 
 	text, err := p.stt.Transcribe(ctx, pcm, 48000)
 	if err != nil {
-		p.logger.Error("voice: STT失敗", "user_id", userID, "error", err)
+		p.logger.Error("声の聞き取りに失敗", "user_id", userID, "error", err)
 		return
 	}
 
 	text = strings.TrimSpace(text)
 	if text == "" || isWhisperHallucination(text) {
-		p.logger.Debug("voice: 無視（空またはハルシネーション）", "user_id", userID, "text", text)
+		p.logger.Debug("空耳だったみたい", "user_id", userID, "text", text)
 		return
 	}
 
-	p.logger.Info("voice: 文字起こし完了", "user_id", userID, "text", text)
+	p.logger.Info("声を聞き取れた", "user_id", userID, "text", text)
 
 	// Resolve the user's display name from Discord state.
 	userName := userID

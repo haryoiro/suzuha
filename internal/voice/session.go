@@ -100,7 +100,7 @@ func (s *Session) Join(ctx context.Context) error {
 		if channelID != nil {
 			chID = channelID.String()
 		}
-		s.logger.Debug("voice: sending voice state update", "guild", guildID, "channel", chID)
+		s.logger.Debug("VC接続の状態を更新中", "guild", guildID, "channel", chID)
 		return s.discordSession.ChannelVoiceJoinManual(guildID.String(), chID, selfMute, selfDeaf)
 	}
 
@@ -137,7 +137,7 @@ func (s *Session) Join(ctx context.Context) error {
 	// Set up opus frame receiver AFTER connection is open (UDP must be ready).
 	s.conn.SetOpusFrameReceiver(&opusReceiver{session: s})
 
-	s.logger.Info("voice: VC参加完了 (DAVE E2EE)", "guild", s.guildID, "channel", s.channelID)
+	s.logger.Info("ボイスチャンネルに入った", "guild", s.guildID, "channel", s.channelID)
 	return nil
 }
 
@@ -186,7 +186,7 @@ func (s *Session) SendPCM(pcm []byte) error {
 	// Set speaking flag inside lock to prevent concurrent clear/set races.
 	ctx := context.Background()
 	if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
-		s.logger.Warn("voice: speaking flag 設定失敗", "error", err)
+		s.logger.Warn("話し始めの合図に失敗", "error", err)
 	}
 	defer func() { _ = s.conn.SetSpeaking(ctx, 0) }()
 
@@ -197,13 +197,13 @@ func (s *Session) SendPCM(pcm []byte) error {
 	silenceFrame := []byte{0xF8, 0xFF, 0xFE}
 	for range 15 {
 		if _, err := udp.Write(silenceFrame); err != nil {
-			s.logger.Warn("voice: silence frame送信失敗", "error", err)
+			s.logger.Warn("無音の送信に失敗", "error", err)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 
 	totalFrames := len(pcm) / frameBytes
-	s.logger.Debug("voice: SendPCM開始", "pcm_bytes", len(pcm),
+	s.logger.Debug("音声を送り始める", "pcm_bytes", len(pcm),
 		"frames", totalFrames, "duration_ms", totalFrames*20)
 
 	var sentFrames int
@@ -225,7 +225,7 @@ func (s *Session) SendPCM(pcm []byte) error {
 		if _, err := udp.Write(opusBuf[:n]); err != nil {
 			if strings.Contains(err.Error(), "missing key ratchet") {
 				// DAVE key transition in progress — wait and retry this frame.
-				s.logger.Debug("voice: DAVE鍵待機中（送信中リトライ）")
+				s.logger.Debug("暗号鍵を待っている")
 				if waitErr := s.waitForDAVEReady(); waitErr != nil {
 					return waitErr
 				}
@@ -245,7 +245,7 @@ func (s *Session) SendPCM(pcm []byte) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	s.logger.Debug("voice: 全フレーム送信完了", "sent", sentFrames, "total", totalFrames)
+	s.logger.Debug("音声を送り終わった", "sent", sentFrames, "total", totalFrames)
 
 	// Send trailing silence frames before clearing speaking flag.
 	for range 5 {
@@ -253,7 +253,7 @@ func (s *Session) SendPCM(pcm []byte) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	s.logger.Debug("voice: SendPCM完了")
+	s.logger.Debug("音声の送信が完了")
 	return nil
 }
 
@@ -269,7 +269,7 @@ func (s *Session) waitForDAVEReady() error {
 		_, err := udp.Write(silenceFrame)
 		if err == nil {
 			if i > 0 {
-				s.logger.Info("voice: DAVE鍵準備完了", "waited_ms", i*200)
+				s.logger.Info("暗号鍵の準備ができた", "waited_ms", i*200)
 			}
 			return nil
 		}

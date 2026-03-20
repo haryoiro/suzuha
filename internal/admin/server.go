@@ -102,7 +102,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	}
 	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
 		mux.Handle("/", spaHandler(staticDir))
-		logger.Info("SPAを配信中", "dir", staticDir)
+		logger.Info("管理画面を配信中", "dir", staticDir)
 	} else {
 		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")

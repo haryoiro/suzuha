@@ -50,10 +50,10 @@ func NewTTSChain(configs []TTSProviderConfig, logger *slog.Logger) (TTS, error) 
 	for _, cfg := range configs {
 		c, err := NewTTS(cfg)
 		if err != nil {
-			logger.Warn("tts: プロバイダ初期化スキップ", "provider", cfg.Provider, "error", err)
+			logger.Warn("声の合成の設定をスキップ", "provider", cfg.Provider, "error", err)
 			continue
 		}
-		logger.Info("tts: プロバイダ登録", "provider", cfg.Provider)
+		logger.Info("声の合成を準備した", "provider", cfg.Provider)
 		clients = append(clients, c)
 	}
 	if len(clients) == 0 {
@@ -79,7 +79,7 @@ func (c *chainTTS) Synthesize(ctx context.Context, text string) ([]byte, int, er
 			return pcm, sr, nil
 		}
 		lastErr = err
-		c.logger.Warn("tts: フォールバック", "error", err)
+		c.logger.Warn("別の声で再試行", "error", err)
 	}
 	return nil, 0, fmt.Errorf("tts: all providers failed: %w", lastErr)
 }

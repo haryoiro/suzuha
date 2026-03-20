@@ -731,7 +731,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		// Start periodic capture loop (333ms = ~3fps).
 		captureCtx, _ := context.WithCancel(context.Background())
 		hub.StartCaptureLoop(captureCtx, 333)
-		logger.Info("device: WebSocketエンドポイント有効 (/ws/device)")
+		logger.Info("デバイス接続口を開いた")
 	}
 
 	// Overland location tracking endpoint.

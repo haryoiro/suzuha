@@ -47,10 +47,10 @@ func NewSTTChain(configs []STTProviderConfig, logger *slog.Logger) (STT, error) 
 	for _, cfg := range configs {
 		c, err := NewSTT(cfg)
 		if err != nil {
-			logger.Warn("stt: プロバイダ初期化スキップ", "provider", cfg.Provider, "error", err)
+			logger.Warn("音声認識の設定をスキップ", "provider", cfg.Provider, "error", err)
 			continue
 		}
-		logger.Info("stt: プロバイダ登録", "provider", cfg.Provider)
+		logger.Info("音声認識を準備した", "provider", cfg.Provider)
 		clients = append(clients, c)
 	}
 	if len(clients) == 0 {
@@ -76,7 +76,7 @@ func (c *chainSTT) Transcribe(ctx context.Context, pcm []byte, sampleRate int) (
 			return text, nil
 		}
 		lastErr = err
-		c.logger.Warn("stt: フォールバック", "error", err)
+		c.logger.Warn("別の音声認識で再試行", "error", err)
 	}
 	return "", fmt.Errorf("stt: all providers failed: %w", lastErr)
 }

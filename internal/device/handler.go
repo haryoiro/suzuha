@@ -22,7 +22,7 @@ func (h *Hub) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			h.logger.Error("device: WebSocketアップグレード失敗", "error", err)
+			h.logger.Error("デバイスの接続に失敗", "error", err)
 			return
 		}
 
@@ -31,12 +31,12 @@ func (h *Hub) Handler() http.HandlerFunc {
 		conn.SetReadLimit(1 * 1024 * 1024) // 1MB max frame
 
 		h.setDevice(dev)
-		h.logger.Info("device: 接続", "device_id", deviceID, "remote", r.RemoteAddr)
+		h.logger.Info("デバイスがつながった", "device_id", deviceID, "remote", r.RemoteAddr)
 
 		defer func() {
 			h.clearDevice(dev)
 			conn.Close()
-			h.logger.Info("device: 切断", "device_id", deviceID)
+			h.logger.Info("デバイスが離れた", "device_id", deviceID)
 		}()
 
 		h.readLoop(dev)
@@ -49,7 +49,7 @@ func (h *Hub) readLoop(dev *DeviceConn) {
 		msgType, data, err := dev.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				h.logger.Warn("device: 読み取りエラー", "error", err)
+				h.logger.Warn("デバイスからの受信でエラー", "error", err)
 			}
 			return
 		}
@@ -65,7 +65,7 @@ func (h *Hub) readLoop(dev *DeviceConn) {
 
 		case websocket.TextMessage:
 			// Text frames are treated as status JSON.
-			h.logger.Info("device: テキストフレーム受信", "data", string(data))
+			h.logger.Info("デバイスからテキストが届いた", "data", string(data))
 		}
 	}
 }
@@ -80,7 +80,7 @@ func (h *Hub) handleFrame(dev *DeviceConn, frameType byte, payload []byte) {
 	case FrameStatus:
 		h.handleStatus(payload)
 	default:
-		h.logger.Warn("device: 不明なフレームタイプ", "type", frameType, "bytes", len(payload))
+		h.logger.Warn("デバイスから知らない形式のデータが来た", "type", frameType, "bytes", len(payload))
 	}
 }
 
@@ -99,7 +99,7 @@ func (h *Hub) handleImage(jpeg []byte) {
 		go func() {
 			result, err := h.yolo.Detect(context.Background(), jpeg)
 			if err != nil {
-				h.logger.Debug("device: YOLO検出失敗", "error", err)
+				h.logger.Debug("物体検出に失敗", "error", err)
 				return
 			}
 			// ESP32-CAM sends 640x480.
@@ -107,7 +107,7 @@ func (h *Hub) handleImage(jpeg []byte) {
 
 			// Notify agent on significant changes.
 			if h.changes.Update(result.Detections) {
-				h.logger.Info("device: 視界変化を検出")
+				h.logger.Info("視界に変化があった")
 			}
 		}()
 	}
@@ -163,7 +163,7 @@ func (h *Hub) handleAudio(pcm []byte) {
 		buf := h.audioBuf
 		h.audioBuf = nil
 
-		h.logger.Info("device: 音声区間検出、STT開始", "bytes", len(buf))
+		h.logger.Info("声が聞こえた、文字起こし開始", "bytes", len(buf))
 		go h.transcribeAndRespond(buf)
 	}
 }
@@ -175,14 +175,14 @@ func (h *Hub) transcribeAndRespond(pcm []byte) {
 
 	text, err := h.stt.Transcribe(ctx, pcm, deviceSampleRate)
 	if err != nil {
-		h.logger.Error("device: STT失敗", "error", err)
+		h.logger.Error("文字起こしに失敗", "error", err)
 		return
 	}
 	if text == "" {
 		return
 	}
 
-	h.logger.Info("device: STT結果", "text", text)
+	h.logger.Info("聞き取れた", "text", text)
 
 	// Clear any audio buffer accumulated during STT processing
 	// (prevents echo of the response)
@@ -201,8 +201,8 @@ func (h *Hub) transcribeAndRespond(pcm []byte) {
 func (h *Hub) handleStatus(payload []byte) {
 	var status map[string]any
 	if err := json.Unmarshal(payload, &status); err != nil {
-		h.logger.Warn("device: ステータスJSON解析失敗", "error", err, "raw", string(payload))
+		h.logger.Warn("デバイスのステータスが読めなかった", "error", err, "raw", string(payload))
 		return
 	}
-	h.logger.Info("device: ステータス受信", "status", status)
+	h.logger.Info("デバイスの状態を受け取った", "status", status)
 }

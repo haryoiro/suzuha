@@ -149,7 +149,7 @@ func (h *Hub) SpeakText(ctx context.Context, text string) error {
 		return fmt.Errorf("device: デバイス未接続")
 	}
 	if h.tts == nil {
-		h.logger.Warn("device: TTSクライアント未設定、テキスト応答をスキップ")
+		h.logger.Warn("声の合成が設定されていないのでスキップ")
 		return nil
 	}
 
@@ -164,12 +164,12 @@ func (h *Hub) SpeakText(ctx context.Context, text string) error {
 	// Resample to device sample rate if needed
 	if sampleRate != deviceSampleRate {
 		pcm = voice.ResamplePCM(pcm, sampleRate, deviceSampleRate)
-		h.logger.Debug("device: TTS リサンプル", "from", sampleRate, "to", deviceSampleRate)
+		h.logger.Debug("音声を変換", "from", sampleRate, "to", deviceSampleRate)
 		// Normalize only after resample (resample can reduce amplitude)
 		pcm = voice.NormalizePCM(pcm, 20000)
 	}
 
-	h.logger.Info("device: TTS送信", "pcm_bytes", len(pcm), "sample_rate", sampleRate)
+	h.logger.Info("デバイスに声を送った", "pcm_bytes", len(pcm), "sample_rate", sampleRate)
 	return dev.SendTTS(pcm)
 }
 
