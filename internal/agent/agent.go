@@ -27,14 +27,15 @@ const DefaultDrainWindow = 3 * time.Second
 // Agent is the main event loop that processes events, calls the LLM,
 // executes tools, and sends responses.
 type Agent struct {
-	ctx     *Context
-	llm     *llm.Client
-	tools   *tool.Registry
-	memory  memory.Store
-	users   user.Store
-	bus     *event.Bus
-	chat    chat.Interface
-	consol  consolidator.Client
+	contexts  map[SourceKey]*Context
+	compactMu map[SourceKey]*sync.Mutex
+	llm       *llm.Client
+	tools     *tool.Registry
+	memory    memory.Store
+	users     user.Store
+	bus       *event.Bus
+	chat      chat.Interface
+	consol    consolidator.Client
 	db              *sql.DB // shared DB for channel activity tracking
 	channelSettings *channelpkg.Store
 	locationStore   *location.Store
@@ -49,8 +50,6 @@ type Agent struct {
 	botID            string
 	contextWindowPct float64
 	drainWindow      time.Duration
-
-	compactMu sync.Mutex // guards background compaction (at most one at a time)
 
 	lastEphemeralMu sync.RWMutex
 	lastEphemeral   []llm.Message
@@ -104,23 +103,38 @@ func New(
 		dw = DefaultDrainWindow
 	}
 
-	agentCtx := NewContext(cfg.MaxContextTokens)
+	// Create contexts for each source key.
+	contexts := map[SourceKey]*Context{
+		SourceKeyDiscord: NewContext(cfg.MaxContextTokens),
+		SourceKeyDevice:  NewContext(cfg.MaxContextTokens),
+	}
 
 	// System prompt is stored separately — immune to compaction/truncation.
-	agentCtx.SetSystemPrompt(cfg.SystemPrompt)
+	for _, agentCtx := range contexts {
+		agentCtx.SetSystemPrompt(cfg.SystemPrompt)
+	}
 
-	// Try to restore context from previous session.
-	if saved := loadContext(db, logger); len(saved) > 0 {
-		// Backward compat: strip system prompt from messages if present.
-		if saved[0].Role == "system" {
-			saved = saved[1:]
+	// Try to restore contexts from previous session.
+	for key, agentCtx := range contexts {
+		if saved := loadContextWith(db, logger, string(key)); len(saved) > 0 {
+			// Backward compat: strip system prompt from messages if present.
+			if saved[0].Role == "system" {
+				saved = saved[1:]
+			}
+			agentCtx.ReplaceAll(saved)
+			logger.Info("DBからコンテキスト復元", "source_key", string(key), "messages", len(saved))
 		}
-		agentCtx.ReplaceAll(saved)
-		logger.Info("DBからコンテキスト復元", "messages", len(saved))
+	}
+
+	// Create per-source compact mutexes.
+	compactMu := map[SourceKey]*sync.Mutex{
+		SourceKeyDiscord: {},
+		SourceKeyDevice:  {},
 	}
 
 	return &Agent{
-		ctx:              agentCtx,
+		contexts:         contexts,
+		compactMu:        compactMu,
 		llm:              llmClient,
 		tools:            tools,
 		memory:           memStore,
@@ -139,9 +153,14 @@ func New(
 	}
 }
 
-// AgentContext returns the agent's context for external use (e.g. tool callbacks).
+// AgentContext returns the agent's discord context for external use (e.g. tool callbacks).
 func (a *Agent) AgentContext() *Context {
-	return a.ctx
+	return a.contexts[SourceKeyDiscord]
+}
+
+// AgentContextFor returns the context for the given source key.
+func (a *Agent) AgentContextFor(key SourceKey) *Context {
+	return a.contexts[key]
 }
 
 // SetBotID updates the bot's platform user ID at runtime.
@@ -189,41 +208,114 @@ func (a *Agent) LastEphemeral() []llm.Message {
 }
 
 // Run starts the agent event loop. Blocks until ctx is canceled.
+// Events are routed to per-source buffered channels and processed by
+// dedicated worker goroutines.
 func (a *Agent) Run(ctx context.Context) error {
 	events := a.bus.Subscribe()
+
+	// Create per-source channels.
+	channels := map[SourceKey]chan event.Event{
+		SourceKeyDiscord: make(chan event.Event, 16),
+		SourceKeyDevice:  make(chan event.Event, 16),
+	}
+
+	// Launch one worker per source key.
+	var wg sync.WaitGroup
+	for key, ch := range channels {
+		wg.Add(1)
+		go func(k SourceKey, c chan event.Event) {
+			defer wg.Done()
+			a.runWorker(ctx, k, c)
+		}(key, ch)
+	}
+
+	// Dispatch: route events to per-source channels.
+	for {
+		select {
+		case <-ctx.Done():
+			// Close all channels so workers exit.
+			for _, ch := range channels {
+				close(ch)
+			}
+			wg.Wait()
+			return ctx.Err()
+		case evt := <-events:
+			key := sourceKeyForEvent(evt.Source)
+			if ch, ok := channels[key]; ok {
+				ch <- evt
+			} else {
+				channels[SourceKeyDiscord] <- evt
+			}
+		}
+	}
+}
+
+// runWorker processes events for a single source key.
+func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Event) {
+	dc := a.directiveConfigFor(key)
+	drainWindow := dc.DrainWindow
+	if key == SourceKeyDiscord {
+		// Discord uses the agent-level drainWindow (which defaults or is configured).
+		drainWindow = a.drainWindow
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case evt := <-events:
+			return
+		case evt, ok := <-ch:
+			if !ok {
+				return
+			}
 			batch := []event.Event{evt}
-			if a.drainWindow > 0 {
+
+			if drainWindow > 0 {
 				// Timed drain: wait for additional events within the window.
-				timer := time.NewTimer(a.drainWindow)
+				timer := time.NewTimer(drainWindow)
 			drain:
 				for {
 					select {
-					case e := <-events:
+					case e, ok := <-ch:
+						if !ok {
+							timer.Stop()
+							break drain
+						}
 						batch = append(batch, e)
-						timer.Reset(a.drainWindow)
+						timer.Reset(drainWindow)
 					case <-timer.C:
 						break drain
 					case <-ctx.Done():
 						timer.Stop()
-						return ctx.Err()
+						return
 					}
 				}
 				timer.Stop()
-			} else {
-				// Non-blocking drain (tests / drainWindow < 0).
+			} else if drainWindow == 0 {
+				// Non-blocking drain for zero drain window (device).
 			drainFast:
 				for {
 					select {
-					case e := <-events:
+					case e, ok := <-ch:
+						if !ok {
+							break drainFast
+						}
 						batch = append(batch, e)
 					default:
 						break drainFast
+					}
+				}
+			} else {
+				// Negative drain window (tests): non-blocking drain.
+			drainTest:
+				for {
+					select {
+					case e, ok := <-ch:
+						if !ok {
+							break drainTest
+						}
+						batch = append(batch, e)
+					default:
+						break drainTest
 					}
 				}
 			}
@@ -235,103 +327,180 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 
 			if len(batch) > 1 {
-				a.logger.Info("バッチ処理", "batch_size", len(batch))
+				a.logger.Info("バッチ処理", "batch_size", len(batch), "source_key", string(key))
 			}
 
-			if err := a.handleBatch(ctx, batch); err != nil {
-				a.logger.Error("イベント処理失敗", "error", err.Error())
+			if err := a.handleBatchWith(ctx, key, batch); err != nil {
+				a.logger.Error("イベント処理失敗", "error", err.Error(), "source_key", string(key))
 			}
 
 			// After processing, catch up on any events that arrived during
-			// handleBatch. Stale batches are ingested into context (Perceive
-			// + Reflect only); only the latest batch gets full pipeline.
-			if latest := a.catchUpStale(ctx, events); len(latest) > 0 {
-				if a.metrics != nil {
-					for _, e := range latest {
-						a.metrics.EventsTotal.WithLabelValues(e.Source, e.Type).Inc()
+			// handleBatch (only for sources that don't skip catch-up).
+			if !dc.SkipCatchUpStale {
+				if latest := a.catchUpStaleFor(ctx, key, ch, drainWindow); len(latest) > 0 {
+					if a.metrics != nil {
+						for _, e := range latest {
+							a.metrics.EventsTotal.WithLabelValues(e.Source, e.Type).Inc()
+						}
 					}
-				}
-				if err := a.handleBatch(ctx, latest); err != nil {
-					a.logger.Error("イベント処理失敗", "error", err.Error())
+					if err := a.handleBatchWith(ctx, key, latest); err != nil {
+						a.logger.Error("イベント処理失敗", "error", err.Error(), "source_key", string(key))
+					}
 				}
 			}
 		}
 	}
 }
 
-// handleBatch orchestrates the 4-stage pipeline:
-// Perceive → (compact check) → Think → Act → Reflect.
-// PipelineHooks are called after each stage for observability.
+// directiveConfigFor returns the DirectiveConfig for a given source key.
+func (a *Agent) directiveConfigFor(key SourceKey) DirectiveConfig {
+	switch key {
+	case SourceKeyDevice:
+		return deviceDirectiveConfig()
+	default:
+		return discordDirectiveConfig(a.drainWindow)
+	}
+}
+
+// handleBatch is the backward-compatible wrapper using the discord source key.
 func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
+	return a.handleBatchWith(ctx, SourceKeyDiscord, batch)
+}
+
+// handleBatchWith orchestrates the 4-stage pipeline for a specific source:
+// Perceive -> (compact check) -> Think -> Act -> Reflect.
+// PipelineHooks are called after each stage for observability.
+func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []event.Event) error {
+	agentCtx := a.contexts[key]
+	dc := a.directiveConfigFor(key)
+
 	// 1. Perceive: ingest events, resolve users, describe images.
-	p := a.Perceive(ctx, batch)
+	p := a.PerceiveWith(ctx, agentCtx, batch, dc)
 	if p == nil {
 		return nil
 	}
 	a.runHooks(func(h PipelineHook) error { return h.AfterPerceive(ctx, batch, p) })
 
 	// 2. Compact context if needed.
-	ratio := a.ctx.UsageRatio()
+	ratio := agentCtx.UsageRatio()
 	if a.metrics != nil {
 		a.metrics.ContextWindowUsage.Set(ratio)
 	}
 	a.logger.Debug("コンテキストウィンドウ", "usage_ratio", fmt.Sprintf("%.2f", ratio),
-		"message_count", len(a.ctx.Messages()),
-		"calibration", fmt.Sprintf("%.2f", a.ctx.TokenCalibration()))
+		"message_count", len(agentCtx.Messages()),
+		"calibration", fmt.Sprintf("%.2f", agentCtx.TokenCalibration()),
+		"source_key", string(key))
 	if a.contextWindowPct > 0 && ratio > a.contextWindowPct {
-		a.logger.Info("コンテキスト圧縮を開始", "ratio", fmt.Sprintf("%.2f", ratio))
-		a.compactAsync(ctx)
+		a.logger.Info("コンテキスト圧縮を開始", "ratio", fmt.Sprintf("%.2f", ratio), "source_key", string(key))
+		a.compactAsyncFor(ctx, agentCtx, key)
 	}
 
 	// 3. Think: build ephemeral context and determine directive.
-	t := a.Think(ctx, p)
+	t := a.ThinkWith(ctx, agentCtx, p, dc)
 	a.runHooks(func(h PipelineHook) error { return h.AfterThink(ctx, p, t) })
 	if t.ListenMode {
-		persistContext(ctx, a.db, a.ctx, a.logger)
+		persistContextWith(ctx, a.db, agentCtx, a.logger, string(key))
 		return nil
 	}
 
-	// 4. Act: LLM completion, tool loop, send response.
-	if err := a.Act(ctx, p, t); err != nil {
+	// 4. Act: LLM completion, tool loop, get response text.
+	text, err := a.ActWith(ctx, agentCtx, p, t)
+	if err != nil {
 		return err
 	}
 	a.runHooks(func(h PipelineHook) error { return h.AfterAct(ctx, p, t) })
 
-	// 5. Reflect: log turn, persist context.
-	a.Reflect(ctx, p)
+	// 5. Route response to the appropriate output.
+	if text != "" {
+		a.routeResponse(ctx, key, p, text)
+	}
+
+	// 6. Reflect: log turn, persist context.
+	a.ReflectWith(ctx, agentCtx, p, key)
 	a.runHooks(func(h PipelineHook) error { return h.AfterReflect(ctx, p) })
 	return nil
 }
 
-// catchUpStale drains queued events, ingests them all into context
+// routeResponse sends the response text to the appropriate output for the source.
+func (a *Agent) routeResponse(ctx context.Context, key SourceKey, p *Perception, text string) {
+	a.logger.Info("応答を送信",
+		"channel", p.Channel,
+		"length", len(text),
+		"is_voice", p.IsVoice,
+		"source_key", string(key),
+		"content", truncate(text, 200))
+
+	switch key {
+	case SourceKeyDevice:
+		if a.deviceSpeaker != nil {
+			a.logger.Info("device: TTSで応答", "length", len(text))
+			if err := a.deviceSpeaker.SpeakText(ctx, text); err != nil {
+				a.logger.Warn("device: TTS送信失敗", "error", err)
+			}
+		}
+	default:
+		// Discord: check voice first, then text.
+		if a.voiceSpeaker != nil && p.LastEvent.Message.GuildID != "" && a.voiceSpeaker.IsConnected(p.LastEvent.Message.GuildID) {
+			guildID := p.LastEvent.Message.GuildID
+			a.logger.Info("voice: 音声で応答", "guild", guildID, "length", len(text))
+			if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
+				a.logger.Warn("voice: 音声送信失敗、テキストにフォールバック", "error", err)
+				if err := a.chat.Send(ctx, p.Channel, text); err != nil {
+					a.logger.Error("agent: 送信に失敗", "error", err)
+				}
+			}
+		} else {
+			if err := a.chat.Send(ctx, p.Channel, text); err != nil {
+				a.logger.Error("agent: 送信に失敗", "error", err)
+			}
+		}
+	}
+}
+
+// catchUpStale is the backward-compatible wrapper.
+func (a *Agent) catchUpStale(ctx context.Context, events <-chan event.Event) []event.Event {
+	return a.catchUpStaleFor(ctx, SourceKeyDiscord, events, a.drainWindow)
+}
+
+// catchUpStaleFor drains queued events for a source, ingests them all into context
 // (Perceive-only), and returns only the final batch for full pipeline
 // processing. This keeps conversation history complete while skipping
 // LLM responses to stale messages — critical for voice tempo.
 // Returns nil if no events were queued.
-func (a *Agent) catchUpStale(ctx context.Context, events <-chan event.Event) []event.Event {
+func (a *Agent) catchUpStaleFor(ctx context.Context, key SourceKey, events <-chan event.Event, drainWindow time.Duration) []event.Event {
+	agentCtx := a.contexts[key]
+	dc := a.directiveConfigFor(key)
+
 	var latest []event.Event
 	for {
 		select {
-		case evt := <-events:
+		case evt, ok := <-events:
+			if !ok {
+				return latest
+			}
 			// If we had a previous batch, perceive-only (ingest without responding).
 			if len(latest) > 0 {
-				p := a.Perceive(ctx, latest)
+				p := a.PerceiveWith(ctx, agentCtx, latest, dc)
 				if p != nil {
 					a.logger.Info("スキップ: 古いバッチを取り込み済み（応答なし）",
-						"batch_size", len(latest), "channel", p.Channel)
-					a.Reflect(ctx, p)
+						"batch_size", len(latest), "channel", p.Channel, "source_key", string(key))
+					a.ReflectWith(ctx, agentCtx, p, key)
 				}
 			}
 			// Start a new "latest" batch and drain within the window.
 			latest = []event.Event{evt}
-			if a.drainWindow > 0 {
-				timer := time.NewTimer(a.drainWindow)
+			if drainWindow > 0 {
+				timer := time.NewTimer(drainWindow)
 			drainCatchUp:
 				for {
 					select {
-					case e := <-events:
+					case e, ok := <-events:
+						if !ok {
+							timer.Stop()
+							break drainCatchUp
+						}
 						latest = append(latest, e)
-						timer.Reset(a.drainWindow)
+						timer.Reset(drainWindow)
 					case <-timer.C:
 						break drainCatchUp
 					case <-ctx.Done():
@@ -348,10 +517,12 @@ func (a *Agent) catchUpStale(ctx context.Context, events <-chan event.Event) []e
 	}
 }
 
-// ReloadPrompt updates the system prompt.
+// ReloadPrompt updates the system prompt across all contexts.
 func (a *Agent) ReloadPrompt(newPrompt string) {
 	a.systemPrompt = newPrompt
-	a.ctx.SetSystemPrompt(newPrompt)
+	for _, agentCtx := range a.contexts {
+		agentCtx.SetSystemPrompt(newPrompt)
+	}
 	a.logger.Info("システムプロンプト再読み込み", "length", len(newPrompt))
 }
 

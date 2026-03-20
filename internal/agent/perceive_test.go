@@ -74,12 +74,12 @@ func TestPerceive_EmptyBatch(t *testing.T) {
 
 func TestPerceive_ContextGrows(t *testing.T) {
 	ag := newTestAgent()
-	before := ag.ctx.Len()
+	before := ag.AgentContext().Len()
 
 	evt := makeMessageEvent("test", "ch1", "user1")
 	ag.Perceive(context.Background(), []event.Event{evt})
 
-	after := ag.ctx.Len()
+	after := ag.AgentContext().Len()
 	if after <= before {
 		t.Errorf("context length should grow after Perceive: before=%d after=%d", before, after)
 	}

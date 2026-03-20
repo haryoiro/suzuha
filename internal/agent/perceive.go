@@ -20,13 +20,19 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
-// Perceive ingests all events in the batch into context, resolving users,
-// describing images, and bootstrapping channel history.
+// Perceive is the backward-compatible wrapper that calls PerceiveWith
+// with the discord context and a zero DirectiveConfig.
+func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
+	return a.PerceiveWith(ctx, a.contexts[SourceKeyDiscord], batch, DirectiveConfig{})
+}
+
+// PerceiveWith ingests all events in the batch into the given context,
+// resolving users, describing images, and bootstrapping channel history.
 // Returns a Perception summarizing what was observed, or nil if all events
 // were filtered out (e.g. disabled channels).
-func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
-	// Filter out disabled channels.
-	if a.channelSettings != nil {
+func (a *Agent) PerceiveWith(ctx context.Context, agentCtx *Context, batch []event.Event, dc DirectiveConfig) *Perception {
+	// Filter out disabled channels (unless SkipChannelFilter is set).
+	if !dc.SkipChannelFilter && a.channelSettings != nil {
 		var filtered []event.Event
 		for _, evt := range batch {
 			chID := evt.Message.Channel
@@ -43,12 +49,12 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 	}
 
 	// Ingest all events into context.
-	turnStartIdx := a.ctx.Len()
+	turnStartIdx := agentCtx.Len()
 	var lastMsg llm.Message
 	var lastEvt event.Event
 	var directlyAddressed bool
 	for _, evt := range batch {
-		msg := a.ingestEvent(ctx, evt)
+		msg := a.ingestEventWith(ctx, agentCtx, evt, dc)
 		lastMsg = msg
 		lastEvt = evt
 		if isDirectlyAddressed(evt, a.botID) {
@@ -72,9 +78,9 @@ func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
 	}
 }
 
-// ingestEvent processes a single event: resolves the user, adds the message
-// to context, and injects channel history. It does NOT trigger LLM completion.
-func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) llm.Message {
+// ingestEventWith processes a single event: resolves the user, adds the message
+// to the given context, and injects channel history. It does NOT trigger LLM completion.
+func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt event.Event, dc DirectiveConfig) llm.Message {
 	msg := eventToMessage(evt)
 
 	a.logger.Info("イベント受信",
@@ -135,12 +141,14 @@ func (a *Agent) ingestEvent(ctx context.Context, evt event.Event) llm.Message {
 		}
 	}
 
-	// Bootstrap channel history if this is a new channel.
-	a.injectChannelHistory(ctx, msg.Channel, msg.Content, msg.Source)
+	// Bootstrap channel history if this is a new channel (unless SkipChannelHistory is set).
+	if !dc.SkipChannelHistory {
+		a.injectChannelHistoryWith(ctx, agentCtx, msg.Channel, msg.Content, msg.Source)
+	}
 
 	// Add to context (skip self_prompt — these are injected as ephemeral in Think).
 	if evt.Type != event.TypeSelfPrompt {
-		a.ctx.Add(msg)
+		agentCtx.Add(msg)
 	}
 
 	return msg
@@ -281,19 +289,19 @@ func extFromMimeType(mime string) string {
 	}
 }
 
-// injectChannelHistory fetches recent messages for a channel not yet seen
+// injectChannelHistoryWith fetches recent messages for a channel not yet seen
 // in the context. Uses the discord_get_history tool if available,
 // falling back to recent memory search.
-func (a *Agent) injectChannelHistory(ctx context.Context, channelID, messageContent, source string) {
+func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context, channelID, messageContent, source string) {
 	if channelID == "" {
 		return
 	}
-	if a.ctx.HasChannelHistory(channelID) {
+	if agentCtx.HasChannelHistory(channelID) {
 		return
 	}
 	// Remove stale history (e.g. from DB restore) before injecting fresh one.
-	a.ctx.RemoveChannelHistory(channelID)
-	a.ctx.MarkChannelSeen(channelID)
+	agentCtx.RemoveChannelHistory(channelID)
+	agentCtx.MarkChannelSeen(channelID)
 
 	var content string
 	if histTool, ok := a.tools.Get("discord_get_history"); ok {
@@ -326,7 +334,7 @@ func (a *Agent) injectChannelHistory(ctx context.Context, channelID, messageCont
 	}
 
 	if content != "" {
-		a.ctx.Add(llm.Message{
+		agentCtx.Add(llm.Message{
 			Role:      "system",
 			Content:   content,
 			Timestamp: jtime.Now(),

@@ -72,10 +72,15 @@ type convState struct {
 	recentDistinctUsers   int           // distinct non-bot users in recent messages
 }
 
-// conversationState scans the agent's context messages backwards to compute
+// conversationState scans the given messages backwards to compute
 // conversation-state signals for the given channel.
 func (a *Agent) conversationState(channel string) convState {
-	msgs := a.ctx.Messages()
+	return conversationStateFrom(a.contexts[SourceKeyDiscord].Messages(), channel, a.botID)
+}
+
+// conversationStateFrom computes conversation-state signals from a given
+// message slice and channel.
+func conversationStateFrom(msgs []llm.Message, channel, botID string) convState {
 	now := time.Now()
 	cs := convState{
 		botLastSpokeAgo: -1, // sentinel: bot never spoke
@@ -92,7 +97,7 @@ func (a *Agent) conversationState(channel string) convState {
 		}
 		scanned++
 
-		if m.Role == "assistant" && m.UserID == a.botID {
+		if m.Role == "assistant" && m.UserID == botID {
 			if cs.botLastSpokeAgo < 0 {
 				// First (most recent) bot message found.
 				cs.botLastSpokeAgo = now.Sub(m.Timestamp)
@@ -100,7 +105,7 @@ func (a *Agent) conversationState(channel string) convState {
 			continue
 		}
 
-		if m.Role == "user" && m.UserID != "" && m.UserID != a.botID {
+		if m.Role == "user" && m.UserID != "" && m.UserID != botID {
 			// Count messages before we've found the bot's last message.
 			if cs.botLastSpokeAgo < 0 {
 				cs.messagesSinceBotSpoke++
@@ -117,9 +122,15 @@ func (a *Agent) conversationState(channel string) convState {
 	return cs
 }
 
-// Think builds ephemeral context (memories, profiles) and determines
-// the response directive. Returns a Thought describing what to do.
+// Think is the backward-compatible wrapper that calls ThinkWith
+// with the discord context and a zero DirectiveConfig.
 func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
+	return a.ThinkWith(ctx, a.contexts[SourceKeyDiscord], p, DirectiveConfig{})
+}
+
+// ThinkWith builds ephemeral context (memories, profiles) and determines
+// the response directive. Returns a Thought describing what to do.
+func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception, dc DirectiveConfig) *Thought {
 	// Build ephemeral context in parallel.
 	var (
 		memMsgs  []llm.Message
@@ -137,7 +148,7 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		profiles = a.buildUserProfiles(ctx)
+		profiles = a.buildUserProfilesWith(ctx, agentCtx)
 	}()
 	if a.locationStore != nil {
 		wg.Add(1)
@@ -161,8 +172,8 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 		ephemeral = append(ephemeral, profiles...)
 	}
 
-	// Check listen mode.
-	if a.channelSettings != nil && p.Channel != "" && !p.IsDM {
+	// Check listen mode (unless ForceRespond is set).
+	if !dc.ForceRespond && a.channelSettings != nil && p.Channel != "" && !p.IsDM {
 		mode := a.channelSettings.GetMode(p.Channel)
 		if mode == channelpkg.ModeListen {
 			a.logger.Info("リッスンモード: 応答せずに取り込み", "channel", p.Channel)
@@ -179,7 +190,10 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 
 	// Determine response directive.
 	var directive string
-	if p.LastEvent.Source == "device" {
+	if dc.DirectiveTemplate != "" {
+		// Use the source-specific directive template.
+		directive = dc.DirectiveTemplate
+	} else if p.LastEvent.Source == "device" {
 		// Physical device: always respond, spoken conversation style.
 		directive = "[RESPOND] 物理デバイス経由の音声対話です。必ず返答してください。" +
 			"話し言葉で自然に返して。1〜2文で短く。" +
@@ -195,11 +209,15 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 	} else if p.DirectlyAddressed {
 		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
 	} else {
-		cs := a.conversationState(p.Channel)
+		cs := conversationStateFrom(agentCtx.Messages(), p.Channel, a.botID)
 		es := a.episodeSignal(ctx, p.LastMessage.Source, p.LastMessage.UserID)
 		directive = responseDirective(p.LastEvent, a.botID, cs, es)
 	}
-	a.logger.Info("LLMリクエスト", "message_count", len(a.ctx.Messages()),
+
+	// When ForceRespond is set, ensure ListenMode is never true.
+	// (Already handled above by skipping listen mode check, but this is a safety net.)
+
+	a.logger.Info("LLMリクエスト", "message_count", len(agentCtx.Messages()),
 		"ephemeral_count", len(ephemeral), "directive", directive)
 
 	// Cache ephemeral messages for admin visibility.
@@ -329,13 +347,18 @@ func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs 
 	}}
 }
 
-// buildUserProfiles collects ephemeral profile messages for all users
-// seen in the current context who haven't been profiled yet.
+// buildUserProfiles is the backward-compatible wrapper.
+func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
+	return a.buildUserProfilesWith(ctx, a.contexts[SourceKeyDiscord])
+}
+
+// buildUserProfilesWith collects ephemeral profile messages for all users
+// seen in the given context who haven't been profiled yet.
 // recentUserLimit controls how many recent user messages to scan backwards
 // to determine which users get profile injection.
 const recentUserLimit = 10
 
-func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
+func (a *Agent) buildUserProfilesWith(ctx context.Context, agentCtx *Context) []llm.Message {
 	if a.users == nil {
 		return nil
 	}
@@ -343,7 +366,7 @@ func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
 	type userKey struct{ platform, userID string }
 
 	// Only collect users from the last N user messages.
-	msgs := a.ctx.Messages()
+	msgs := agentCtx.Messages()
 	seen := make(map[userKey]bool)
 	var keys []userKey
 	count := 0

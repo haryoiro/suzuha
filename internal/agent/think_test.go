@@ -19,7 +19,7 @@ func TestConversationState_BotNeverSpoke(t *testing.T) {
 
 	// Add some user messages, no bot messages.
 	for i := 0; i < 5; i++ {
-		ag.ctx.Add(llm.Message{
+		ag.AgentContext().Add(llm.Message{
 			Role: "user", UserID: "user1", Channel: ch,
 			Timestamp: time.Now().Add(-time.Duration(5-i) * time.Minute),
 		})
@@ -37,16 +37,16 @@ func TestConversationState_BotSpokeRecently(t *testing.T) {
 	ch := "ch1"
 
 	// Bot spoke 30 seconds ago.
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "assistant", UserID: "bot123", Channel: ch,
 		Timestamp: time.Now().Add(-30 * time.Second),
 	})
 	// 2 user messages after.
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "user", UserID: "user1", Channel: ch,
 		Timestamp: time.Now().Add(-20 * time.Second),
 	})
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "user", UserID: "user1", Channel: ch,
 		Timestamp: time.Now().Add(-10 * time.Second),
 	})
@@ -67,15 +67,15 @@ func TestConversationState_MultipleUsers(t *testing.T) {
 	ag := newTestAgent()
 	ch := "ch1"
 
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "assistant", UserID: "bot123", Channel: ch,
 		Timestamp: time.Now().Add(-60 * time.Second),
 	})
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "user", UserID: "user1", Channel: ch,
 		Timestamp: time.Now().Add(-30 * time.Second),
 	})
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "user", UserID: "user2", Channel: ch,
 		Timestamp: time.Now().Add(-20 * time.Second),
 	})
@@ -90,12 +90,12 @@ func TestConversationState_DifferentChannel(t *testing.T) {
 	ag := newTestAgent()
 
 	// Bot spoke in ch1 recently.
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "assistant", UserID: "bot123", Channel: "ch1",
 		Timestamp: time.Now().Add(-30 * time.Second),
 	})
 	// User message in ch2.
-	ag.ctx.Add(llm.Message{
+	ag.AgentContext().Add(llm.Message{
 		Role: "user", UserID: "user1", Channel: "ch2",
 		Timestamp: time.Now().Add(-10 * time.Second),
 	})

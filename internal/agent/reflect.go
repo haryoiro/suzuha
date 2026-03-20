@@ -11,44 +11,58 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
-// Reflect logs the conversation turn, persists context to DB,
-// and runs post-response bookkeeping.
+// Reflect is the backward-compatible wrapper that calls ReflectWith
+// with the discord source key.
 func (a *Agent) Reflect(ctx context.Context, p *Perception) {
-	if p.Channel != "" {
-		a.logConversationTurn(ctx, p.TurnStartIdx, p.Channel)
-	}
-	persistContext(ctx, a.db, a.ctx, a.logger)
+	a.ReflectWith(ctx, a.contexts[SourceKeyDiscord], p, SourceKeyDiscord)
 }
 
-// compactAsync triggers context compaction in a background goroutine.
-// The pipeline continues processing while compaction runs.
-// Only one compaction runs at a time; concurrent requests are skipped.
+// ReflectWith logs the conversation turn, persists context to DB,
+// and runs post-response bookkeeping for the given source key.
+func (a *Agent) ReflectWith(ctx context.Context, agentCtx *Context, p *Perception, sourceKey SourceKey) {
+	if p.Channel != "" {
+		a.logConversationTurn(ctx, agentCtx, p.TurnStartIdx, p.Channel)
+	}
+	persistContextWith(ctx, a.db, agentCtx, a.logger, string(sourceKey))
+}
+
+// compactAsync is the backward-compatible wrapper.
 func (a *Agent) compactAsync(ctx context.Context) {
-	if !a.compactMu.TryLock() {
-		a.logger.Debug("コンパクション既に実行中、スキップ")
+	a.compactAsyncFor(ctx, a.contexts[SourceKeyDiscord], SourceKeyDiscord)
+}
+
+// compactAsyncFor triggers context compaction in a background goroutine
+// for the given source key.
+// The pipeline continues processing while compaction runs.
+// Only one compaction runs at a time per source key; concurrent requests are skipped.
+func (a *Agent) compactAsyncFor(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
+	mu := a.compactMu[sourceKey]
+	if !mu.TryLock() {
+		a.logger.Debug("コンパクション既に実行中、スキップ", "source_key", string(sourceKey))
 		return
 	}
 
-	snapshot := a.ctx.Messages()
+	snapshot := agentCtx.Messages()
 	snapshotLen := len(snapshot)
 
 	go func() {
-		defer a.compactMu.Unlock()
-		a.logger.Info("バックグラウンドコンパクション開始", "snapshot_len", snapshotLen)
-		a.doCompact(ctx, snapshot, true)
+		defer mu.Unlock()
+		a.logger.Info("バックグラウンドコンパクション開始", "snapshot_len", snapshotLen, "source_key", string(sourceKey))
+		a.doCompactWith(ctx, agentCtx, sourceKey, snapshot, true)
 	}()
 }
 
 // compact triggers context compaction synchronously (used by ForceCompact).
 func (a *Agent) compact(ctx context.Context) {
-	msgs := a.ctx.Messages()
-	a.doCompact(ctx, msgs, false)
+	agentCtx := a.contexts[SourceKeyDiscord]
+	msgs := agentCtx.Messages()
+	a.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 }
 
-// doCompact performs the actual compaction logic.
+// doCompactWith performs the actual compaction logic for the given context and source key.
 // If async is true, new messages appended during compaction are preserved via CompactReplace;
 // otherwise the context is fully replaced via ReplaceAll.
-func (a *Agent) doCompact(ctx context.Context, msgs []llm.Message, async bool) {
+func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey, msgs []llm.Message, async bool) {
 	n := len(msgs)
 	target := n / 2
 
@@ -59,15 +73,15 @@ func (a *Agent) doCompact(ctx context.Context, msgs []llm.Message, async bool) {
 		})
 		if err != nil {
 			a.logger.Warn("コンソリデータの圧縮失敗、切り詰めにフォールバック", "error", err)
-			a.ctx.TruncateOldest(n / 2)
-			a.resetAndPersist(ctx)
+			agentCtx.TruncateOldest(n / 2)
+			a.resetAndPersistWith(ctx, agentCtx, sourceKey)
 			return
 		}
 
 		if len(result.KeepIndices) == 0 {
 			a.logger.Warn("コンソリデータが保持インデックスを返さず、切り詰めにフォールバック")
-			a.ctx.TruncateOldest(n / 2)
-			a.resetAndPersist(ctx)
+			agentCtx.TruncateOldest(n / 2)
+			a.resetAndPersistWith(ctx, agentCtx, sourceKey)
 			return
 		}
 
@@ -78,36 +92,41 @@ func (a *Agent) doCompact(ctx context.Context, msgs []llm.Message, async bool) {
 			}
 		}
 		if async {
-			a.ctx.CompactReplace(n, kept)
+			agentCtx.CompactReplace(n, kept)
 		} else {
-			a.ctx.ReplaceAll(kept)
+			agentCtx.ReplaceAll(kept)
 		}
-		a.resetAndPersist(ctx)
+		a.resetAndPersistWith(ctx, agentCtx, sourceKey)
 		a.logger.Info("コンパクション完了", "kept", len(kept), "original", n)
 		return
 	}
 
 	// No consolidator available — simple truncation fallback.
-	a.ctx.TruncateOldest(n / 2)
-	a.resetAndPersist(ctx)
+	agentCtx.TruncateOldest(n / 2)
+	a.resetAndPersistWith(ctx, agentCtx, sourceKey)
 	a.logger.Info("切り詰め完了", "original", n)
 }
 
-// resetAndPersist clears injected state and saves context to DB.
+// resetAndPersistWith clears injected state and saves context to DB.
+func (a *Agent) resetAndPersistWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
+	agentCtx.ResetInjectedUsers()
+	agentCtx.ResetSeenChannels()
+	persistContextWith(ctx, a.db, agentCtx, a.logger, string(sourceKey))
+}
+
+// resetAndPersist is the backward-compatible wrapper.
 func (a *Agent) resetAndPersist(ctx context.Context) {
-	a.ctx.ResetInjectedUsers()
-	a.ctx.ResetSeenChannels()
-	persistContext(ctx, a.db, a.ctx, a.logger)
+	a.resetAndPersistWith(ctx, a.contexts[SourceKeyDiscord], SourceKeyDiscord)
 }
 
 // logConversationTurn logs all messages added during the current turn
 // to the conversation_logs table for fine-tuning data collection.
-func (a *Agent) logConversationTurn(ctx context.Context, startIdx int, channel string) {
+func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, startIdx int, channel string) {
 	if a.db == nil {
 		return
 	}
 
-	msgs := a.ctx.Messages()
+	msgs := agentCtx.Messages()
 	if startIdx >= len(msgs) {
 		return
 	}
@@ -154,8 +173,14 @@ func nullIfEmpty(s string) *string {
 	return &s
 }
 
-// persistContext saves the current context messages to the database.
+// persistContext is the backward-compatible wrapper that uses source_key "discord".
 func persistContext(ctx context.Context, db *sql.DB, agentCtx *Context, logger *slog.Logger) {
+	persistContextWith(ctx, db, agentCtx, logger, string(SourceKeyDiscord))
+}
+
+// persistContextWith saves the current context messages to the database
+// using the given source key.
+func persistContextWith(ctx context.Context, db *sql.DB, agentCtx *Context, logger *slog.Logger, sourceKey string) {
 	if db == nil {
 		return
 	}
@@ -166,20 +191,25 @@ func persistContext(ctx context.Context, db *sql.DB, agentCtx *Context, logger *
 		return
 	}
 	_, err = db.ExecContext(ctx,
-		`INSERT OR REPLACE INTO context_snapshot (id, messages, updated_at) VALUES (1, ?, datetime('now'))`,
-		string(data))
+		`INSERT OR REPLACE INTO context_snapshot (source_key, messages, updated_at) VALUES (?, ?, datetime('now'))`,
+		sourceKey, string(data))
 	if err != nil {
 		logger.Warn("コンテキスト永続化: 書き込み失敗", "error", err)
 	}
 }
 
-// loadContext loads saved context messages from the database.
+// loadContext is the backward-compatible wrapper that loads the discord context.
 func loadContext(db *sql.DB, logger *slog.Logger) []llm.Message {
+	return loadContextWith(db, logger, string(SourceKeyDiscord))
+}
+
+// loadContextWith loads saved context messages from the database for the given source key.
+func loadContextWith(db *sql.DB, logger *slog.Logger, sourceKey string) []llm.Message {
 	if db == nil {
 		return nil
 	}
 	var data string
-	err := db.QueryRow(`SELECT messages FROM context_snapshot WHERE id = 1`).Scan(&data)
+	err := db.QueryRow(`SELECT messages FROM context_snapshot WHERE source_key = ?`, sourceKey).Scan(&data)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			logger.Warn("コンテキスト読み込み: クエリ失敗", "error", err)
