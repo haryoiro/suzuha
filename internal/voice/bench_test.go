@@ -51,13 +51,13 @@ func BenchmarkVADProcess_Silence(b *testing.B) {
 	}
 }
 
-func BenchmarkResample24kTo48k(b *testing.B) {
+func BenchmarkResamplePCM_24kTo48k(b *testing.B) {
 	// 1 second of 24kHz mono = 24000 samples.
 	pcm := generateTone(24000, 5000)
 	b.SetBytes(int64(len(pcm)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		resample24kTo48k(pcm)
+		ResamplePCM(pcm, 24000, 48000)
 	}
 }
 

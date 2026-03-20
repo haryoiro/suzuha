@@ -3,7 +3,6 @@ package voice
 import (
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -149,7 +148,7 @@ func (p *Pipeline) SpeakText(ctx context.Context, guildID, text string) error {
 		return fmt.Errorf("voice: ギルド %s のセッションが見つかりません", guildID)
 	}
 
-	pcm, err := p.tts.Synthesize(ctx, text)
+	pcm, sampleRate, err := p.tts.Synthesize(ctx, text)
 	if err != nil {
 		return fmt.Errorf("voice: TTS失敗: %w", err)
 	}
@@ -157,8 +156,8 @@ func (p *Pipeline) SpeakText(ctx context.Context, guildID, text string) error {
 		return nil
 	}
 
-	// VOICEVOX outputs 24kHz mono, Discord expects 48kHz stereo.
-	pcm48k := resample24kTo48k(pcm)
+	// Discord expects 48kHz stereo.
+	pcm48k := ResamplePCM(pcm, sampleRate, 48000)
 	stereo := monoToStereo(pcm48k)
 
 	return sess.SendPCM(stereo)
@@ -169,6 +168,12 @@ func (p *Pipeline) SpeakText(ctx context.Context, guildID, text string) error {
 func (p *Pipeline) handleSpeech(ctx context.Context, guildID, channelID, userID string, pcm []byte) {
 	// Transcribe speech to text.
 	// PCM is 48kHz mono from the receiver.
+	durationMs := len(pcm) * 1000 / (48000 * 2)
+	p.logger.Debug("voice: STTリクエスト", "user_id", userID, "pcm_bytes", len(pcm), "duration_ms", durationMs)
+
+	// Normalize volume before STT (Discord voice can be very quiet).
+	pcm = NormalizePCM(pcm, 16000)
+
 	text, err := p.stt.Transcribe(ctx, pcm, 48000)
 	if err != nil {
 		p.logger.Error("voice: STT失敗", "user_id", userID, "error", err)
@@ -217,35 +222,6 @@ func (p *Pipeline) handleSpeech(ctx context.Context, guildID, channelID, userID 
 		ChannelName: "voice",
 	})
 	p.bus.Publish(evt)
-}
-
-// resample24kTo48k doubles the sample rate by linear interpolation.
-// Input: 16-bit LE mono PCM at 24kHz. Output: 16-bit LE mono PCM at 48kHz.
-func resample24kTo48k(pcm []byte) []byte {
-	nSamples := len(pcm) / 2
-	if nSamples == 0 {
-		return nil
-	}
-	out := make([]byte, nSamples*4) // 2x samples, 2 bytes each
-	for i := 0; i < nSamples; i++ {
-		sample := int16(binary.LittleEndian.Uint16(pcm[i*2 : i*2+2]))
-		// Write the sample twice (simple nearest-neighbor upsampling).
-		binary.LittleEndian.PutUint16(out[i*4:], uint16(sample))
-		binary.LittleEndian.PutUint16(out[i*4+2:], uint16(sample))
-	}
-	return out
-}
-
-// monoToStereo duplicates a mono 16-bit LE PCM stream to stereo.
-func monoToStereo(mono []byte) []byte {
-	nSamples := len(mono) / 2
-	stereo := make([]byte, nSamples*4) // 2 channels, 2 bytes each
-	for i := 0; i < nSamples; i++ {
-		sample := mono[i*2 : i*2+2]
-		copy(stereo[i*4:], sample)   // left
-		copy(stereo[i*4+2:], sample) // right
-	}
-	return stereo
 }
 
 // whisperHallucinations contains phrases that Whisper commonly hallucinates
