@@ -7,6 +7,7 @@ idf_component_register(
         "audio_task.c"
         "speaker_task.c"
         "display_task.c"
+        "ssd1351.c"
         "servo_task.c"
     INCLUDE_DIRS "."
     PRIV_REQUIRES
@@ -20,6 +21,11 @@ idf_component_register(
         driver
         esp_driver_i2s
         esp_driver_mcpwm
+        esp_driver_spi
         esp_driver_gpio
+        esp_driver_i2c
+        esp_driver_cam
+        esp_driver_isp
+        esp_driver_jpeg
         esp_timer
 )

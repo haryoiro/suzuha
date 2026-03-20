@@ -14,8 +14,10 @@ COPY partitions_esp32*.csv ./
 COPY main/ main/
 COPY components/ components/
 
-# Copy target-specific sdkconfig
+# Copy target-specific sdkconfig + secrets (if exists)
 COPY sdkconfig.defaults.${TARGET} sdkconfig.defaults
+COPY sdkconfig.secret[s] ./
+RUN if [ -f sdkconfig.secrets ]; then cat sdkconfig.secrets >> sdkconfig.defaults; fi
 
 # Build
 RUN source $IDF_PATH/export.sh && \

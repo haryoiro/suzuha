@@ -79,20 +79,259 @@ static void capture_and_send(void)
 }
 
 // ============================================================
-// ESP32-P4 (MIPI-CSI + HW JPEG) — placeholder
+// ESP32-P4 (MIPI-CSI + ISP + HW JPEG)
 // ============================================================
 #elif CONFIG_IDF_TARGET_ESP32P4
 
+#include <string.h>
+#include "esp_cam_ctlr.h"
+#include "esp_cam_ctlr_csi.h"
+#include "esp_cam_sensor.h"
+#include "esp_cam_sensor_detect.h"
+#include "esp_sccb_intf.h"
+#include "esp_sccb_i2c.h"
+#include "driver/i2c_master.h"
+#include "driver/isp.h"
+#include "driver/jpeg_encode.h"
+#include "esp_ldo_regulator.h"
+#include "esp_cache.h"
+#include "esp_heap_caps.h"
+#include "esp_cam_sensor_xclk.h"
+
+// Camera sensor SCCB (I2C) — shared with board I2C header
+#define CAM_SCCB_SCL_IO     8
+#define CAM_SCCB_SDA_IO     7
+#define CAM_SCCB_FREQ_HZ    (10 * 1000)
+
+// MIPI PHY LDO
+#define MIPI_LDO_CHAN_ID     3
+#define MIPI_LDO_VOLTAGE_MV  2500
+
+// CSI
+#define CSI_LANE_BITRATE_MBPS  200
+#define CSI_DATA_LANE_NUM      2
+
+// Buffer sizes
+#define FRAME_BUF_SIZE  (CAM_WIDTH * CAM_HEIGHT * 2)  // RGB565
+#define JPEG_BUF_SIZE   (CAM_WIDTH * CAM_HEIGHT)      // max JPEG output
+
+static esp_cam_ctlr_handle_t s_cam_handle = NULL;
+static isp_proc_handle_t s_isp_handle = NULL;
+static jpeg_encoder_handle_t s_jpeg_handle = NULL;
+static uint8_t *s_frame_buf[2] = {NULL, NULL};  // double buffer
+static int s_buf_idx = 0;                        // current capture buffer
+static uint8_t *s_jpeg_buf = NULL;
+static bool s_camera_ready = false;
+
+// ISR callback: provide same buffer for next frame
+static bool IRAM_ATTR on_get_new_trans(esp_cam_ctlr_handle_t handle,
+                                       esp_cam_ctlr_trans_t *trans,
+                                       void *user_data)
+{
+    esp_cam_ctlr_trans_t *def = (esp_cam_ctlr_trans_t *)user_data;
+    trans->buffer = def->buffer;
+    trans->buflen = def->buflen;
+    return false;
+}
+
+static bool IRAM_ATTR on_trans_finished(esp_cam_ctlr_handle_t handle,
+                                        esp_cam_ctlr_trans_t *trans,
+                                        void *user_data)
+{
+    return false;
+}
+
 static esp_err_t init_camera(void)
 {
-    // TODO: esp_cam_ctlr_csi + ISP + JPEG codec
-    ESP_LOGI(TAG, "P4 camera init placeholder");
+    // ---- MIPI PHY LDO ----
+    esp_ldo_channel_handle_t ldo_mipi_phy = NULL;
+    esp_ldo_channel_config_t ldo_cfg = {
+        .chan_id = MIPI_LDO_CHAN_ID,
+        .voltage_mv = MIPI_LDO_VOLTAGE_MV,
+    };
+    ESP_ERROR_CHECK(esp_ldo_acquire_channel(&ldo_cfg, &ldo_mipi_phy));
+
+    // ---- I2C bus for camera SCCB ----
+    i2c_master_bus_config_t i2c_bus_conf = {
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .sda_io_num = CAM_SCCB_SDA_IO,
+        .scl_io_num = CAM_SCCB_SCL_IO,
+        .i2c_port = I2C_NUM_1,  // NUM_0 is used by ES8311 codec
+        .flags.enable_internal_pullup = true,
+    };
+    i2c_master_bus_handle_t i2c_bus = NULL;
+    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_conf, &i2c_bus));
+
+    // ---- Auto-detect camera sensor ----
+    esp_cam_sensor_config_t cam_config = {
+        .reset_pin = -1,
+        .pwdn_pin = -1,
+        .xclk_pin = -1,
+    };
+
+    esp_cam_sensor_device_t *cam = NULL;
+    for (esp_cam_sensor_detect_fn_t *p = &__esp_cam_sensor_detect_fn_array_start;
+         p < &__esp_cam_sensor_detect_fn_array_end; ++p) {
+        sccb_i2c_config_t i2c_config = {
+            .scl_speed_hz = CAM_SCCB_FREQ_HZ,
+            .device_address = p->sccb_addr,
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        };
+        ESP_ERROR_CHECK(sccb_new_i2c_io(i2c_bus, &i2c_config, &cam_config.sccb_handle));
+
+        cam_config.sensor_port = p->port;
+        cam = (*(p->detect))(&cam_config);
+        if (cam) {
+            if (p->port != ESP_CAM_SENSOR_MIPI_CSI) {
+                ESP_LOGE(TAG, "Detected sensor is not MIPI-CSI");
+                return ESP_ERR_NOT_SUPPORTED;
+            }
+            break;
+        }
+        esp_sccb_del_i2c_io(cam_config.sccb_handle);
+    }
+
+    if (!cam) {
+        ESP_LOGW(TAG, "No camera sensor detected — camera disabled");
+        return ESP_OK;  // non-fatal
+    }
+
+    // ---- Select format ----
+    esp_cam_sensor_format_array_t fmt_array = {0};
+    esp_cam_sensor_query_format(cam, &fmt_array);
+
+    const esp_cam_sensor_format_t *selected_fmt = NULL;
+    for (int i = 0; i < fmt_array.count; i++) {
+        ESP_LOGI(TAG, "  sensor format[%d]: %s", i, fmt_array.format_array[i].name);
+        // Prefer RAW8 800x640 (closest to CAM_WIDTH x CAM_HEIGHT)
+        if (!selected_fmt && strstr(fmt_array.format_array[i].name, "RAW8_800x640")) {
+            selected_fmt = &fmt_array.format_array[i];
+        }
+    }
+    // Fallback: any RAW8 format
+    if (!selected_fmt) {
+        for (int i = 0; i < fmt_array.count; i++) {
+            if (strstr(fmt_array.format_array[i].name, "RAW8")) {
+                selected_fmt = &fmt_array.format_array[i];
+                break;
+            }
+        }
+    }
+    if (!selected_fmt && fmt_array.count > 0) {
+        selected_fmt = &fmt_array.format_array[0];
+    }
+    if (!selected_fmt) {
+        ESP_LOGE(TAG, "No compatible sensor format");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    ESP_LOGI(TAG, "Using format: %s", selected_fmt->name);
+    ESP_ERROR_CHECK(esp_cam_sensor_set_format(cam, selected_fmt));
+
+    // NOTE: stream enable is deferred until after CSI controller starts
+
+    // ---- CSI controller ----
+    esp_cam_ctlr_csi_config_t csi_cfg = {
+        .ctlr_id = 0,
+        .h_res = CAM_WIDTH,
+        .v_res = CAM_HEIGHT,
+        .data_lane_num = CSI_DATA_LANE_NUM,
+        .lane_bit_rate_mbps = CSI_LANE_BITRATE_MBPS,
+        .input_data_color_type = CAM_CTLR_COLOR_RAW8,
+        .output_data_color_type = CAM_CTLR_COLOR_RGB565,
+        .byte_swap_en = false,
+        .queue_items = 1,
+    };
+    ESP_ERROR_CHECK(esp_cam_new_csi_ctlr(&csi_cfg, &s_cam_handle));
+
+    // Allocate frame buffer via controller (handles alignment)
+    s_frame_buf[0] = esp_cam_ctlr_alloc_buffer(s_cam_handle, FRAME_BUF_SIZE,
+                                                MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
+    if (!s_frame_buf[0]) {
+        ESP_LOGE(TAG, "Frame buffer alloc failed");
+        return ESP_ERR_NO_MEM;
+    }
+
+    static esp_cam_ctlr_trans_t s_default_trans;
+    s_default_trans.buffer = s_frame_buf[0];
+    s_default_trans.buflen = FRAME_BUF_SIZE;
+
+    esp_cam_ctlr_evt_cbs_t cbs = {
+        .on_get_new_trans = on_get_new_trans,
+        .on_trans_finished = on_trans_finished,
+    };
+    ESP_ERROR_CHECK(esp_cam_ctlr_register_event_callbacks(s_cam_handle, &cbs, &s_default_trans));
+    ESP_ERROR_CHECK(esp_cam_ctlr_enable(s_cam_handle));
+
+    // ---- ISP (RAW8 → RGB565) ----
+    esp_isp_processor_cfg_t isp_cfg = {
+        .clk_hz = 80 * 1000 * 1000,
+        .input_data_source = ISP_INPUT_DATA_SOURCE_CSI,
+        .input_data_color_type = ISP_COLOR_RAW8,
+        .output_data_color_type = ISP_COLOR_RGB565,
+        .has_line_start_packet = false,
+        .has_line_end_packet = false,
+        .h_res = CAM_WIDTH,
+        .v_res = CAM_HEIGHT,
+    };
+    ESP_ERROR_CHECK(esp_isp_new_processor(&isp_cfg, &s_isp_handle));
+    ESP_ERROR_CHECK(esp_isp_enable(s_isp_handle));
+
+    // ---- JPEG encoder ----
+    jpeg_encode_engine_cfg_t jpeg_eng_cfg = {
+        .timeout_ms = 1000,
+    };
+    ESP_ERROR_CHECK(jpeg_new_encoder_engine(&jpeg_eng_cfg, &s_jpeg_handle));
+
+    // Allocate JPEG output buffer
+    jpeg_encode_memory_alloc_cfg_t jpeg_mem_cfg = {
+        .buffer_direction = JPEG_ENC_ALLOC_OUTPUT_BUFFER,
+    };
+    size_t jpeg_alloc_size = 0;
+    s_jpeg_buf = jpeg_alloc_encoder_mem(JPEG_BUF_SIZE, &jpeg_mem_cfg, &jpeg_alloc_size);
+    if (!s_jpeg_buf) {
+        ESP_LOGE(TAG, "JPEG buffer alloc failed");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // ---- Start CSI then enable sensor streaming ----
+    ESP_ERROR_CHECK(esp_cam_ctlr_start(s_cam_handle));
+
+    int stream_enable = 1;
+    ESP_ERROR_CHECK(esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_STREAM, &stream_enable));
+
+    s_camera_ready = true;
+    ESP_LOGI(TAG, "MIPI-CSI camera initialized (%dx%d)", CAM_WIDTH, CAM_HEIGHT);
     return ESP_OK;
 }
 
-static void capture_and_send(void)
+static void encode_and_send_buf(uint8_t *buf)
 {
-    ESP_LOGI(TAG, "P4 capture not yet implemented");
+    // Sync cache (PSRAM frame data → CPU)
+    esp_cache_msync(buf, FRAME_BUF_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+
+    // JPEG encode
+    jpeg_encode_cfg_t enc_cfg = {
+        .width = CAM_WIDTH,
+        .height = CAM_HEIGHT,
+        .src_type = JPEG_ENCODE_IN_FORMAT_RGB565,
+        .sub_sample = JPEG_DOWN_SAMPLING_YUV422,
+        .image_quality = 80,
+    };
+    uint32_t jpeg_size = 0;
+    esp_err_t ret = jpeg_encoder_process(s_jpeg_handle, &enc_cfg,
+                                         buf, FRAME_BUF_SIZE,
+                                         s_jpeg_buf, JPEG_BUF_SIZE,
+                                         &jpeg_size);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "JPEG encode failed: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    ESP_LOGI(TAG, "JPEG encoded: %lu bytes", (unsigned long)jpeg_size);
+    if (ws_client_is_connected()) {
+        ws_client_send_binary(FRAME_TYPE_IMAGE, s_jpeg_buf, jpeg_size);
+    }
 }
 
 // ============================================================
@@ -106,8 +345,39 @@ static void capture_and_send(void) {}
 #endif
 
 // ============================================================
-// Common task code (shared by all targets)
+// Common task code
 // ============================================================
+
+#if CONFIG_IDF_TARGET_ESP32P4
+
+// P4: continuously receive frames, JPEG encode on capture request
+static void camera_task(void *arg)
+{
+    if (!s_camera_ready) {
+        ESP_LOGW(TAG, "Camera not ready, task idle");
+        while (true) { vTaskDelay(pdMS_TO_TICKS(1000)); }
+    }
+
+    esp_cam_ctlr_trans_t trans = {
+        .buffer = s_frame_buf[0],
+        .buflen = FRAME_BUF_SIZE,
+    };
+
+    // Continuous receive loop (same pattern as IDF example)
+    while (true) {
+        ESP_ERROR_CHECK(esp_cam_ctlr_receive(s_cam_handle, &trans, ESP_CAM_CTLR_MAX_DELAY));
+
+        if (s_capture_requested) {
+            s_capture_requested = false;
+            encode_and_send_buf(trans.buffer);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+#else
+
+// ESP32-CAM: on-demand capture
 static void camera_task(void *arg)
 {
     while (true) {
@@ -121,6 +391,8 @@ static void camera_task(void *arg)
     vTaskDelete(NULL);
 }
 
+#endif
+
 esp_err_t camera_task_start(void)
 {
     esp_err_t ret = init_camera();
@@ -129,7 +401,7 @@ esp_err_t camera_task_start(void)
     }
 
     BaseType_t created = xTaskCreatePinnedToCore(
-        camera_task, "camera", 4096, NULL, 4, &s_task_handle, 0);
+        camera_task, "camera", 8192, NULL, 4, &s_task_handle, 0);
 
     return (created == pdPASS) ? ESP_OK : ESP_FAIL;
 }

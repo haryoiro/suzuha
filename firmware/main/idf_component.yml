@@ -9,8 +9,8 @@ dependencies:
     version: "*"
     rules:
       - if: "target in [esp32, esp32s2, esp32s3]"
-  waveshare/esp32_p4_nano:
-    version: "*"
+  espressif/esp_cam_sensor:
+    version: "^1.1.0"
     rules:
       - if: "target in [esp32p4]"
   idf:

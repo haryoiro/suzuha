@@ -42,6 +42,9 @@ static void handle_command(const char *json, size_t len)
     } else if (strcmp(cmd->valuestring, "face") == 0) {
         int expr = cJSON_GetObjectItem(root, "expression")->valueint;
         display_set_expression((face_expression_t)expr);
+    } else if (strcmp(cmd->valuestring, "volume") == 0) {
+        int level = cJSON_GetObjectItem(root, "level")->valueint;
+        audio_set_volume(level);
     } else {
         ESP_LOGW(TAG, "Unknown command: %s", cmd->valuestring);
     }
@@ -62,22 +65,33 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    // WiFi
-    ESP_ERROR_CHECK(wifi_init_sta(WIFI_SSID, WIFI_PASS));
-    ESP_LOGI(TAG, "WiFi connected");
-
-    // WebSocket
-    ESP_ERROR_CHECK(ws_client_init(SERVER_URI, handle_command));
-    ESP_LOGI(TAG, "WebSocket connected");
-
-    // Start tasks
+    // Display & servo first (no network dependency)
     ESP_ERROR_CHECK(display_task_start());
+    ESP_ERROR_CHECK(servo_task_start());
+
+    // WiFi (non-fatal — device works offline)
+    ret = wifi_init_sta(WIFI_SSID, WIFI_PASS);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi failed: %s — running offline", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "WiFi connected");
+
+        // WebSocket
+        ret = ws_client_init(SERVER_URI, handle_command);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "WebSocket failed: %s", esp_err_to_name(ret));
+        } else {
+            ESP_LOGI(TAG, "WebSocket connected");
+        }
+    }
+
+    // Audio & camera
     ESP_ERROR_CHECK(audio_task_start());
     ESP_ERROR_CHECK(speaker_task_start());
     ESP_ERROR_CHECK(camera_task_start());
 
-    // Servo
-    ESP_ERROR_CHECK(servo_task_start());
+    // Auto-start mic streaming (server handles STT)
+    audio_task_set_streaming(true);
 
     ESP_LOGI(TAG, "suzuha physical agent ready");
 }

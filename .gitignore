@@ -39,6 +39,7 @@ config.suzuha1.yaml
 # Firmware build artifacts
 firmware/build-*/
 firmware/build/
+firmware/sdkconfig.secrets
 
 # OS
 .DS_Store
