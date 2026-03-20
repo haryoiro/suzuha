@@ -49,7 +49,7 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 		return nil
 	}
 
-	a.logger.Info("応答を送信",
+	a.logger.Info("話した",
 		"channel", p.Channel,
 		"length", len(text),
 		"is_voice", p.IsVoice,
@@ -57,24 +57,24 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 
 	if a.deviceSpeaker != nil && p.LastEvent.Source == "device" {
 		// Physical device: send TTS audio instead of text.
-		a.logger.Info("device: TTSで応答", "length", len(text))
+		a.logger.Info("デバイスに声で返す", "length", len(text))
 		if err := a.deviceSpeaker.SpeakText(ctx, text); err != nil {
-			a.logger.Warn("device: TTS送信失敗", "error", err)
+			a.logger.Warn("デバイスへの声が届かなかった", "error", err)
 		}
 	} else if a.voiceSpeaker != nil && p.LastEvent.Message.GuildID != "" && a.voiceSpeaker.IsConnected(p.LastEvent.Message.GuildID) {
 		// Discord voice channel: speak via voice.
 		guildID := p.LastEvent.Message.GuildID
-		a.logger.Info("voice: 音声で応答", "guild", guildID, "length", len(text))
+		a.logger.Info("VCで声で返す", "guild", guildID, "length", len(text))
 		if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
-			a.logger.Warn("voice: 音声送信失敗、テキストにフォールバック", "error", err)
+			a.logger.Warn("VCの声が出なかったのでテキストで返す", "error", err)
 			if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-				return fmt.Errorf("agent: 送信に失敗: %w", err)
+				return fmt.Errorf("返事の送信に失敗: %w", err)
 			}
 		}
 	} else {
 		// Send text response.
 		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-			return fmt.Errorf("agent: 送信に失敗: %w", err)
+			return fmt.Errorf("返事の送信に失敗: %w", err)
 		}
 	}
 
@@ -107,24 +107,24 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, p *Perception, t
 	text := strings.TrimSpace(llm.StripDirectiveTags(resp.Text))
 	switch {
 	case text == "":
-		a.logger.Debug("空の応答をスキップ")
+		a.logger.Debug("何も思いつかなかった")
 		return "", nil
 	case containsSkipTool(resp.ToolCalls):
-		a.logger.Info("応答をスキップ (skip_responseツール)",
+		a.logger.Info("黙った (skip_response)",
 			"had_text", text != "")
 		return "", nil
 	case intermediateText != "" && isSimilarText(intermediateText, text):
-		a.logger.Info("中間応答と類似のため最終応答をスキップ",
+		a.logger.Info("同じこと言いそうなので黙った",
 			"intermediate_length", len(intermediateText),
 			"final_length", len(text))
 		return "", nil
 	case llm.IsSilentResponse(text):
-		a.logger.Info("応答をスキップ (サイレント)",
+		a.logger.Info("黙った (サイレント)",
 			"raw_text", truncate(resp.Text, 100))
 		return "", nil
 	case a.channelSettings != nil && p.Channel != "" && !p.IsDM &&
 		a.channelSettings.GetMode(p.Channel) != channelpkg.ModeActive:
-		a.logger.Info("非アクティブチャンネルへの送信を抑制",
+		a.logger.Info("静かなチャンネルなので自重した",
 			"channel", p.Channel, "mode", string(a.channelSettings.GetMode(p.Channel)))
 		return "", nil
 	default:
@@ -199,7 +199,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 			return nil, intermediateText, err
 		}
 
-		a.logger.Info("LLM応答",
+		a.logger.Info("考えた",
 			"iteration", iter,
 			"finish_reason", resp.FinishReason,
 			"text_length", len(resp.Text),
@@ -211,7 +211,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 		// Calibrate token estimator using actual prompt tokens from the provider.
 		if iter == 0 && resp.Usage.PromptTokens > 0 {
 			agentCtx.CalibrateTokens(resp.Usage.PromptTokens)
-			a.logger.Debug("トークンキャリブレーション更新",
+			a.logger.Debug("トークン計算を補正",
 				"actual", resp.Usage.PromptTokens,
 				"estimated", agentCtx.EstimatedTokens(),
 				"ratio", fmt.Sprintf("%.2f", agentCtx.TokenCalibration()))
@@ -231,17 +231,17 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 
 		// Send intermediate text to chat if the LLM returned text alongside tool calls.
 		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
-			a.logger.Info("ツール実行前に中間応答を送信",
+			a.logger.Info("途中で話した",
 				"channel", channel, "length", len(stripped))
 			if err := a.chat.Send(ctx, channel, stripped); err != nil {
-				a.logger.Warn("中間応答の送信に失敗", "error", err)
+				a.logger.Warn("途中の発言に失敗", "error", err)
 			}
 			intermediateText = stripped
 		}
 
 		allStopAfter := true
 		for _, tc := range resp.ToolCalls {
-			a.logger.Info("ツール呼び出し",
+			a.logger.Info("ツールを使う",
 				"iteration", iter,
 				"tool", tc.Function.Name,
 				"call_id", tc.ID,
@@ -249,7 +249,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 
 			t, ok := toolMap[tc.Function.Name]
 			if !ok {
-				a.logger.Warn("不明なツール", "tool", tc.Function.Name)
+				a.logger.Warn("知らないツールを呼ばれた", "tool", tc.Function.Name)
 				agentCtx.Add(llm.Message{
 					Role:       "tool",
 					Content:    fmt.Sprintf("error: 不明なツール %q", tc.Function.Name),
@@ -269,7 +269,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 			elapsed := time.Since(start)
 
 			if err != nil {
-				a.logger.Error("ツール実行エラー",
+				a.logger.Error("ツールが失敗した",
 					"tool", tc.Function.Name, "error", err, "elapsed_ms", elapsed.Milliseconds())
 				if a.metrics != nil {
 					a.metrics.ToolCallsTotal.WithLabelValues(tc.Function.Name, "error").Inc()
@@ -301,7 +301,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 				content += c.Text
 			}
 
-			a.logger.Info("ツール結果",
+			a.logger.Info("ツールの結果",
 				"tool", tc.Function.Name,
 				"elapsed_ms", elapsed.Milliseconds(),
 				"is_error", result.IsError,
@@ -327,7 +327,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 		}
 
 		if allStopAfter {
-			a.logger.Info("全ツールがStopAfterを返したためツールループを終了", "iteration", iter)
+			a.logger.Info("ツールが完了した", "iteration", iter)
 			return resp, intermediateText, nil
 		}
 	}

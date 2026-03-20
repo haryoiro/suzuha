@@ -176,7 +176,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 	if !dc.ForceRespond && a.channelSettings != nil && p.Channel != "" && !p.IsDM {
 		mode := a.channelSettings.GetMode(p.Channel)
 		if mode == channelpkg.ModeListen {
-			a.logger.Info("リッスンモード: 応答せずに取り込み", "channel", p.Channel)
+			a.logger.Info("聞いてるだけ", "channel", p.Channel)
 			return &Thought{ListenMode: true}
 		}
 		if a.channelSettings.Get(p.Channel).Home {
@@ -217,7 +217,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 	// When ForceRespond is set, ensure ListenMode is never true.
 	// (Already handled above by skipping listen mode check, but this is a safety net.)
 
-	a.logger.Info("LLMリクエスト", "message_count", len(agentCtx.Messages()),
+	a.logger.Info("考え中", "message_count", len(agentCtx.Messages()),
 		"ephemeral_count", len(ephemeral), "directive", directive)
 
 	// Cache ephemeral messages for admin visibility.
@@ -239,7 +239,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs []string) []llm.Message {
 	memories, err := a.memory.Search(ctx, query, 5)
 	if err != nil {
-		a.logger.Debug("メモリ検索失敗", "error", err)
+		a.logger.Debug("思い出せなかった", "error", err)
 	}
 
 	// If media (images/audio) are present, also search by media embedding.
@@ -257,7 +257,7 @@ func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs 
 			}}
 			mediaResults, err := a.memory.SearchByParts(ctx, parts, 5)
 			if err != nil {
-				a.logger.Debug("メディアメモリ検索失敗", "error", err)
+				a.logger.Debug("画像の記憶を探せなかった", "error", err)
 				continue
 			}
 			// Deduplicate with text results.
@@ -320,7 +320,7 @@ func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs 
 				}
 				data, err := a.mediaStore.Get(ctx, att.Key)
 				if err != nil {
-					a.logger.Debug("メモリ添付画像の読み込み失敗", "key", att.Key, "error", err)
+					a.logger.Debug("記憶の画像を読めなかった", "key", att.Key, "error", err)
 					continue
 				}
 				dataURI := fmt.Sprintf("data:%s;base64,%s",
@@ -438,7 +438,7 @@ func (a *Agent) buildUserProfilesWith(ctx context.Context, agentCtx *Context) []
 func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID string) string {
 	u, err := a.users.Resolve(ctx, platform, platformUserID, "")
 	if err != nil {
-		a.logger.Debug("ユーザープロファイル取得失敗", "error", err)
+		a.logger.Debug("相手のことを思い出せなかった", "error", err)
 		return ""
 	}
 
@@ -448,7 +448,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 	if a.memory != nil {
 		memories, err := a.memory.ListByUser(ctx, u.ID, 5)
 		if err != nil {
-			a.logger.Debug("ユーザーメモリ検索失敗", "error", err)
+			a.logger.Debug("相手との記憶を探せなかった", "error", err)
 		}
 		if len(memories) > 0 {
 			content += "Known facts:\n"
@@ -459,7 +459,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 
 		episodes, err := a.memory.ListEpisodesByParticipant(ctx, platformUserID, 3)
 		if err != nil {
-			a.logger.Debug("エピソードメモリ検索失敗", "error", err)
+			a.logger.Debug("エピソードの記憶を探せなかった", "error", err)
 		}
 		if len(episodes) > 0 {
 			content += "Shared episodes:\n"
@@ -471,7 +471,7 @@ func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID s
 
 	guilds, err := a.users.GetUserGuilds(ctx, u.ID)
 	if err != nil {
-		a.logger.Debug("ユーザーギルド取得失敗", "error", err)
+		a.logger.Debug("サーバー情報の取得に失敗", "error", err)
 	}
 	if len(guilds) > 0 {
 		type guildInfo struct {

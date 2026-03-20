@@ -37,7 +37,7 @@ func (a *Agent) PerceiveWith(ctx context.Context, agentCtx *Context, batch []eve
 		for _, evt := range batch {
 			chID := evt.Message.Channel
 			if chID != "" && !evt.Message.IsDM && a.channelSettings.GetMode(chID) == channelpkg.ModeDisabled {
-				a.logger.Debug("無効なチャンネルをスキップ", "channel", chID)
+				a.logger.Debug("無効なチャンネルなのでスルー", "channel", chID)
 				continue
 			}
 			filtered = append(filtered, evt)
@@ -83,7 +83,7 @@ func (a *Agent) PerceiveWith(ctx context.Context, agentCtx *Context, batch []eve
 func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt event.Event, dc DirectiveConfig) llm.Message {
 	msg := eventToMessage(evt)
 
-	a.logger.Info("イベント受信",
+	a.logger.Info("聞こえた",
 		"source", evt.Source, "type", evt.Type,
 		"user", msg.UserName, "user_id", msg.UserID,
 		"channel", msg.Channel, "content", truncate(msg.Content, 100))
@@ -92,18 +92,18 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {
 		u, err := a.users.Resolve(ctx, msg.Source, msg.UserID, msg.UserName)
 		if err != nil {
-			a.logger.Warn("ユーザー解決失敗", "error", err)
+			a.logger.Warn("誰かわからなかった", "error", err)
 		} else {
 			if u.DisplayName != "" {
 				msg.UserName = u.DisplayName
-				a.logger.Debug("ユーザー解決済み", "display_name", u.DisplayName, "role", u.Role)
+				a.logger.Debug("誰かわかった", "display_name", u.DisplayName, "role", u.Role)
 			}
 			guildID := evt.Message.GuildID
 			guildName := evt.Message.GuildName
 			channelName := evt.Message.ChannelName
 			if guildID != "" {
 				if err := a.users.TrackGuildChannel(ctx, u.ID, guildID, guildName, msg.Channel, channelName); err != nil {
-					a.logger.Warn("ギルドチャンネル追跡失敗", "error", err)
+					a.logger.Warn("チャンネルの追跡に失敗", "error", err)
 				}
 			}
 		}
@@ -192,7 +192,7 @@ func (a *Agent) describeImages(ctx context.Context, urls []string) string {
 	for i, u := range urls {
 		desc, err := a.llm.DescribeImage(ctx, u)
 		if err != nil {
-			a.logger.Warn("ビジョン: 画像説明失敗", "url", u, "error", err)
+			a.logger.Warn("画像が読めなかった", "url", u, "error", err)
 			desc = "画像の読み取りに失敗しました"
 		}
 		parts = append(parts, fmt.Sprintf("[添付画像%d: %s]", i+1, desc))
@@ -213,18 +213,18 @@ func (a *Agent) downloadAndPersistImages(ctx context.Context, urls []string, mes
 	for i, u := range urls {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
-			a.logger.Warn("画像ダウンロード: リクエスト作成失敗", "url", u, "error", err)
+			a.logger.Warn("画像の取得準備に失敗", "url", u, "error", err)
 			continue
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			a.logger.Warn("画像ダウンロード: 取得失敗", "url", u, "error", err)
+			a.logger.Warn("画像をダウンロードできなかった", "url", u, "error", err)
 			continue
 		}
 		data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
 		resp.Body.Close()
 		if err != nil || len(data) == 0 {
-			a.logger.Warn("画像ダウンロード: 読み取り失敗", "url", u, "error", err)
+			a.logger.Warn("画像の読み込みに失敗", "url", u, "error", err)
 			continue
 		}
 		mime := resp.Header.Get("Content-Type")
@@ -237,7 +237,7 @@ func (a *Agent) downloadAndPersistImages(ctx context.Context, urls []string, mes
 		// Convert webp to png for Gemini embedding compatibility.
 		if mime == "image/webp" {
 			if converted, err := convertWebPToPNG(data); err != nil {
-				a.logger.Warn("webp→png変換失敗、元データで保存", "error", err)
+				a.logger.Warn("webp→png変換に失敗、そのまま保存", "error", err)
 			} else {
 				data = converted
 				mime = "image/png"
@@ -251,10 +251,10 @@ func (a *Agent) downloadAndPersistImages(ctx context.Context, urls []string, mes
 			ext := extFromMimeType(mime)
 			key := fmt.Sprintf("messages/%s/%d%s", messageID, i, ext)
 			if err := a.mediaStore.Put(ctx, key, data); err != nil {
-				a.logger.Warn("画像の永続化に失敗", "key", key, "error", err)
+				a.logger.Warn("画像の保存に失敗", "key", key, "error", err)
 			} else {
 				mediaKeys = append(mediaKeys, key)
-				a.logger.Debug("画像を永続化", "key", key, "size", len(data))
+				a.logger.Debug("画像を保存した", "key", key, "size", len(data))
 			}
 		}
 	}
@@ -311,7 +311,7 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 		})
 		result, err := histTool.Execute(ctx, input)
 		if err != nil {
-			a.logger.Warn("チャンネル履歴ツール失敗", "channel", channelID, "error", err)
+			a.logger.Warn("会話の振り返りに失敗", "channel", channelID, "error", err)
 		} else if result != nil && !result.IsError && len(result.Content) > 0 && result.Content[0].Text != "" {
 			content = a.formatChannelHistory(ctx, channelID, result.Content[0].Text, source)
 		}
@@ -321,7 +321,7 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 		since := time.Now().Add(-3 * 24 * time.Hour)
 		memories, err := a.memory.SearchRecent(ctx, messageContent, 5, since)
 		if err != nil {
-			a.logger.Debug("チャンネルメモリフォールバック失敗", "error", err)
+			a.logger.Debug("関連する記憶が見つからなかった", "error", err)
 		}
 		if len(memories) > 0 {
 			var b strings.Builder
@@ -339,7 +339,7 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 			Content:   content,
 			Timestamp: jtime.Now(),
 		})
-		a.logger.Info("チャンネル履歴を注入", "channel", channelID, "length", len(content))
+		a.logger.Info("最近の会話を振り返った", "channel", channelID, "length", len(content))
 	}
 }
 

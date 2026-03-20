@@ -122,7 +122,7 @@ func New(
 				saved = saved[1:]
 			}
 			agentCtx.ReplaceAll(saved)
-			logger.Info("DBからコンテキスト復元", "source_key", string(key), "messages", len(saved))
+			logger.Info("前の記憶を思い出した", "source_key", string(key), "messages", len(saved))
 		}
 	}
 
@@ -327,11 +327,11 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 			}
 
 			if len(batch) > 1 {
-				a.logger.Info("バッチ処理", "batch_size", len(batch), "source_key", string(key))
+				a.logger.Info("まとめて処理する", "batch_size", len(batch), "source_key", string(key))
 			}
 
 			if err := a.handleBatchWith(ctx, key, batch); err != nil {
-				a.logger.Error("イベント処理失敗", "error", err.Error(), "source_key", string(key))
+				a.logger.Error("処理に失敗した", "error", err.Error(), "source_key", string(key))
 			}
 
 			// After processing, catch up on any events that arrived during
@@ -344,7 +344,7 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 						}
 					}
 					if err := a.handleBatchWith(ctx, key, latest); err != nil {
-						a.logger.Error("イベント処理失敗", "error", err.Error(), "source_key", string(key))
+						a.logger.Error("処理に失敗した", "error", err.Error(), "source_key", string(key))
 					}
 				}
 			}
@@ -386,12 +386,12 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	if a.metrics != nil {
 		a.metrics.ContextWindowUsage.Set(ratio)
 	}
-	a.logger.Debug("コンテキストウィンドウ", "usage_ratio", fmt.Sprintf("%.2f", ratio),
+	a.logger.Debug("記憶の状態", "usage_ratio", fmt.Sprintf("%.2f", ratio),
 		"message_count", len(agentCtx.Messages()),
 		"calibration", fmt.Sprintf("%.2f", agentCtx.TokenCalibration()),
 		"source_key", string(key))
 	if a.contextWindowPct > 0 && ratio > a.contextWindowPct {
-		a.logger.Info("コンテキスト圧縮を開始", "ratio", fmt.Sprintf("%.2f", ratio), "source_key", string(key))
+		a.logger.Info("記憶を整理する", "ratio", fmt.Sprintf("%.2f", ratio), "source_key", string(key))
 		a.compactAsyncFor(ctx, agentCtx, key)
 	}
 
@@ -423,7 +423,7 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 
 // routeResponse sends the response text to the appropriate output for the source.
 func (a *Agent) routeResponse(ctx context.Context, key SourceKey, p *Perception, text string) {
-	a.logger.Info("応答を送信",
+	a.logger.Info("話した",
 		"channel", p.Channel,
 		"length", len(text),
 		"is_voice", p.IsVoice,
@@ -433,25 +433,25 @@ func (a *Agent) routeResponse(ctx context.Context, key SourceKey, p *Perception,
 	switch key {
 	case SourceKeyDevice:
 		if a.deviceSpeaker != nil {
-			a.logger.Info("device: TTSで応答", "length", len(text))
+			a.logger.Info("デバイスに声で返す", "length", len(text))
 			if err := a.deviceSpeaker.SpeakText(ctx, text); err != nil {
-				a.logger.Warn("device: TTS送信失敗", "error", err)
+				a.logger.Warn("デバイスへの声が届かなかった", "error", err)
 			}
 		}
 	default:
 		// Discord: check voice first, then text.
 		if a.voiceSpeaker != nil && p.LastEvent.Message.GuildID != "" && a.voiceSpeaker.IsConnected(p.LastEvent.Message.GuildID) {
 			guildID := p.LastEvent.Message.GuildID
-			a.logger.Info("voice: 音声で応答", "guild", guildID, "length", len(text))
+			a.logger.Info("VCで声で返す", "guild", guildID, "length", len(text))
 			if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
-				a.logger.Warn("voice: 音声送信失敗、テキストにフォールバック", "error", err)
+				a.logger.Warn("VCの声が出なかったのでテキストで返す", "error", err)
 				if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-					a.logger.Error("agent: 送信に失敗", "error", err)
+					a.logger.Error("返事の送信に失敗", "error", err)
 				}
 			}
 		} else {
 			if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-				a.logger.Error("agent: 送信に失敗", "error", err)
+				a.logger.Error("返事の送信に失敗", "error", err)
 			}
 		}
 	}
@@ -482,7 +482,7 @@ func (a *Agent) catchUpStaleFor(ctx context.Context, key SourceKey, events <-cha
 			if len(latest) > 0 {
 				p := a.PerceiveWith(ctx, agentCtx, latest, dc)
 				if p != nil {
-					a.logger.Info("スキップ: 古いバッチを取り込み済み（応答なし）",
+					a.logger.Info("溜まってた話を聞いた（返事はしない）",
 						"batch_size", len(latest), "channel", p.Channel, "source_key", string(key))
 					a.ReflectWith(ctx, agentCtx, p, key)
 				}
@@ -523,7 +523,7 @@ func (a *Agent) ReloadPrompt(newPrompt string) {
 	for _, agentCtx := range a.contexts {
 		agentCtx.SetSystemPrompt(newPrompt)
 	}
-	a.logger.Info("システムプロンプト再読み込み", "length", len(newPrompt))
+	a.logger.Info("人格を読み直した", "length", len(newPrompt))
 }
 
 // ForceCompact triggers context compaction externally (e.g. from admin API).

@@ -47,9 +47,6 @@ const LogRow = memo(function LogRow({ entry }: { entry: LogEntry }) {
       >
         {entry.level}
       </Tag>
-      {entry.source && (
-        <Tag style={{ margin: 0, flexShrink: 0 }}>{entry.source}</Tag>
-      )}
       <span>{entry.msg}</span>
       {attrs.map(([k, v]) => (
         <span key={k}>
@@ -63,12 +60,11 @@ const LogRow = memo(function LogRow({ entry }: { entry: LogEntry }) {
 });
 
 export const LogsPage = memo(function LogsPage() {
-  const [level, setLevel] = useState<string | undefined>();
-  const [source, setSource] = useState<string | undefined>();
+  const [level, setLevel] = useState<string | undefined>("INFO");
   const [autoScroll, setAutoScroll] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { logs, connected, clear } = useLogStream({ level, source });
+  const { logs, connected, clear } = useLogStream({ level });
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -107,17 +103,6 @@ export const LogsPage = memo(function LogsPage() {
               { label: "INFO", value: "INFO" },
               { label: "WARN", value: "WARN" },
               { label: "ERROR", value: "ERROR" },
-            ]}
-          />
-          <Select
-            placeholder="Source"
-            allowClear
-            style={{ width: 140 }}
-            value={source}
-            onChange={setSource}
-            options={[
-              { label: "agent", value: "agent" },
-              { label: "consolidator", value: "consolidator" },
             ]}
           />
           <Space size={4}>

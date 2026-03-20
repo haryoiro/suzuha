@@ -158,7 +158,7 @@ func (c *Client) SwapProvider(providerName, model, apiKey, apiBase string, maxCt
 	if maxCtx > 0 {
 		c.maxCtx = maxCtx
 	}
-	c.logger.Info("llm プロバイダを切り替えました", "provider", providerName, "model", model, "api_base", apiBase, "max_ctx", c.maxCtx, "vision", visionCapable)
+	c.logger.Info("LLMを切り替えた", "provider", providerName, "model", model, "api_base", apiBase, "max_ctx", c.maxCtx, "vision", visionCapable)
 	return nil
 }
 
@@ -227,7 +227,7 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		} else {
 			c.visionProv = p
 		}
-		logger.Info("ビジョンモデルを有効化しました", "model", vis.Model)
+		logger.Info("ビジョンモデルを有効にした", "model", vis.Model)
 	}
 
 	return c, nil
@@ -276,7 +276,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		Tools:    convertTools(tools),
 	}
 
-	c.logger.Debug("llm リクエスト",
+	c.logger.Debug("LLMにリクエスト",
 		"model", model,
 		"messages", len(messages),
 		"tools", len(tools))
@@ -296,7 +296,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	}
 
 	if err != nil {
-		c.logger.Error("llm 補完に失敗しました", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
+		c.logger.Error("LLMが答えてくれなかった", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
 		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
 	}
 
@@ -306,7 +306,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	}
 
 	if len(resp.Choices) == 0 {
-		c.logger.Warn("llm 空のレスポンスを受信しました", "model", model, "elapsed_ms", elapsed.Milliseconds())
+		c.logger.Warn("LLMが何も言わなかった", "model", model, "elapsed_ms", elapsed.Milliseconds())
 		return nil, fmt.Errorf("llm: 空のレスポンス")
 	}
 
@@ -322,7 +322,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		r.Usage = *resp.Usage
 	}
 
-	c.logger.Info("llm 補完完了",
+	c.logger.Info("LLMが答えた",
 		"model", model,
 		"elapsed_ms", elapsed.Milliseconds(),
 		"finish_reason", r.FinishReason,

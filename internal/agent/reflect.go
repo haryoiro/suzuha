@@ -38,7 +38,7 @@ func (a *Agent) compactAsync(ctx context.Context) {
 func (a *Agent) compactAsyncFor(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
 	mu := a.compactMu[sourceKey]
 	if !mu.TryLock() {
-		a.logger.Debug("コンパクション既に実行中、スキップ", "source_key", string(sourceKey))
+		a.logger.Debug("記憶の整理はもうやってる", "source_key", string(sourceKey))
 		return
 	}
 
@@ -47,7 +47,7 @@ func (a *Agent) compactAsyncFor(ctx context.Context, agentCtx *Context, sourceKe
 
 	go func() {
 		defer mu.Unlock()
-		a.logger.Info("バックグラウンドコンパクション開始", "snapshot_len", snapshotLen, "source_key", string(sourceKey))
+		a.logger.Info("裏で記憶を整理し始める", "snapshot_len", snapshotLen, "source_key", string(sourceKey))
 		a.doCompactWith(ctx, agentCtx, sourceKey, snapshot, true)
 	}()
 }
@@ -72,14 +72,14 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 			TargetCount: target,
 		})
 		if err != nil {
-			a.logger.Warn("コンソリデータの圧縮失敗、切り詰めにフォールバック", "error", err)
+			a.logger.Warn("記憶の整理がうまくいかず、古い方から忘れた", "error", err)
 			agentCtx.TruncateOldest(n / 2)
 			a.resetAndPersistWith(ctx, agentCtx, sourceKey)
 			return
 		}
 
 		if len(result.KeepIndices) == 0 {
-			a.logger.Warn("コンソリデータが保持インデックスを返さず、切り詰めにフォールバック")
+			a.logger.Warn("整理する記憶の選別ができず、古い方から忘れた")
 			agentCtx.TruncateOldest(n / 2)
 			a.resetAndPersistWith(ctx, agentCtx, sourceKey)
 			return
@@ -97,14 +97,14 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 			agentCtx.ReplaceAll(kept)
 		}
 		a.resetAndPersistWith(ctx, agentCtx, sourceKey)
-		a.logger.Info("コンパクション完了", "kept", len(kept), "original", n)
+		a.logger.Info("記憶を整理した", "kept", len(kept), "original", n)
 		return
 	}
 
 	// No consolidator available — simple truncation fallback.
 	agentCtx.TruncateOldest(n / 2)
 	a.resetAndPersistWith(ctx, agentCtx, sourceKey)
-	a.logger.Info("切り詰め完了", "original", n)
+	a.logger.Info("古い記憶を忘れた", "original", n)
 }
 
 // resetAndPersistWith clears injected state and saves context to DB.
@@ -161,7 +161,7 @@ func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, star
 			msg.Timestamp,
 		)
 		if err != nil {
-			a.logger.Warn("会話ログ: 挿入失敗", "error", err, "role", msg.Role)
+			a.logger.Warn("会話の記録に失敗", "error", err, "role", msg.Role)
 		}
 	}
 }
@@ -187,14 +187,14 @@ func persistContextWith(ctx context.Context, db *sql.DB, agentCtx *Context, logg
 	msgs := agentCtx.Messages()
 	data, err := json.Marshal(msgs)
 	if err != nil {
-		logger.Warn("コンテキスト永続化: マーシャル失敗", "error", err)
+		logger.Warn("記憶の保存に失敗 (変換)", "error", err)
 		return
 	}
 	_, err = db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO context_snapshot (source_key, messages, updated_at) VALUES (?, ?, datetime('now'))`,
 		sourceKey, string(data))
 	if err != nil {
-		logger.Warn("コンテキスト永続化: 書き込み失敗", "error", err)
+		logger.Warn("記憶の保存に失敗 (書き込み)", "error", err)
 	}
 }
 
@@ -212,13 +212,13 @@ func loadContextWith(db *sql.DB, logger *slog.Logger, sourceKey string) []llm.Me
 	err := db.QueryRow(`SELECT messages FROM context_snapshot WHERE source_key = ?`, sourceKey).Scan(&data)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			logger.Warn("コンテキスト読み込み: クエリ失敗", "error", err)
+			logger.Warn("記憶の読み込みに失敗 (DB)", "error", err)
 		}
 		return nil
 	}
 	var msgs []llm.Message
 	if err := json.Unmarshal([]byte(data), &msgs); err != nil {
-		logger.Warn("コンテキスト読み込み: アンマーシャル失敗", "error", err)
+		logger.Warn("記憶の読み込みに失敗 (解析)", "error", err)
 		return nil
 	}
 	return msgs
