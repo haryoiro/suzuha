@@ -74,6 +74,17 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 		w.Write(data)
 	})
 
+	// Device volume proxy.
+	mux.HandleFunc("PUT /api/device/volume", func(w http.ResponseWriter, r *http.Request) {
+		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/volume", r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+
 	// Media serve, upload, and image search (binary, not in OpenAPI spec).
 	mux.HandleFunc("GET /api/media/", adminHandler.serveMedia)
 	mux.HandleFunc("POST /api/memories/{id}/media", adminHandler.uploadMedia)

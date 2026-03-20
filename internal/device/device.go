@@ -19,11 +19,16 @@ const (
 	FrameImage   = 0x02 // JPEG              (ESP32 → Server)
 	FrameCommand = 0x03 // JSON              (Server → ESP32)
 	FrameStatus  = 0x04 // JSON              (ESP32 → Server)
-	FrameTTS     = 0x05 // PCM 24kHz mono    (Server → ESP32)
+	FrameTTS     = 0x05 // PCM 16kHz mono    (Server → ESP32)
 )
 
-// TTS chunk size: 4KB per frame to avoid overwhelming ESP32 ring buffer.
-const ttsChunkSize = 4096
+// deviceSampleRate is the I2S sample rate on the ESP32-P4 (shared mic/speaker bus).
+const deviceSampleRate = 24000
+
+// TTS chunk size: must be < ESP32 WebSocket buffer_size (4096) minus 1 byte frame header.
+// If total frame (1 + chunk) exceeds buffer_size, WebSocket fragments the message
+// and continuation frames (op_code=0x00) are dropped by the ESP32 handler.
+const ttsChunkSize = 4000
 
 // Speaker is the interface that the agent uses to send TTS audio to the device.
 type Speaker interface {
@@ -81,26 +86,37 @@ type Hub struct {
 	device  *DeviceConn
 	bus     *event.Bus
 	tts     voice.TTS
+	stt     voice.STT
 	yolo    *YOLOClient
 	frames  *FrameStore
 	changes *ChangeDetector
 	logger  *slog.Logger
+
+	// Audio accumulator for VAD-like chunking
+	audioBuf []byte
+
+	// Owner info (from DB)
+	ownerID   string
+	ownerName string
 }
 
 // NewHub creates a new device Hub.
 // defaultChannel is the Discord channel ID for vision change notifications.
-func NewHub(bus *event.Bus, tts voice.TTS, yoloURL, defaultChannel string, logger *slog.Logger) *Hub {
+func NewHub(bus *event.Bus, tts voice.TTS, stt voice.STT, yoloURL, defaultChannel, ownerID, ownerName string, logger *slog.Logger) *Hub {
 	var yolo *YOLOClient
 	if yoloURL != "" {
 		yolo = NewYOLOClient(yoloURL)
 	}
 	return &Hub{
-		bus:     bus,
-		tts:     tts,
-		yolo:    yolo,
-		frames:  NewFrameStore(),
-		changes: NewChangeDetector(bus, 30*time.Second, defaultChannel),
-		logger:  logger,
+		bus:       bus,
+		tts:       tts,
+		stt:       stt,
+		yolo:      yolo,
+		frames:    NewFrameStore(),
+		changes:   NewChangeDetector(bus, 30*time.Second, defaultChannel),
+		ownerID:   ownerID,
+		ownerName: ownerName,
+		logger:    logger,
 	}
 }
 
@@ -137,7 +153,7 @@ func (h *Hub) SpeakText(ctx context.Context, text string) error {
 		return nil
 	}
 
-	pcm, err := h.tts.Synthesize(ctx, text)
+	pcm, sampleRate, err := h.tts.Synthesize(ctx, text)
 	if err != nil {
 		return fmt.Errorf("device: TTS合成失敗: %w", err)
 	}
@@ -145,7 +161,15 @@ func (h *Hub) SpeakText(ctx context.Context, text string) error {
 		return nil
 	}
 
-	h.logger.Info("device: TTS送信", "pcm_bytes", len(pcm))
+	// Resample to device sample rate if needed
+	if sampleRate != deviceSampleRate {
+		pcm = voice.ResamplePCM(pcm, sampleRate, deviceSampleRate)
+		h.logger.Debug("device: TTS リサンプル", "from", sampleRate, "to", deviceSampleRate)
+		// Normalize only after resample (resample can reduce amplitude)
+		pcm = voice.NormalizePCM(pcm, 20000)
+	}
+
+	h.logger.Info("device: TTS送信", "pcm_bytes", len(pcm), "sample_rate", sampleRate)
 	return dev.SendTTS(pcm)
 }
 

@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Card, Tag, Typography, Space, Empty, List, Switch } from "antd";
+import { Card, Tag, Typography, Space, Empty, List, Switch, Slider } from "antd";
 import {
   CameraOutlined,
   DisconnectOutlined,
   LinkOutlined,
+  SoundOutlined,
 } from "@ant-design/icons";
 import {
   getDeviceFrameURL,
   connectDetectionStream,
   deviceVisionApi,
+  deviceVolumeApi,
   type DeviceDetectionEvent,
   type DeviceDetection,
 } from "../lib/api";
@@ -41,6 +43,7 @@ export default function DevicePage() {
   const [frameSize, setFrameSize] = useState({ w: 640, h: 480 });
   const [hasFrame, setHasFrame] = useState(false);
   const [visionEnabled, setVisionEnabled] = useState(true);
+  const [volume, setVolume] = useState(50);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -173,6 +176,16 @@ export default function DevicePage() {
           }}
           checkedChildren="Vision ON"
           unCheckedChildren="Vision OFF"
+        />
+        <SoundOutlined style={{ marginLeft: 16 }} />
+        <Slider
+          min={0}
+          max={100}
+          value={volume}
+          onChange={(v) => setVolume(v)}
+          onChangeComplete={(v) => deviceVolumeApi.set(v)}
+          style={{ width: 120, margin: 0 }}
+          tooltip={{ formatter: (v) => `${v}%` }}
         />
       </div>
 

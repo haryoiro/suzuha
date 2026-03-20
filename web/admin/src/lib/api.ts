@@ -592,3 +592,11 @@ export const deviceVisionApi = {
       body: JSON.stringify({ enabled }),
     }),
 };
+
+export const deviceVolumeApi = {
+  set: (level: number) =>
+    fetchJSON<{ ok: boolean; level: number }>("/api/device/volume", {
+      method: "PUT",
+      body: JSON.stringify({ level }),
+    }),
+};

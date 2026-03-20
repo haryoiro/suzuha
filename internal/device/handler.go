@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/haryoiro/suzuha/internal/event"
 )
 
 var upgrader = websocket.Upgrader{
@@ -75,8 +76,7 @@ func (h *Hub) handleFrame(dev *DeviceConn, frameType byte, payload []byte) {
 	case FrameImage:
 		h.handleImage(payload)
 	case FrameAudio:
-		// V1: ESP32-CAM has no mic, skip audio frames.
-		h.logger.Debug("device: オーディオフレーム受信（スキップ）", "bytes", len(payload))
+		h.handleAudio(payload)
 	case FrameStatus:
 		h.handleStatus(payload)
 	default:
@@ -111,6 +111,90 @@ func (h *Hub) handleImage(jpeg []byte) {
 			}
 		}()
 	}
+}
+
+// handleAudio accumulates PCM chunks and runs STT when enough audio is buffered.
+// Simple energy-based VAD: accumulate until silence is detected after speech.
+func (h *Hub) handleAudio(pcm []byte) {
+	if h.stt == nil {
+		return
+	}
+
+	h.audioBuf = append(h.audioBuf, pcm...)
+
+	// Accumulate at least 2s of audio (24kHz, 16-bit mono)
+	const minBytes = deviceSampleRate * 2 * 2  // 2s minimum
+	const maxBytes = deviceSampleRate * 2 * 10 // 10s maximum
+
+	if len(h.audioBuf) < minBytes {
+		return
+	}
+
+	// Simple energy check on the latest chunk
+	energy := int64(0)
+	samples := len(pcm) / 2
+	for i := 0; i < samples; i++ {
+		s := int16(uint16(pcm[i*2]) | uint16(pcm[i*2+1])<<8)
+		if s < 0 {
+			s = -s
+		}
+		energy += int64(s)
+	}
+	avgEnergy := energy / int64(samples+1)
+
+	// If silence detected (energy < threshold) and we have enough audio, transcribe
+	const silenceThreshold = 100
+	if avgEnergy < silenceThreshold || len(h.audioBuf) >= maxBytes {
+		// Skip if only silence (no speech detected)
+		totalEnergy := int64(0)
+		totalSamples := len(h.audioBuf) / 2
+		for i := 0; i < totalSamples; i++ {
+			s := int16(uint16(h.audioBuf[i*2]) | uint16(h.audioBuf[i*2+1])<<8)
+			if s < 0 {
+				s = -s
+			}
+			totalEnergy += int64(s)
+		}
+		if totalEnergy/int64(totalSamples+1) < silenceThreshold {
+			h.audioBuf = nil
+			return
+		}
+
+		buf := h.audioBuf
+		h.audioBuf = nil
+
+		h.logger.Info("device: 音声区間検出、STT開始", "bytes", len(buf))
+		go h.transcribeAndRespond(buf)
+	}
+}
+
+// transcribeAndRespond runs STT, publishes the text as a user message event,
+// then speaks the LLM response via TTS.
+func (h *Hub) transcribeAndRespond(pcm []byte) {
+	ctx := context.Background()
+
+	text, err := h.stt.Transcribe(ctx, pcm, deviceSampleRate)
+	if err != nil {
+		h.logger.Error("device: STT失敗", "error", err)
+		return
+	}
+	if text == "" {
+		return
+	}
+
+	h.logger.Info("device: STT結果", "text", text)
+
+	// Clear any audio buffer accumulated during STT processing
+	// (prevents echo of the response)
+	h.audioBuf = nil
+
+	// Publish as message event — agent pipeline will process and respond
+	h.bus.Publish(event.NewMessageEvent("device", event.MessagePayload{
+		Content:  text,
+		UserID:   h.ownerID,
+		UserName: h.ownerName,
+		IsVoice:  true,
+	}))
 }
 
 // handleStatus logs the device status JSON.
