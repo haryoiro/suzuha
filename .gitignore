@@ -29,6 +29,8 @@ unsloth_compiled_cache/
 .suzuha/
 .suzuha1/
 config.suzuha1.yaml
+werewolf-players/
+docker-compose.werewolf.yaml
 
 # IDE
 .idea/

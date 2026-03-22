@@ -82,6 +82,20 @@ services:
     depends_on:
       - agent
 
+  widget-frontend:
+    image: node:22-slim
+    working_dir: /app/web/widget
+    command: sh -c "corepack enable && pnpm install && pnpm run dev --host 0.0.0.0"
+    ports:
+      - "5174:5174"
+    volumes:
+      - .:/app
+      - widget-node-modules:/app/web/widget/node_modules
+    environment:
+      - API_URL=http://agent:9090
+    depends_on:
+      - agent
+
   yolo:
     build: ./yolo
     restart: unless-stopped
@@ -106,6 +120,7 @@ volumes:
   go-mod-cache:
   go-build-cache:
   node-modules:
+  widget-node-modules:
   npm-cache:
   sbv2-models:
   sbv2-cache:
