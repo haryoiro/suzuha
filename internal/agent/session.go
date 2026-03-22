@@ -1,6 +1,9 @@
 package agent
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // SourceKey identifies an interaction source.
 type SourceKey string
@@ -8,6 +11,7 @@ type SourceKey string
 const (
 	SourceKeyDiscord SourceKey = "discord"
 	SourceKeyDevice  SourceKey = "device"
+	SourceKeyWeb     SourceKey = "web"
 )
 
 // DirectiveConfig holds source-specific pipeline settings.
@@ -38,8 +42,38 @@ func discordDirectiveConfig(drainWindow time.Duration) DirectiveConfig {
 func deviceDirectiveConfig() DirectiveConfig {
 	return DirectiveConfig{
 		ForceRespond:       true,
-		DrainWindow:        0,
+		DrainWindow:        2 * time.Second,
 		DirectiveTemplate:  "[RESPOND] 物理デバイス経由の音声対話です。必ず返答してください。話し言葉で自然に返して。1〜2文で短く。skip_response は使わないで。テキストに絵文字・顔文字は入れない。音声で読まれるので句読点や記号は控えめに。",
+		SkipChannelFilter:  true,
+		SkipCatchUpStale:   true,
+		SkipChannelHistory: true,
+	}
+}
+
+// Session represents a single interaction session.
+// Each source (Discord, Device, CLI) implements this interface.
+type Session interface {
+	// Source returns this session's source identifier.
+	Source() SourceKey
+	// Context returns this session's conversation context (message history).
+	Context() *Context
+	// DirectiveConfig returns source-specific pipeline settings.
+	DirectiveConfig() DirectiveConfig
+	// PersistKey returns the key used for context persistence in the database.
+	PersistKey() string
+	// BeginTurn sets the routing context for the current conversation turn.
+	// Called after Perceive, before Think/Act.
+	BeginTurn(p *Perception)
+	// Respond sends response text through this session's output.
+	Respond(ctx context.Context, text string) error
+}
+
+// webDirectiveConfig returns the DirectiveConfig for web widget sources.
+func webDirectiveConfig() DirectiveConfig {
+	return DirectiveConfig{
+		ForceRespond:       true,
+		DrainWindow:        2 * time.Second,
+		DirectiveTemplate:  "[RESPOND] Webウィジェット経由の音声対話です。必ず返答してください。話し言葉で自然に返して。1〜2文で短く。skip_response は使わないで。テキストに絵文字・顔文字は入れない。音声で読まれるので句読点や記号は控えめに。",
 		SkipChannelFilter:  true,
 		SkipCatchUpStale:   true,
 		SkipChannelHistory: true,
@@ -51,6 +85,8 @@ func sourceKeyForEvent(source string) SourceKey {
 	switch source {
 	case "device":
 		return SourceKeyDevice
+	case "web":
+		return SourceKeyWeb
 	default:
 		return SourceKeyDiscord
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/chat/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/consolidator"
+	"github.com/haryoiro/suzuha/internal/diary"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/explore"
 	"github.com/haryoiro/suzuha/internal/forget"
@@ -167,21 +168,13 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			registry.Register(builtin.NewUpdateUserProfile(userStore, func(userID, newName string) {
 				ag.AgentContext().UpdateUserName(userID, newName)
 			}))
+			registry.Register(builtin.NewMemoCreate(store))
+			registry.Register(builtin.NewMemoSearch(store))
+			registry.Register(builtin.NewMemoUpdate(store))
 
-			// Extract explore config from scheduler jobs.
-			var exploreSearxURL string
-			var exploreMaxDepth int
-			for _, j := range cfg.Consolidator.Scheduler.Jobs {
-				if j.Task == "explore" {
-					if u, ok := j.Config["searxng_url"].(string); ok {
-						exploreSearxURL = u
-					}
-					if d, ok := j.Config["max_depth"].(int); ok {
-						exploreMaxDepth = d
-					}
-					break
-				}
-			}
+			// Explore tool config (searxng is always on the compose network).
+			exploreSearxURL := "http://searxng:8080"
+			exploreMaxDepth := 4
 
 			features := []scheduler.Feature{
 				action.New(store.DB()),
@@ -189,6 +182,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				topics.New(),
 				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
 				forget.New(),
+				diary.New(),
 			}
 
 			// Add location feature if enabled.

@@ -189,7 +189,9 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 					if vp := dc.VoicePipeline(); vp != nil {
 						registry.Register(discord.NewVoiceJoin(vp, s, cfg.Voice.AllowedChannels, logger))
 						registry.Register(discord.NewVoiceLeave(vp, s, logger))
-						ag.SetVoiceSpeaker(vp)
+						if ds, ok := ag.GetSession(agent.SourceKeyDiscord).(*agent.DiscordSession); ok {
+							ds.SetVoice(vp)
+						}
 						logger.Info("voice tools registered")
 					}
 				}
@@ -663,7 +665,9 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		mux.HandleFunc("GET /ws/device", hub.Handler())
 		mux.HandleFunc("GET /internal/device/frame", hub.Frames().FrameHandler())
 		mux.HandleFunc("GET /internal/device/detections", hub.Frames().DetectionStreamHandler())
-		ag.SetDeviceSpeaker(hub)
+		ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
+			ag.AgentContextFor(agent.SourceKeyDevice), hub, logger,
+		))
 		registry.Register(device.NewServoTool(hub))
 		registry.Register(device.NewCaptureTool(hub))
 		registry.Register(device.NewFaceTool(hub))

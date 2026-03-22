@@ -29,12 +29,12 @@ const DefaultDrainWindow = 3 * time.Second
 type Agent struct {
 	contexts  map[SourceKey]*Context
 	compactMu map[SourceKey]*sync.Mutex
+	sessions  map[SourceKey]Session
 	llm       *llm.Client
 	tools     *tool.Registry
 	memory    memory.Store
 	users     user.Store
 	bus       *event.Bus
-	chat      chat.Interface
 	consol    consolidator.Client
 	db              *sql.DB // shared DB for channel activity tracking
 	channelSettings *channelpkg.Store
@@ -43,16 +43,24 @@ type Agent struct {
 	logger          *slog.Logger
 	metrics         *observe.Metrics
 	hooks           []PipelineHook
-	voiceSpeaker    chat.VoiceSpeaker
-	deviceSpeaker   DeviceSpeaker
 
 	systemPrompt     string
 	botID            string
 	contextWindowPct float64
 	drainWindow      time.Duration
 
+	// ExpressionBroadcaster is called to broadcast expression changes to device/web clients.
+	ExpressionBroadcaster func(expression int)
+
 	lastEphemeralMu sync.RWMutex
 	lastEphemeral   []llm.Message
+}
+
+// broadcastExpression sends an expression change if a broadcaster is configured.
+func (a *Agent) broadcastExpression(expression int) {
+	if a.ExpressionBroadcaster != nil {
+		a.ExpressionBroadcaster(expression)
+	}
 }
 
 // Config holds agent configuration.
@@ -107,6 +115,7 @@ func New(
 	contexts := map[SourceKey]*Context{
 		SourceKeyDiscord: NewContext(cfg.MaxContextTokens),
 		SourceKeyDevice:  NewContext(cfg.MaxContextTokens),
+		SourceKeyWeb:     NewContext(cfg.MaxContextTokens),
 	}
 
 	// System prompt is stored separately — immune to compaction/truncation.
@@ -130,17 +139,18 @@ func New(
 	compactMu := map[SourceKey]*sync.Mutex{
 		SourceKeyDiscord: {},
 		SourceKeyDevice:  {},
+		SourceKeyWeb:     {},
 	}
 
-	return &Agent{
+	ag := &Agent{
 		contexts:         contexts,
 		compactMu:        compactMu,
+		sessions:         make(map[SourceKey]Session),
 		llm:              llmClient,
 		tools:            tools,
 		memory:           memStore,
 		users:            userStore,
 		bus:              bus,
-		chat:             chatIface,
 		consol:           consolClient,
 		db:               db,
 		channelSettings:  channelSettings,
@@ -151,6 +161,28 @@ func New(
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
 	}
+
+	// Create default sessions. These can be replaced via SetSession().
+	ag.sessions[SourceKeyDiscord] = NewDiscordSession(
+		contexts[SourceKeyDiscord],
+		chatIface,
+		nil, // voiceSpeaker set later
+		channelSettings,
+		dw,
+		logger,
+	)
+	ag.sessions[SourceKeyDevice] = NewDeviceSession(
+		contexts[SourceKeyDevice],
+		nil, // deviceSpeaker set later
+		logger,
+	)
+	ag.sessions[SourceKeyWeb] = NewWebSession(
+		contexts[SourceKeyWeb],
+		nil, // webSpeaker set later
+		logger,
+	)
+
+	return ag
 }
 
 // AgentContext returns the agent's discord context for external use (e.g. tool callbacks).
@@ -178,14 +210,19 @@ type DeviceSpeaker interface {
 	SpeakText(ctx context.Context, text string) error
 }
 
-// SetVoiceSpeaker sets the voice speaker for voice channel responses.
-func (a *Agent) SetVoiceSpeaker(vs chat.VoiceSpeaker) {
-	a.voiceSpeaker = vs
+// SetSession registers a Session for the given source key.
+func (a *Agent) SetSession(key SourceKey, sess Session) {
+	a.sessions[key] = sess
+	// Keep contexts map in sync: if the session provides a context,
+	// use it as the canonical context for this source key.
+	if sess.Context() != nil {
+		a.contexts[key] = sess.Context()
+	}
 }
 
-// SetDeviceSpeaker sets the device speaker for physical agent TTS responses.
-func (a *Agent) SetDeviceSpeaker(ds DeviceSpeaker) {
-	a.deviceSpeaker = ds
+// GetSession returns the Session for the given source key, or nil if not set.
+func (a *Agent) GetSession(key SourceKey) Session {
+	return a.sessions[key]
 }
 
 // SetLocationStore sets the location store for GPS context injection.
@@ -217,6 +254,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	channels := map[SourceKey]chan event.Event{
 		SourceKeyDiscord: make(chan event.Event, 16),
 		SourceKeyDevice:  make(chan event.Event, 16),
+		SourceKeyWeb:     make(chan event.Event, 16),
 	}
 
 	// Launch one worker per source key.
@@ -252,7 +290,13 @@ func (a *Agent) Run(ctx context.Context) error {
 
 // runWorker processes events for a single source key.
 func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Event) {
-	dc := a.directiveConfigFor(key)
+	sess := a.sessions[key]
+	var dc DirectiveConfig
+	if sess != nil {
+		dc = sess.DirectiveConfig()
+	} else {
+		dc = a.directiveConfigFor(key)
+	}
 	drainWindow := dc.DrainWindow
 	if key == SourceKeyDiscord {
 		// Discord uses the agent-level drainWindow (which defaults or is configured).
@@ -371,8 +415,12 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 // Perceive -> (compact check) -> Think -> Act -> Reflect.
 // PipelineHooks are called after each stage for observability.
 func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []event.Event) error {
-	agentCtx := a.contexts[key]
-	dc := a.directiveConfigFor(key)
+	sess := a.sessions[key]
+	if sess == nil {
+		return fmt.Errorf("no session for source %s", key)
+	}
+	agentCtx := sess.Context()
+	dc := sess.DirectiveConfig()
 
 	// 1. Perceive: ingest events, resolve users, describe images.
 	p := a.PerceiveWith(ctx, agentCtx, batch, dc)
@@ -380,6 +428,9 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 		return nil
 	}
 	a.runHooks(func(h PipelineHook) error { return h.AfterPerceive(ctx, batch, p) })
+
+	// Set turn context for response routing.
+	sess.BeginTurn(p)
 
 	// 2. Compact context if needed.
 	ratio := agentCtx.UsageRatio()
@@ -395,6 +446,11 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 		a.compactAsyncFor(ctx, agentCtx, key)
 	}
 
+	// Show "thinking" expression on device/web clients while processing.
+	if key == SourceKeyDevice || key == SourceKeyWeb {
+		a.broadcastExpression(6) // thinking
+	}
+
 	// 3. Think: build ephemeral context and determine directive.
 	t := a.ThinkWith(ctx, agentCtx, p, dc)
 	a.runHooks(func(h PipelineHook) error { return h.AfterThink(ctx, p, t) })
@@ -404,57 +460,29 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	}
 
 	// 4. Act: LLM completion, tool loop, get response text.
-	text, err := a.ActWith(ctx, agentCtx, p, t)
+	text, err := a.ActWith(ctx, agentCtx, sess, p, t)
 	if err != nil {
 		return err
 	}
 	a.runHooks(func(h PipelineHook) error { return h.AfterAct(ctx, p, t) })
 
-	// 5. Route response to the appropriate output.
+	// 5. Route response through the session.
 	if text != "" {
-		a.routeResponse(ctx, key, p, text)
+		a.logger.Info("話した", "source_key", string(key), "length", len(text), "content", truncate(text, 200))
+		if err := sess.Respond(ctx, text); err != nil {
+			a.logger.Error("返事の送信に失敗", "error", err)
+		}
+	}
+
+	// Revert to neutral expression after responding.
+	if key == SourceKeyDevice || key == SourceKeyWeb {
+		a.broadcastExpression(0) // neutral
 	}
 
 	// 6. Reflect: log turn, persist context.
 	a.ReflectWith(ctx, agentCtx, p, key)
 	a.runHooks(func(h PipelineHook) error { return h.AfterReflect(ctx, p) })
 	return nil
-}
-
-// routeResponse sends the response text to the appropriate output for the source.
-func (a *Agent) routeResponse(ctx context.Context, key SourceKey, p *Perception, text string) {
-	a.logger.Info("話した",
-		"channel", p.Channel,
-		"length", len(text),
-		"is_voice", p.IsVoice,
-		"source_key", string(key),
-		"content", truncate(text, 200))
-
-	switch key {
-	case SourceKeyDevice:
-		if a.deviceSpeaker != nil {
-			a.logger.Info("デバイスに声で返す", "length", len(text))
-			if err := a.deviceSpeaker.SpeakText(ctx, text); err != nil {
-				a.logger.Warn("デバイスへの声が届かなかった", "error", err)
-			}
-		}
-	default:
-		// Discord: check voice first, then text.
-		if a.voiceSpeaker != nil && p.LastEvent.Message.GuildID != "" && a.voiceSpeaker.IsConnected(p.LastEvent.Message.GuildID) {
-			guildID := p.LastEvent.Message.GuildID
-			a.logger.Info("VCで声で返す", "guild", guildID, "length", len(text))
-			if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
-				a.logger.Warn("VCの声が出なかったのでテキストで返す", "error", err)
-				if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-					a.logger.Error("返事の送信に失敗", "error", err)
-				}
-			}
-		} else {
-			if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-				a.logger.Error("返事の送信に失敗", "error", err)
-			}
-		}
-	}
 }
 
 // catchUpStale is the backward-compatible wrapper.
@@ -468,8 +496,15 @@ func (a *Agent) catchUpStale(ctx context.Context, events <-chan event.Event) []e
 // LLM responses to stale messages — critical for voice tempo.
 // Returns nil if no events were queued.
 func (a *Agent) catchUpStaleFor(ctx context.Context, key SourceKey, events <-chan event.Event, drainWindow time.Duration) []event.Event {
-	agentCtx := a.contexts[key]
-	dc := a.directiveConfigFor(key)
+	var agentCtx *Context
+	var dc DirectiveConfig
+	if sess := a.sessions[key]; sess != nil {
+		agentCtx = sess.Context()
+		dc = sess.DirectiveConfig()
+	} else {
+		agentCtx = a.contexts[key]
+		dc = a.directiveConfigFor(key)
+	}
 
 	var latest []event.Event
 	for {

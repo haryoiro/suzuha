@@ -19,13 +19,19 @@ var _ chat.Typer    = (*Chat)(nil)
 
 // Chat implements chat.Interface for Discord using discordgo.
 type Chat struct {
-	token         string
-	botID         string
-	bus           *event.Bus
-	log           *slog.Logger
-	session       *discordgo.Session
-	onReady       func(*discordgo.Session)
-	voicePipeline *voice.Pipeline
+	token            string
+	botID            string
+	bus              *event.Bus
+	log              *slog.Logger
+	session          *discordgo.Session
+	onReady          func(*discordgo.Session)
+	onChannelDelete  func(channelID string)
+	voicePipeline    *voice.Pipeline
+}
+
+// OnChannelDelete registers a callback fired when a Discord channel is deleted.
+func (c *Chat) OnChannelDelete(fn func(channelID string)) {
+	c.onChannelDelete = fn
 }
 
 // OnReady registers a callback that fires after Discord connection is established.
@@ -108,6 +114,13 @@ func (c *Chat) Run(ctx context.Context) error {
 
 		evt := c.messageToEvent(m.ChannelID, m.ID, m.Author.ID, m.Author.Username, content, isMention, isDM, m.Author.Bot, m.GuildID, guildName, channelName, imageURLs)
 		c.bus.Publish(evt)
+	})
+
+	session.AddHandler(func(s *discordgo.Session, e *discordgo.ChannelDelete) {
+		c.log.Info("discord チャンネルが削除された", "channel_id", e.ID, "name", e.Name)
+		if c.onChannelDelete != nil {
+			c.onChannelDelete(e.ID)
+		}
 	})
 
 	if err := session.Open(); err != nil {
