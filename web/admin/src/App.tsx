@@ -16,6 +16,7 @@ import {
   ScheduleOutlined,
   CameraOutlined,
   SoundOutlined,
+  BookOutlined,
 } from "@ant-design/icons";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -34,6 +35,7 @@ const ToolsPage = lazy(() => import("./routes/tools"));
 const SchedulerPage = lazy(() => import("./routes/scheduler"));
 const DevicePage = lazy(() => import("./routes/device"));
 const VoicePage = lazy(() => import("./routes/voice"));
+const DiaryPage = lazy(() => import("./routes/diary"));
 
 const { Sider, Header, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -53,6 +55,7 @@ type Page =
   | { key: "context" }
   | { key: "device" }
   | { key: "voice" }
+  | { key: "diary" }
   | { key: "logs" };
 
 /** Parse location hash into a Page. */
@@ -62,7 +65,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "scheduler", "prompts", "metrics", "context", "device", "voice", "logs"];
+  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "scheduler", "prompts", "metrics", "context", "device", "voice", "diary", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -99,6 +102,7 @@ export function App() {
     { key: "device", icon: <CameraOutlined />, label: "Device" },
     { key: "voice", icon: <SoundOutlined />, label: "Voice" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
+    { key: "diary", icon: <BookOutlined />, label: "Diary" },
     { key: "logs", icon: <FileTextOutlined />, label: "Logs" },
   ];
 
@@ -136,6 +140,8 @@ export function App() {
         return <VoicePage />;
       case "context":
         return <ContextPage />;
+      case "diary":
+        return <DiaryPage />;
       case "logs":
         return <LogsPage />;
     }

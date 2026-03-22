@@ -248,6 +248,7 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
                   { label: "tool", value: "tool" },
                   { label: "episode", value: "episode" },
                   { label: "self", value: "self" },
+                  { label: "memo", value: "memo" },
                 ]}
               />
             </Space>
@@ -300,6 +301,7 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
                 { label: "tool", value: "tool" },
                 { label: "episode", value: "episode" },
                 { label: "self", value: "self" },
+                { label: "memo", value: "memo" },
               ]}
             />
           </Form.Item>
