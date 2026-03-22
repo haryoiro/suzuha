@@ -142,7 +142,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				msgs = append(msgs, llm.Message{Role: "system", Content: sp})
 			}
 			msgs = append(msgs, ephemeral...)
-			msgs = append(msgs, agentCtx.MessagesForChannel(channel)...)
+			msgs = append(msgs, agentCtx.Messages()...)
 			if directive != "" {
 				msgs = append(msgs, llm.Message{
 					Role:      "system",
@@ -151,7 +151,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				})
 			}
 		} else {
-			msgs = agentCtx.MessagesWithSystemForChannel(channel)
+			msgs = agentCtx.MessagesWithSystem()
 		}
 		// Trim messages to fit within max context, reserving space for tools.
 		msgs = trimMessagesToFit(msgs, allTools, a.llm.MaxContextTokens())
