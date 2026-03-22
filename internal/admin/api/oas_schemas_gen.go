@@ -298,6 +298,54 @@ func (s *ChannelsListOK) SetData(val []Channel) {
 	s.Data = val
 }
 
+type ContextGetSource string
+
+const (
+	ContextGetSourceDiscord ContextGetSource = "discord"
+	ContextGetSourceDevice  ContextGetSource = "device"
+	ContextGetSourceWeb     ContextGetSource = "web"
+)
+
+// AllValues returns all ContextGetSource values.
+func (ContextGetSource) AllValues() []ContextGetSource {
+	return []ContextGetSource{
+		ContextGetSourceDiscord,
+		ContextGetSourceDevice,
+		ContextGetSourceWeb,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ContextGetSource) MarshalText() ([]byte, error) {
+	switch s {
+	case ContextGetSourceDiscord:
+		return []byte(s), nil
+	case ContextGetSourceDevice:
+		return []byte(s), nil
+	case ContextGetSourceWeb:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ContextGetSource) UnmarshalText(data []byte) error {
+	switch ContextGetSource(data) {
+	case ContextGetSourceDiscord:
+		*s = ContextGetSourceDiscord
+		return nil
+	case ContextGetSourceDevice:
+		*s = ContextGetSourceDevice
+		return nil
+	case ContextGetSourceWeb:
+		*s = ContextGetSourceWeb
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 type ConversationLogsExportOK struct {
 	Data io.Reader
 }
@@ -1481,6 +1529,52 @@ func (o OptBool) Get() (v bool, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptBool) Or(d bool) bool {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptContextGetSource returns new OptContextGetSource with value set to v.
+func NewOptContextGetSource(v ContextGetSource) OptContextGetSource {
+	return OptContextGetSource{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptContextGetSource is optional ContextGetSource.
+type OptContextGetSource struct {
+	Value ContextGetSource
+	Set   bool
+}
+
+// IsSet returns true if OptContextGetSource was set.
+func (o OptContextGetSource) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptContextGetSource) Reset() {
+	var v ContextGetSource
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptContextGetSource) SetTo(v ContextGetSource) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptContextGetSource) Get() (v ContextGetSource, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptContextGetSource) Or(d ContextGetSource) ContextGetSource {
 	if v, ok := o.Get(); ok {
 		return v
 	}

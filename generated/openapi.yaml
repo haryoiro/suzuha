@@ -129,7 +129,17 @@ paths:
   /api/context:
     get:
       operationId: Context_get
-      parameters: []
+      parameters:
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - discord
+              - device
+              - web
+          explode: false
       responses:
         '200':
           description: The request has succeeded.

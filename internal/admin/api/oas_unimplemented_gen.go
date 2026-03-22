@@ -59,7 +59,7 @@ func (UnimplementedHandler) ChannelsList(ctx context.Context) (r *ChannelsListOK
 // ContextGet implements Context_get operation.
 //
 // GET /api/context
-func (UnimplementedHandler) ContextGet(ctx context.Context) (r jx.Raw, _ error) {
+func (UnimplementedHandler) ContextGet(ctx context.Context, params ContextGetParams) (r jx.Raw, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

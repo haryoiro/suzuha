@@ -142,6 +142,19 @@ func (s *ChannelsListOK) Validate() error {
 	return nil
 }
 
+func (s ContextGetSource) Validate() error {
+	switch s {
+	case "discord":
+		return nil
+	case "device":
+		return nil
+	case "web":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
 func (s *ConversationLogsListOK) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer

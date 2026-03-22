@@ -37,7 +37,7 @@ type Handler interface {
 	// ContextGet implements Context_get operation.
 	//
 	// GET /api/context
-	ContextGet(ctx context.Context) (jx.Raw, error)
+	ContextGet(ctx context.Context, params ContextGetParams) (jx.Raw, error)
 	// ConversationLogsExport implements ConversationLogs_export operation.
 	//
 	// Export as JSONL.

@@ -1,8 +1,8 @@
 import { memo, useState } from "react";
-import { Tag, Progress, Spin, Empty, Button } from "antd";
+import { Tag, Progress, Spin, Empty, Button, Segmented } from "antd";
 import { ReloadOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import { useAgentContext } from "../hooks/useAgentContext";
-import type { ContextMessage } from "../lib/api";
+import type { ContextMessage, ContextSource } from "../lib/api";
 
 const roleColors: Record<string, string> = {
   system: "purple",
@@ -110,8 +110,15 @@ const EphemeralSection = memo(function EphemeralSection({
   );
 });
 
+const sourceOptions: { label: string; value: ContextSource }[] = [
+  { label: "Discord", value: "discord" },
+  { label: "Device", value: "device" },
+  { label: "Web", value: "web" },
+];
+
 export const ContextPage = memo(function ContextPage() {
-  const { data, isLoading, refetch } = useAgentContext();
+  const [source, setSource] = useState<ContextSource>("discord");
+  const { data, isLoading, refetch } = useAgentContext(source);
 
   if (isLoading) {
     return (
@@ -141,6 +148,12 @@ export const ContextPage = memo(function ContextPage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>Context</h2>
+          <Segmented
+            options={sourceOptions}
+            value={source}
+            onChange={(val) => setSource(val as ContextSource)}
+            size="small"
+          />
           <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
             {data.count} msgs
           </span>

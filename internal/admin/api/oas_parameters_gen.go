@@ -208,6 +208,85 @@ func decodeChannelSettingsUpdateParams(args [1]string, argsEscaped bool, r *http
 	return params, nil
 }
 
+// ContextGetParams is parameters of Context_get operation.
+type ContextGetParams struct {
+	Source OptContextGetSource `json:",omitempty,omitzero"`
+}
+
+func unpackContextGetParams(packed middleware.Parameters) (params ContextGetParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "source",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Source = v.(OptContextGetSource)
+		}
+	}
+	return params
+}
+
+func decodeContextGetParams(args [0]string, argsEscaped bool, r *http.Request) (params ContextGetParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: source.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "source",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotSourceVal ContextGetSource
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotSourceVal = ContextGetSource(c)
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Source.SetTo(paramsDotSourceVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+			if err := func() error {
+				if value, ok := params.Source.Get(); ok {
+					if err := func() error {
+						if err := value.Validate(); err != nil {
+							return err
+						}
+						return nil
+					}(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "source",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ConversationLogsExportParams is parameters of ConversationLogs_export operation.
 type ConversationLogsExportParams struct {
 	ChannelID OptString `json:",omitempty,omitzero"`

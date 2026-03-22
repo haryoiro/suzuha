@@ -76,8 +76,12 @@ func (h *AdminHandler) AgentCompact(ctx context.Context) (jx.Raw, error) {
 	return h.proxyPostRaw(ctx, "/internal/compact", nil)
 }
 
-func (h *AdminHandler) ContextGet(ctx context.Context) (jx.Raw, error) {
-	return h.proxyGet(ctx, "/internal/context")
+func (h *AdminHandler) ContextGet(ctx context.Context, params api.ContextGetParams) (jx.Raw, error) {
+	path := "/internal/context"
+	if src, ok := params.Source.Get(); ok {
+		path += "?source=" + string(src)
+	}
+	return h.proxyGet(ctx, path)
 }
 
 func (h *AdminHandler) IdentityGet(ctx context.Context) (jx.Raw, error) {

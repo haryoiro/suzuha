@@ -906,8 +906,22 @@ func (s *Server) handleContextGetRequest(args [0]string, argsEscaped bool, w htt
 
 			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
 		}
-		err error
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ContextGetOperation,
+			ID:   "Context_get",
+		}
 	)
+	params, err := decodeContextGetParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
 
 	var rawBody []byte
 
@@ -920,13 +934,18 @@ func (s *Server) handleContextGetRequest(args [0]string, argsEscaped bool, w htt
 			OperationID:      "Context_get",
 			Body:             nil,
 			RawBody:          rawBody,
-			Params:           middleware.Parameters{},
-			Raw:              r,
+			Params: middleware.Parameters{
+				{
+					Name: "source",
+					In:   "query",
+				}: params.Source,
+			},
+			Raw: r,
 		}
 
 		type (
 			Request  = struct{}
-			Params   = struct{}
+			Params   = ContextGetParams
 			Response = jx.Raw
 		)
 		response, err = middleware.HookMiddleware[
@@ -936,14 +955,14 @@ func (s *Server) handleContextGetRequest(args [0]string, argsEscaped bool, w htt
 		](
 			m,
 			mreq,
-			nil,
+			unpackContextGetParams,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.ContextGet(ctx)
+				response, err = s.h.ContextGet(ctx, params)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.ContextGet(ctx)
+		response, err = s.h.ContextGet(ctx, params)
 	}
 	if err != nil {
 		defer recordError("Internal", err)

@@ -55,7 +55,7 @@ type Invoker interface {
 	// ContextGet invokes Context_get operation.
 	//
 	// GET /api/context
-	ContextGet(ctx context.Context) (jx.Raw, error)
+	ContextGet(ctx context.Context, params ContextGetParams) (jx.Raw, error)
 	// ConversationLogsExport invokes ConversationLogs_export operation.
 	//
 	// Export as JSONL.
@@ -770,12 +770,12 @@ func (c *Client) sendChannelsList(ctx context.Context) (res *ChannelsListOK, err
 // ContextGet invokes Context_get operation.
 //
 // GET /api/context
-func (c *Client) ContextGet(ctx context.Context) (jx.Raw, error) {
-	res, err := c.sendContextGet(ctx)
+func (c *Client) ContextGet(ctx context.Context, params ContextGetParams) (jx.Raw, error) {
+	res, err := c.sendContextGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendContextGet(ctx context.Context) (res jx.Raw, err error) {
+func (c *Client) sendContextGet(ctx context.Context, params ContextGetParams) (res jx.Raw, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("Context_get"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -815,6 +815,27 @@ func (c *Client) sendContextGet(ctx context.Context) (res jx.Raw, err error) {
 	var pathParts [1]string
 	pathParts[0] = "/api/context"
 	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeQueryParams"
+	q := uri.NewQueryEncoder()
+	{
+		// Encode "source" parameter.
+		cfg := uri.QueryParameterEncodingConfig{
+			Name:    "source",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.EncodeParam(cfg, func(e uri.Encoder) error {
+			if val, ok := params.Source.Get(); ok {
+				return e.EncodeValue(conv.StringToString(string(val)))
+			}
+			return nil
+		}); err != nil {
+			return res, errors.Wrap(err, "encode query")
+		}
+	}
+	u.RawQuery = q.Values().Encode()
 
 	stage = "EncodeRequest"
 	r, err := ht.NewRequest(ctx, "GET", u)

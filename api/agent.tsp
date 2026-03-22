@@ -24,7 +24,7 @@ interface Identity {
 @route("/api/context")
 @tag("Agent")
 interface Context {
-  @get op get(): unknown;
+  @get op get(@query source?: "discord" | "device" | "web"): unknown;
 }
 
 // Forget / Deduplication
