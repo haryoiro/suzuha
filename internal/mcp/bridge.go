@@ -228,7 +228,7 @@ func (f *jsonLineReader) Read(p []byte) (int, error) {
 		line, err := f.r.ReadBytes('\n')
 		if len(line) > 0 {
 			trimmed := bytes.TrimSpace(line)
-			if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+			if len(trimmed) > 0 && trimmed[0] == '{' {
 				f.buf.Write(line)
 			} else if len(trimmed) > 0 {
 				f.logger.Debug("MCP標準出力をフィルタ", "server", f.name, "line", string(trimmed))

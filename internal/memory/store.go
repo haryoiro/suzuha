@@ -18,6 +18,7 @@ const (
 	MemoryTypeTool    MemoryType = "tool"
 	MemoryTypeEpisode MemoryType = "episode"
 	MemoryTypeSelf    MemoryType = "self"
+	MemoryTypeMemo    MemoryType = "memo"
 )
 
 // Attachment is a reference to a media file stored in MediaStore.
