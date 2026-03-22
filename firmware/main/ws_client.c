@@ -92,7 +92,7 @@ esp_err_t ws_client_send_binary(uint8_t frame_type, const uint8_t *data, size_t 
     frame[0] = frame_type;
     memcpy(frame + 1, data, len);
 
-    int sent = esp_websocket_client_send_bin(s_client, (const char *)frame, frame_len, portMAX_DELAY);
+    int sent = esp_websocket_client_send_bin(s_client, (const char *)frame, frame_len, pdMS_TO_TICKS(3000));
     free(frame);
 
     return (sent >= 0) ? ESP_OK : ESP_FAIL;

@@ -115,12 +115,8 @@ func (t *faceTool) Execute(_ context.Context, input json.RawMessage) (*tool.Tool
 		return tool.ErrorResult("パラメータ解析失敗: " + err.Error()), nil
 	}
 
-	dev := t.hub.Device()
-	if dev == nil {
-		return tool.ErrorResult("デバイス未接続"), nil
-	}
-
-	if err := dev.SendCommand(map[string]any{
+	// Broadcast expression to all connected clients (ESP + Web).
+	if err := t.hub.BroadcastCommand(map[string]any{
 		"cmd":        "face",
 		"expression": args.Expression,
 	}); err != nil {

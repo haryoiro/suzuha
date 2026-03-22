@@ -122,6 +122,11 @@ static uint8_t *s_frame_buf[2] = {NULL, NULL};  // double buffer
 static int s_buf_idx = 0;                        // current capture buffer
 static uint8_t *s_jpeg_buf = NULL;
 static bool s_camera_ready = false;
+static esp_cam_sensor_device_t *s_cam_sensor = NULL;
+
+// Software AE state
+static uint16_t s_exposure = 0x0300;  // initial exposure
+static uint8_t  s_gain = 0x40;        // initial gain
 
 // ISR callback: provide same buffer for next frame
 static bool IRAM_ATTR on_get_new_trans(esp_cam_ctlr_handle_t handle,
@@ -134,11 +139,17 @@ static bool IRAM_ATTR on_get_new_trans(esp_cam_ctlr_handle_t handle,
     return false;
 }
 
+static SemaphoreHandle_t s_frame_sem = NULL;
+
 static bool IRAM_ATTR on_trans_finished(esp_cam_ctlr_handle_t handle,
                                         esp_cam_ctlr_trans_t *trans,
                                         void *user_data)
 {
-    return false;
+    BaseType_t woken = pdFALSE;
+    if (s_frame_sem) {
+        xSemaphoreGiveFromISR(s_frame_sem, &woken);
+    }
+    return woken == pdTRUE;
 }
 
 static esp_err_t init_camera(void)
@@ -228,6 +239,8 @@ static esp_err_t init_camera(void)
     ESP_LOGI(TAG, "Using format: %s", selected_fmt->name);
     ESP_ERROR_CHECK(esp_cam_sensor_set_format(cam, selected_fmt));
 
+    s_cam_sensor = cam;  // store early for use in camera_task
+
     // NOTE: stream enable is deferred until after CSI controller starts
 
     // ---- CSI controller ----
@@ -240,7 +253,7 @@ static esp_err_t init_camera(void)
         .input_data_color_type = CAM_CTLR_COLOR_RAW8,
         .output_data_color_type = CAM_CTLR_COLOR_RGB565,
         .byte_swap_en = false,
-        .queue_items = 1,
+        .queue_items = 2,
     };
     ESP_ERROR_CHECK(esp_cam_new_csi_ctlr(&csi_cfg, &s_cam_handle));
 
@@ -269,6 +282,7 @@ static esp_err_t init_camera(void)
         .input_data_source = ISP_INPUT_DATA_SOURCE_CSI,
         .input_data_color_type = ISP_COLOR_RAW8,
         .output_data_color_type = ISP_COLOR_RGB565,
+        .bayer_order = COLOR_RAW_ELEMENT_ORDER_GBRG,  // OV5647 bayer pattern
         .has_line_start_packet = false,
         .has_line_end_packet = false,
         .h_res = CAM_WIDTH,
@@ -276,6 +290,16 @@ static esp_err_t init_camera(void)
     };
     ESP_ERROR_CHECK(esp_isp_new_processor(&isp_cfg, &s_isp_handle));
     ESP_ERROR_CHECK(esp_isp_enable(s_isp_handle));
+
+    // Enable demosaic for proper color reconstruction
+    esp_isp_demosaic_config_t demosaic_cfg = {
+        .grad_ratio = {
+            .integer = 2,
+            .decimal = 5,
+        },
+    };
+    ESP_ERROR_CHECK(esp_isp_demosaic_configure(s_isp_handle, &demosaic_cfg));
+    ESP_ERROR_CHECK(esp_isp_demosaic_enable(s_isp_handle));
 
     // ---- JPEG encoder ----
     jpeg_encode_engine_cfg_t jpeg_eng_cfg = {
@@ -300,15 +324,128 @@ static esp_err_t init_camera(void)
     int stream_enable = 1;
     ESP_ERROR_CHECK(esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_STREAM, &stream_enable));
 
+    // ---- Set OV5647 manual exposure + gain via group hold ----
+    // The 800x640 format does NOT init exposure/gain registers.
+    // Use OV5647 group hold (0x3212) to latch changes atomically.
+    esp_cam_sensor_reg_val_t reg;
+
+    // Start group hold
+    reg.regaddr = 0x3212; reg.value = 0x00;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    // Manual AEC + AGC + delay bits
+    reg.regaddr = 0x3503; reg.value = 0x63;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    // Exposure: moderate initial value (s_exposure=0x0300)
+    reg.regaddr = 0x3500; reg.value = (s_exposure >> 12) & 0x0F;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x3501; reg.value = (s_exposure >> 4) & 0xFF;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x3502; reg.value = (s_exposure & 0x0F) << 4;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    // Gain: moderate initial value (s_gain=0x40)
+    reg.regaddr = 0x350a; reg.value = 0x00;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x350b; reg.value = s_gain;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    // End group hold + launch
+    reg.regaddr = 0x3212; reg.value = 0x10;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x3212; reg.value = 0xA0;
+    esp_cam_sensor_ioctl(cam, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    ESP_LOGI(TAG, "OV5647 exposure+gain set via group hold");
+
     s_camera_ready = true;
     ESP_LOGI(TAG, "MIPI-CSI camera initialized (%dx%d)", CAM_WIDTH, CAM_HEIGHT);
     return ESP_OK;
+}
+
+// ---- Simple software AE ----
+#define AE_TARGET     110              // target brightness (0-255)
+#define AE_TOLERANCE   20              // acceptable range around target
+
+static int measure_brightness(const uint8_t *buf, size_t len)
+{
+    // Sample every 256th pixel for speed (RGB565: 2 bytes per pixel)
+    uint32_t sum = 0;
+    int count = 0;
+    for (size_t i = 0; i + 1 < len; i += 512) {
+        // RGB565: RRRRRGGG GGGBBBBB → approximate luminance
+        uint16_t px = (uint16_t)buf[i] | ((uint16_t)buf[i + 1] << 8);
+        uint8_t r = (px >> 11) & 0x1F;
+        uint8_t g = (px >> 5) & 0x3F;
+        uint8_t b = px & 0x1F;
+        // Rough luminance (scale to 0-255)
+        sum += (r * 8 * 77 + g * 4 * 150 + b * 8 * 29) >> 8;
+        count++;
+    }
+    return count > 0 ? (int)(sum / count) : 0;
+}
+
+static void adjust_exposure(int brightness)
+{
+    if (!s_cam_sensor) return;
+
+    int error = AE_TARGET - brightness;
+    if (error > -AE_TOLERANCE && error < AE_TOLERANCE) return;
+
+    // Adjust exposure first, then gain
+    if (error > 0) {
+        // Too dark: increase
+        if (s_exposure < 0x0900) {
+            s_exposure = s_exposure + (s_exposure >> 2) + 1;  // +25%
+            if (s_exposure > 0x0900) s_exposure = 0x0900;
+        } else if (s_gain < 0xFF) {
+            s_gain = s_gain + (s_gain >> 3) + 1;  // +12.5%
+            if (s_gain > 0xFF) s_gain = 0xFF;
+        }
+    } else {
+        // Too bright: decrease
+        if (s_gain > 0x10) {
+            int g = (int)s_gain - (s_gain >> 3) - 1;
+            s_gain = (g > 0x10) ? (uint8_t)g : 0x10;
+        } else if (s_exposure > 0x0010) {
+            s_exposure = s_exposure - (s_exposure >> 2) - 1;
+            if (s_exposure < 0x0010) s_exposure = 0x0010;
+        }
+    }
+
+    // Apply via group hold
+    esp_cam_sensor_reg_val_t reg;
+
+    reg.regaddr = 0x3212; reg.value = 0x00;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    reg.regaddr = 0x3500; reg.value = (s_exposure >> 12) & 0x0F;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x3501; reg.value = (s_exposure >> 4) & 0xFF;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x3502; reg.value = (s_exposure & 0x0F) << 4;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    reg.regaddr = 0x350a; reg.value = 0x00;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x350b; reg.value = s_gain;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+
+    reg.regaddr = 0x3212; reg.value = 0x10;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
+    reg.regaddr = 0x3212; reg.value = 0xA0;
+    esp_cam_sensor_ioctl(s_cam_sensor, ESP_CAM_SENSOR_IOC_S_REG, &reg);
 }
 
 static void encode_and_send_buf(uint8_t *buf)
 {
     // Sync cache (PSRAM frame data → CPU)
     esp_cache_msync(buf, FRAME_BUF_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+
+    // Software AE: measure brightness and adjust for next frame
+    int brightness = measure_brightness(buf, FRAME_BUF_SIZE);
+    adjust_exposure(brightness);
 
     // JPEG encode
     jpeg_encode_cfg_t enc_cfg = {
@@ -328,7 +465,6 @@ static void encode_and_send_buf(uint8_t *buf)
         return;
     }
 
-    ESP_LOGI(TAG, "JPEG encoded: %lu bytes", (unsigned long)jpeg_size);
     if (ws_client_is_connected()) {
         ws_client_send_binary(FRAME_TYPE_IMAGE, s_jpeg_buf, jpeg_size);
     }
@@ -350,7 +486,7 @@ static void capture_and_send(void) {}
 
 #if CONFIG_IDF_TARGET_ESP32P4
 
-// P4: continuously receive frames, JPEG encode on capture request
+// P4: use on_trans_finished semaphore instead of esp_cam_ctlr_receive
 static void camera_task(void *arg)
 {
     if (!s_camera_ready) {
@@ -358,18 +494,17 @@ static void camera_task(void *arg)
         while (true) { vTaskDelay(pdMS_TO_TICKS(1000)); }
     }
 
-    esp_cam_ctlr_trans_t trans = {
-        .buffer = s_frame_buf[0],
-        .buflen = FRAME_BUF_SIZE,
-    };
+    s_frame_sem = xSemaphoreCreateBinary();
 
-    // Continuous receive loop (same pattern as IDF example)
     while (true) {
-        ESP_ERROR_CHECK(esp_cam_ctlr_receive(s_cam_handle, &trans, ESP_CAM_CTLR_MAX_DELAY));
+        // Wait for frame from CSI (signaled by on_trans_finished ISR)
+        if (xSemaphoreTake(s_frame_sem, pdMS_TO_TICKS(1000)) != pdTRUE) {
+            continue;
+        }
 
         if (s_capture_requested) {
             s_capture_requested = false;
-            encode_and_send_buf(trans.buffer);
+            encode_and_send_buf(s_frame_buf[0]);
         }
     }
     vTaskDelete(NULL);

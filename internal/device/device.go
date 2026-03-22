@@ -2,24 +2,22 @@ package device
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/voice"
 )
 
 // Frame type constants matching firmware/main/config.h.
 const (
-	FrameAudio   = 0x01 // PCM16 16kHz mono  (ESP32 → Server)
+	FrameAudio   = 0x01 // PCM16 24kHz mono  (Client → Server)
 	FrameImage   = 0x02 // JPEG              (ESP32 → Server)
-	FrameCommand = 0x03 // JSON              (Server → ESP32)
-	FrameStatus  = 0x04 // JSON              (ESP32 → Server)
-	FrameTTS     = 0x05 // PCM 16kHz mono    (Server → ESP32)
+	FrameCommand = 0x03 // JSON              (Server → Client)
+	FrameStatus  = 0x04 // JSON              (Client → Server)
+	FrameTTS     = 0x05 // PCM 24kHz mono    (Server → Client)
 )
 
 // deviceSampleRate is the I2S sample rate on the ESP32-P4 (shared mic/speaker bus).
@@ -30,60 +28,15 @@ const deviceSampleRate = 24000
 // and continuation frames (op_code=0x00) are dropped by the ESP32 handler.
 const ttsChunkSize = 4000
 
-// Speaker is the interface that the agent uses to send TTS audio to the device.
+// Speaker is the interface that the agent uses to send TTS audio.
 type Speaker interface {
 	SpeakText(ctx context.Context, text string) error
 }
 
-// DeviceConn represents a connected physical device.
-type DeviceConn struct {
-	mu   sync.Mutex
-	conn *websocket.Conn
-	id   string
-}
-
-// SendCommand sends a JSON command frame to the device.
-func (d *DeviceConn) SendCommand(cmd map[string]any) error {
-	payload, err := json.Marshal(cmd)
-	if err != nil {
-		return fmt.Errorf("device: JSONエンコード失敗: %w", err)
-	}
-	frame := make([]byte, 1+len(payload))
-	frame[0] = FrameCommand
-	copy(frame[1:], payload)
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.conn.WriteMessage(websocket.BinaryMessage, frame)
-}
-
-// SendTTS sends PCM audio data as TTS frames, chunked to avoid buffer overflow.
-func (d *DeviceConn) SendTTS(pcm []byte) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	for offset := 0; offset < len(pcm); offset += ttsChunkSize {
-		end := offset + ttsChunkSize
-		if end > len(pcm) {
-			end = len(pcm)
-		}
-		chunk := pcm[offset:end]
-
-		frame := make([]byte, 1+len(chunk))
-		frame[0] = FrameTTS
-		copy(frame[1:], chunk)
-
-		if err := d.conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
-			return fmt.Errorf("device: TTS送信失敗: %w", err)
-		}
-	}
-	return nil
-}
-
-// Hub manages device connections.
+// Hub manages device and web client connections.
 type Hub struct {
 	mu      sync.RWMutex
-	device  *DeviceConn
+	clients map[string]Client // all connected clients (ESP + Web)
 	bus     *event.Bus
 	tts     voice.TTS
 	stt     voice.STT
@@ -92,8 +45,9 @@ type Hub struct {
 	changes *ChangeDetector
 	logger  *slog.Logger
 
-	// Audio accumulator for VAD-like chunking
-	audioBuf []byte
+	// Audio accumulator for ESP device VAD-like chunking
+	audioBuf     []byte
+	silenceCount int // consecutive silent chunks for ESP VAD
 
 	// Owner info (from DB)
 	ownerID   string
@@ -108,6 +62,7 @@ func NewHub(bus *event.Bus, tts voice.TTS, stt voice.STT, yoloURL, defaultChanne
 		yolo = NewYOLOClient(yoloURL)
 	}
 	return &Hub{
+		clients:   make(map[string]Client),
 		bus:       bus,
 		tts:       tts,
 		stt:       stt,
@@ -130,23 +85,69 @@ func (h *Hub) Frames() *FrameStore {
 	return h.frames
 }
 
-// Device returns the currently connected device, or nil.
+// addClient registers a client in the hub.
+func (h *Hub) addClient(c Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.clients[c.ID()] = c
+}
+
+// removeClient unregisters a client from the hub.
+func (h *Hub) removeClient(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.clients, id)
+}
+
+// Device returns the first connected ESP device, or nil.
 func (h *Hub) Device() *DeviceConn {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.device
+	for _, c := range h.clients {
+		if dc, ok := c.(*DeviceConn); ok {
+			return dc
+		}
+	}
+	return nil
 }
 
-// IsConnected returns true if a device is connected.
+// IsConnected returns true if an ESP device is connected.
 func (h *Hub) IsConnected() bool {
 	return h.Device() != nil
 }
 
-// SpeakText synthesizes text to PCM via TTS and sends it to the connected device.
+// AllClients returns a snapshot of all connected clients.
+func (h *Hub) AllClients() []Client {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make([]Client, 0, len(h.clients))
+	for _, c := range h.clients {
+		out = append(out, c)
+	}
+	return out
+}
+
+// BroadcastCommand sends a JSON command to all connected clients (ESP + Web).
+func (h *Hub) BroadcastCommand(cmd map[string]any) error {
+	clients := h.AllClients()
+	if len(clients) == 0 {
+		return fmt.Errorf("device: クライアント未接続")
+	}
+	var lastErr error
+	for _, c := range clients {
+		if err := c.SendCommand(cmd); err != nil {
+			h.logger.Warn("コマンド送信失敗", "client", c.ID(), "kind", c.Kind(), "error", err)
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+// SpeakText synthesizes text to PCM via TTS and sends it to all connected clients.
 func (h *Hub) SpeakText(ctx context.Context, text string) error {
-	dev := h.Device()
-	if dev == nil {
-		return fmt.Errorf("device: デバイス未接続")
+	clients := h.AllClients()
+	if len(clients) == 0 {
+		return fmt.Errorf("device: クライアント未接続")
 	}
 	if h.tts == nil {
 		h.logger.Warn("声の合成が設定されていないのでスキップ")
@@ -169,12 +170,60 @@ func (h *Hub) SpeakText(ctx context.Context, text string) error {
 		pcm = voice.NormalizePCM(pcm, 20000)
 	}
 
-	h.logger.Info("デバイスに声を送った", "pcm_bytes", len(pcm), "sample_rate", sampleRate)
-	return dev.SendTTS(pcm)
+	h.logger.Info("クライアントに声を送った", "pcm_bytes", len(pcm), "clients", len(clients))
+
+	var lastErr error
+	for _, c := range clients {
+		if err := c.SendTTS(pcm); err != nil {
+			h.logger.Warn("TTS送信失敗", "client", c.ID(), "kind", c.Kind(), "error", err)
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+// SpeakTextTo synthesizes text and sends TTS only to clients of the specified kind.
+func (h *Hub) SpeakTextTo(ctx context.Context, text string, kind string) error {
+	if h.tts == nil {
+		h.logger.Warn("声の合成が設定されていないのでスキップ")
+		return nil
+	}
+
+	pcm, sampleRate, err := h.tts.Synthesize(ctx, text)
+	if err != nil {
+		return fmt.Errorf("device: TTS合成失敗: %w", err)
+	}
+	if len(pcm) == 0 {
+		return nil
+	}
+
+	if sampleRate != deviceSampleRate {
+		pcm = voice.ResamplePCM(pcm, sampleRate, deviceSampleRate)
+		pcm = voice.NormalizePCM(pcm, 20000)
+	}
+
+	clients := h.AllClients()
+	var sent int
+	var lastErr error
+	for _, c := range clients {
+		if c.Kind() != kind {
+			continue
+		}
+		if err := c.SendTTS(pcm); err != nil {
+			h.logger.Warn("TTS送信失敗", "client", c.ID(), "kind", c.Kind(), "error", err)
+			lastErr = err
+		} else {
+			sent++
+		}
+	}
+	if sent == 0 && lastErr == nil {
+		return fmt.Errorf("device: %sクライアント未接続", kind)
+	}
+	return lastErr
 }
 
 // StartCaptureLoop starts a goroutine that sends periodic capture commands
-// to the connected device for continuous camera streaming.
+// to the connected ESP device for continuous camera streaming.
 func (h *Hub) StartCaptureLoop(ctx context.Context, intervalMs int) {
 	go func() {
 		ticker := time.NewTicker(time.Duration(intervalMs) * time.Millisecond)
@@ -192,18 +241,4 @@ func (h *Hub) StartCaptureLoop(ctx context.Context, intervalMs int) {
 			}
 		}
 	}()
-}
-
-func (h *Hub) setDevice(d *DeviceConn) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.device = d
-}
-
-func (h *Hub) clearDevice(d *DeviceConn) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.device == d {
-		h.device = nil
-	}
 }

@@ -17,7 +17,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // Handler returns an http.HandlerFunc that upgrades to WebSocket
-// and processes device binary frames.
+// and processes ESP32 device binary frames.
 func (h *Hub) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -30,11 +30,11 @@ func (h *Hub) Handler() http.HandlerFunc {
 		dev := &DeviceConn{conn: conn, id: deviceID}
 		conn.SetReadLimit(1 * 1024 * 1024) // 1MB max frame
 
-		h.setDevice(dev)
+		h.addClient(dev)
 		h.logger.Info("デバイスがつながった", "device_id", deviceID, "remote", r.RemoteAddr)
 
 		defer func() {
-			h.clearDevice(dev)
+			h.removeClient(deviceID)
 			conn.Close()
 			h.logger.Info("デバイスが離れた", "device_id", deviceID)
 		}()
@@ -76,7 +76,7 @@ func (h *Hub) handleFrame(dev *DeviceConn, frameType byte, payload []byte) {
 	case FrameImage:
 		h.handleImage(payload)
 	case FrameAudio:
-		h.handleAudio(payload)
+		h.handleAudio(payload, "device")
 	case FrameStatus:
 		h.handleStatus(payload)
 	default:
@@ -114,8 +114,9 @@ func (h *Hub) handleImage(jpeg []byte) {
 }
 
 // handleAudio accumulates PCM chunks and runs STT when enough audio is buffered.
-// Simple energy-based VAD: accumulate until silence is detected after speech.
-func (h *Hub) handleAudio(pcm []byte) {
+// Requires consecutive silent chunks before triggering to avoid cutting speech at pauses.
+// source is the event source string ("device" or "web").
+func (h *Hub) handleAudio(pcm []byte, source string) {
 	if h.stt == nil {
 		return
 	}
@@ -125,12 +126,14 @@ func (h *Hub) handleAudio(pcm []byte) {
 	// Accumulate at least 2s of audio (24kHz, 16-bit mono)
 	const minBytes = deviceSampleRate * 2 * 2  // 2s minimum
 	const maxBytes = deviceSampleRate * 2 * 10 // 10s maximum
+	const silenceThreshold = 100
+	const requiredSilenceChunks = 10 // ~1s of consecutive silence (100ms chunks)
 
 	if len(h.audioBuf) < minBytes {
 		return
 	}
 
-	// Simple energy check on the latest chunk
+	// Energy check on the latest chunk
 	energy := int64(0)
 	samples := len(pcm) / 2
 	for i := 0; i < samples; i++ {
@@ -142,10 +145,15 @@ func (h *Hub) handleAudio(pcm []byte) {
 	}
 	avgEnergy := energy / int64(samples+1)
 
-	// If silence detected (energy < threshold) and we have enough audio, transcribe
-	const silenceThreshold = 100
-	if avgEnergy < silenceThreshold || len(h.audioBuf) >= maxBytes {
-		// Skip if only silence (no speech detected)
+	if avgEnergy < silenceThreshold {
+		h.silenceCount++
+	} else {
+		h.silenceCount = 0
+	}
+
+	// Trigger transcription only after sustained silence or max buffer
+	if h.silenceCount >= requiredSilenceChunks || len(h.audioBuf) >= maxBytes {
+		// Skip if only silence (no speech detected at all)
 		totalEnergy := int64(0)
 		totalSamples := len(h.audioBuf) / 2
 		for i := 0; i < totalSamples; i++ {
@@ -157,20 +165,22 @@ func (h *Hub) handleAudio(pcm []byte) {
 		}
 		if totalEnergy/int64(totalSamples+1) < silenceThreshold {
 			h.audioBuf = nil
+			h.silenceCount = 0
 			return
 		}
 
 		buf := h.audioBuf
 		h.audioBuf = nil
+		h.silenceCount = 0
 
-		h.logger.Info("声が聞こえた、文字起こし開始", "bytes", len(buf))
-		go h.transcribeAndRespond(buf)
+		h.logger.Info("声が聞こえた、文字起こし開始", "bytes", len(buf), "source", source)
+		go h.transcribeAndRespond(buf, source)
 	}
 }
 
 // transcribeAndRespond runs STT, publishes the text as a user message event,
 // then speaks the LLM response via TTS.
-func (h *Hub) transcribeAndRespond(pcm []byte) {
+func (h *Hub) transcribeAndRespond(pcm []byte, source string) {
 	ctx := context.Background()
 
 	text, err := h.stt.Transcribe(ctx, pcm, deviceSampleRate)
@@ -182,14 +192,14 @@ func (h *Hub) transcribeAndRespond(pcm []byte) {
 		return
 	}
 
-	h.logger.Info("聞き取れた", "text", text)
+	h.logger.Info("聞き取れた", "text", text, "source", source)
 
 	// Clear any audio buffer accumulated during STT processing
 	// (prevents echo of the response)
 	h.audioBuf = nil
 
 	// Publish as message event — agent pipeline will process and respond
-	h.bus.Publish(event.NewMessageEvent("device", event.MessagePayload{
+	h.bus.Publish(event.NewMessageEvent(source, event.MessagePayload{
 		Content:  text,
 		UserID:   h.ownerID,
 		UserName: h.ownerName,
