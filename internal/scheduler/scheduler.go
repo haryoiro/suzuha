@@ -99,7 +99,7 @@ func (s *Scheduler) LoadJobs(jobs []JobDef) error {
 		jobName := j.Name
 		taskName := j.Task
 		entryID, err := s.cron.AddFunc(j.Cron, func() {
-			s.logger.Info("scheduler: ジョブを実行中", "job", jobName, "task", taskName)
+			s.logger.Debug("scheduler: ジョブを実行中", "job", jobName, "task", taskName)
 			jobCtx := s.ctx
 			if jobCtx == nil {
 				jobCtx = context.Background()

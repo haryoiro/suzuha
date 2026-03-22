@@ -26,8 +26,8 @@ const (
 	boredomMax = 100.0
 
 	// postThresholdMin is the minimum boredom level required to consider posting.
-	// At boredomRate=8, this means ~2.5 hours of silence before any post is possible.
-	postThresholdMin = 20.0
+	// At boredomRate=8, this means ~20 minutes of silence before any post is possible.
+	postThresholdMin = 3.0
 
 	// postProbabilityMax is the posting probability at maximum boredom.
 	postProbabilityMax = 0.85
@@ -92,13 +92,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	if len(cfg) > 0 {
 		_ = json.Unmarshal(cfg, &mc)
 	}
-	if mc.ChannelID == "" {
-		mc.ChannelID = findHomeChannel(ctx, cc.DB)
-	}
-	if mc.ChannelID == "" {
-		cc.Logger.Warn("topics: no channel_id and no home channel, skipping")
-		return nil
-	}
 	if cc.Bus == nil {
 		cc.Logger.Warn("topics: no event bus available, skipping")
 		return nil
@@ -120,6 +113,20 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	if !mc.SkipBoredom && !shouldPost(boredom) {
 		cc.Logger.Info("topics: skipping (low boredom or probability miss)",
 			"boredom", fmt.Sprintf("%.1f", boredom))
+		return nil
+	}
+
+	// Choose channel: high boredom → wander to any active channel, low → home only.
+	if mc.ChannelID == "" {
+		if boredom >= 50 {
+			mc.ChannelID = findRandomActiveChannel(ctx, cc.DB)
+		}
+		if mc.ChannelID == "" {
+			mc.ChannelID = findHomeChannel(ctx, cc.DB)
+		}
+	}
+	if mc.ChannelID == "" {
+		cc.Logger.Warn("topics: no channel found, skipping")
 		return nil
 	}
 
@@ -271,10 +278,23 @@ func buildSelfPrompt(
 	fmt.Fprintf(&sb, "今: %s %s\n", now.Format("2006-01-02"), now.Format("15:04"))
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
 
-	sb.WriteString("私は自由\n\n")
-
-	if mentionTarget != nil {
-		fmt.Fprintf(&sb, "%sさん (Discord: <@%s>) がいる\n\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
+	// 退屈度に応じた行動指針
+	switch {
+	case boredom >= 70:
+		sb.WriteString("かなり暇。誰かに話しかけたい気分。\n")
+		if mentionTarget != nil {
+			fmt.Fprintf(&sb, "%sさん (Discord: <@%s>) に声をかけてみてもいい。\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
+		}
+		sb.WriteString("気になることを調べたり、音楽を変えたり、積極的に動いていい。\n\n")
+	case boredom >= 40:
+		sb.WriteString("そこそこ暇。ひとりごとを言ったり、気になることを調べたりしてもいい。\n")
+		if mentionTarget != nil {
+			fmt.Fprintf(&sb, "%sさん (Discord: <@%s>) がいるけど、用がなければ話しかけなくていい。\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
+		}
+		sb.WriteString("\n")
+	default:
+		sb.WriteString("まだそんなに暇じゃない。誰かに話しかける必要はない。\n")
+		sb.WriteString("ステータスを変えたり、気になることを考えたり調べたり、何かを作ったりしてもいい。\n\n")
 	}
 
 	if len(recentMemories) > 0 {
@@ -293,8 +313,6 @@ func buildSelfPrompt(
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("何をするかは自分で決める 何もしなくてもいい\n")
-	sb.WriteString("ツールは使えるけど使わなくてもいい 思いついたことをそのまま\n")
 	sb.WriteString("同じようなことの繰り返しにならないように\n\n")
 	sb.WriteString("- 短く自然に 綺麗にまとめない\n")
 	sb.WriteString("- 絵文字・顔文字は使わない\n")
@@ -329,6 +347,31 @@ func selectMentionTarget(boredom float64, users []user.MentionableUser) *user.Me
 
 // findHomeChannel looks up the home channel from channel_settings.
 // Only returns channels with active mode (not disabled/listen).
+// findRandomActiveChannel picks a random active channel from any server.
+func findRandomActiveChannel(ctx context.Context, db *sql.DB) string {
+	if db == nil {
+		return ""
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT channel_id FROM channel_settings WHERE mode = 'active' OR mode = ''`)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+
+	var channels []string
+	for rows.Next() {
+		var ch string
+		if rows.Scan(&ch) == nil {
+			channels = append(channels, ch)
+		}
+	}
+	if len(channels) == 0 {
+		return ""
+	}
+	return channels[rand.IntN(len(channels))]
+}
+
 func findHomeChannel(ctx context.Context, db *sql.DB) string {
 	var channelID string
 	err := db.QueryRowContext(ctx,
