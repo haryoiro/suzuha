@@ -133,16 +133,23 @@ func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
 func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception, dc DirectiveConfig) *Thought {
 	// Build ephemeral context in parallel.
 	var (
-		memMsgs  []llm.Message
-		locMsg   string
-		profiles []llm.Message
-		wg       sync.WaitGroup
+		memMsgs        []llm.Message
+		locMsg         string
+		profiles       []llm.Message
+		diaryMsg       string
+		channelSummary string
+		wg             sync.WaitGroup
 	)
 	if a.memory != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			memMsgs = a.buildMemoryContext(ctx, p.LastMessage.Content, p.LastMessage.ImageURLs)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			diaryMsg = a.buildDiaryContext(ctx)
 		}()
 	}
 	wg.Add(1)
@@ -159,7 +166,17 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 	}
 	wg.Wait()
 
+	// Build other-channel awareness for Discord (no goroutine needed).
+	if p.LastEvent.Source == "discord" && p.Channel != "" {
+		channelSummary = a.buildOtherChannels(agentCtx, p.Channel)
+	}
+
 	var ephemeral []llm.Message
+	if diaryMsg != "" {
+		ephemeral = append(ephemeral, llm.Message{
+			Role: "system", Content: diaryMsg, Timestamp: jtime.Now(),
+		})
+	}
 	if len(memMsgs) > 0 {
 		ephemeral = append(ephemeral, memMsgs...)
 	}
@@ -170,6 +187,11 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 	}
 	if len(profiles) > 0 {
 		ephemeral = append(ephemeral, profiles...)
+	}
+	if channelSummary != "" {
+		ephemeral = append(ephemeral, llm.Message{
+			Role: "system", Content: channelSummary, Timestamp: jtime.Now(),
+		})
 	}
 
 	// Check listen mode (unless ForceRespond is set).
@@ -204,8 +226,10 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 		ephemeral = append(ephemeral, llm.Message{
 			Role: "system", Content: p.LastMessage.Content, Timestamp: jtime.Now(),
 		})
-		toolNames := strings.Join(a.tools.AllEnabledNames(), ", ")
-		directive = fmt.Sprintf("[SELF_PROMPT] 自分の内なる思考です。以下のツールを自由に組み合わせて遊んでください: %s\n気になることを調べる、誰かが言っていたことを思い出してリマインドする、会話の流れから何か提案する、ステータスを変える、つぶやく、なんでもOK。\n※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。", toolNames)
+		directive = "[SELF_PROMPT] 自分の内なる思考。\n" +
+			"気になったことを調べたり、誰かに声をかけたり、音楽を変えたり、自由にやっていい。\n" +
+			"使えるツールは全部使っていい。目的のない行動はしない。\n" +
+			"※時刻や雰囲気の報告はしない（「静かな午後だ」「X時だ」等）。"
 	} else if p.DirectlyAddressed {
 		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
 	} else {
@@ -568,4 +592,110 @@ func responseDirective(evt event.Event, botID string, cs convState, es episodeSi
 	return "[LISTEN] チャンネルの会話です。" + skipDefault +
 		"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
 		brevity + reactHint + noEmoji + noTimeReport
+}
+
+// diaryLookback is how far back to fetch hourly digests for ephemeral injection.
+const diaryLookback = 12 * time.Hour
+
+// buildDiaryContext fetches recent hourly digests and formats them as a
+// system message for ephemeral injection. Returns "" if no digests exist.
+func (a *Agent) buildDiaryContext(ctx context.Context) string {
+	since := jtime.Now().Add(-diaryLookback)
+	mems, err := a.memory.ListRecentByType(ctx, memory.MemoryTypeSelf, since, 24)
+	if err != nil {
+		a.logger.Debug("日記を取得できなかった", "error", err)
+		return ""
+	}
+
+	// Filter to hourly_digest kind.
+	var digests []memory.Memory
+	for _, m := range mems {
+		if m.Metadata == nil {
+			continue
+		}
+		if kind, _ := m.Metadata["kind"].(string); kind == "hourly_digest" {
+			digests = append(digests, m)
+		}
+	}
+	if len(digests) == 0 {
+		return ""
+	}
+
+	// Reverse to chronological order (ListRecentByType returns DESC).
+	for i, j := 0, len(digests)-1; i < j; i, j = i+1, j-1 {
+		digests[i], digests[j] = digests[j], digests[i]
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Recent diary (past 12h):\n")
+	for _, d := range digests {
+		hour, _ := d.Metadata["hour"].(string)
+		fmt.Fprintf(&sb, "- [%s] %s\n", hour, d.Content)
+	}
+	return sb.String()
+}
+
+// buildOtherChannels lists other Discord channels present in the context
+// so the LLM knows they exist and can check them via tools.
+func (a *Agent) buildOtherChannels(agentCtx *Context, currentChannel string) string {
+	msgs := agentCtx.Messages()
+
+	type chInfo struct {
+		name   string
+		isDM   bool
+		userID string
+	}
+	channels := make(map[string]*chInfo)
+
+	for _, m := range msgs {
+		if m.Channel == "" || m.Channel == currentChannel || m.Role == "system" {
+			continue
+		}
+		if _, ok := channels[m.Channel]; ok {
+			// Update metadata from latest message.
+			info := channels[m.Channel]
+			if m.ChannelName != "" {
+				info.name = m.ChannelName
+			}
+			if m.GuildID != "" {
+				info.isDM = false
+			}
+			if info.isDM && m.Role == "user" && m.UserID != "" {
+				info.userID = m.UserID
+			}
+			continue
+		}
+		channels[m.Channel] = &chInfo{
+			name:   m.ChannelName,
+			isDM:   m.GuildID == "",
+			userID: m.UserID,
+		}
+	}
+
+	if len(channels) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("[他のチャンネル]\n")
+	sb.WriteString("discord_get_history で内容を確認できます。\n")
+	sb.WriteString("そのチャンネルで発言すると会話コンテキストが切り替わります。\n\n")
+
+	for chID, info := range channels {
+		if info.isDM {
+			label := info.userID
+			if info.name != "" {
+				label = info.name
+			}
+			fmt.Fprintf(&sb, "- DM:%s (user:%s, channel:%s)\n", label, info.userID, chID)
+		} else {
+			label := info.name
+			if label == "" {
+				label = chID
+			}
+			fmt.Fprintf(&sb, "- #%s (channel:%s)\n", label, chID)
+		}
+	}
+
+	return sb.String()
 }

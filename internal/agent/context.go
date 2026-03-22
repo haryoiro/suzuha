@@ -265,6 +265,86 @@ func (c *Context) RemoveChannelHistory(channelID string) {
 	c.messages = filtered
 }
 
+// MessagesForChannel returns messages filtered by channel.
+// If channelID is empty, returns all messages (Device/Web compatibility).
+// Otherwise returns messages where Channel matches channelID or Channel is empty.
+// Tool call/result chains are kept intact: if an assistant message with ToolCalls
+// is included, all corresponding tool results are also included, and vice versa.
+func (c *Context) MessagesForChannel(channelID string) []llm.Message {
+	if channelID == "" {
+		return c.Messages()
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// First pass: collect messages matching the channel filter.
+	matched := make(map[int]bool, len(c.messages))
+	for i, m := range c.messages {
+		if m.Channel == channelID || m.Channel == "" {
+			matched[i] = true
+		}
+	}
+
+	// Second pass: ensure tool call/result chain integrity.
+	// Build maps: toolCallID -> assistant message index, toolCallID -> tool result index.
+	callIDToAssistant := make(map[string]int)
+	callIDToToolResult := make(map[string]int)
+	for i, m := range c.messages {
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			for _, tc := range m.ToolCalls {
+				callIDToAssistant[tc.ID] = i
+			}
+		}
+		if m.Role == "tool" && m.ToolCallID != "" {
+			callIDToToolResult[m.ToolCallID] = i
+		}
+	}
+	// If an assistant with tool_calls is matched, include all its tool results.
+	for i, m := range c.messages {
+		if !matched[i] || m.Role != "assistant" || len(m.ToolCalls) == 0 {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if idx, ok := callIDToToolResult[tc.ID]; ok {
+				matched[idx] = true
+			}
+		}
+	}
+	// If a tool result is matched, include its triggering assistant message.
+	for i, m := range c.messages {
+		if !matched[i] || m.Role != "tool" || m.ToolCallID == "" {
+			continue
+		}
+		if idx, ok := callIDToAssistant[m.ToolCallID]; ok {
+			matched[idx] = true
+		}
+	}
+
+	out := make([]llm.Message, 0, len(matched))
+	for i, m := range c.messages {
+		if matched[i] {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// MessagesWithSystemForChannel returns the system prompt followed by
+// channel-filtered messages. Used for LLM calls after the first iteration.
+func (c *Context) MessagesWithSystemForChannel(channelID string) []llm.Message {
+	filtered := c.MessagesForChannel(channelID)
+	sp := c.SystemPrompt()
+	out := make([]llm.Message, 0, 1+len(filtered))
+	if sp != "" {
+		out = append(out, llm.Message{
+			Role:    "system",
+			Content: sp,
+		})
+	}
+	out = append(out, filtered...)
+	return out
+}
+
 // MaxTokens returns the configured max token limit.
 func (c *Context) MaxTokens() int {
 	return c.maxTokens

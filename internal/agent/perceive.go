@@ -337,6 +337,7 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 		agentCtx.Add(llm.Message{
 			Role:      "system",
 			Content:   content,
+			Channel:  channelID,
 			Timestamp: jtime.Now(),
 		})
 		a.logger.Info("最近の会話を振り返った", "channel", channelID, "length", len(content))

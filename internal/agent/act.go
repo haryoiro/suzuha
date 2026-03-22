@@ -9,8 +9,6 @@ import (
 
 	"github.com/agnivade/levenshtein"
 
-	channelpkg "github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -35,57 +33,26 @@ func (skipResponseTool) Execute(_ context.Context, input json.RawMessage) (*tool
 
 var _ tool.Tool = skipResponseTool{}
 
-// Act is the backward-compatible wrapper that calls ActWith with the discord context,
-// then routes the response to the appropriate output (Discord chat, voice, or device).
+// Act is the backward-compatible wrapper that calls ActWith with the discord context
+// and session, then routes the response through the discord session.
 func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
-	agentCtx := a.contexts[SourceKeyDiscord]
-	text, err := a.ActWith(ctx, agentCtx, p, t)
+	sess := a.sessions[SourceKeyDiscord]
+	sess.BeginTurn(p)
+	text, err := a.ActWith(ctx, a.contexts[SourceKeyDiscord], sess, p, t)
 	if err != nil {
 		return err
 	}
-
-	// Route response to the appropriate output (original Act behavior).
 	if text == "" {
 		return nil
 	}
-
-	a.logger.Info("話した",
-		"channel", p.Channel,
-		"length", len(text),
-		"is_voice", p.IsVoice,
-		"content", truncate(text, 200))
-
-	if a.deviceSpeaker != nil && p.LastEvent.Source == "device" {
-		// Physical device: send TTS audio instead of text.
-		a.logger.Info("デバイスに声で返す", "length", len(text))
-		if err := a.deviceSpeaker.SpeakText(ctx, text); err != nil {
-			a.logger.Warn("デバイスへの声が届かなかった", "error", err)
-		}
-	} else if a.voiceSpeaker != nil && p.LastEvent.Message.GuildID != "" && a.voiceSpeaker.IsConnected(p.LastEvent.Message.GuildID) {
-		// Discord voice channel: speak via voice.
-		guildID := p.LastEvent.Message.GuildID
-		a.logger.Info("VCで声で返す", "guild", guildID, "length", len(text))
-		if err := a.voiceSpeaker.SpeakText(ctx, guildID, text); err != nil {
-			a.logger.Warn("VCの声が出なかったのでテキストで返す", "error", err)
-			if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-				return fmt.Errorf("返事の送信に失敗: %w", err)
-			}
-		}
-	} else {
-		// Send text response.
-		if err := a.chat.Send(ctx, p.Channel, text); err != nil {
-			return fmt.Errorf("返事の送信に失敗: %w", err)
-		}
-	}
-
-	return nil
+	return sess.Respond(ctx, text)
 }
 
 // ActWith runs the LLM completion with tool loop, filters the response,
 // and returns the response text. It does NOT route the response to any output;
-// the caller is responsible for sending the response.
-func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, p *Perception, t *Thought) (string, error) {
-	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, t.Directive, p.Channel, t.Ephemeral)
+// the caller is responsible for sending the response via Session.Respond().
+func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p *Perception, t *Thought) (string, error) {
+	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t.Directive, p.Channel, t.Ephemeral)
 	if err != nil {
 		return "", fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
@@ -122,11 +89,6 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, p *Perception, t
 		a.logger.Info("黙った (サイレント)",
 			"raw_text", truncate(resp.Text, 100))
 		return "", nil
-	case a.channelSettings != nil && p.Channel != "" && !p.IsDM &&
-		a.channelSettings.GetMode(p.Channel) != channelpkg.ModeActive:
-		a.logger.Info("静かなチャンネルなので自重した",
-			"channel", p.Channel, "mode", string(a.channelSettings.GetMode(p.Channel)))
-		return "", nil
 	default:
 		return text, nil
 	}
@@ -134,12 +96,12 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, p *Perception, t
 
 // completeWithTools is the backward-compatible wrapper.
 func (a *Agent) completeWithTools(ctx context.Context, directive, channel string, ephemeral []llm.Message) (*llm.Response, string, error) {
-	return a.completeWithToolsUsing(ctx, a.contexts[SourceKeyDiscord], directive, channel, ephemeral)
+	return a.completeWithToolsUsing(ctx, a.contexts[SourceKeyDiscord], a.sessions[SourceKeyDiscord], directive, channel, ephemeral)
 }
 
 // completeWithToolsUsing runs the LLM and executes tool calls in a loop,
-// using the given agent context.
-func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, directive, channel string, ephemeral []llm.Message) (*llm.Response, string, error) {
+// using the given agent context and session for typing/intermediate responses.
+func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, directive, channel string, ephemeral []llm.Message) (*llm.Response, string, error) {
 	allTools := a.tools.AllEnabled()
 
 	// Include skip_response tool when the directive allows skipping (not [RESPOND]).
@@ -160,8 +122,8 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 		// Send typing indicator only on subsequent iterations (tool loops),
 		// not on the first call where we don't yet know if we'll respond.
 		if iter > 0 && channel != "" {
-			if typer, ok := a.chat.(chat.Typer); ok {
-				typer.Typing(ctx, channel)
+			if ds, ok := sess.(*DiscordSession); ok {
+				ds.Typing(ctx)
 			}
 		}
 
@@ -180,7 +142,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 				msgs = append(msgs, llm.Message{Role: "system", Content: sp})
 			}
 			msgs = append(msgs, ephemeral...)
-			msgs = append(msgs, agentCtx.Messages()...)
+			msgs = append(msgs, agentCtx.MessagesForChannel(channel)...)
 			if directive != "" {
 				msgs = append(msgs, llm.Message{
 					Role:      "system",
@@ -189,7 +151,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 				})
 			}
 		} else {
-			msgs = agentCtx.MessagesWithSystem()
+			msgs = agentCtx.MessagesWithSystemForChannel(channel)
 		}
 		// Trim messages to fit within max context, reserving space for tools.
 		msgs = trimMessagesToFit(msgs, allTools, a.llm.MaxContextTokens())
@@ -229,11 +191,11 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 			ToolCalls: resp.ToolCalls,
 		})
 
-		// Send intermediate text to chat if the LLM returned text alongside tool calls.
+		// Send intermediate text if the LLM returned text alongside tool calls.
 		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
 			a.logger.Info("途中で話した",
 				"channel", channel, "length", len(stripped))
-			if err := a.chat.Send(ctx, channel, stripped); err != nil {
+			if err := sess.Respond(ctx, stripped); err != nil {
 				a.logger.Warn("途中の発言に失敗", "error", err)
 			}
 			intermediateText = stripped
@@ -253,6 +215,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 				agentCtx.Add(llm.Message{
 					Role:       "tool",
 					Content:    fmt.Sprintf("error: 不明なツール %q", tc.Function.Name),
+					Channel:    channel,
 					ToolCallID: tc.ID,
 					Timestamp:  jtime.Now(),
 				})
@@ -277,6 +240,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 				agentCtx.Add(llm.Message{
 					Role:       "tool",
 					Content:    fmt.Sprintf("error: %v", err),
+					Channel:    channel,
 					ToolCallID: tc.ID,
 					Timestamp:  jtime.Now(),
 				})
@@ -310,6 +274,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 			agentCtx.Add(llm.Message{
 				Role:       "tool",
 				Content:    content,
+				Channel:    channel,
 				ToolCallID: tc.ID,
 				Timestamp:  jtime.Now(),
 			})
@@ -321,6 +286,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, d
 					Role:      "user",
 					Content:   content,
 					ImageURLs: result.ImageURLs,
+					Channel:   channel,
 					Timestamp: jtime.Now(),
 				})
 			}

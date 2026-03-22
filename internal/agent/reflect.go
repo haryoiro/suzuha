@@ -21,7 +21,7 @@ func (a *Agent) Reflect(ctx context.Context, p *Perception) {
 // and runs post-response bookkeeping for the given source key.
 func (a *Agent) ReflectWith(ctx context.Context, agentCtx *Context, p *Perception, sourceKey SourceKey) {
 	if p.Channel != "" {
-		a.logConversationTurn(ctx, agentCtx, p.TurnStartIdx, p.Channel)
+		a.logConversationTurn(ctx, agentCtx, p.TurnStartIdx, p.Channel, sourceKey)
 	}
 	persistContextWith(ctx, a.db, agentCtx, a.logger, string(sourceKey))
 }
@@ -121,7 +121,7 @@ func (a *Agent) resetAndPersist(ctx context.Context) {
 
 // logConversationTurn logs all messages added during the current turn
 // to the conversation_logs table for fine-tuning data collection.
-func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, startIdx int, channel string) {
+func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, startIdx int, channel string, sourceKey SourceKey) {
 	if a.db == nil {
 		return
 	}
@@ -153,12 +153,12 @@ func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, star
 		}
 
 		_, err := a.db.ExecContext(ctx,
-			`INSERT INTO conversation_logs (turn_id, channel_id, role, content, user_id, user_name, message_id, tool_calls, tool_call_id, timestamp)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO conversation_logs (turn_id, channel_id, role, content, user_id, user_name, message_id, tool_calls, tool_call_id, timestamp, source_key)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			turnID, channel, msg.Role, msg.Content,
 			nullIfEmpty(msg.UserID), nullIfEmpty(msg.UserName), nullIfEmpty(msg.MessageID),
 			toolCallsJSON, toolCallID,
-			msg.Timestamp,
+			msg.Timestamp, string(sourceKey),
 		)
 		if err != nil {
 			a.logger.Warn("会話の記録に失敗", "error", err, "role", msg.Role)
