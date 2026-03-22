@@ -119,6 +119,24 @@ func (a *Agent) resetAndPersist(ctx context.Context) {
 	a.resetAndPersistWith(ctx, a.contexts[SourceKeyDiscord], SourceKeyDiscord)
 }
 
+// DeleteChannel removes all data for a channel: in-memory context messages,
+// channel_settings, channel_activity, conversation_logs, and user_guild_channels.
+func (a *Agent) DeleteChannel(ctx context.Context, key SourceKey, channelID string) int {
+	actx := a.contexts[key]
+	removed := actx.RemoveByChannel(channelID)
+	if a.db != nil {
+		a.db.ExecContext(ctx, `DELETE FROM channel_settings WHERE channel_id = ?`, channelID)
+		a.db.ExecContext(ctx, `DELETE FROM channel_activity WHERE channel_id = ?`, channelID)
+		a.db.ExecContext(ctx, `DELETE FROM conversation_logs WHERE channel_id = ?`, channelID)
+		a.db.ExecContext(ctx, `DELETE FROM user_guild_channels WHERE channel_id = ?`, channelID)
+	}
+	if a.channelSettings != nil {
+		a.channelSettings.Reload(ctx)
+	}
+	persistContextWith(ctx, a.db, actx, a.logger, string(key))
+	return removed
+}
+
 // logConversationTurn logs all messages added during the current turn
 // to the conversation_logs table for fine-tuning data collection.
 func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, startIdx int, channel string, sourceKey SourceKey) {

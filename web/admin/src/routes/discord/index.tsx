@@ -14,7 +14,7 @@ import {
   Popconfirm,
   message,
 } from "antd";
-import { ReloadOutlined, UndoOutlined } from "@ant-design/icons";
+import { ReloadOutlined, UndoOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
   useGuildList,
@@ -22,6 +22,7 @@ import {
   useUpsertChannelSetting,
   useDeleteChannelSetting,
 } from "../../hooks/useChannelSettings";
+import { contextApi } from "../../lib/api";
 import type { ChannelSetting } from "../../lib/api";
 import { formatJST } from "../../lib/date";
 
@@ -178,16 +179,30 @@ export const DiscordPage = memo(function DiscordPage() {
     {
       title: "",
       key: "actions",
-      width: 50,
-      render: (_: unknown, record: ChannelSetting) =>
-        record.settings_updated_at ? (
+      width: 100,
+      render: (_: unknown, record: ChannelSetting) => (
+        <Space size={0}>
+          {record.settings_updated_at ? (
+            <Popconfirm
+              title="Reset to default (active)?"
+              onConfirm={() => handleReset(record.channel_id)}
+            >
+              <Button type="text" size="small" icon={<UndoOutlined />} />
+            </Popconfirm>
+          ) : null}
           <Popconfirm
-            title="Reset to default (active)?"
-            onConfirm={() => handleReset(record.channel_id)}
+            title="Delete this channel from DB?"
+            description="Context messages, settings, and logs for this channel will be removed."
+            onConfirm={async () => {
+              await contextApi.deleteChannel(record.channel_id);
+              message.success(`Deleted #${record.channel_name}`);
+              refetch();
+            }}
           >
-            <Button type="text" size="small" icon={<UndoOutlined />} />
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
-        ) : null,
+        </Space>
+      ),
     },
   ];
 

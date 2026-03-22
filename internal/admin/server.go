@@ -90,6 +90,9 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	mux.HandleFunc("POST /api/memories/{id}/media", adminHandler.uploadMedia)
 	mux.HandleFunc("POST /api/memories/search-image", adminHandler.searchByImage)
 
+	// Channel deletion (DB).
+	mux.HandleFunc("DELETE /api/channels/{channelId}", adminHandler.deleteChannel)
+
 	// VOICEVOX speaker proxy.
 	mux.HandleFunc("GET /api/voicevox/speakers", adminHandler.proxyVoicevoxSpeakers)
 	mux.HandleFunc("GET /api/voicevox/speaker", adminHandler.proxyVoicevoxCurrentSpeaker)

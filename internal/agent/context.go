@@ -265,6 +265,38 @@ func (c *Context) RemoveChannelHistory(channelID string) {
 	c.messages = filtered
 }
 
+// RemoveByChannel removes all messages belonging to the given channel ID.
+// Returns the number of messages removed.
+func (c *Context) RemoveByChannel(channelID string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	before := len(c.messages)
+	filtered := make([]llm.Message, 0, len(c.messages))
+	for _, m := range c.messages {
+		if m.Channel == channelID {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	c.messages = filtered
+	return before - len(c.messages)
+}
+
+// Channels returns a list of unique channel IDs present in the context.
+func (c *Context) Channels() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	seen := make(map[string]bool)
+	var channels []string
+	for _, m := range c.messages {
+		if m.Channel != "" && !seen[m.Channel] {
+			seen[m.Channel] = true
+			channels = append(channels, m.Channel)
+		}
+	}
+	return channels
+}
+
 // MessagesForChannel returns messages filtered by channel.
 // If channelID is empty, returns all messages (Device/Web compatibility).
 // Otherwise returns messages where Channel matches channelID or Channel is empty.

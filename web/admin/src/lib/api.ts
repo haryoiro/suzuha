@@ -20,7 +20,7 @@ export interface MemoryAttachment {
 
 export interface Memory {
   id: string;
-  type: "user" | "world" | "tool" | "episode" | "self";
+  type: "user" | "world" | "tool" | "episode" | "self" | "memo";
   content: string;
   metadata?: Record<string, unknown>;
   created_at: string;
@@ -356,6 +356,8 @@ export interface ContextMessage {
   tool_calls?: unknown[];
 }
 
+export type ContextSource = "discord" | "device" | "web";
+
 export interface ContextResponse {
   messages: ContextMessage[];
   count: number;
@@ -363,10 +365,19 @@ export interface ContextResponse {
   usage_ratio: number;
   max_tokens: number;
   ephemeral?: ContextMessage[];
+  source?: ContextSource;
 }
 
 export const contextApi = {
-  get: () => fetchJSON<ContextResponse>("/api/context"),
+  get: (source?: ContextSource) => {
+    const q = source ? `?source=${source}` : "";
+    return fetchJSON<ContextResponse>(`/api/context${q}`);
+  },
+  deleteChannel: (channelId: string) => {
+    return fetch(`/api/channels/${channelId}`, { method: "DELETE" }).then(
+      (r) => r.json()
+    );
+  },
 };
 
 // Prompts API
