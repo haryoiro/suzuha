@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/haryoiro/suzuha/internal/embedding"
 )
@@ -143,8 +144,19 @@ func TestSaveWithEmbedFunc(t *testing.T) {
 	}
 	defer store.Close()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start the background embedding worker (Save is async without pre-computed embedding).
+	go store.RunEmbeddingWorker(ctx)
+
 	store.Save(ctx, &Memory{Type: MemoryTypeUser, Content: "embed test"})
+
+	// Wait for the async worker to process the embedding.
+	deadline := time.Now().Add(2 * time.Second)
+	for !emb.called && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if !emb.called {
 		t.Error("expected embedder to be called")
