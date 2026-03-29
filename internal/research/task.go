@@ -14,7 +14,6 @@ import (
 // taskConfig holds task-specific configuration from config.yaml.
 type taskConfig struct {
 	SearXNGURL string `json:"searxng_url"`
-	Breadth    int    `json:"breadth"`
 	MaxSources int    `json:"max_sources"`
 }
 
@@ -23,7 +22,7 @@ type taskState struct {
 	LastResearchedAt time.Time `json:"last_researched_at"`
 }
 
-// Task implements scheduler.CronTask for fast deep-research exploration.
+// Task implements scheduler.CronTask for autonomous web research.
 type Task struct {
 	mu               sync.Mutex
 	lastResearchedAt time.Time
@@ -33,7 +32,7 @@ type Task struct {
 var _ scheduler.CronTask = (*Task)(nil)
 
 func (t *Task) Name() string        { return "research" }
-func (t *Task) Description() string { return "トピックについて多角的にリサーチする" }
+func (t *Task) Description() string { return "ランダムなトピックをリサーチする" }
 
 func (t *Task) now() time.Time {
 	if t.nowFunc != nil {
@@ -66,10 +65,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		cc.Logger.Warn("research: no searxng_url configured, skipping")
 		return nil
 	}
-	breadth := tc.Breadth
-	if breadth <= 0 {
-		breadth = defaultBreadth
-	}
 	maxSources := tc.MaxSources
 	if maxSources <= 0 {
 		maxSources = defaultMaxSources
@@ -84,39 +79,23 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		return nil
 	}
 	query := article.Title
-	cc.Logger.Info("research: starting research", "query", query)
+	cc.Logger.Info("research: starting", "query", query)
 
-	// Step 1: Expand query.
-	queries, err := expandQuery(ctx, cc.LLM, cc.SystemPrompt, query, breadth)
-	if err != nil {
-		queries = []string{query}
-	}
-	cc.Logger.Info("research: expanded queries", "queries", queries)
-
-	// Step 2: Parallel search.
-	results := searchAll(ctx, searx, queries, searchPerQuery)
-	if len(results) == 0 {
+	// Search + parallel fetch.
+	results, err := searx.Search(ctx, query, searchPerQuery)
+	if err != nil || len(results) == 0 {
 		cc.Logger.Warn("research: no search results")
 		return nil
 	}
-	cc.Logger.Info("research: search complete", "results", len(results))
 
-	// Step 3: Parallel fetch.
 	sources := fetchAll(ctx, searx, results, maxSources, pageMaxRunes)
 	if len(sources) == 0 {
 		cc.Logger.Warn("research: no pages fetched")
 		return nil
 	}
-	cc.Logger.Info("research: pages fetched", "sources", len(sources))
 
-	// Log completion. Results are not saved to memory — the research cron
-	// task collects sources but doesn't have agent context to interpret them.
-	// If needed, a future version could add LLM synthesis here.
-	cc.Logger.Info("research: finished",
-		"query", query,
-		"sources", len(sources))
+	cc.Logger.Info("research: finished", "query", query, "sources", len(sources))
 
-	// Persist state.
 	t.mu.Lock()
 	t.lastResearchedAt = t.now()
 	t.mu.Unlock()

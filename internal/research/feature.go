@@ -4,29 +4,22 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// Feature is the fast deep-research exploration feature.
-// Parallel searches + parallel fetches + 2 LLM calls.
+// Feature is the fast web research feature.
+// Single search + parallel page fetches, no LLM overhead.
 type Feature struct {
-	searxngURL   string
-	llm          *llm.Client
-	systemPrompt string
-	breadth      int
-	maxSources   int
+	searxngURL string
+	maxSources int
 }
 
 // New creates a Research Feature.
-func New(searxngURL string, llmClient *llm.Client, systemPrompt string, breadth, maxSources int) *Feature {
+func New(searxngURL string, maxSources int) *Feature {
 	return &Feature{
-		searxngURL:   searxngURL,
-		llm:          llmClient,
-		systemPrompt: systemPrompt,
-		breadth:      breadth,
-		maxSources:   maxSources,
+		searxngURL: searxngURL,
+		maxSources: maxSources,
 	}
 }
 
@@ -34,17 +27,17 @@ func (f *Feature) Name() string { return "research" }
 
 func (f *Feature) Setup(_ context.Context, _ *sql.DB) error { return nil }
 
-// Tools returns the explore tool for the agent.
+// Tools returns the research tool for the agent.
 func (f *Feature) Tools() []tool.Tool {
 	if f.searxngURL == "" {
 		return nil
 	}
 	return []tool.Tool{
-		NewExploreTool(f.searxngURL, f.llm, f.systemPrompt, f.breadth, f.maxSources),
+		NewResearchTool(f.searxngURL, f.maxSources),
 	}
 }
 
-// Tasks returns the exploration scheduler task.
+// Tasks returns the research scheduler task.
 func (f *Feature) Tasks() []scheduler.CronTask {
 	return []scheduler.CronTask{&Task{}}
 }
