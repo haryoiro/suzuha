@@ -31,8 +31,8 @@ CONFIG_FREERTOS_HZ=1000
 # Camera sensor
 CONFIG_CAMERA_OV5647=y
 
-# Servo (tilt default 7 conflicts with camera SCCB SDA)
-CONFIG_SERVO_TILT_GPIO=25
+# Servo
+CONFIG_SERVO_TILT_GPIO=5
 
 # Logging
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
