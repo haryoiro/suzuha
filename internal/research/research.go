@@ -12,7 +12,7 @@ import (
 const (
 	defaultMaxSources = 5    // pages to fetch in parallel
 	pageMaxRunes      = 1200 // per-page content limit
-	searchResults     = 10   // search results to retrieve
+	searchResults     = 20   // search results to retrieve (filtered before fetch)
 )
 
 // source holds fetched page content.
