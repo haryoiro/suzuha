@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
@@ -15,18 +14,16 @@ import (
 type Feature struct {
 	searxngURL   string
 	llm          *llm.Client
-	mem          memory.Store
 	systemPrompt string
 	breadth      int
 	maxSources   int
 }
 
-// New creates an Explore Feature.
-func New(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, breadth, maxSources int) *Feature {
+// New creates a Research Feature.
+func New(searxngURL string, llmClient *llm.Client, systemPrompt string, breadth, maxSources int) *Feature {
 	return &Feature{
 		searxngURL:   searxngURL,
 		llm:          llmClient,
-		mem:          memStore,
 		systemPrompt: systemPrompt,
 		breadth:      breadth,
 		maxSources:   maxSources,
@@ -43,7 +40,7 @@ func (f *Feature) Tools() []tool.Tool {
 		return nil
 	}
 	return []tool.Tool{
-		NewExploreTool(f.searxngURL, f.llm, f.mem, f.systemPrompt, f.breadth, f.maxSources),
+		NewExploreTool(f.searxngURL, f.llm, f.systemPrompt, f.breadth, f.maxSources),
 	}
 }
 

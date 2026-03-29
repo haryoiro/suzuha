@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/jtime"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/websearch"
 )
@@ -110,26 +109,9 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 	cc.Logger.Info("research: pages fetched", "sources", len(sources))
 
-	// Save raw collected content to memory (no LLM synthesis).
-	raw := formatRawSources(query, queries, sources)
-	sourceURLs := make([]string, len(sources))
-	for i, s := range sources {
-		sourceURLs[i] = s.URL
-	}
-	mem := &memory.Memory{
-		Type:    memory.MemoryTypeWorld,
-		Content: raw,
-		Metadata: map[string]any{
-			"source":      "research",
-			"type":        "research",
-			"query":       query,
-			"num_sources": len(sources),
-			"source_urls": sourceURLs,
-		},
-	}
-	if saveErr := cc.Memory.Save(ctx, mem); saveErr != nil {
-		cc.Logger.Error("research: save", "error", saveErr)
-	}
+	// Log completion. Results are not saved to memory — the research cron
+	// task collects sources but doesn't have agent context to interpret them.
+	// If needed, a future version could add LLM synthesis here.
 	cc.Logger.Info("research: finished",
 		"query", query,
 		"sources", len(sources))

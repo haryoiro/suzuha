@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/websearch"
 )
@@ -16,7 +15,6 @@ import (
 type ExploreTool struct {
 	searx        *websearch.SearXNGClient
 	llm          *llm.Client
-	mem          memory.Store
 	systemPrompt string
 	breadth      int
 	maxSources   int
@@ -25,7 +23,7 @@ type ExploreTool struct {
 var _ tool.Tool = (*ExploreTool)(nil)
 
 // NewExploreTool creates a fast explore tool.
-func NewExploreTool(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, breadth, maxSources int) *ExploreTool {
+func NewExploreTool(searxngURL string, llmClient *llm.Client, systemPrompt string, breadth, maxSources int) *ExploreTool {
 	if breadth <= 0 {
 		breadth = defaultBreadth
 	}
@@ -35,7 +33,6 @@ func NewExploreTool(searxngURL string, llmClient *llm.Client, memStore memory.St
 	return &ExploreTool{
 		searx:        websearch.NewSearXNG(searxngURL),
 		llm:          llmClient,
-		mem:          memStore,
 		systemPrompt: systemPrompt,
 		breadth:      breadth,
 		maxSources:   maxSources,
@@ -131,28 +128,7 @@ func (t *ExploreTool) doResearch(ctx context.Context, query string, breadth, max
 
 	// Build raw result for agent to process with conversation context.
 	// No LLM synthesis here — suzuha handles interpretation.
-	raw := formatRawSources(query, queries, sources)
-
-	// Save to memory (raw content, agent will add its own interpretation).
-	if t.mem != nil {
-		sourceURLs := make([]string, len(sources))
-		for i, s := range sources {
-			sourceURLs[i] = s.URL
-		}
-		mem := &memory.Memory{
-			Type:    memory.MemoryTypeWorld,
-			Content: raw,
-			Metadata: map[string]any{
-				"source":      "research_tool",
-				"type":        "research",
-				"query":       query,
-				"sub_queries": queries,
-				"num_sources": len(sources),
-				"source_urls": sourceURLs,
-			},
-		}
-		_ = t.mem.Save(ctx, mem)
-	}
-
-	return raw, nil
+	// Results stay in context until compaction, where the consolidator
+	// extracts any important knowledge as long-term memories.
+	return formatRawSources(query, queries, sources), nil
 }
