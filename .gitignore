@@ -21,6 +21,7 @@ data/
 .pnpm-store/
 .venv*/
 api/node_modules/
+web/widget/node_modules/
 
 # ML / fine-tuning
 models/
@@ -48,4 +49,6 @@ firmware/sdkconfig.secrets
 .DS_Store
 Thumbs.db
 .claude/settings.local.json
+.claude/worktrees/
 current_frame.jpg
+/build/
