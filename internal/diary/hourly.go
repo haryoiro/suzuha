@@ -103,7 +103,7 @@ func fetchConversationLogs(ctx context.Context, cc *scheduler.CronContext, from,
 		 WHERE timestamp >= ? AND timestamp < ?
 		   AND role IN ('user', 'assistant')
 		 ORDER BY timestamp ASC`,
-		from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339),
+		from, to,
 	)
 	if err != nil {
 		cc.Logger.Debug("diary_hourly: conversation_logs query", "error", err)
