@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultMaxSources = 4    // pages to fetch in parallel
+	defaultMaxSources = 6    // pages to fetch in parallel
 	pageMaxRunes      = 1200 // per-page content limit
 	searchResults     = 10   // search results to retrieve
 )
