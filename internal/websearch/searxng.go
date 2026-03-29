@@ -82,10 +82,14 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 
 // FetchPage retrieves a web page via r.jina.ai reader and returns
 // the Markdown content (truncated to maxRunes).
+// Times out after 8 seconds to avoid slow pages blocking the pipeline.
 func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes int) (string, error) {
+	fetchCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+
 	fetchURL := jinaReaderPrefix + pageURL
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
+	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, fetchURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("fetch page: リクエストの作成に失敗: %w", err)
 	}
