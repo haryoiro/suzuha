@@ -288,7 +288,8 @@ export const ToolsPage = memo(function ToolsPage() {
               <pre style={{
                 marginTop: 12,
                 padding: 12,
-                background: "#f5f5f5",
+                background: "#1e1e1e",
+                color: "#d4d4d4",
                 borderRadius: 6,
                 maxHeight: 300,
                 overflow: "auto",

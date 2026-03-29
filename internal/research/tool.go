@@ -51,23 +51,13 @@ func (t *ExploreTool) InputSchema() json.RawMessage {
 			"query": {
 				"type": "string",
 				"description": "リサーチしたいトピックやキーワード。省略するとランダムなWikipedia記事から始まる。"
-			},
-			"breadth": {
-				"type": "integer",
-				"description": "サブクエリの数（多いほど広く調べる）。デフォルト3。"
-			},
-			"max_sources": {
-				"type": "integer",
-				"description": "取得するページの最大数。デフォルト6。"
 			}
 		}
 	}`)
 }
 
 type exploreInput struct {
-	Query      string `json:"query"`
-	Breadth    int    `json:"breadth"`
-	MaxSources int    `json:"max_sources"`
+	Query string `json:"query"`
 }
 
 func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
@@ -76,22 +66,7 @@ func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 		_ = json.Unmarshal(input, &in)
 	}
 
-	breadth := t.breadth
-	if in.Breadth > 0 {
-		breadth = in.Breadth
-		if breadth > 10 {
-			breadth = 10
-		}
-	}
-	maxSources := t.maxSources
-	if in.MaxSources > 0 {
-		maxSources = in.MaxSources
-		if maxSources > 20 {
-			maxSources = 20
-		}
-	}
-
-	summary, err := t.doResearch(ctx, in.Query, breadth, maxSources)
+	summary, err := t.doResearch(ctx, in.Query, t.breadth, t.maxSources)
 	if err != nil {
 		return tool.ErrorResult(fmt.Sprintf("research: リサーチに失敗しました: %v", err)), nil
 	}
