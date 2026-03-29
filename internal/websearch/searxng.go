@@ -106,6 +106,12 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 		return "", fmt.Errorf("fetch page: ステータス %d", resp.StatusCode)
 	}
 
+	// Skip non-HTML content (PDF, images, etc.).
+	ct := resp.Header.Get("Content-Type")
+	if ct != "" && !strings.Contains(ct, "text/html") && !strings.Contains(ct, "text/plain") {
+		return "", fmt.Errorf("fetch page: スキップ (Content-Type: %s)", ct)
+	}
+
 	parsedURL, _ := url.Parse(pageURL)
 	article, err := readability.FromReader(io.LimitReader(resp.Body, maxFetchBytes), parsedURL)
 	if err != nil {
