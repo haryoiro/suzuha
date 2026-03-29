@@ -22,7 +22,29 @@ type source struct {
 	Content string
 }
 
-// fetchAll fetches multiple pages in parallel via Jina reader.
+// skipExtensions are file extensions that should not be fetched.
+var skipExtensions = []string{".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".tar", ".gz"}
+
+// filterHTMLResults removes non-HTML URLs (PDF, docs, etc.) from search results.
+func filterHTMLResults(results []websearch.SearchResult) []websearch.SearchResult {
+	var out []websearch.SearchResult
+	for _, r := range results {
+		lower := strings.ToLower(r.URL)
+		skip := false
+		for _, ext := range skipExtensions {
+			if strings.HasSuffix(lower, ext) || strings.Contains(lower, ext+"?") {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// fetchAll fetches multiple pages in parallel using readability.
 func fetchAll(
 	ctx context.Context,
 	searx *websearch.SearXNGClient,
@@ -30,6 +52,7 @@ func fetchAll(
 	maxSources int,
 	maxRunes int,
 ) []source {
+	results = filterHTMLResults(results)
 	if len(results) > maxSources {
 		results = results[:maxSources]
 	}
