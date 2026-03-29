@@ -227,23 +227,32 @@ func fetchRecentContext(ctx context.Context, cc *scheduler.CronContext, limit in
 	return mems
 }
 
-// fetchPastMutterings retrieves past muttering posts from memory.
+// fetchPastMutterings retrieves recent bot messages from conversation_logs
+// so that self-prompts can avoid repeating the same topics.
 func fetchPastMutterings(ctx context.Context, cc *scheduler.CronContext, limit int) []memory.Memory {
-	mems, err := cc.Memory.SearchByType(ctx, "独り言", memory.MemoryTypeWorld, limit)
-	if err != nil {
-		cc.Logger.Debug("topics: search past mutterings", "error", err)
+	if cc.DB == nil {
 		return nil
 	}
-	var filtered []memory.Memory
-	for _, m := range mems {
-		if m.Metadata == nil {
+	rows, err := cc.DB.QueryContext(ctx,
+		`SELECT content, timestamp FROM conversation_logs
+		 WHERE role = 'assistant' AND content != ''
+		 ORDER BY timestamp DESC LIMIT ?`, limit)
+	if err != nil {
+		cc.Logger.Debug("topics: fetch past mutterings", "error", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var results []memory.Memory
+	for rows.Next() {
+		var content string
+		var ts time.Time
+		if err := rows.Scan(&content, &ts); err != nil {
 			continue
 		}
-		if source, _ := m.Metadata["source"].(string); source == "topics" {
-			filtered = append(filtered, m)
-		}
+		results = append(results, memory.Memory{Content: content, CreatedAt: ts})
 	}
-	return filtered
+	return results
 }
 
 // buildTimeHint returns a time-of-day hint for the LLM prompt.
@@ -306,7 +315,7 @@ func buildSelfPrompt(
 	}
 
 	if len(pastMutterings) > 0 {
-		sb.WriteString("最近のつぶやき（被らないように）:\n")
+		sb.WriteString("最近の自分の発言（同じ話題を繰り返さないこと）:\n")
 		for _, m := range pastMutterings {
 			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
 		}
