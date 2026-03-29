@@ -3,15 +3,15 @@ package builtin
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
+	readability "codeberg.org/readeck/go-readability/v2"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
-
-const jinaReaderPrefix = "https://r.jina.ai/"
 
 const maxBodyBytes = 512 << 10 // 512KB raw read limit
 const maxOutputRunes = 4000   // truncate final output for LLM context
@@ -24,29 +24,27 @@ type Fetch struct {
 // NewFetch creates a Fetch tool with a default timeout.
 func NewFetch() *Fetch {
 	return &Fetch{
-		client: &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-func (f *Fetch) Name() string        { return "fetch" }
+func (f *Fetch) Name() string { return "fetch" }
 func (f *Fetch) Description() string {
-	return "URLの内容を取得してMarkdownで返す。Webページは自動で整形される。"
+	return "URLの内容を取得してテキストで返す。Webページは本文が自動で抽出される。"
 }
 
 func (f *Fetch) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"url": {"type": "string", "description": "The URL to fetch."},
-			"method": {"type": "string", "enum": ["GET", "POST"], "default": "GET"}
+			"url": {"type": "string", "description": "The URL to fetch."}
 		},
 		"required": ["url"]
 	}`)
 }
 
 type fetchInput struct {
-	URL    string `json:"url"`
-	Method string `json:"method"`
+	URL string `json:"url"`
 }
 
 func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
@@ -55,21 +53,12 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
-	if in.Method == "" {
-		in.Method = "GET"
-	}
-
-	// Use r.jina.ai reader for GET requests to get clean Markdown.
-	fetchURL := in.URL
-	if in.Method == "GET" {
-		fetchURL = jinaReaderPrefix + in.URL
-	}
-
-	req, err := http.NewRequestWithContext(ctx, in.Method, fetchURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, in.URL, nil)
 	if err != nil {
 		return tool.ErrorResult("不正なリクエスト: " + err.Error()), nil
 	}
-	req.Header.Set("User-Agent", "suzuha-bot/1.0 (https://github.com/haryoiro/suzuha)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; suzuha-bot/1.0)")
+	req.Header.Set("Accept-Language", "ja,en;q=0.5")
 
 	resp, err := f.client.Do(req)
 	if err != nil {
@@ -77,12 +66,18 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
+	// Use readability to extract main content.
+	parsedURL, _ := url.Parse(in.URL)
+	article, err := readability.FromReader(io.LimitReader(resp.Body, maxBodyBytes), parsedURL)
 	if err != nil {
-		return tool.ErrorResult("レスポンス読み取り失敗: " + err.Error()), nil
+		return tool.ErrorResult("本文抽出に失敗: " + err.Error()), nil
 	}
 
-	text := string(body)
+	var buf strings.Builder
+	if err := article.RenderText(&buf); err != nil {
+		return tool.ErrorResult("テキスト変換に失敗: " + err.Error()), nil
+	}
+	text := strings.TrimSpace(buf.String())
 
 	// Truncate to keep LLM context manageable.
 	runes := []rune(text)
@@ -90,7 +85,7 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 		text = string(runes[:maxOutputRunes]) + "\n\n...(省略)"
 	}
 
-	return tool.TextResult(fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, text)), nil
+	return tool.TextResult(text), nil
 }
 
 var _ tool.Tool = (*Fetch)(nil)

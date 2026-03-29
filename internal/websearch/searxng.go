@@ -10,9 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	readability "codeberg.org/readeck/go-readability/v2"
 )
 
-const jinaReaderPrefix = "https://r.jina.ai/"
+const maxFetchBytes = 512 * 1024 // 512KB raw HTML limit
 
 // SearchResult represents a single search result from SearXNG.
 type SearchResult struct {
@@ -80,20 +82,19 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 	return body.Results, nil
 }
 
-// FetchPage retrieves a web page via r.jina.ai reader and returns
-// the Markdown content (truncated to maxRunes).
+// FetchPage fetches a web page, extracts the main content using readability,
+// and returns plain text (truncated to maxRunes).
 // Times out after 8 seconds to avoid slow pages blocking the pipeline.
 func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes int) (string, error) {
 	fetchCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	fetchURL := jinaReaderPrefix + pageURL
-
-	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, fetchURL, nil)
+	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, pageURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("fetch page: リクエストの作成に失敗: %w", err)
 	}
-	req.Header.Set("User-Agent", "suzuha-bot/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; suzuha-bot/1.0)")
+	req.Header.Set("Accept-Language", "ja,en;q=0.5")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -105,18 +106,17 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 		return "", fmt.Errorf("fetch page: ステータス %d", resp.StatusCode)
 	}
 
-	const maxBytes = 512 * 1024
-	limit := maxRunes * 4
-	if limit > maxBytes {
-		limit = maxBytes
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)))
+	parsedURL, _ := url.Parse(pageURL)
+	article, err := readability.FromReader(io.LimitReader(resp.Body, maxFetchBytes), parsedURL)
 	if err != nil {
-		return "", fmt.Errorf("fetch page: 読み取りに失敗: %w", err)
+		return "", fmt.Errorf("fetch page: 本文抽出に失敗: %w", err)
 	}
 
-	text := string(body)
-	text = CollapseWhitespace(text)
+	var buf strings.Builder
+	if err := article.RenderText(&buf); err != nil {
+		return "", fmt.Errorf("fetch page: テキスト変換に失敗: %w", err)
+	}
+	text := CollapseWhitespace(buf.String())
 
 	runes := []rune(text)
 	if len(runes) > maxRunes {
