@@ -50,21 +50,6 @@ export interface ListResponse {
   total: number;
 }
 
-export interface MetricItem {
-  name: string;
-  help: string;
-  type: string;
-  value?: number;
-  labels?: Record<string, string>;
-  buckets?: { le: number; count: number }[];
-  sum?: number;
-  count?: number;
-}
-
-export interface MetricsResponse {
-  metrics: MetricItem[];
-}
-
 export interface LogEntry {
   seq: number;
   time: string;
@@ -314,11 +299,6 @@ export const voicevoxApi = {
       method: "PUT",
       body: JSON.stringify({ speaker_id: speakerId }),
     }),
-};
-
-// Metrics API
-export const metricsApi = {
-  json: () => fetchJSON<MetricsResponse>("/api/metrics/json"),
 };
 
 // Agent API

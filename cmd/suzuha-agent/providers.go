@@ -82,14 +82,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return do.MustInvoke[*memory.SQLiteStore](i).DB(), nil
 		})
 
-		// Metrics (SQLite-backed, persists across restarts).
-		do.Provide(i, func(i do.Injector) (*observe.Metrics, error) {
-			store := do.MustInvoke[*memory.SQLiteStore](i)
-			m := observe.NewMetrics(store.DB())
-			store.SetOnSave(m.MemoryWritesTotal.Inc)
-			return m, nil
-		})
-
 		// Location store (nil when location tracking is not configured).
 		do.Provide(i, func(i do.Injector) (*location.Store, error) {
 			cfg := do.MustInvoke[*config.Config](i)
@@ -149,7 +141,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
 				do.MustInvoke[*channel.Store](i),
 				do.MustInvoke[*slog.Logger](i),
-				do.MustInvoke[*observe.Metrics](i),
 			), nil
 		})
 

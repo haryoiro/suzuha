@@ -42,7 +42,6 @@ const (
 	MemoriesListWithVecOperation    OperationName = "MemoriesListWithVec"
 	MemoriesUpdateOperation         OperationName = "MemoriesUpdate"
 	MemoriesVecStatsOperation       OperationName = "MemoriesVecStats"
-	MetricsJSONOperation            OperationName = "MetricsJSON"
 	PromptsGetOperation             OperationName = "PromptsGet"
 	PromptsListOperation            OperationName = "PromptsList"
 	PromptsUpdateOperation          OperationName = "PromptsUpdate"

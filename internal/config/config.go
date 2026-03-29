@@ -195,7 +195,7 @@ type CronJob struct {
 // Observe configures observability.
 type Observe struct {
 	LogLevel    string `yaml:"log_level"`    // "debug", "info", "warn", "error"
-	MetricsAddr string `yaml:"metrics_addr"` // e.g. ":9090"
+	InternalAddr string `yaml:"internal_addr"` // e.g. ":9090"
 }
 
 // AdminAuth configures Basic authentication for the admin dashboard.
@@ -371,8 +371,8 @@ func (c *Config) setDefaults() {
 	if c.Observe.LogLevel == "" {
 		c.Observe.LogLevel = "info"
 	}
-	if c.Observe.MetricsAddr == "" {
-		c.Observe.MetricsAddr = ":9090"
+	if c.Observe.InternalAddr == "" {
+		c.Observe.InternalAddr = ":9090"
 	}
 	if c.Admin.Addr == "" {
 		c.Admin.Addr = ":8080"

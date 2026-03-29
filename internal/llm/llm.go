@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"go.opentelemetry.io/otel/attribute"
@@ -131,8 +130,7 @@ type Client struct {
 	visionModel     string
 	visionCapable   bool // true if active provider supports vision natively
 	maxCtx          int
-	metrics         *observe.Metrics
-	logger          *slog.Logger
+	logger *slog.Logger
 	tracer          trace.Tracer // nil when tracing is disabled
 }
 
@@ -192,7 +190,7 @@ type VisionConfig struct {
 }
 
 // NewClient creates a new LLM client.
-func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb EmbeddingConfig, vis VisionConfig, metrics *observe.Metrics, logger *slog.Logger) (*Client, error) {
+func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb EmbeddingConfig, vis VisionConfig, logger *slog.Logger) (*Client, error) {
 	p, err := newProvider(providerName, apiKey, apiBase)
 	if err != nil {
 		return nil, err
@@ -207,9 +205,8 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		defaultModel:    model,
 		embeddingModel:  emb.Model,
 		embeddingDims:   emb.Dims,
-		maxCtx:          maxCtx,
-		metrics:         metrics,
-		logger:          logger,
+		maxCtx: maxCtx,
+		logger: logger,
 	}
 
 	// Build embedding provider: use separate provider if configured, otherwise reuse main.
@@ -322,21 +319,12 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	})
 	elapsed := time.Since(start)
 
-	if c.metrics != nil {
-		c.metrics.LLMLatency.Observe(elapsed.Seconds())
-	}
-
 	if err != nil {
 		if span != nil {
 			span.RecordError(err)
 		}
 		c.logger.Error("LLMが答えてくれなかった", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
 		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
-	}
-
-	if c.metrics != nil && resp.Usage != nil {
-		c.metrics.LLMTokensIn.Add(float64(resp.Usage.PromptTokens))
-		c.metrics.LLMTokensOut.Add(float64(resp.Usage.CompletionTokens))
 	}
 
 	if len(resp.Choices) == 0 {
@@ -581,10 +569,6 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 		return callErr
 	})
 	elapsed := time.Since(start)
-
-	if c.metrics != nil {
-		c.metrics.EmbeddingLatency.Observe(elapsed.Seconds())
-	}
 
 	if err != nil {
 		c.logger.Error("埋め込みに失敗しました", "model", c.embeddingModel, "elapsed_ms", elapsed.Milliseconds(), "error", err)

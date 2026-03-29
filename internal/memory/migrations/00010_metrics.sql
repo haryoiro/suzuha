@@ -1,4 +1,8 @@
 -- +goose Up
+DROP TABLE IF EXISTS metric_histogram_buckets;
+DROP TABLE IF EXISTS metrics;
+
+-- +goose Down
 CREATE TABLE IF NOT EXISTS metrics (
   name TEXT NOT NULL,
   labels TEXT NOT NULL DEFAULT '{}',
@@ -13,7 +17,3 @@ CREATE TABLE IF NOT EXISTS metric_histogram_buckets (
   count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (name, le)
 );
-
--- +goose Down
-DROP TABLE IF EXISTS metric_histogram_buckets;
-DROP TABLE IF EXISTS metrics;

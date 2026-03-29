@@ -143,7 +143,7 @@ consolidator:
 
 observe:
   log_level: "debug"
-  metrics_addr: ":9090"
+  internal_addr: ":9090"
 
 admin:
   addr: ":8080"

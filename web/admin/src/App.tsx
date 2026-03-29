@@ -3,7 +3,6 @@ import { ConfigProvider, Layout, Menu, theme, Drawer, Button, Grid, Spin } from 
 import {
   DashboardOutlined,
   DatabaseOutlined,
-  BarChartOutlined,
   FileTextOutlined,
   EditOutlined,
   TeamOutlined,
@@ -23,7 +22,6 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 const DashboardPage = lazy(() => import("./routes/index"));
 const MemoriesPage = lazy(() => import("./routes/memories/index"));
 const MemoryDetailPage = lazy(() => import("./routes/memories/$id"));
-const MetricsPage = lazy(() => import("./routes/metrics"));
 const LogsPage = lazy(() => import("./routes/logs"));
 const UsersPage = lazy(() => import("./routes/users/index"));
 const ContextPage = lazy(() => import("./routes/context"));
@@ -51,7 +49,6 @@ type Page =
   | { key: "tools" }
   | { key: "scheduler" }
   | { key: "prompts" }
-  | { key: "metrics" }
   | { key: "context" }
   | { key: "device" }
   | { key: "voice" }
@@ -65,7 +62,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "scheduler", "prompts", "metrics", "context", "device", "voice", "diary", "logs"];
+  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "scheduler", "prompts", "context", "device", "voice", "diary", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -98,7 +95,6 @@ export function App() {
     { key: "tools", icon: <ToolOutlined />, label: "Tools" },
     { key: "scheduler", icon: <ScheduleOutlined />, label: "Scheduler" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
-    { key: "metrics", icon: <BarChartOutlined />, label: "Metrics" },
     { key: "device", icon: <CameraOutlined />, label: "Device" },
     { key: "voice", icon: <SoundOutlined />, label: "Voice" },
     { key: "context", icon: <MessageOutlined />, label: "Context" },
@@ -132,8 +128,6 @@ export function App() {
         return <SchedulerPage />;
       case "prompts":
         return <PromptsPage />;
-      case "metrics":
-        return <MetricsPage />;
       case "device":
         return <DevicePage />;
       case "voice":

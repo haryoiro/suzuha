@@ -4,7 +4,6 @@ import (
 	"log/slog"
 
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/samber/do/v2"
 )
 
@@ -12,7 +11,6 @@ import (
 func Package(i do.Injector) {
 	do.Provide(i, func(i do.Injector) (*Client, error) {
 		cfg := do.MustInvoke[*config.Config](i)
-		metrics := do.MustInvoke[*observe.Metrics](i)
 		logger := do.MustInvoke[*slog.Logger](i)
 		return NewClient(
 			cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey, cfg.LLM.APIBase,
@@ -30,7 +28,7 @@ func Package(i do.Injector) {
 				APIKey:   cfg.Vision.APIKey,
 				APIBase:  cfg.Vision.APIBase,
 			},
-			metrics, logger,
+			logger,
 		)
 	})
 }

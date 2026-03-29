@@ -62,8 +62,6 @@ func run() error {
 	store := do.MustInvoke[*memory.SQLiteStore](injector)
 	defer store.Close()
 
-	_ = do.MustInvoke[*observe.Metrics](injector)
-
 	mcpMgr := do.MustInvoke[*mcp.Manager](injector)
 	defer mcpMgr.Close()
 
@@ -94,7 +92,7 @@ func run() error {
 	}
 
 	// Start internal HTTP server.
-	if cfg.Observe.MetricsAddr != "" {
+	if cfg.Observe.InternalAddr != "" {
 		go startInternalHTTP(injector, cfgPath)
 	}
 
@@ -806,8 +804,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		logger.Info("overland location endpoint enabled")
 	}
 
-	logger.Info("internal server starting", "addr", cfg.Observe.MetricsAddr)
-	if err := http.ListenAndServe(cfg.Observe.MetricsAddr, mux); err != nil {
+	logger.Info("internal server starting", "addr", cfg.Observe.InternalAddr)
+	if err := http.ListenAndServe(cfg.Observe.InternalAddr, mux); err != nil {
 		logger.Error("internal server failed", "error", err)
 	}
 }

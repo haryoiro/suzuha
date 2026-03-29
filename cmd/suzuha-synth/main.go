@@ -76,7 +76,7 @@ func runGenerate(cfgPath string, count int, outputPath string) error {
 		cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey, cfg.LLM.APIBase,
 		cfg.LLM.MaxTokens,
 		llm.EmbeddingConfig{}, llm.VisionConfig{},
-		nil, logger,
+		logger,
 	)
 	if err != nil {
 		return fmt.Errorf("llm: %w", err)

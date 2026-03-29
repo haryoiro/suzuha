@@ -15,7 +15,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"
 	"go.opentelemetry.io/otel/attribute"
@@ -43,7 +42,6 @@ type Agent struct {
 	locationStore   *location.Store
 	mediaStore      memory.MediaStore
 	logger          *slog.Logger
-	metrics         *observe.Metrics
 	hooks  []PipelineHook
 	tracer trace.Tracer // nil when tracing is disabled
 
@@ -107,7 +105,6 @@ func New(
 	db *sql.DB,
 	channelSettings *channelpkg.Store,
 	logger *slog.Logger,
-	metrics *observe.Metrics,
 ) *Agent {
 	dw := cfg.DrainWindow
 	if dw == 0 {
@@ -157,9 +154,8 @@ func New(
 		consol:           consolClient,
 		db:               db,
 		channelSettings:  channelSettings,
-		logger:           logger,
-		metrics:          metrics,
-		systemPrompt:     cfg.SystemPrompt,
+		logger:       logger,
+		systemPrompt: cfg.SystemPrompt,
 		botID:            cfg.BotID,
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
@@ -372,12 +368,6 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 				}
 			}
 
-			if a.metrics != nil {
-				for _, e := range batch {
-					a.metrics.EventsTotal.WithLabelValues(e.Source, e.Type).Inc()
-				}
-			}
-
 			if len(batch) > 1 {
 				a.logger.Info("まとめて処理する", "batch_size", len(batch), "source_key", string(key))
 			}
@@ -390,11 +380,6 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 			// handleBatch (only for sources that don't skip catch-up).
 			if !dc.SkipCatchUpStale {
 				if latest := a.catchUpStaleFor(ctx, key, ch, drainWindow); len(latest) > 0 {
-					if a.metrics != nil {
-						for _, e := range latest {
-							a.metrics.EventsTotal.WithLabelValues(e.Source, e.Type).Inc()
-						}
-					}
 					if err := a.handleBatchWith(ctx, key, latest); err != nil {
 						a.logger.Error("処理に失敗した", "error", err.Error(), "source_key", string(key))
 					}
@@ -446,9 +431,6 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 
 	// 2. Compact context if needed.
 	ratio := agentCtx.UsageRatio()
-	if a.metrics != nil {
-		a.metrics.ContextWindowUsage.Set(ratio)
-	}
 	a.logger.Debug("記憶の状態", "usage_ratio", fmt.Sprintf("%.2f", ratio),
 		"message_count", len(agentCtx.Messages()),
 		"calibration", fmt.Sprintf("%.2f", agentCtx.TokenCalibration()),

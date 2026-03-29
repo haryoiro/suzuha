@@ -841,26 +841,6 @@ paths:
           description: 'There is no content to send for this request, but the headers may be useful. '
       tags:
         - Memories
-  /api/metrics/json:
-    get:
-      operationId: Metrics_json
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  metrics:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MetricEntry'
-                required:
-                  - metrics
-      tags:
-        - Metrics
   /api/prompts:
     get:
       operationId: Prompts_list
@@ -1492,52 +1472,6 @@ components:
           type: boolean
       allOf:
         - $ref: '#/components/schemas/Memory'
-    MetricBucket:
-      type: object
-      required:
-        - le
-        - count
-      properties:
-        le:
-          type: number
-          format: double
-        count:
-          type: integer
-          format: int64
-    MetricEntry:
-      type: object
-      required:
-        - name
-        - help
-        - type
-      properties:
-        name:
-          type: string
-        help:
-          type: string
-        type:
-          type: string
-          enum:
-            - counter
-            - histogram
-            - gauge
-        value:
-          type: number
-          format: double
-        labels:
-          type: object
-          additionalProperties:
-            type: string
-        buckets:
-          type: array
-          items:
-            $ref: '#/components/schemas/MetricBucket'
-        sum:
-          type: number
-          format: double
-        count:
-          type: number
-          format: double
     OkResponse:
       type: object
       required:

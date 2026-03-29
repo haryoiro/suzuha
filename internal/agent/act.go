@@ -225,10 +225,6 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				continue
 			}
 
-			if a.metrics != nil {
-				a.metrics.ToolCallsTotal.WithLabelValues(tc.Function.Name, "called").Inc()
-			}
-
 			// Wrap tool execution in a tracing span.
 			var toolSpan trace.Span
 			if a.tracer != nil {
@@ -266,9 +262,6 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			if err != nil {
 				a.logger.Error("ツールが失敗した",
 					"tool", tc.Function.Name, "error", err, "elapsed_ms", elapsed.Milliseconds())
-				if a.metrics != nil {
-					a.metrics.ToolCallsTotal.WithLabelValues(tc.Function.Name, "error").Inc()
-				}
 				agentCtx.Add(llm.Message{
 					Role:       "tool",
 					Content:    fmt.Sprintf("error: %v", err),
@@ -282,14 +275,6 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 
 			if !result.StopAfter {
 				allStopAfter = false
-			}
-
-			if a.metrics != nil {
-				status := "success"
-				if result.IsError {
-					status = "error"
-				}
-				a.metrics.ToolCallsTotal.WithLabelValues(tc.Function.Name, status).Inc()
 			}
 
 			content := ""

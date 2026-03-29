@@ -1,23 +1,9 @@
-import { Button, Card, Col, Row, Statistic, Spin, Progress, message } from "antd";
+import { Button, Card, Spin, Progress, message } from "antd";
 import { useState, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useMetrics } from "../hooks/useMetrics";
-import type { MetricItem, BoredomStatus } from "../lib/api";
+import type { BoredomStatus } from "../lib/api";
 import { agentApi, boredomApi } from "../lib/api";
 import { formatRelative } from "../lib/date";
-
-function findMetric(
-  metrics: MetricItem[] | undefined,
-  name: string
-): MetricItem | undefined {
-  return metrics?.find((m) => m.name === name);
-}
-
-/** Compute average latency from a histogram metric's sum/count. */
-function avgFromHistogram(m: MetricItem | undefined): number {
-  if (!m || !m.sum || !m.count || m.count === 0) return 0;
-  return m.sum / m.count;
-}
 
 function boredomLabel(value: number): string {
   if (value >= 80) return "かなり暇";
@@ -35,11 +21,9 @@ function boredomColor(value: number): string {
 }
 
 export const DashboardPage = memo(function DashboardPage() {
-  const { data, isLoading, refetch } = useMetrics();
-  const metrics = data?.metrics;
   const [compacting, setCompacting] = useState(false);
 
-  const { data: boredom } = useQuery<BoredomStatus>({
+  const { data: boredom, isLoading } = useQuery<BoredomStatus>({
     queryKey: ["boredom"],
     queryFn: boredomApi.get,
     refetchInterval: 30000,
@@ -50,22 +34,12 @@ export const DashboardPage = memo(function DashboardPage() {
     try {
       const res = await agentApi.compact();
       message.success(`Compact done (${res.message_count} messages remaining)`);
-      refetch();
     } catch {
       message.error("Compact failed");
     } finally {
       setCompacting(false);
     }
   };
-
-  const tokensIn = findMetric(metrics, "suzuha_llm_tokens_input_total");
-  const tokensOut = findMetric(metrics, "suzuha_llm_tokens_output_total");
-  const latency = findMetric(metrics, "suzuha_llm_latency_seconds");
-  const contextUsage = findMetric(
-    metrics,
-    "suzuha_context_window_usage_ratio"
-  );
-  const memWrites = findMetric(metrics, "suzuha_memory_writes_total");
 
   if (isLoading) {
     return (
@@ -75,7 +49,6 @@ export const DashboardPage = memo(function DashboardPage() {
     );
   }
 
-  const avgLatency = avgFromHistogram(latency);
   const boredomVal = boredom?.boredom ?? 0;
 
   return (
@@ -129,54 +102,36 @@ export const DashboardPage = memo(function DashboardPage() {
         </Card>
       )}
 
-      <Row gutter={[16, 16]}>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic title="Tokens In" value={tokensIn?.value ?? 0} />
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic title="Tokens Out" value={tokensOut?.value ?? 0} />
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Avg Latency"
-              value={avgLatency}
-              precision={3}
-              suffix="s"
-            />
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Context Usage"
-              value={(contextUsage?.value ?? 0) * 100}
-              precision={0}
-              suffix="%"
-            />
-            <Button
-              size="small"
-              loading={compacting}
-              onClick={handleCompact}
-              style={{ marginTop: 8 }}
-            >
-              Compact
-            </Button>
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Memory Writes"
-              value={memWrites?.value ?? 0}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <Card
+        style={{ marginBottom: 16 }}
+        styles={{ body: { display: "flex", alignItems: "center", gap: 16 } }}
+      >
+        <Button
+          type="link"
+          href={`http://${window.location.hostname}:3000`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ padding: 0, fontSize: 14 }}
+        >
+          Langfuse Dashboard
+        </Button>
+        <Button
+          type="link"
+          href={`https://${window.location.hostname}:5174`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ padding: 0, fontSize: 14 }}
+        >
+          Voice Widget
+        </Button>
+        <Button
+          loading={compacting}
+          onClick={handleCompact}
+          size="small"
+        >
+          Compact Context
+        </Button>
+      </Card>
     </div>
   );
 });

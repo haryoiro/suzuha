@@ -174,10 +174,6 @@ type Invoker interface {
 	//
 	// GET /api/memories/vec-stats
 	MemoriesVecStats(ctx context.Context) (*VecStats, error)
-	// MetricsJSON invokes Metrics_json operation.
-	//
-	// GET /api/metrics/json
-	MetricsJSON(ctx context.Context) (*MetricsJSONOK, error)
 	// PromptsGet invokes Prompts_get operation.
 	//
 	// GET /api/prompts/{name}
@@ -3442,78 +3438,6 @@ func (c *Client) sendMemoriesVecStats(ctx context.Context) (res *VecStats, err e
 
 	stage = "DecodeResponse"
 	result, err := decodeMemoriesVecStatsResponse(resp)
-	if err != nil {
-		return res, errors.Wrap(err, "decode response")
-	}
-
-	return result, nil
-}
-
-// MetricsJSON invokes Metrics_json operation.
-//
-// GET /api/metrics/json
-func (c *Client) MetricsJSON(ctx context.Context) (*MetricsJSONOK, error) {
-	res, err := c.sendMetricsJSON(ctx)
-	return res, err
-}
-
-func (c *Client) sendMetricsJSON(ctx context.Context) (res *MetricsJSONOK, err error) {
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("Metrics_json"),
-		semconv.HTTPRequestMethodKey.String("GET"),
-		semconv.URLTemplateKey.String("/api/metrics/json"),
-	}
-	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		elapsedDuration := time.Since(startTime)
-		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
-	}()
-
-	// Increment request counter.
-	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-
-	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, MetricsJSONOperation,
-		trace.WithAttributes(otelAttrs...),
-		clientSpanKind,
-	)
-	// Track stage for error reporting.
-	var stage string
-	defer func() {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, stage)
-			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-		}
-		span.End()
-	}()
-
-	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [1]string
-	pathParts[0] = "/api/metrics/json"
-	uri.AddPathParts(u, pathParts[:]...)
-
-	stage = "EncodeRequest"
-	r, err := ht.NewRequest(ctx, "GET", u)
-	if err != nil {
-		return res, errors.Wrap(err, "create request")
-	}
-
-	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
-	if err != nil {
-		return res, errors.Wrap(err, "do request")
-	}
-	body := resp.Body
-	defer body.Close()
-
-	stage = "DecodeResponse"
-	result, err := decodeMetricsJSONResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
