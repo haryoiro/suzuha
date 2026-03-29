@@ -477,12 +477,23 @@ export interface ToolInfo {
   enabled: boolean;
 }
 
+export interface ToolExecuteResult {
+  ok: boolean;
+  output: string;
+  is_error: boolean;
+}
+
 export const toolsApi = {
   list: () => fetchJSON<{ data: ToolInfo[] }>("/api/tools"),
   toggle: (name: string, enabled: boolean) =>
     fetchJSON<{ ok: boolean }>(`/api/tools/${encodeURIComponent(name)}/enabled`, {
       method: "PUT",
       body: JSON.stringify({ enabled }),
+    }),
+  execute: (name: string, input?: Record<string, unknown>) =>
+    fetchJSON<ToolExecuteResult>(`/api/tools/${encodeURIComponent(name)}/execute`, {
+      method: "POST",
+      body: JSON.stringify(input ?? {}),
     }),
 };
 

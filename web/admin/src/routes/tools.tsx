@@ -1,5 +1,6 @@
 import { useState, memo, useMemo } from "react";
 import { Table, Typography, Input, Modal, Tag, Descriptions, Card, Select, Switch, Button, Flex, message } from "antd";
+import { PlayCircleOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
 import { useTools } from "../hooks/useTools";
@@ -147,6 +148,8 @@ export const ToolsPage = memo(function ToolsPage() {
   const { data, isLoading } = useTools();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ToolInfo | null>(null);
+  const [execInput, setExecInput] = useState("{}");
+  const [execOutput, setExecOutput] = useState<string | null>(null);
 
   const toggleMutation = useMutation({
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
@@ -154,6 +157,31 @@ export const ToolsPage = memo(function ToolsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tools"] }),
     onError: () => message.error("Toggle failed"),
   });
+
+  const execMutation = useMutation({
+    mutationFn: ({ name, input }: { name: string; input: Record<string, unknown> }) =>
+      toolsApi.execute(name, input),
+    onSuccess: (result) => {
+      setExecOutput(result.output);
+      if (result.is_error) {
+        message.warning("Tool returned error");
+      } else {
+        message.success("Executed");
+      }
+    },
+    onError: () => message.error("Execution failed"),
+  });
+
+  const handleExecute = () => {
+    if (!selected) return;
+    try {
+      const parsed = JSON.parse(execInput);
+      setExecOutput(null);
+      execMutation.mutate({ name: selected.name, input: parsed });
+    } catch {
+      message.error("Invalid JSON");
+    }
+  };
 
   const tools = useMemo(() => {
     const all = data?.data ?? [];
@@ -231,7 +259,7 @@ export const ToolsPage = memo(function ToolsPage() {
       <Modal
         title={selected?.name}
         open={!!selected}
-        onCancel={() => setSelected(null)}
+        onCancel={() => { setSelected(null); setExecOutput(null); setExecInput("{}"); }}
         footer={null}
         width={640}
       >
@@ -240,6 +268,37 @@ export const ToolsPage = memo(function ToolsPage() {
             <p>{selected.description}</p>
             <Title level={5} style={{ marginTop: 16 }}>Parameters</Title>
             <SchemaView schema={selected.input_schema} />
+            <Title level={5} style={{ marginTop: 16 }}>Execute</Title>
+            <Input.TextArea
+              rows={3}
+              value={execInput}
+              onChange={(e) => setExecInput(e.target.value)}
+              placeholder='{"key": "value"}'
+              style={{ fontFamily: "monospace", fontSize: 12, marginBottom: 8 }}
+            />
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={execMutation.isPending}
+              onClick={handleExecute}
+            >
+              Execute
+            </Button>
+            {execOutput != null && (
+              <pre style={{
+                marginTop: 12,
+                padding: 12,
+                background: "#f5f5f5",
+                borderRadius: 6,
+                maxHeight: 300,
+                overflow: "auto",
+                fontSize: 12,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}>
+                {execOutput}
+              </pre>
+            )}
           </>
         )}
       </Modal>

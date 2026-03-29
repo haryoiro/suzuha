@@ -148,6 +148,17 @@ func (h *AdminHandler) proxySchedulerTrigger(w http.ResponseWriter, r *http.Requ
 	w.Write(data)
 }
 
+func (h *AdminHandler) proxyToolExecute(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	data, err := h.proxyPostRaw(r.Context(), "/internal/tools/"+name+"/execute", r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
 func (h *AdminHandler) proxyVoicevoxSpeakers(w http.ResponseWriter, r *http.Request) {
 	data, err := h.proxyGet(r.Context(), "/internal/voicevox/speakers")
 	if err != nil {

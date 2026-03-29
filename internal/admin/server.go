@@ -50,6 +50,9 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	mux.HandleFunc("GET /api/scheduler/jobs", adminHandler.proxySchedulerJobs)
 	mux.HandleFunc("POST /api/scheduler/trigger/{task}", adminHandler.proxySchedulerTrigger)
 
+	// Tool execution proxy.
+	mux.HandleFunc("POST /api/tools/{name}/execute", adminHandler.proxyToolExecute)
+
 	// Device camera/detection proxy to internal server.
 	mux.HandleFunc("GET /api/device/frame", adminHandler.proxyDeviceFrame)
 	mux.HandleFunc("GET /api/device/detections", adminHandler.proxyDeviceDetections)

@@ -580,6 +580,38 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		fmt.Fprint(w, `{"ok":true}`)
 	})
 
+	// Tool execution API.
+	mux.HandleFunc("POST /internal/tools/{name}/execute", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		t, ok := registry.Get(name)
+		if !ok {
+			http.Error(w, `{"error":"tool not found"}`, http.StatusNotFound)
+			return
+		}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+		if len(body) == 0 {
+			body = []byte("{}")
+		}
+		logger.Info("tool: 手動実行", "tool", name)
+		result, err := t.Execute(r.Context(), json.RawMessage(body))
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+			return
+		}
+		var text string
+		for _, c := range result.Content {
+			text += c.Text
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"ok":       !result.IsError,
+			"output":   text,
+			"is_error": result.IsError,
+		})
+	})
+
 	// VOICEVOX speaker management (find voicevox config from TTS providers).
 	var voicevoxCfg *config.TTSProvider
 	for i := range cfg.Voice.TTS {
