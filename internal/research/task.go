@@ -11,13 +11,11 @@ import (
 	"github.com/haryoiro/suzuha/internal/websearch"
 )
 
-// taskConfig holds task-specific configuration from config.yaml.
 type taskConfig struct {
 	SearXNGURL string `json:"searxng_url"`
 	MaxSources int    `json:"max_sources"`
 }
 
-// taskState is saved to the task_state table between runs.
 type taskState struct {
 	LastResearchedAt time.Time `json:"last_researched_at"`
 }
@@ -72,7 +70,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	searx := websearch.NewSearXNG(tc.SearXNGURL)
 
-	// Pick a random starting topic.
 	article, err := websearch.RandomArticle(ctx)
 	if err != nil {
 		cc.Logger.Error("research: wikipedia random", "error", err)
@@ -81,22 +78,13 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	query := article.Title
 	cc.Logger.Info("research: starting", "query", query)
 
-	// Search.
 	results, err := searx.Search(ctx, query, searchResults)
 	if err != nil || len(results) == 0 {
 		cc.Logger.Warn("research: no search results")
 		return nil
 	}
 
-	// LLM picks relevant results.
-	picked := filterResults(results, pickResults(ctx, cc.LLM, query, results, maxSources))
-	if len(picked) == 0 {
-		cc.Logger.Warn("research: no relevant results picked")
-		return nil
-	}
-
-	// Parallel fetch.
-	sources := fetchAll(ctx, searx, picked, pageMaxRunes)
+	sources := fetchAll(ctx, searx, results, maxSources, pageMaxRunes)
 	if len(sources) == 0 {
 		cc.Logger.Warn("research: no pages fetched")
 		return nil
@@ -108,7 +96,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	t.lastResearchedAt = t.now()
 	t.mu.Unlock()
 	t.saveState(ctx, cc)
-
 	return nil
 }
 
@@ -117,9 +104,7 @@ func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
 		return
 	}
 	t.mu.Lock()
-	s := taskState{
-		LastResearchedAt: t.lastResearchedAt,
-	}
+	s := taskState{LastResearchedAt: t.lastResearchedAt}
 	t.mu.Unlock()
 	if err := scheduler.SaveState(ctx, cc.DB, t.Name(), &s); err != nil {
 		cc.Logger.Warn("research: save state", "error", err)
