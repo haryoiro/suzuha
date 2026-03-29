@@ -127,7 +127,6 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		nil, // db — nil is OK for tests that don't track channel activity
 		nil, // channelSettings — nil skips channel filtering
 		slog.Default(),
-		nil, // metrics
 	)
 	for _, o := range opts {
 		o(ag)
