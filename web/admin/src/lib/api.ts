@@ -604,10 +604,48 @@ export const deviceVisionApi = {
     }),
 };
 
+export const deviceServoApi = {
+  set: (pan: number, tilt: number) =>
+    fetchJSON<{ ok: boolean }>("/api/device/servo", {
+      method: "POST",
+      body: JSON.stringify({ pan, tilt }),
+    }),
+};
+
 export const deviceVolumeApi = {
   set: (level: number) =>
     fetchJSON<{ ok: boolean; level: number }>("/api/device/volume", {
       method: "PUT",
       body: JSON.stringify({ level }),
+    }),
+};
+
+export interface TrackerConfig {
+  target_label: string;
+  confirm_frames: number;
+  lost_frames: number;
+  iou_threshold: number;
+  min_confidence: number;
+  smoothing_alpha: number;
+  dead_zone: number;
+  proportional_gain: number;
+  max_deg_per_frame: number;
+  frame_width: number;
+  frame_height: number;
+  invert_pan: boolean;
+  invert_tilt: boolean;
+}
+
+export interface TrackerStatus {
+  enabled: boolean;
+  config: TrackerConfig;
+}
+
+export const deviceTrackerApi = {
+  get: () => fetchJSON<TrackerStatus>("/api/device/tracker"),
+  set: (body: { enabled?: boolean; target_label?: string } & Partial<TrackerConfig>) =>
+    fetchJSON<{ ok: boolean }>("/api/device/tracker", {
+      method: "PUT",
+      body: JSON.stringify(body),
     }),
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Card, Tag, Typography, Space, Empty, List, Switch, Slider } from "antd";
+import { Card, Tag, Typography, Space, Empty, List, Switch, Slider, Select, InputNumber, Collapse } from "antd";
 import {
+  AimOutlined,
   CameraOutlined,
   DisconnectOutlined,
   LinkOutlined,
@@ -11,8 +12,11 @@ import {
   connectDetectionStream,
   deviceVisionApi,
   deviceVolumeApi,
+  deviceServoApi,
+  deviceTrackerApi,
   type DeviceDetectionEvent,
   type DeviceDetection,
+  type TrackerConfig,
 } from "../lib/api";
 
 const { Title, Text } = Typography;
@@ -36,6 +40,71 @@ function labelColor(label: string): string {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
+const KNOWN_LABELS = ["", "face", "head", "head_front", "head_back", "body"];
+
+function TrackerSettings({ config, onChange }: { config: TrackerConfig; onChange: (patch: Partial<TrackerConfig>) => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>Target label</Text>
+        <Select
+          size="small"
+          style={{ width: "100%" }}
+          value={config.target_label || ""}
+          onChange={(v) => onChange({ target_label: v })}
+          options={KNOWN_LABELS.map((l) => ({ label: l || "(cascade: face→head→body)", value: l }))}
+          showSearch
+        />
+      </div>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>Dead zone ({(config.dead_zone * 100).toFixed(0)}%)</Text>
+        <Slider
+          min={0} max={0.3} step={0.01}
+          value={config.dead_zone}
+          onChange={(v) => onChange({ dead_zone: v })}
+          tooltip={{ formatter: (v) => `${((v ?? 0) * 100).toFixed(0)}%` }}
+        />
+      </div>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>Smoothing ({config.smoothing_alpha.toFixed(2)})</Text>
+        <Slider
+          min={0.05} max={1} step={0.05}
+          value={config.smoothing_alpha}
+          onChange={(v) => onChange({ smoothing_alpha: v })}
+        />
+      </div>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>Speed limit ({config.max_deg_per_frame}°/frame)</Text>
+        <Slider
+          min={1} max={30} step={1}
+          value={config.max_deg_per_frame}
+          onChange={(v) => onChange({ max_deg_per_frame: v })}
+        />
+      </div>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>Proportional gain</Text>
+        <Slider
+          min={0.01} max={0.5} step={0.01}
+          value={config.proportional_gain}
+          onChange={(v) => onChange({ proportional_gain: v })}
+        />
+      </div>
+      <div style={{ display: "flex", gap: 16 }}>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Invert Pan</Text>
+          <br />
+          <Switch size="small" checked={config.invert_pan} onChange={(v) => onChange({ invert_pan: v })} />
+        </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Invert Tilt</Text>
+          <br />
+          <Switch size="small" checked={config.invert_tilt} onChange={(v) => onChange({ invert_tilt: v })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DevicePage() {
   const [connected, setConnected] = useState(false);
   const [detections, setDetections] = useState<DeviceDetection[]>([]);
@@ -44,6 +113,10 @@ export default function DevicePage() {
   const [hasFrame, setHasFrame] = useState(false);
   const [visionEnabled, setVisionEnabled] = useState(true);
   const [volume, setVolume] = useState(50);
+  const [trackerEnabled, setTrackerEnabled] = useState(false);
+  const [trackerConfig, setTrackerConfig] = useState<TrackerConfig | null>(null);
+  const [pan, setPan] = useState(90);
+  const [tilt, setTilt] = useState(90);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,6 +125,10 @@ export default function DevicePage() {
   // Fetch vision toggle state.
   useEffect(() => {
     deviceVisionApi.get().then((r) => setVisionEnabled(r.enabled)).catch(() => {});
+    deviceTrackerApi.get().then((r) => {
+      setTrackerEnabled(r.enabled);
+      setTrackerConfig(r.config);
+    }).catch(() => {});
   }, []);
 
   // Poll frame image.
@@ -177,6 +254,15 @@ export default function DevicePage() {
           checkedChildren="Vision ON"
           unCheckedChildren="Vision OFF"
         />
+        <Switch
+          checked={trackerEnabled}
+          onChange={(v) => {
+            setTrackerEnabled(v);
+            deviceTrackerApi.set({ enabled: v });
+          }}
+          checkedChildren="Tracking ON"
+          unCheckedChildren="Tracking OFF"
+        />
         <SoundOutlined style={{ marginLeft: 16 }} />
         <Slider
           min={0}
@@ -187,6 +273,26 @@ export default function DevicePage() {
           style={{ width: 120, margin: 0 }}
           tooltip={{ formatter: (v) => `${v}%` }}
         />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <Text type="secondary">Pan</Text>
+        <Slider
+          min={0} max={180} value={pan}
+          onChange={(v) => setPan(v)}
+          onChangeComplete={(v) => { setPan(v); deviceServoApi.set(v, tilt); }}
+          style={{ width: 160, margin: 0 }}
+          tooltip={{ formatter: (v) => `${v}°` }}
+        />
+        <Text type="secondary">Tilt</Text>
+        <Slider
+          min={0} max={180} value={tilt}
+          onChange={(v) => setTilt(v)}
+          onChangeComplete={(v) => { setTilt(v); deviceServoApi.set(pan, v); }}
+          style={{ width: 160, margin: 0 }}
+          tooltip={{ formatter: (v) => `${v}°` }}
+        />
+        <Text type="secondary" style={{ fontSize: 11 }}>({pan}°, {tilt}°)</Text>
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -281,6 +387,26 @@ export default function DevicePage() {
             />
           ) : (
             <Text type="secondary">No objects detected</Text>
+          )}
+
+          {trackerConfig && (
+            <Collapse
+              size="small"
+              style={{ marginTop: 12 }}
+              items={[{
+                key: "tracker",
+                label: (
+                  <Space>
+                    <AimOutlined />
+                    <span>Tracker Settings</span>
+                  </Space>
+                ),
+                children: <TrackerSettings config={trackerConfig} onChange={(patch) => {
+                  setTrackerConfig((prev) => prev ? { ...prev, ...patch } : prev);
+                  deviceTrackerApi.set(patch);
+                }} />,
+              }]}
+            />
           )}
         </Card>
       </div>

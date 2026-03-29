@@ -74,9 +74,40 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 		w.Write(data)
 	})
 
+	// Device servo proxy.
+	mux.HandleFunc("POST /api/device/servo", func(w http.ResponseWriter, r *http.Request) {
+		data, err := adminHandler.proxyPostRaw(r.Context(), "/internal/device/servo", r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+
 	// Device volume proxy.
 	mux.HandleFunc("PUT /api/device/volume", func(w http.ResponseWriter, r *http.Request) {
 		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/volume", r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+
+	// Device tracker proxy.
+	mux.HandleFunc("GET /api/device/tracker", func(w http.ResponseWriter, r *http.Request) {
+		data, err := adminHandler.proxyGet(r.Context(), "/internal/device/tracker")
+		if err != nil {
+			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+	})
+	mux.HandleFunc("PUT /api/device/tracker", func(w http.ResponseWriter, r *http.Request) {
+		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/tracker", r.Body)
 		if err != nil {
 			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
 			return

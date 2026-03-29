@@ -94,9 +94,11 @@ func (h *Hub) handleImage(jpeg []byte) {
 	// Store latest frame for admin viewing.
 	h.frames.UpdateFrame(jpeg)
 
-	// Run YOLO detection asynchronously.
-	if h.yolo != nil {
+	// Run YOLO detection asynchronously. Skip if previous detection is still running.
+	if h.yolo != nil && h.detectSem != nil && h.detectSem.TryAcquire(1) {
 		go func() {
+			defer h.detectSem.Release(1)
+
 			result, err := h.yolo.Detect(context.Background(), jpeg)
 			if err != nil {
 				h.logger.Debug("物体検出に失敗", "error", err)
@@ -108,6 +110,11 @@ func (h *Hub) handleImage(jpeg []byte) {
 			// Notify agent on significant changes.
 			if h.changes.Update(result.Detections) {
 				h.logger.Info("視界に変化があった")
+			}
+
+			// Feed object tracker for LLM-free servo tracking.
+			if h.tracker != nil {
+				h.tracker.Feed(result.Detections)
 			}
 		}()
 	}

@@ -59,6 +59,11 @@ func (t *servoTool) Execute(_ context.Context, input json.RawMessage) (*tool.Too
 		return tool.ErrorResult("サーボコマンド送信失敗: " + err.Error()), nil
 	}
 
+	// Keep tracker in sync with manual servo moves.
+	if tr := t.hub.Tracker(); tr != nil {
+		tr.UpdatePosition(float64(args.Pan), float64(args.Tilt))
+	}
+
 	return tool.TextResult(fmt.Sprintf("サーボを移動: pan=%d, tilt=%d", args.Pan, args.Tilt)), nil
 }
 

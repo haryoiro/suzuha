@@ -9,6 +9,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/voice"
+	"golang.org/x/sync/semaphore"
 )
 
 // Frame type constants matching firmware/main/config.h.
@@ -43,7 +44,9 @@ type Hub struct {
 	yolo    *YOLOClient
 	frames  *FrameStore
 	changes *ChangeDetector
-	logger  *slog.Logger
+	tracker   *ObjectTracker
+	detectSem *semaphore.Weighted // limit concurrent YOLO detections to 1
+	logger    *slog.Logger
 
 	// Audio accumulator for ESP device VAD-like chunking
 	audioBuf     []byte
@@ -61,7 +64,7 @@ func NewHub(bus *event.Bus, tts voice.TTS, stt voice.STT, yoloURL, defaultChanne
 	if yoloURL != "" {
 		yolo = NewYOLOClient(yoloURL)
 	}
-	return &Hub{
+	h := &Hub{
 		clients:   make(map[string]Client),
 		bus:       bus,
 		tts:       tts,
@@ -69,10 +72,13 @@ func NewHub(bus *event.Bus, tts voice.TTS, stt voice.STT, yoloURL, defaultChanne
 		yolo:      yolo,
 		frames:    NewFrameStore(),
 		changes:   NewChangeDetector(bus, 30*time.Second, defaultChannel),
+		detectSem: semaphore.NewWeighted(1),
 		ownerID:   ownerID,
 		ownerName: ownerName,
 		logger:    logger,
 	}
+	h.tracker = NewObjectTracker(DefaultTrackerConfig(), h.Device, logger)
+	return h
 }
 
 // ChangeDetector returns the change detector for API access.
@@ -83,6 +89,11 @@ func (h *Hub) ChangeDetector() *ChangeDetector {
 // Frames returns the FrameStore for registering HTTP handlers.
 func (h *Hub) Frames() *FrameStore {
 	return h.frames
+}
+
+// Tracker returns the object tracker for API access.
+func (h *Hub) Tracker() *ObjectTracker {
+	return h.tracker
 }
 
 // addClient registers a client in the hub.
