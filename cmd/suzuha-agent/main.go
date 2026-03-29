@@ -670,6 +670,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		}
 		hub := device.NewHub(bus, ttsClient, sttClient, yoloURL, deviceChannel, ownerID, ownerName, logger)
 		mux.HandleFunc("GET /ws/device", hub.Handler())
+		mux.HandleFunc("GET /ws/web", hub.WebHandler())
 		mux.HandleFunc("GET /internal/device/frame", hub.Frames().FrameHandler())
 		mux.HandleFunc("GET /internal/device/detections", hub.Frames().DetectionStreamHandler())
 		ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
