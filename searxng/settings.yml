@@ -33,6 +33,7 @@ engines:
     engine: bing
     shortcut: bi
     disabled: false
+    region: ja-JP
   - name: qwant
     engine: qwant
     shortcut: qw

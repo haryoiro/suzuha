@@ -40,6 +40,16 @@ func NewSearXNG(baseURL string) *SearXNGClient {
 	}
 }
 
+// hasJapanese returns true if the string contains any Japanese characters.
+func hasJapanese(s string) bool {
+	for _, r := range s {
+		if r >= 0x3000 && r <= 0x9FFF || r >= 0xF900 && r <= 0xFAFF {
+			return true
+		}
+	}
+	return false
+}
+
 // Search performs a search and returns up to limit results.
 func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	u, err := url.Parse(c.baseURL)
@@ -47,8 +57,14 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 		return nil, fmt.Errorf("searxng: URLのパースに失敗: %w", err)
 	}
 	u.Path = "/search"
+	// Append Japanese context word for non-Japanese queries to avoid
+	// Chinese results from Bing.
+	searchQuery := query
+	if !hasJapanese(query) {
+		searchQuery = query + " とは"
+	}
 	q := u.Query()
-	q.Set("q", query)
+	q.Set("q", searchQuery)
 	q.Set("format", "json")
 	q.Set("language", "ja")
 	u.RawQuery = q.Encode()
