@@ -7,16 +7,15 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
-// CompactRequest is sent from the agent to request context compaction.
+// CompactRequest is sent from the agent to request memory extraction
+// before context is cleared.
 type CompactRequest struct {
-	Messages    []llm.Message
-	TargetCount int
+	Messages []llm.Message
 }
 
-// CompactResult is returned by the consolidator with compaction decisions.
+// CompactResult is returned by the consolidator with extracted memories.
 type CompactResult struct {
-	KeepIndices []int
-	Memories    []memory.Memory
+	Memories []memory.Memory
 }
 
 // Client is the interface the agent uses to request compaction.

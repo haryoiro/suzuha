@@ -6,25 +6,13 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
-func TestParseCompactResponse_KeepAndMemories(t *testing.T) {
-	input := `KEEP: 0, 2, 5, 7
-
-MEMORIES:
+func TestParseCompactResponse_MemoriesOnly(t *testing.T) {
+	input := `MEMORIES:
 - [user] Likes Go programming
 - [world] Tokyo is the capital of Japan
 - [tool] fetch tool was used to get weather data`
 
-	result := parseCompactResponse(input, 10)
-
-	if len(result.KeepIndices) != 4 {
-		t.Fatalf("expected 4 keep indices, got %d", len(result.KeepIndices))
-	}
-	expected := []int{0, 2, 5, 7}
-	for i, idx := range result.KeepIndices {
-		if idx != expected[i] {
-			t.Errorf("keep index %d: expected %d, got %d", i, expected[i], idx)
-		}
-	}
+	result := parseCompactResponse(input)
 
 	if len(result.Memories) != 3 {
 		t.Fatalf("expected 3 memories, got %d", len(result.Memories))
@@ -37,6 +25,16 @@ MEMORIES:
 	}
 	if result.Memories[2].Type != memory.MemoryTypeTool {
 		t.Errorf("expected tool type, got %s", result.Memories[2].Type)
+	}
+}
+
+func TestParseCompactResponse_EmptyMemories(t *testing.T) {
+	input := `MEMORIES:`
+
+	result := parseCompactResponse(input)
+
+	if len(result.Memories) != 0 {
+		t.Fatalf("expected 0 memories, got %d", len(result.Memories))
 	}
 }
 
@@ -60,7 +58,6 @@ func TestParseMemoryLine_WithUserID(t *testing.T) {
 }
 
 func TestParseMemoryLine_WithoutUserID(t *testing.T) {
-	// Backward compatibility: [user] without user_id still works.
 	mem, ok := parseMemoryLine("[user] Likes Go programming")
 	if !ok {
 		t.Fatal("expected ok=true")
@@ -122,25 +119,21 @@ func TestParseMemoryLine_Self(t *testing.T) {
 }
 
 func TestParseCompactResponse_UserMemoriesWithUserID(t *testing.T) {
-	input := `KEEP: 0, 1
-
-MEMORIES:
+	input := `MEMORIES:
 - [user user_id=12345] Likes Python
 - [user] General user fact without ID
 - [world] Some world fact`
 
-	result := parseCompactResponse(input, 5)
+	result := parseCompactResponse(input)
 
 	if len(result.Memories) != 3 {
 		t.Fatalf("expected 3 memories, got %d", len(result.Memories))
 	}
 
-	// First memory has user_id in metadata.
 	if result.Memories[0].Metadata == nil || result.Memories[0].Metadata["user_id"] != "12345" {
 		t.Errorf("expected user_id=12345, got %v", result.Memories[0].Metadata)
 	}
 
-	// Second memory has no user_id.
 	if result.Memories[1].Metadata != nil {
 		t.Errorf("expected nil metadata, got %v", result.Memories[1].Metadata)
 	}

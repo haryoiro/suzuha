@@ -59,52 +59,31 @@ func (a *Agent) compact(ctx context.Context) {
 	a.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 }
 
-// doCompactWith performs the actual compaction logic for the given context and source key.
-// If async is true, new messages appended during compaction are preserved via CompactReplace;
-// otherwise the context is fully replaced via ReplaceAll.
+// doCompactWith extracts long-term memories from the context, then clears all
+// messages. The next turn will re-inject recent channel history via
+// injectChannelHistoryWith, so no messages need to be kept.
+// If async is true, messages appended during compaction are preserved.
 func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey, msgs []llm.Message, async bool) {
 	n := len(msgs)
-	target := n / 2
 
+	// Extract long-term memories via consolidator (best-effort).
 	if a.consol != nil {
-		result, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
-			Messages:    msgs,
-			TargetCount: target,
+		_, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
+			Messages: msgs,
 		})
 		if err != nil {
-			a.logger.Warn("記憶の整理がうまくいかず、古い方から忘れた", "error", err)
-			agentCtx.TruncateOldest(n / 2)
-			a.resetAndPersistWith(ctx, agentCtx, sourceKey)
-			return
+			a.logger.Warn("記憶の抽出に失敗", "error", err)
 		}
-
-		if len(result.KeepIndices) == 0 {
-			a.logger.Warn("整理する記憶の選別ができず、古い方から忘れた")
-			agentCtx.TruncateOldest(n / 2)
-			a.resetAndPersistWith(ctx, agentCtx, sourceKey)
-			return
-		}
-
-		var kept []llm.Message
-		for _, idx := range result.KeepIndices {
-			if idx >= 0 && idx < n {
-				kept = append(kept, msgs[idx])
-			}
-		}
-		if async {
-			agentCtx.CompactReplace(n, kept)
-		} else {
-			agentCtx.ReplaceAll(kept)
-		}
-		a.resetAndPersistWith(ctx, agentCtx, sourceKey)
-		a.logger.Info("記憶を整理した", "kept", len(kept), "original", n)
-		return
 	}
 
-	// No consolidator available — simple truncation fallback.
-	agentCtx.TruncateOldest(n / 2)
+	// Clear all messages; channel history is re-injected next turn.
+	if async {
+		agentCtx.CompactReplace(n, nil)
+	} else {
+		agentCtx.ReplaceAll(nil)
+	}
 	a.resetAndPersistWith(ctx, agentCtx, sourceKey)
-	a.logger.Info("古い記憶を忘れた", "original", n)
+	a.logger.Info("記憶を整理した（全クリア）", "original", n)
 }
 
 // resetAndPersistWith clears injected state and saves context to DB.

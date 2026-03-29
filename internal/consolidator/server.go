@@ -118,14 +118,14 @@ func NewServer(llmClient *llm.Client, store memory.Store, logger *slog.Logger) *
 	}
 }
 
-// Compact analyzes messages and decides what to keep vs. store as long-term memory.
+// Compact extracts long-term memories from the given messages.
 func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResult, error) {
 	if len(req.Messages) == 0 {
 		return &CompactResult{}, nil
 	}
 
-	// Build a prompt asking the LLM to select important messages and extract memories.
-	prompt := buildCompactPrompt(req.Messages, req.TargetCount)
+	// Build a prompt asking the LLM to extract memories from the conversation.
+	prompt := buildCompactPrompt(req.Messages)
 
 	resp, err := s.llmClient.CompleteRawDefault(ctx, []providers.Message{
 		{Role: "system", Content: compactSystemPrompt},
@@ -135,7 +135,7 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 		return nil, fmt.Errorf("consolidator: コンパクト処理のLLM呼び出しに失敗: %w", err)
 	}
 
-	result := parseCompactResponse(resp.Text, len(req.Messages))
+	result := parseCompactResponse(resp.Text)
 
 	// Build per-message-index media key map.
 	mediaByIndex := collectMediaKeysByIndex(req.Messages)
@@ -173,15 +173,11 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 	return result, nil
 }
 
-const compactSystemPrompt = `You are a memory consolidation agent. Your job is to analyze a conversation and:
-1. Select which messages are most important to keep in short-term context.
-2. Extract key information that should be stored as long-term memories.
+const compactSystemPrompt = `You are a memory extraction agent. Your job is to analyze a conversation and extract key information that should be stored as long-term memories.
 
 IMPORTANT: Write all MEMORIES content in Japanese (日本語). The conversation is in Japanese, and memories must also be in Japanese.
 
 Respond in this exact format:
-
-KEEP: 0,2,5,7 (comma-separated message indices to keep)
 
 MEMORIES:
 - [user user_id=<platform_user_id>] そのユーザーに関する情報や好み
@@ -202,13 +198,15 @@ MEMORIES:
 - 例: 「プログラミングの話になると饒舌になる」「朝は機嫌が悪い」「○○の話題が苦手」
 - 毎回出す必要はない。本当に新しい自己認識があった時だけ
 
+抽出するに値しない雑談・挨拶だけの場合は「MEMORIES:」のみ書いて空にしてよい。
+
 IMPORTANT: For [user] memories, always include the user_id of the person the fact is about.
 The user_id can be found in message metadata (user_id=... in the message header).
 If the fact is about a user whose user_id is not clear, omit the user_id.`
 
-func buildCompactPrompt(messages []llm.Message, targetCount int) string {
+func buildCompactPrompt(messages []llm.Message) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Here are %d messages. Select approximately %d to keep.\n\n", len(messages), targetCount)
+	fmt.Fprintf(&sb, "Here are %d messages. Extract important information as long-term memories.\n\n", len(messages))
 	for i, m := range messages {
 		imgTag := ""
 		if len(m.MediaKeys) > 0 || len(m.ImageURLs) > 0 {
@@ -224,64 +222,27 @@ func buildCompactPrompt(messages []llm.Message, targetCount int) string {
 	return sb.String()
 }
 
-func parseCompactResponse(text string, msgCount int) *CompactResult {
+func parseCompactResponse(text string) *CompactResult {
 	result := &CompactResult{}
 
 	lines := strings.Split(text, "\n")
-	section := "" // "memories"
+	inMemories := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		upper := strings.ToUpper(line)
 
-		if strings.HasPrefix(upper, "KEEP:") {
-			indices := line[len("KEEP:"):]
-			// Strip trailing parenthetical comments.
-			if parenIdx := strings.Index(indices, "("); parenIdx >= 0 {
-				indices = indices[:parenIdx]
-			}
-			for _, part := range strings.Split(indices, ",") {
-				part = strings.TrimSpace(part)
-				if part == "" {
-					continue
-				}
-				var idx int
-				if _, err := fmt.Sscanf(part, "%d", &idx); err == nil && idx >= 0 && idx < msgCount {
-					result.KeepIndices = append(result.KeepIndices, idx)
-				}
-			}
-			section = ""
+		if strings.HasPrefix(strings.ToUpper(line), "MEMORIES:") {
+			inMemories = true
 			continue
 		}
 
-		if strings.HasPrefix(upper, "MEMORIES:") {
-			section = "memories"
-			continue
-		}
-
-		if !strings.HasPrefix(line, "- ") {
+		if !inMemories || !strings.HasPrefix(line, "- ") {
 			continue
 		}
 		content := strings.TrimPrefix(line, "- ")
-
-		if section == "memories" {
-			if mem, ok := parseMemoryLine(content); ok {
-				result.Memories = append(result.Memories, mem)
-			}
+		if mem, ok := parseMemoryLine(content); ok {
+			result.Memories = append(result.Memories, mem)
 		}
-	}
-
-	// Deduplicate KeepIndices.
-	if len(result.KeepIndices) > 0 {
-		seen := make(map[int]bool, len(result.KeepIndices))
-		deduped := make([]int, 0, len(result.KeepIndices))
-		for _, idx := range result.KeepIndices {
-			if !seen[idx] {
-				seen[idx] = true
-				deduped = append(deduped, idx)
-			}
-		}
-		result.KeepIndices = deduped
 	}
 
 	return result
