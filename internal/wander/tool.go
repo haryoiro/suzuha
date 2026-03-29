@@ -1,4 +1,4 @@
-package explore
+package wander
 
 import (
 	"context"
@@ -8,26 +8,27 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/websearch"
 )
 
-// ExploreTool allows the LLM to trigger a web exploration session.
-type ExploreTool struct {
-	searx        *SearXNGClient
+// WanderTool allows the LLM to trigger a casual web wandering session.
+type WanderTool struct {
+	searx        *websearch.SearXNGClient
 	llm          *llm.Client
 	mem          memory.Store
 	systemPrompt string
 	maxDepth     int
 }
 
-var _ tool.Tool = (*ExploreTool)(nil)
+var _ tool.Tool = (*WanderTool)(nil)
 
-// NewExploreTool creates an explore tool.
-func NewExploreTool(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, maxDepth int) *ExploreTool {
+// NewWanderTool creates a wander tool.
+func NewWanderTool(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, maxDepth int) *WanderTool {
 	if maxDepth <= 0 {
 		maxDepth = defaultMaxDepth
 	}
-	return &ExploreTool{
-		searx:        NewSearXNG(searxngURL),
+	return &WanderTool{
+		searx:        websearch.NewSearXNG(searxngURL),
 		llm:          llmClient,
 		mem:          memStore,
 		systemPrompt: systemPrompt,
@@ -35,12 +36,12 @@ func NewExploreTool(searxngURL string, llmClient *llm.Client, memStore memory.St
 	}
 }
 
-func (t *ExploreTool) Name() string { return "explore" }
-func (t *ExploreTool) Description() string {
-	return "ネットを散歩して情報を探索する。気になるトピックから出発して関連情報を芋づる式にたどる。結果はメモリに保存されるが、結果はみんなに共有されていないので共有したかったら知ったことを共有しよう。"
+func (t *WanderTool) Name() string { return "wander" }
+func (t *WanderTool) Description() string {
+	return "ネットを散歩して情報を探索する。気になるトピックから出発して関連情報を芋づる式にたどる。ゆっくり深く探索したい時に使う。結果はメモリに保存されるが、みんなには共有されていないので共有したかったら知ったことを共有しよう。"
 }
 
-func (t *ExploreTool) InputSchema() json.RawMessage {
+func (t *WanderTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -56,13 +57,13 @@ func (t *ExploreTool) InputSchema() json.RawMessage {
 	}`)
 }
 
-type exploreToolInput struct {
+type wanderToolInput struct {
 	Query    string `json:"query"`
 	MaxDepth int    `json:"max_depth"`
 }
 
-func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
-	var in exploreToolInput
+func (t *WanderTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
+	var in wanderToolInput
 	if len(input) > 0 {
 		_ = json.Unmarshal(input, &in)
 	}
@@ -75,22 +76,22 @@ func (t *ExploreTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 		}
 	}
 
-	summary, err := t.doExploration(ctx, in.Query, maxDepth)
+	summary, err := t.doWander(ctx, in.Query, maxDepth)
 	if err != nil {
-		return tool.ErrorResult(fmt.Sprintf("explore: 探索に失敗しました: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("wander: 散歩に失敗しました: %v", err)), nil
 	}
 	return tool.TextResult(summary), nil
 }
 
-func (t *ExploreTool) doExploration(ctx context.Context, startQuery string, maxDepth int) (string, error) {
+func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth int) (string, error) {
 	var title, content string
 
 	if startQuery != "" {
 		results, err := t.searx.Search(ctx, startQuery, searchResultsMax)
 		if err != nil || len(results) == 0 {
-			article, wErr := RandomArticle(ctx)
+			article, wErr := websearch.RandomArticle(ctx)
 			if wErr != nil {
-				return "", fmt.Errorf("explore: 検索結果がなくWikipediaも失敗しました: %w", wErr)
+				return "", fmt.Errorf("wander: 検索結果がなくWikipediaも失敗しました: %w", wErr)
 			}
 			title = article.Title
 			content = article.Extract
@@ -99,9 +100,9 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string, maxD
 			content = results[0].Content
 		}
 	} else {
-		article, err := RandomArticle(ctx)
+		article, err := websearch.RandomArticle(ctx)
 		if err != nil {
-			return "", fmt.Errorf("explore: Wikipediaランダム記事の取得に失敗: %w", err)
+			return "", fmt.Errorf("wander: Wikipediaランダム記事の取得に失敗: %w", err)
 		}
 		title = article.Title
 		content = article.Extract
@@ -111,7 +112,13 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string, maxD
 	var rememberedItems []string
 
 	for depth := 0; depth < maxDepth; depth++ {
-		eval, err := evaluate(ctx, t.llm, t.systemPrompt, title, content, path)
+		// Pre-search so LLM can evaluate + pick in one call.
+		var searchResults []websearch.SearchResult
+		if depth < maxDepth-1 {
+			searchResults, _ = t.searx.Search(ctx, title, searchResultsMax)
+		}
+
+		eval, err := evaluateAndPick(ctx, t.llm, t.systemPrompt, title, content, path, searchResults)
 		if err != nil {
 			break
 		}
@@ -128,14 +135,16 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string, maxD
 			break
 		}
 
-		results, err := t.searx.Search(ctx, *eval.NextQuery, searchResultsMax)
-		if err != nil || len(results) == 0 {
-			break
-		}
-
-		picked, err := pickResult(ctx, t.llm, t.systemPrompt, *eval.NextQuery, results, path)
-		if err != nil || picked == nil {
-			break
+		// Use LLM's pick if valid, otherwise search with next_query.
+		var picked *websearch.SearchResult
+		if eval.Pick > 0 && eval.Pick <= len(searchResults) {
+			picked = &searchResults[eval.Pick-1]
+		} else {
+			results, sErr := t.searx.Search(ctx, *eval.NextQuery, searchResultsMax)
+			if sErr != nil || len(results) == 0 {
+				break
+			}
+			picked = &results[0]
 		}
 
 		pageContent, err := t.searx.FetchPage(ctx, picked.URL, contentMaxRunes)
@@ -159,7 +168,7 @@ func (t *ExploreTool) doExploration(ctx context.Context, startQuery string, maxD
 			Type:    memory.MemoryTypeWorld,
 			Content: summary,
 			Metadata: map[string]any{
-				"source": "explore_tool",
+				"source": "wander_tool",
 				"type":   "reflection",
 			},
 		}

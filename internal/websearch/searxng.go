@@ -1,4 +1,4 @@
-package explore
+package websearch
 
 import (
 	"context"
@@ -83,7 +83,6 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 // FetchPage retrieves a web page via r.jina.ai reader and returns
 // the Markdown content (truncated to maxRunes).
 func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes int) (string, error) {
-	// Use r.jina.ai reader to get clean Markdown.
 	fetchURL := jinaReaderPrefix + pageURL
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
@@ -102,8 +101,7 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 		return "", fmt.Errorf("fetch page: ステータス %d", resp.StatusCode)
 	}
 
-	// Read limited bytes to avoid huge pages (maxRunes * 4 bytes for UTF-8).
-	const maxBytes = 512 * 1024 // 512KB cap
+	const maxBytes = 512 * 1024
 	limit := maxRunes * 4
 	if limit > maxBytes {
 		limit = maxBytes
@@ -114,9 +112,7 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 	}
 
 	text := string(body)
-
-	// Collapse excessive whitespace.
-	text = collapseWhitespace(text)
+	text = CollapseWhitespace(text)
 
 	runes := []rune(text)
 	if len(runes) > maxRunes {
@@ -125,16 +121,16 @@ func (c *SearXNGClient) FetchPage(ctx context.Context, pageURL string, maxRunes 
 	return text, nil
 }
 
-// collapseWhitespace reduces runs of 3+ newlines to 2.
-func collapseWhitespace(s string) string {
+// CollapseWhitespace reduces runs of 3+ newlines to 2.
+func CollapseWhitespace(s string) string {
 	for strings.Contains(s, "\n\n\n") {
 		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
 	}
 	return strings.TrimSpace(s)
 }
 
-// truncateResults formats search results for display in prompts.
-func truncateResults(results []SearchResult, maxPerResult int) string {
+// TruncateResults formats search results for display in prompts.
+func TruncateResults(results []SearchResult, maxPerResult int) string {
 	var s string
 	for i, r := range results {
 		snippet := r.Content

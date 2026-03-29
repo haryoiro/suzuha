@@ -1,4 +1,4 @@
-package explore
+package wander
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// Feature is the self-contained web exploration feature.
-// It provides a scheduler task for autonomous exploration and an agent tool.
+// Feature is the self-contained web wandering feature.
+// It provides a scheduler task for autonomous wandering and an agent tool.
 type Feature struct {
 	searxngURL   string
 	llm          *llm.Client
@@ -20,7 +20,7 @@ type Feature struct {
 	maxDepth     int
 }
 
-// New creates an Explore Feature.
+// New creates a Wander Feature.
 func New(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, maxDepth int) *Feature {
 	return &Feature{
 		searxngURL:   searxngURL,
@@ -31,22 +31,22 @@ func New(searxngURL string, llmClient *llm.Client, memStore memory.Store, system
 	}
 }
 
-func (f *Feature) Name() string { return "explore" }
+func (f *Feature) Name() string { return "wander" }
 
-// Setup is a no-op; Explore uses the shared task_state table.
+// Setup is a no-op; Wander uses the shared task_state table.
 func (f *Feature) Setup(_ context.Context, _ *sql.DB) error { return nil }
 
-// Tools returns the explore tool for the agent.
+// Tools returns the wander tool for the agent.
 func (f *Feature) Tools() []tool.Tool {
 	if f.searxngURL == "" {
 		return nil
 	}
 	return []tool.Tool{
-		NewExploreTool(f.searxngURL, f.llm, f.mem, f.systemPrompt, f.maxDepth),
+		NewWanderTool(f.searxngURL, f.llm, f.mem, f.systemPrompt, f.maxDepth),
 	}
 }
 
-// Tasks returns the exploration scheduler task.
+// Tasks returns the wandering scheduler task.
 func (f *Feature) Tasks() []scheduler.CronTask {
 	return []scheduler.CronTask{&Task{}}
 }
