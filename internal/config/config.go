@@ -27,6 +27,15 @@ type Config struct {
 	Admin        Admin        `yaml:"admin"`
 	Location     Location     `yaml:"location"`
 	SelfImprove  SelfImprove  `yaml:"self_improve"`
+	Langfuse     Langfuse     `yaml:"langfuse"`
+}
+
+// Langfuse configures LLM observability tracing via OTLP.
+type Langfuse struct {
+	Enabled   bool   `yaml:"enabled"`
+	Endpoint  string `yaml:"endpoint"`   // e.g. "http://langfuse:3000"
+	PublicKey string `yaml:"public_key"` // Langfuse project public key
+	SecretKey string `yaml:"secret_key"` // Langfuse project secret key
 }
 
 // SelfImprove configures the self-improvement channel for Claude Code collaboration.
@@ -272,6 +281,12 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("OVERLAND_TOKEN"); v != "" {
 		c.Location.Token = v
+	}
+	if v := os.Getenv("LANGFUSE_PUBLIC_KEY"); v != "" {
+		c.Langfuse.PublicKey = v
+	}
+	if v := os.Getenv("LANGFUSE_SECRET_KEY"); v != "" {
+		c.Langfuse.SecretKey = v
 	}
 	if v := os.Getenv("DEEPGRAM_API_KEY"); v != "" {
 		for i := range c.Voice.STT {

@@ -18,6 +18,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // DefaultDrainWindow is the default delay after the last event before
@@ -42,7 +44,8 @@ type Agent struct {
 	mediaStore      memory.MediaStore
 	logger          *slog.Logger
 	metrics         *observe.Metrics
-	hooks           []PipelineHook
+	hooks  []PipelineHook
+	tracer trace.Tracer // nil when tracing is disabled
 
 	systemPrompt     string
 	botID            string
@@ -235,6 +238,11 @@ func (a *Agent) SetMediaStore(s memory.MediaStore) {
 	a.mediaStore = s
 }
 
+// SetTracer sets the OpenTelemetry tracer for pipeline and tool call tracing.
+func (a *Agent) SetTracer(t trace.Tracer) {
+	a.tracer = t
+}
+
 // LastEphemeral returns the most recently injected ephemeral messages.
 func (a *Agent) LastEphemeral() []llm.Message {
 	a.lastEphemeralMu.RLock()
@@ -422,12 +430,16 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	agentCtx := sess.Context()
 	dc := sess.DirectiveConfig()
 
+	// Start turn-level tracing spans.
+	hookCtx := a.beginPipelineHooks(ctx)
+	defer a.endPipelineHooks(hookCtx)
+
 	// 1. Perceive: ingest events, resolve users, describe images.
 	p := a.PerceiveWith(ctx, agentCtx, batch, dc)
 	if p == nil {
 		return nil
 	}
-	a.runHooks(func(h PipelineHook) error { return h.AfterPerceive(ctx, batch, p) })
+	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterPerceive(c, batch, p) })
 
 	// Set turn context for response routing.
 	sess.BeginTurn(p)
@@ -453,18 +465,23 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 
 	// 3. Think: build ephemeral context and determine directive.
 	t := a.ThinkWith(ctx, agentCtx, p, dc)
-	a.runHooks(func(h PipelineHook) error { return h.AfterThink(ctx, p, t) })
+	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterThink(c, p, t) })
 	if t.ListenMode {
 		persistContextWith(ctx, a.db, agentCtx, a.logger, string(key))
 		return nil
 	}
 
 	// 4. Act: LLM completion, tool loop, get response text.
-	text, err := a.ActWith(ctx, agentCtx, sess, p, t)
+	// Use hookCtx so LLM/tool spans are children of the pipeline.turn trace.
+	text, err := a.ActWith(hookCtx, agentCtx, sess, p, t)
 	if err != nil {
 		return err
 	}
-	a.runHooks(func(h PipelineHook) error { return h.AfterAct(ctx, p, t) })
+	// Record bot response on the root turn span for Langfuse output.
+	if rootSpan := trace.SpanFromContext(hookCtx); rootSpan.SpanContext().IsValid() && text != "" {
+		rootSpan.SetAttributes(attribute.String("suzuha.output", text))
+	}
+	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterAct(c, p, t) })
 
 	// 5. Route response through the session.
 	if text != "" {
@@ -481,7 +498,7 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 
 	// 6. Reflect: log turn, persist context.
 	a.ReflectWith(ctx, agentCtx, p, key)
-	a.runHooks(func(h PipelineHook) error { return h.AfterReflect(ctx, p) })
+	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterReflect(c, p) })
 	return nil
 }
 

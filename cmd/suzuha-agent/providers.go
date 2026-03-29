@@ -11,6 +11,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/embedding"
+	"github.com/haryoiro/suzuha/internal/langfuse"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/chat/cli"
@@ -19,7 +20,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/diary"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/explore"
+	"github.com/haryoiro/suzuha/internal/research"
+	"github.com/haryoiro/suzuha/internal/wander"
 	"github.com/haryoiro/suzuha/internal/forget"
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
@@ -151,6 +153,26 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			), nil
 		})
 
+		// Langfuse TracerProvider (nil when disabled).
+		do.Provide(i, func(i do.Injector) (*langfuse.TracerProvider, error) {
+			cfg := do.MustInvoke[*config.Config](i)
+			if !cfg.Langfuse.Enabled {
+				return nil, nil
+			}
+			logger := do.MustInvoke[*slog.Logger](i)
+			tp, err := langfuse.NewTracerProvider(context.Background(), langfuse.Config{
+				Endpoint:  cfg.Langfuse.Endpoint,
+				PublicKey: cfg.Langfuse.PublicKey,
+				SecretKey: cfg.Langfuse.SecretKey,
+			})
+			if err != nil {
+				logger.Warn("Langfuseの初期化に失敗", "error", err)
+				return nil, nil
+			}
+			logger.Info("Langfuseトレーシングを有効化", "endpoint", cfg.Langfuse.Endpoint)
+			return tp, nil
+		})
+
 		// Features: setup + tool/hook registration.
 		do.Provide(i, func(i do.Injector) ([]scheduler.Feature, error) {
 			cfg := do.MustInvoke[*config.Config](i)
@@ -172,15 +194,15 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			registry.Register(builtin.NewMemoSearch(store))
 			registry.Register(builtin.NewMemoUpdate(store))
 
-			// Explore tool config (searxng is always on the compose network).
-			exploreSearxURL := "http://searxng:8080"
-			exploreMaxDepth := 4
+			// Web search features (searxng is always on the compose network).
+			searxURL := "http://searxng:8080"
 
 			features := []scheduler.Feature{
 				action.New(store.DB()),
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
-				explore.New(exploreSearxURL, llmClient, store, cfg.Agent.SystemPrompt, exploreMaxDepth),
+				research.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 3, 6),
+				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
 				forget.New(),
 				diary.New(),
 			}
@@ -190,6 +212,15 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			if locStore != nil {
 				features = append(features, location.NewFeature(locStore))
 				ag.SetLocationStore(locStore)
+			}
+
+			// Wire Langfuse tracing if enabled.
+			lfTP := do.MustInvoke[*langfuse.TracerProvider](i)
+			if lfTP != nil {
+				tracer := lfTP.Tracer("suzuha-agent")
+				llmClient.SetTracer(tracer)
+				ag.SetTracer(tracer)
+				ag.AddHook(langfuse.NewHook(tracer))
 			}
 
 			// Set media store for memory attachment loading.

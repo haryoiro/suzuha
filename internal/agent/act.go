@@ -13,6 +13,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // skipResponseTool is a virtual tool that signals the LLM wants to skip responding.
@@ -22,7 +24,7 @@ type skipResponseTool struct{}
 
 func (skipResponseTool) Name() string { return "skip_response" }
 func (skipResponseTool) Description() string {
-	return "この会話に返答しないときに呼ぶ。テキストを返す場合はこのツールを呼ばないこと。discord_react と一緒に呼んでもよい。"
+	return "この会話に返答しないときに呼ぶ。重要: テキストを返すなら絶対にこのツールを呼ばないこと（テキストとskip_responseの同時使用は禁止）。discord_react と一緒に呼んでもよい。"
 }
 func (skipResponseTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"reason":{"type":"string","description":"スキップ理由（ログ用）"}},"required":[]}`)
@@ -227,9 +229,39 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				a.metrics.ToolCallsTotal.WithLabelValues(tc.Function.Name, "called").Inc()
 			}
 
+			// Wrap tool execution in a tracing span.
+			var toolSpan trace.Span
+			if a.tracer != nil {
+				_, toolSpan = a.tracer.Start(ctx, "tool."+tc.Function.Name,
+					trace.WithAttributes(
+						attribute.String("tool.name", tc.Function.Name),
+						attribute.String("tool.call_id", tc.ID),
+						attribute.String("tool.input", truncate(tc.Function.Arguments, 2000)),
+					),
+				)
+			}
+
 			start := time.Now()
 			result, err := t.Execute(ctx, json.RawMessage(tc.Function.Arguments))
 			elapsed := time.Since(start)
+
+			if toolSpan != nil {
+				toolSpan.SetAttributes(attribute.Int64("tool.duration_ms", elapsed.Milliseconds()))
+				if err != nil {
+					toolSpan.RecordError(err)
+					toolSpan.SetAttributes(attribute.String("tool.output", err.Error()))
+				} else if result != nil {
+					var resultText string
+					for _, c := range result.Content {
+						resultText += c.Text
+					}
+					toolSpan.SetAttributes(
+						attribute.String("tool.output", truncate(resultText, 2000)),
+						attribute.Bool("tool.is_error", result.IsError),
+					)
+				}
+				toolSpan.End()
+			}
 
 			if err != nil {
 				a.logger.Error("ツールが失敗した",
@@ -278,6 +310,13 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				ToolCallID: tc.ID,
 				Timestamp:  jtime.Now(),
 			})
+
+			// Share python_exec output to Discord as a code block.
+			if channel != "" && tc.Function.Name == "python_exec" && content != "" {
+				if err := sess.Respond(ctx, "```\n"+content+"\n```"); err != nil {
+					a.logger.Warn("ツール結果の共有に失敗", "error", err)
+				}
+			}
 
 			// If the tool returned images, inject them as a user message
 			// (OpenAI API only supports multimodal content in user messages).

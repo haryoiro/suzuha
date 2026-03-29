@@ -14,6 +14,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	llmerrors "github.com/mozilla-ai/any-llm-go/errors"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"github.com/mozilla-ai/any-llm-go/providers/gemini"
@@ -131,6 +133,14 @@ type Client struct {
 	maxCtx          int
 	metrics         *observe.Metrics
 	logger          *slog.Logger
+	tracer          trace.Tracer // nil when tracing is disabled
+}
+
+// SetTracer sets the OpenTelemetry tracer for LLM call tracing.
+func (c *Client) SetTracer(t trace.Tracer) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tracer = t
 }
 
 // ProviderInfo returns the current provider name, model, API base URL, and vision capability.
@@ -266,9 +276,30 @@ func (c *Client) MaxContextTokens() int {
 func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.Tool) (*Response, error) {
 	c.mu.RLock()
 	prov := c.provider
+	provName := c.providerName
 	model := c.model
 	vision := c.visionCapable
+	tracer := c.tracer
 	c.mu.RUnlock()
+
+	// Start LLM generation span if tracer is available.
+	var span trace.Span
+	if tracer != nil {
+		// Serialize messages for tracing (role + content only, skip images).
+		inputJSON := serializeMessagesForTrace(messages)
+
+		ctx, span = tracer.Start(ctx, "llm.complete",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("gen_ai.system", provName),
+				attribute.String("gen_ai.request.model", model),
+				attribute.Int("gen_ai.prompt.message_count", len(messages)),
+				attribute.Int("gen_ai.request.tool_count", len(tools)),
+				attribute.String("gen_ai.input", inputJSON),
+			),
+		)
+		defer span.End()
+	}
 
 	params := providers.CompletionParams{
 		Model:    model,
@@ -296,6 +327,9 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	}
 
 	if err != nil {
+		if span != nil {
+			span.RecordError(err)
+		}
 		c.logger.Error("LLMが答えてくれなかった", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
 		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
 	}
@@ -320,6 +354,19 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	}
 	if resp.Usage != nil {
 		r.Usage = *resp.Usage
+	}
+
+	// Record LLM response attributes to span.
+	if span != nil {
+		outputJSON := serializeResponseForTrace(r)
+		span.SetAttributes(
+			attribute.Int("gen_ai.usage.prompt_tokens", r.Usage.PromptTokens),
+			attribute.Int("gen_ai.usage.completion_tokens", r.Usage.CompletionTokens),
+			attribute.String("gen_ai.response.finish_reason", r.FinishReason),
+			attribute.Int("gen_ai.response.tool_call_count", len(r.ToolCalls)),
+			attribute.Int64("gen_ai.response.latency_ms", elapsed.Milliseconds()),
+			attribute.String("gen_ai.output", outputJSON),
+		)
 	}
 
 	c.logger.Info("LLMが答えた",
@@ -665,4 +712,49 @@ func truncateStr(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "..."
+}
+
+// serializeMessagesForTrace converts messages to a JSON array for Langfuse input.
+// Images are excluded to keep the payload manageable.
+func serializeMessagesForTrace(messages []Message) string {
+	type traceMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+		Name    string `json:"name,omitempty"`
+	}
+	out := make([]traceMsg, 0, len(messages))
+	for _, m := range messages {
+		name := m.UserName
+		if m.Role == "tool" {
+			name = m.ToolCallID
+		}
+		out = append(out, traceMsg{
+			Role:    m.Role,
+			Content: m.Content,
+			Name:    name,
+		})
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
+}
+
+// serializeResponseForTrace converts a Response to JSON for Langfuse output.
+func serializeResponseForTrace(r *Response) string {
+	type traceToolCall struct {
+		Name string `json:"name"`
+		Args string `json:"arguments"`
+	}
+	type traceResp struct {
+		Text      string          `json:"text"`
+		ToolCalls []traceToolCall `json:"tool_calls,omitempty"`
+	}
+	resp := traceResp{Text: r.Text}
+	for _, tc := range r.ToolCalls {
+		resp.ToolCalls = append(resp.ToolCalls, traceToolCall{
+			Name: tc.Function.Name,
+			Args: tc.Function.Arguments,
+		})
+	}
+	b, _ := json.Marshal(resp)
+	return string(b)
 }

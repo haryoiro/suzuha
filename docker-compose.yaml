@@ -99,6 +99,8 @@ services:
   yolo:
     build: ./yolo
     restart: unless-stopped
+    environment:
+      SCORE_THRESHOLD: "0.50"
 
   firmware-p4:
     build:
@@ -116,6 +118,118 @@ services:
     profiles:
       - firmware
 
+  langfuse-redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass langfuse
+    restart: unless-stopped
+
+  langfuse-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: langfuse
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+    volumes:
+      - langfuse-db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  langfuse-minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: langfuse
+      MINIO_ROOT_PASSWORD: langfuse
+    volumes:
+      - langfuse-minio:/data
+    restart: unless-stopped
+
+  langfuse-minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - langfuse-minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://langfuse-minio:9000 langfuse langfuse;
+      mc mb --ignore-existing myminio/langfuse;
+      exit 0;
+      "
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    environment:
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: langfuse
+    volumes:
+      - langfuse-clickhouse:/var/lib/clickhouse
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/keeper.xml:ro
+    restart: unless-stopped
+
+  langfuse:
+    image: langfuse/langfuse:3
+    depends_on:
+      - langfuse-db
+      - langfuse-clickhouse
+      - langfuse-redis
+      - langfuse-minio
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://langfuse:langfuse@langfuse-db:5432/langfuse"
+      CLICKHOUSE_URL: "http://langfuse-clickhouse:8123"
+      CLICKHOUSE_MIGRATION_URL: "clickhouse://langfuse-clickhouse:9000"
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: langfuse
+      REDIS_HOST: "langfuse-redis"
+      REDIS_PORT: "6379"
+      REDIS_AUTH: "langfuse"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "suzuha-langfuse-secret"
+      SALT: "suzuha-langfuse-salt"
+      LANGFUSE_INIT_ORG_ID: "suzuha"
+      LANGFUSE_INIT_ORG_NAME: "Suzuha"
+      LANGFUSE_INIT_PROJECT_ID: "suzuha-agent"
+      LANGFUSE_INIT_PROJECT_NAME: "Suzuha Agent"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "pk-lf-suzuha"
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: "sk-lf-suzuha"
+      LANGFUSE_INIT_USER_EMAIL: "admin@suzuha.local"
+      LANGFUSE_INIT_USER_PASSWORD: "admin1234"
+      LANGFUSE_INIT_USER_NAME: "Admin"
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: "auto"
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: "http://langfuse-minio:9000"
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    depends_on:
+      - langfuse-db
+      - langfuse-clickhouse
+      - langfuse-redis
+      - langfuse-minio
+    environment:
+      DATABASE_URL: "postgresql://langfuse:langfuse@langfuse-db:5432/langfuse"
+      CLICKHOUSE_URL: "http://langfuse-clickhouse:8123"
+      CLICKHOUSE_MIGRATION_URL: "clickhouse://langfuse-clickhouse:9000"
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: langfuse
+      REDIS_HOST: "langfuse-redis"
+      REDIS_PORT: "6379"
+      REDIS_AUTH: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: "auto"
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: "langfuse"
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: "http://langfuse-minio:9000"
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      SALT: "suzuha-langfuse-salt"
+    restart: unless-stopped
+
 volumes:
   go-mod-cache:
   go-build-cache:
@@ -124,3 +238,6 @@ volumes:
   npm-cache:
   sbv2-models:
   sbv2-cache:
+  langfuse-db:
+  langfuse-clickhouse:
+  langfuse-minio:

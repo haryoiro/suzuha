@@ -25,6 +25,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/device"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
@@ -65,6 +66,12 @@ func run() error {
 
 	mcpMgr := do.MustInvoke[*mcp.Manager](injector)
 	defer mcpMgr.Close()
+
+	// Langfuse TracerProvider shutdown (flush pending spans).
+	lfTP := do.MustInvoke[*langfuse.TracerProvider](injector)
+	if lfTP != nil {
+		defer lfTP.Shutdown(context.Background())
+	}
 
 	chatIface := do.MustInvoke[chat.Interface](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
@@ -730,6 +737,50 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"ok":true,"level":%d}`, body.Level)
+		})
+
+		// Object tracker API
+		mux.HandleFunc("GET /internal/device/tracker", func(w http.ResponseWriter, r *http.Request) {
+			tr := hub.Tracker()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"enabled": tr.Enabled(),
+				"config":  tr.Config(),
+			})
+		})
+		mux.HandleFunc("PUT /internal/device/tracker", func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Enabled          *bool    `json:"enabled"`
+				TargetLabel      *string  `json:"target_label"`
+				DeadZone         *float64 `json:"dead_zone"`
+				SmoothingAlpha   *float64 `json:"smoothing_alpha"`
+				ProportionalGain *float64 `json:"proportional_gain"`
+				MaxDegPerFrame   *float64 `json:"max_deg_per_frame"`
+				InvertPan        *bool    `json:"invert_pan"`
+				InvertTilt       *bool    `json:"invert_tilt"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+				return
+			}
+			tr := hub.Tracker()
+			if body.Enabled != nil {
+				tr.SetEnabled(*body.Enabled)
+				logger.Info("device: トラッカー切り替え", "enabled", *body.Enabled)
+			}
+			if body.TargetLabel != nil {
+				tr.SetTargetLabel(*body.TargetLabel)
+			}
+			tr.ApplyPartial(device.TrackerPatch{
+				DeadZone:         body.DeadZone,
+				SmoothingAlpha:   body.SmoothingAlpha,
+				ProportionalGain: body.ProportionalGain,
+				MaxDegPerFrame:   body.MaxDegPerFrame,
+				InvertPan:        body.InvertPan,
+				InvertTilt:       body.InvertTilt,
+			})
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"ok":true}`)
 		})
 
 		// Start periodic capture loop (333ms = ~3fps).
