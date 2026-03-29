@@ -40,16 +40,6 @@ func NewSearXNG(baseURL string) *SearXNGClient {
 	}
 }
 
-// hasJapanese returns true if the string contains any Japanese characters.
-func hasJapanese(s string) bool {
-	for _, r := range s {
-		if r >= 0x3000 && r <= 0x9FFF || r >= 0xF900 && r <= 0xFAFF {
-			return true
-		}
-	}
-	return false
-}
-
 // Search performs a search and returns up to limit results.
 func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	u, err := url.Parse(c.baseURL)
@@ -57,14 +47,8 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 		return nil, fmt.Errorf("searxng: URLのパースに失敗: %w", err)
 	}
 	u.Path = "/search"
-	// Append Japanese context word for non-Japanese queries to avoid
-	// Chinese results from Bing.
-	searchQuery := query
-	if !hasJapanese(query) {
-		searchQuery = query + " とは"
-	}
 	q := u.Query()
-	q.Set("q", searchQuery)
+	q.Set("q", query)
 	q.Set("format", "json")
 	q.Set("language", "ja")
 	u.RawQuery = q.Encode()
@@ -92,10 +76,43 @@ func (c *SearXNGClient) Search(ctx context.Context, query string, limit int) ([]
 		return nil, fmt.Errorf("searxng: デコードに失敗: %w", err)
 	}
 
-	if limit > 0 && len(body.Results) > limit {
-		body.Results = body.Results[:limit]
+	// Filter out non-Japanese results (e.g. Chinese from Bing).
+	filtered := filterJapaneseResults(body.Results)
+
+	if limit > 0 && len(filtered) > limit {
+		filtered = filtered[:limit]
 	}
-	return body.Results, nil
+	return filtered, nil
+}
+
+// chineseDomains are domains that indicate Chinese-language content.
+var chineseDomains = []string{
+	"zhihu.com", "baidu.com", "bilibili.com", "csdn.net",
+	"douban.com", "weibo.com", "sogou.com", "163.com",
+	"qq.com", "sina.com", "sohu.com", "jianshu.com",
+}
+
+// filterJapaneseResults removes results that appear to be Chinese content.
+func filterJapaneseResults(results []SearchResult) []SearchResult {
+	var out []SearchResult
+	for _, r := range results {
+		lower := strings.ToLower(r.URL)
+		skip := false
+		for _, d := range chineseDomains {
+			if strings.Contains(lower, d) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			out = append(out, r)
+		}
+	}
+	// If filtering removed everything, return originals as fallback.
+	if len(out) == 0 {
+		return results
+	}
+	return out
 }
 
 // FetchPage fetches a web page, extracts the main content using readability,
