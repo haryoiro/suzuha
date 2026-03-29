@@ -28,7 +28,7 @@ func (p *PythonExec) Description() string {
 	return `Pythonコードを実行して結果を返す。計算、問題解決、コードの検証、Webからのデータ取得などに使える。
 タイムアウト: 30秒。ネットワークアクセス可能。出力上限: 4000文字。
 pipも使える。必要ならsubprocessでパッケージをインストールできる（例: subprocess.run(["pip","install","requests"])）。
-重要: 出力は自分にしか見えない。ユーザーに結果を伝えたい場合は、返答テキストに含めること。`
+重要: 結果を確認するには必ずprint()で出力すること。print()しないと結果が返ってこない。`
 }
 
 func (p *PythonExec) InputSchema() json.RawMessage {
