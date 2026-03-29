@@ -5,33 +5,36 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/websearch"
 )
 
-// ResearchTool triggers a fast web research session.
-// Single search + parallel page fetches, no LLM overhead.
+// ResearchTool triggers a web research session.
+// Search → LLM picks relevant results → parallel fetch picked pages.
 type ResearchTool struct {
 	searx      *websearch.SearXNGClient
+	llm        *llm.Client
 	maxSources int
 }
 
 var _ tool.Tool = (*ResearchTool)(nil)
 
 // NewResearchTool creates a research tool.
-func NewResearchTool(searxngURL string, maxSources int) *ResearchTool {
+func NewResearchTool(searxngURL string, llmClient *llm.Client, maxSources int) *ResearchTool {
 	if maxSources <= 0 {
 		maxSources = defaultMaxSources
 	}
 	return &ResearchTool{
 		searx:      websearch.NewSearXNG(searxngURL),
+		llm:        llmClient,
 		maxSources: maxSources,
 	}
 }
 
 func (t *ResearchTool) Name() string { return "research" }
 func (t *ResearchTool) Description() string {
-	return "トピックについて高速にリサーチする。検索して上位ページの内容を取得する。何かについてしっかり調べたい時に使う。結果はみんなには共有されていないので共有したかったら知ったことを共有しよう。"
+	return "トピックについてリサーチする。検索結果から関連性の高いページを選んで内容を取得する。何かについてしっかり調べたい時に使う。結果はみんなには共有されていないので共有したかったら知ったことを共有しよう。"
 }
 
 func (t *ResearchTool) InputSchema() json.RawMessage {
@@ -72,14 +75,20 @@ func (t *ResearchTool) doResearch(ctx context.Context, query string) (string, er
 		query = article.Title
 	}
 
-	// Single search, no LLM sub-query expansion.
-	results, err := t.searx.Search(ctx, query, searchPerQuery)
+	// Step 1: Search.
+	results, err := t.searx.Search(ctx, query, searchResults)
 	if err != nil || len(results) == 0 {
 		return "検索結果が見つからなかった", nil
 	}
 
-	// Parallel fetch top pages.
-	sources := fetchAll(ctx, t.searx, results, t.maxSources, pageMaxRunes)
+	// Step 2: LLM picks the most relevant results.
+	picked := filterResults(results, pickResults(ctx, t.llm, query, results, t.maxSources))
+	if len(picked) == 0 {
+		return "関連する検索結果がなかった", nil
+	}
+
+	// Step 3: Parallel fetch picked pages.
+	sources := fetchAll(ctx, t.searx, picked, pageMaxRunes)
 	if len(sources) == 0 {
 		return "ページの取得に失敗した", nil
 	}

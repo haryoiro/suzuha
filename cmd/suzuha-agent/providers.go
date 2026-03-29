@@ -192,7 +192,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				action.New(store.DB()),
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
-				research.New(searxURL, 4),
+				research.New(searxURL, llmClient, 4),
 				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
 				forget.New(),
 				diary.New(),

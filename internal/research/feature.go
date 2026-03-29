@@ -4,21 +4,24 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// Feature is the fast web research feature.
-// Single search + parallel page fetches, no LLM overhead.
+// Feature is the web research feature.
+// Search → LLM picks relevant results → parallel fetch.
 type Feature struct {
 	searxngURL string
+	llm        *llm.Client
 	maxSources int
 }
 
 // New creates a Research Feature.
-func New(searxngURL string, maxSources int) *Feature {
+func New(searxngURL string, llmClient *llm.Client, maxSources int) *Feature {
 	return &Feature{
 		searxngURL: searxngURL,
+		llm:        llmClient,
 		maxSources: maxSources,
 	}
 }
@@ -33,7 +36,7 @@ func (f *Feature) Tools() []tool.Tool {
 		return nil
 	}
 	return []tool.Tool{
-		NewResearchTool(f.searxngURL, f.maxSources),
+		NewResearchTool(f.searxngURL, f.llm, f.maxSources),
 	}
 }
 

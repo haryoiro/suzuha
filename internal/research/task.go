@@ -81,14 +81,22 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	query := article.Title
 	cc.Logger.Info("research: starting", "query", query)
 
-	// Search + parallel fetch.
-	results, err := searx.Search(ctx, query, searchPerQuery)
+	// Search.
+	results, err := searx.Search(ctx, query, searchResults)
 	if err != nil || len(results) == 0 {
 		cc.Logger.Warn("research: no search results")
 		return nil
 	}
 
-	sources := fetchAll(ctx, searx, results, maxSources, pageMaxRunes)
+	// LLM picks relevant results.
+	picked := filterResults(results, pickResults(ctx, cc.LLM, query, results, maxSources))
+	if len(picked) == 0 {
+		cc.Logger.Warn("research: no relevant results picked")
+		return nil
+	}
+
+	// Parallel fetch.
+	sources := fetchAll(ctx, searx, picked, pageMaxRunes)
 	if len(sources) == 0 {
 		cc.Logger.Warn("research: no pages fetched")
 		return nil
