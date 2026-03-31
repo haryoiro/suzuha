@@ -3,9 +3,11 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +20,82 @@ import (
 
 func init() {
 	sqlite_vec.Auto()
+}
+
+// memColumns は memories テーブルの SELECT クエリ用の正規カラムリスト。
+const memColumns = "id, type, content, metadata, keywords, topic, persons, event_time, created_at, updated_at"
+
+// memColumnsQualified は指定されたテーブルエイリアス（例: "m"）をプレフィックスに付けた memColumns を返す。
+func memColumnsQualified(alias string) string {
+	cols := []string{"id", "type", "content", "metadata", "keywords", "topic", "persons", "event_time", "created_at", "updated_at"}
+	for i, c := range cols {
+		cols[i] = alias + "." + c
+	}
+	return strings.Join(cols, ", ")
+}
+
+// scanMem は memColumns の順序に合致する単一のメモリ行をスキャンする。
+func scanMem(scanner interface{ Scan(dest ...any) error }) (Memory, error) {
+	var m Memory
+	var typeStr string
+	var metaJSON string
+	var keywordsStr, topicStr, personsStr sql.NullString
+	var eventTime sql.NullTime
+
+	if err := scanner.Scan(
+		&m.ID, &typeStr, &m.Content, &metaJSON,
+		&keywordsStr, &topicStr, &personsStr, &eventTime,
+		&m.CreatedAt, &m.UpdatedAt,
+	); err != nil {
+		return m, err
+	}
+
+	m.Type = MemoryType(typeStr)
+	if metaJSON != "" {
+		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
+			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
+		}
+	}
+	if keywordsStr.Valid {
+		json.Unmarshal([]byte(keywordsStr.String), &m.Keywords)
+	}
+	if topicStr.Valid {
+		m.Topic = topicStr.String
+	}
+	if personsStr.Valid {
+		json.Unmarshal([]byte(personsStr.String), &m.Persons)
+	}
+	if eventTime.Valid {
+		t := eventTime.Time
+		m.EventTime = &t
+	}
+	unpackAttachments(&m)
+	return m, nil
+}
+
+// marshalStringSlice は文字列スライスをJSONエンコードした文字列を返す。空の場合は nil を返す。
+func marshalStringSlice(s []string) any {
+	if len(s) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+// nullTimePtr は *time.Time から sql.NullTime を返す。
+func nullTimePtr(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: *t, Valid: true}
+}
+
+// nullString はSQL挿入用に *string（空の場合は nil）を返す。
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // SQLiteStore implements Store using SQLite + sqlite-vec + FTS5.
@@ -94,9 +172,11 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT OR REPLACE INTO memories (id, type, content, metadata, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO memories (id, type, content, metadata, keywords, topic, persons, event_time, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
+		marshalStringSlice(mem.Keywords), nullString(mem.Topic),
+		marshalStringSlice(mem.Persons), nullTimePtr(mem.EventTime),
 		mem.CreatedAt, mem.UpdatedAt,
 	); err != nil {
 		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
@@ -148,9 +228,11 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT OR REPLACE INTO memories (id, type, content, metadata, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO memories (id, type, content, metadata, keywords, topic, persons, event_time, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
+		marshalStringSlice(mem.Keywords), nullString(mem.Topic),
+		marshalStringSlice(mem.Persons), nullTimePtr(mem.EventTime),
 		mem.CreatedAt, mem.UpdatedAt,
 	); err != nil {
 		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
@@ -312,7 +394,89 @@ func (s *SQLiteStore) RunEmbeddingWorker(ctx context.Context) {
 }
 
 func (s *SQLiteStore) Search(ctx context.Context, query string, limit int) ([]Memory, error) {
-	return s.searchInternal(ctx, query, "", limit, time.Time{})
+	return s.SearchWithContext(ctx, query, limit, SymbolicFilter{})
+}
+
+// SearchWithContext は3軸ハイブリッド検索（FTS + Vec + Symbolic）を行う。
+func (s *SQLiteStore) SearchWithContext(ctx context.Context, query string, limit int, filter SymbolicFilter) ([]Memory, error) {
+	overFetch := limit * 2
+
+	// 軸1: FTSキーワード検索
+	ftsResults, ftsErr := s.searchFTS(ctx, query, "", overFetch, time.Time{})
+
+	// 軸2: ベクトル類似度検索
+	var vecResults []scoredID
+	var vecErr error
+	if s.embedder != nil {
+		vecResults, vecErr = s.searchVec(ctx, query, "", overFetch)
+	}
+
+	// 軸3: Symbolic 検索（構造化フィールドフィルタ）
+	symResults, symErr := s.searchSymbolic(ctx, filter, "", overFetch)
+	if symErr != nil {
+		s.logger.Warn("memory: シンボリック検索に失敗、スキップ", "error", symErr)
+	}
+
+	// 全軸が失敗した場合はエラーを返す。
+	hasFTS := ftsErr == nil && len(ftsResults) > 0
+	hasVec := vecErr == nil && len(vecResults) > 0
+	hasSym := symErr == nil && len(symResults) > 0
+	if !hasFTS && !hasVec && !hasSym {
+		if ftsErr != nil {
+			return nil, ftsErr
+		}
+		return nil, nil
+	}
+
+	// 単軸の場合は RRF のオーバーヘッドを避ける。
+	axisCount := 0
+	if hasFTS {
+		axisCount++
+	}
+	if hasVec {
+		axisCount++
+	}
+	if hasSym {
+		axisCount++
+	}
+	if axisCount == 1 {
+		if hasFTS {
+			if len(ftsResults) > limit {
+				ftsResults = ftsResults[:limit]
+			}
+			return ftsResults, nil
+		}
+		var ids []string
+		if hasVec {
+			for _, v := range vecResults {
+				ids = append(ids, v.id)
+				if len(ids) >= limit {
+					break
+				}
+			}
+		} else {
+			for _, sym := range symResults {
+				ids = append(ids, sym.id)
+				if len(ids) >= limit {
+					break
+				}
+			}
+		}
+		loaded, err := s.loadMemoriesByIDs(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		var results []Memory
+		for _, id := range ids {
+			if m, ok := loaded[id]; ok {
+				results = append(results, m)
+			}
+		}
+		return results, nil
+	}
+
+	// 複数軸: 3軸 RRF マージ。
+	return s.rrfMerge3(ctx, ftsResults, vecResults, symResults, limit)
 }
 
 func (s *SQLiteStore) SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]Memory, error) {
@@ -436,16 +600,17 @@ func (s *SQLiteStore) searchFTS(ctx context.Context, query string, memType Memor
 	var q string
 	var args []any
 
+	mc := memColumnsQualified("m")
 	if len([]rune(query)) >= 3 {
-		q = `SELECT m.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
+		q = fmt.Sprintf(`SELECT %s
 		     FROM memories m
 		     JOIN memories_fts f ON f.rowid = m.rowid
-		     WHERE memories_fts MATCH ?`
+		     WHERE memories_fts MATCH ?`, mc)
 		args = []any{escapeFTS5Query(query)}
 	} else {
-		q = `SELECT m.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
+		q = fmt.Sprintf(`SELECT %s
 		     FROM memories m
-		     WHERE m.content LIKE ?`
+		     WHERE m.content LIKE ?`, mc)
 		args = []any{"%" + query + "%"}
 	}
 
@@ -743,6 +908,136 @@ func (s *SQLiteStore) rrfMerge(ctx context.Context, ftsResults []Memory, vecResu
 	return results, nil
 }
 
+// searchSymbolic は構造化フィールド（persons, topic, event_time）でフィルタリング検索を行う。
+// フィルタが空の場合は nil を返す。結果は updated_at DESC で順序付けされる。
+func (s *SQLiteStore) searchSymbolic(ctx context.Context, filter SymbolicFilter, memType MemoryType, limit int) ([]scoredID, error) {
+	if filter.IsEmpty() {
+		return nil, nil
+	}
+
+	var clauses []string
+	var args []any
+
+	// Persons フィルタ: persons JSON 配列に指定 ID のいずれかが含まれるメモリにマッチ。
+	if len(filter.PersonIDs) > 0 {
+		placeholders := strings.Repeat("?,", len(filter.PersonIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		clauses = append(clauses, fmt.Sprintf(
+			`m.id IN (SELECT m2.id FROM memories m2, json_each(m2.persons) AS j WHERE j.value IN (%s))`,
+			placeholders))
+		for _, pid := range filter.PersonIDs {
+			args = append(args, pid)
+		}
+	}
+
+	// Topic プレフィックスフィルタ。
+	if filter.TopicPrefix != "" {
+		clauses = append(clauses, `m.topic LIKE ?`)
+		args = append(args, filter.TopicPrefix+"%")
+	}
+
+	// 時間フィルタ（event_time 優先、NULL なら created_at で代替）。
+	if !filter.Since.IsZero() {
+		clauses = append(clauses, `COALESCE(m.event_time, m.created_at) >= ?`)
+		args = append(args, filter.Since)
+	}
+
+	if memType != "" {
+		clauses = append(clauses, `m.type = ?`)
+		args = append(args, string(memType))
+	}
+
+	if len(clauses) == 0 {
+		return nil, nil
+	}
+
+	where := strings.Join(clauses, " AND ")
+	q := fmt.Sprintf(`SELECT m.id FROM memories m WHERE %s ORDER BY m.updated_at DESC LIMIT ?`, where)
+	args = append(args, limit)
+
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("memory: シンボリック検索に失敗: %w", err)
+	}
+	defer rows.Close()
+
+	var results []scoredID
+	for rows.Next() {
+		var r scoredID
+		if err := rows.Scan(&r.id); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
+// rrfMerge3 は FTS, Vec, Symbolic の3軸検索結果を Reciprocal Rank Fusion で統合する。
+func (s *SQLiteStore) rrfMerge3(ctx context.Context, ftsResults []Memory, vecResults []scoredID, symResults []scoredID, limit int) ([]Memory, error) {
+	scores := make(map[string]float64)
+	memMap := make(map[string]Memory)
+
+	// FTS はランクベースのスコアを付与。
+	for rank, m := range ftsResults {
+		scores[m.ID] += 1.0 / float64(rrfK+rank+1)
+		memMap[m.ID] = m
+	}
+
+	// Vec はランクベースのスコアを付与（距離昇順で既にソート済み）。
+	for rank, v := range vecResults {
+		scores[v.id] += 1.0 / float64(rrfK+rank+1)
+	}
+
+	// Symbolic はランクベースのスコアを付与（updated_at DESC でソート済み）。
+	for rank, sym := range symResults {
+		scores[sym.id] += 1.0 / float64(rrfK+rank+1)
+	}
+
+	// RRF スコア降順でソート。
+	type idScore struct {
+		id    string
+		score float64
+	}
+	ranked := make([]idScore, 0, len(scores))
+	for id, score := range scores {
+		ranked = append(ranked, idScore{id, score})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		return ranked[i].score > ranked[j].score
+	})
+
+	// 結果を収集。memMap にないIDはバッチロードする。
+	var results []Memory
+	var toLoad []string
+	for _, r := range ranked {
+		if len(results)+len(toLoad) >= limit {
+			break
+		}
+		if m, ok := memMap[r.id]; ok {
+			results = append(results, m)
+		} else {
+			toLoad = append(toLoad, r.id)
+		}
+	}
+
+	if len(toLoad) > 0 {
+		loaded, err := s.loadMemoriesByIDs(ctx, toLoad)
+		if err != nil {
+			return results, nil
+		}
+		for _, id := range toLoad {
+			if m, ok := loaded[id]; ok {
+				results = append(results, m)
+			}
+		}
+	}
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
 // loadMemoriesByIDs batch-loads memories by their IDs.
 func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[string]Memory, error) {
 	if len(ids) == 0 {
@@ -757,8 +1052,8 @@ func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[
 	}
 
 	q := fmt.Sprintf(
-		`SELECT id, type, content, metadata, created_at, updated_at FROM memories WHERE id IN (%s)`,
-		placeholders,
+		`SELECT %s FROM memories WHERE id IN (%s)`,
+		memColumns, placeholders,
 	)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -768,14 +1063,9 @@ func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[
 
 	result := make(map[string]Memory, len(ids))
 	for rows.Next() {
-		var m Memory
-		var metaJSON, typeStr string
-		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		m, err := scanMem(rows)
+		if err != nil {
 			return nil, fmt.Errorf("memory: 読み込み時のスキャンに失敗: %w", err)
-		}
-		m.Type = MemoryType(typeStr)
-		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 		}
 		result[m.ID] = m
 	}
@@ -783,19 +1073,14 @@ func (s *SQLiteStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[
 }
 
 // scanMemories scans rows into a slice of Memory.
+// The query must select memColumns in order.
 func scanMemories(rows *sql.Rows) ([]Memory, error) {
 	var results []Memory
 	for rows.Next() {
-		var m Memory
-		var metaJSON, typeStr string
-		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		m, err := scanMem(rows)
+		if err != nil {
 			return nil, fmt.Errorf("memory: スキャンに失敗: %w", err)
 		}
-		m.Type = MemoryType(typeStr)
-		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
-		}
-		unpackAttachments(&m)
 		results = append(results, m)
 	}
 	return results, rows.Err()
@@ -803,11 +1088,12 @@ func scanMemories(rows *sql.Rows) ([]Memory, error) {
 
 func (s *SQLiteStore) ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, type, content, metadata, created_at, updated_at
-		 FROM memories
-		 WHERE type = ? AND json_extract(metadata, '$.user_id') = ?
-		 ORDER BY updated_at DESC
-		 LIMIT ?`,
+		fmt.Sprintf(`SELECT %s FROM memories m
+		 WHERE m.type = ? AND m.id IN (
+		   SELECT m2.id FROM memories m2, json_each(m2.persons) AS j WHERE j.value = ?
+		 )
+		 ORDER BY m.updated_at DESC
+		 LIMIT ?`, memColumnsQualified("m")),
 		string(MemoryTypeUser), userID, limit,
 	)
 	if err != nil {
@@ -820,11 +1106,13 @@ func (s *SQLiteStore) ListByUser(ctx context.Context, userID string, limit int) 
 
 func (s *SQLiteStore) ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]Memory, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT m.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
-		 FROM memories m, json_each(json_extract(m.metadata, '$.participants')) AS j
-		 WHERE m.type = ? AND j.value = ?
+		fmt.Sprintf(`SELECT %s
+		 FROM memories m
+		 WHERE m.type = ? AND m.id IN (
+		   SELECT m2.id FROM memories m2, json_each(m2.persons) AS j WHERE j.value = ?
+		 )
 		 ORDER BY m.updated_at DESC
-		 LIMIT ?`,
+		 LIMIT ?`, memColumnsQualified("m")),
 		string(MemoryTypeEpisode), userID, limit,
 	)
 	if err != nil {
@@ -1003,8 +1291,8 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 
 	// Fetch page.
 	q := fmt.Sprintf(
-		"SELECT m.id, m.type, m.content, m.metadata, m.created_at, m.updated_at FROM memories m WHERE %s ORDER BY m.%s %s LIMIT ? OFFSET ?",
-		where, opts.OrderBy, opts.OrderDir,
+		"SELECT %s FROM memories m WHERE %s ORDER BY m.%s %s LIMIT ? OFFSET ?",
+		memColumnsQualified("m"), where, opts.OrderBy, opts.OrderDir,
 	)
 	pageArgs := make([]any, len(args), len(args)+2)
 	copy(pageArgs, args)
@@ -1018,15 +1306,9 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 
 	var results []Memory
 	for rows.Next() {
-		var m Memory
-		var metaJSON string
-		var typeStr string
-		if err := rows.Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		m, err := scanMem(rows)
+		if err != nil {
 			return nil, 0, fmt.Errorf("memory: 一覧のスキャンに失敗: %w", err)
-		}
-		m.Type = MemoryType(typeStr)
-		if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-			s.logger.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 		}
 		results = append(results, m)
 	}
@@ -1034,18 +1316,12 @@ func (s *SQLiteStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, e
 }
 
 func (s *SQLiteStore) Get(ctx context.Context, id string) (*Memory, error) {
-	var m Memory
-	var metaJSON string
-	var typeStr string
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, type, content, metadata, created_at, updated_at FROM memories WHERE id = ?`, id,
-	).Scan(&m.ID, &typeStr, &m.Content, &metaJSON, &m.CreatedAt, &m.UpdatedAt)
+	row := s.db.QueryRowContext(ctx,
+		fmt.Sprintf(`SELECT %s FROM memories WHERE id = ?`, memColumns), id,
+	)
+	m, err := scanMem(row)
 	if err != nil {
 		return nil, fmt.Errorf("memory: 取得に失敗: %w", err)
-	}
-	m.Type = MemoryType(typeStr)
-	if err := json.Unmarshal([]byte(metaJSON), &m.Metadata); err != nil {
-		s.logger.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
 	}
 	return &m, nil
 }
@@ -1066,8 +1342,11 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(ctx,
-		`UPDATE memories SET type = ?, content = ?, metadata = ?, updated_at = ? WHERE id = ?`,
-		string(mem.Type), mem.Content, string(metadataJSON), mem.UpdatedAt, mem.ID,
+		`UPDATE memories SET type = ?, content = ?, metadata = ?, keywords = ?, topic = ?, persons = ?, event_time = ?, updated_at = ? WHERE id = ?`,
+		string(mem.Type), mem.Content, string(metadataJSON),
+		marshalStringSlice(mem.Keywords), nullString(mem.Topic),
+		marshalStringSlice(mem.Persons), nullTimePtr(mem.EventTime),
+		mem.UpdatedAt, mem.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("memory: 更新に失敗: %w", err)
@@ -1130,11 +1409,10 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 
 func (s *SQLiteStore) ListByType(ctx context.Context, memType MemoryType, limit int) ([]Memory, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, type, content, metadata, created_at, updated_at
-		 FROM memories
+		fmt.Sprintf(`SELECT %s FROM memories
 		 WHERE type = ?
 		 ORDER BY updated_at DESC
-		 LIMIT ?`,
+		 LIMIT ?`, memColumns),
 		string(memType), limit)
 	if err != nil {
 		return nil, fmt.Errorf("memory: タイプ別一覧の取得に失敗: %w", err)
@@ -1146,14 +1424,27 @@ func (s *SQLiteStore) ListByType(ctx context.Context, memType MemoryType, limit 
 
 func (s *SQLiteStore) ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, type, content, metadata, created_at, updated_at
-		 FROM memories
+		fmt.Sprintf(`SELECT %s FROM memories
 		 WHERE type = ? AND created_at > ?
 		 ORDER BY created_at DESC
-		 LIMIT ?`,
+		 LIMIT ?`, memColumns),
 		string(memType), since, limit)
 	if err != nil {
 		return nil, fmt.Errorf("memory: タイプ別最新一覧の取得に失敗: %w", err)
+	}
+	defer rows.Close()
+	return scanMemories(rows)
+}
+
+func (s *SQLiteStore) ListRecent(ctx context.Context, since time.Time, limit int) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx,
+		fmt.Sprintf(`SELECT %s FROM memories
+		 WHERE created_at > ?
+		 ORDER BY created_at DESC
+		 LIMIT ?`, memColumns),
+		since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("memory: 最新一覧の取得に失敗: %w", err)
 	}
 	defer rows.Close()
 	return scanMemories(rows)
@@ -1169,6 +1460,54 @@ func (s *SQLiteStore) VecStats(ctx context.Context) (total, embedded int, err er
 	return total, embedded, nil
 }
 
+func (s *SQLiteStore) ListEmbeddedMemories(ctx context.Context) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx,
+		fmt.Sprintf(`SELECT %s
+		 FROM memories_vec v JOIN memories m ON m.id = v.id
+		 ORDER BY m.type, m.created_at`, memColumnsQualified("m")))
+	if err != nil {
+		return nil, fmt.Errorf("memory: 埋め込み済みメモリの取得に失敗: %w", err)
+	}
+	defer rows.Close()
+	return scanMemories(rows)
+}
+
+func (s *SQLiteStore) ListAllEmbeddings(ctx context.Context) (map[string][]float32, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, embedding FROM memories_vec`)
+	if err != nil {
+		return nil, fmt.Errorf("memory: 埋め込みの取得に失敗: %w", err)
+	}
+	defer rows.Close()
+	result := make(map[string][]float32)
+	for rows.Next() {
+		var id string
+		var blob []byte
+		if err := rows.Scan(&id, &blob); err != nil {
+			continue
+		}
+		vec, err := deserializeFloat32Vec(blob)
+		if err != nil {
+			continue
+		}
+		result[id] = vec
+	}
+	return result, rows.Err()
+}
+
+// deserializeFloat32Vec はリトルエンディアンの float32 バイト列を []float32 に変換する。
+func deserializeFloat32Vec(blob []byte) ([]float32, error) {
+	if len(blob)%4 != 0 {
+		return nil, fmt.Errorf("不正なblobの長さ: %d", len(blob))
+	}
+	n := len(blob) / 4
+	vec := make([]float32, n)
+	for i := 0; i < n; i++ {
+		bits := binary.LittleEndian.Uint32(blob[i*4 : (i+1)*4])
+		vec[i] = math.Float32frombits(bits)
+	}
+	return vec, nil
+}
+
 func (s *SQLiteStore) FindDuplicates(ctx context.Context, k int, threshold float64) ([]DuplicateGroup, error) {
 	if k <= 0 {
 		k = 10
@@ -1179,9 +1518,9 @@ func (s *SQLiteStore) FindDuplicates(ctx context.Context, k int, threshold float
 		visited bool
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT v.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
+		fmt.Sprintf(`SELECT %s
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
-		 ORDER BY m.type, m.updated_at DESC`)
+		 ORDER BY m.type, m.updated_at DESC`, memColumnsQualified("m")))
 	if err != nil {
 		return nil, fmt.Errorf("memory: 重複検出用の一覧取得に失敗: %w", err)
 	}
@@ -1189,15 +1528,11 @@ func (s *SQLiteStore) FindDuplicates(ctx context.Context, k int, threshold float
 
 	var all []memEntry
 	for rows.Next() {
-		var e memEntry
-		var metaJSON string
-		if err := rows.Scan(&e.ID, &e.Type, &e.Content, &metaJSON, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		m, err := scanMem(rows)
+		if err != nil {
 			continue
 		}
-		if metaJSON != "" {
-			json.Unmarshal([]byte(metaJSON), &e.Metadata)
-		}
-		all = append(all, e)
+		all = append(all, memEntry{Memory: m})
 	}
 
 	var groups []DuplicateGroup
