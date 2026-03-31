@@ -38,6 +38,12 @@ type Memory struct {
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
+
+	// 構造化フィールド — コンソリデーターが抽出し、検索・フィルタリングに使用する。
+	Keywords  []string   `json:"keywords,omitempty"`  // 検索キーワード（名前、エンティティ、トピック語）
+	Topic     string     `json:"topic,omitempty"`     // トピック分類（"技術/Go", "日常/食事"）
+	Persons   []string   `json:"persons,omitempty"`   // 関連ユーザーID（user_id + participants を統合）
+	EventTime *time.Time `json:"event_time,omitempty"` // イベント発生日時（CreatedAt とは異なる）
 }
 
 // MediaStore stores and retrieves binary media data.
@@ -52,6 +58,19 @@ type MediaStore interface {
 	Delete(ctx context.Context, key string) error
 }
 
+// SymbolicFilter は Symbolic 検索（メタデータベース）の制約を指定する。
+// 全フィールドはオプション。ゼロ値は「そのフィールドでフィルタしない」を意味する。
+type SymbolicFilter struct {
+	PersonIDs   []string  // persons JSON 配列にこれらの ID のいずれかが含まれるメモリにマッチ
+	TopicPrefix string    // topic がこのプレフィックスで始まるメモリにマッチ（例: "技術"）
+	Since       time.Time // event_time >= Since（event_time が NULL なら created_at で代替）
+}
+
+// IsEmpty は Symbolic フィルタが一切指定されていない場合に true を返す。
+func (f SymbolicFilter) IsEmpty() bool {
+	return len(f.PersonIDs) == 0 && f.TopicPrefix == "" && f.Since.IsZero()
+}
+
 // Store is the long-term memory storage interface.
 type Store interface {
 	// Save persists a memory entry. If the memory has an embedding,
@@ -61,6 +80,10 @@ type Store interface {
 	// Search performs hybrid search (vector similarity + FTS5 keyword)
 	// and returns up to limit results merged via Reciprocal Rank Fusion.
 	Search(ctx context.Context, query string, limit int) ([]Memory, error)
+
+	// SearchWithContext は3軸ハイブリッド検索（FTS + Vec + Symbolic）を行う。
+	// SymbolicFilter で指定された条件に合致するメモリを RRF でブーストする。
+	SearchWithContext(ctx context.Context, query string, limit int, filter SymbolicFilter) ([]Memory, error)
 
 	// SearchByType narrows search to a specific memory type.
 	SearchByType(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error)
@@ -80,6 +103,9 @@ type Store interface {
 
 	// ListRecentByType returns memories of a specific type created after since, up to limit.
 	ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error)
+
+	// ListRecent は since 以降に作成された全タイプの最新メモリを limit 件まで返す。
+	ListRecent(ctx context.Context, since time.Time, limit int) ([]Memory, error)
 
 	// SearchByParts performs vector search using multimodal input (e.g. image).
 	// The parts are embedded and used for KNN similarity search.
@@ -146,6 +172,14 @@ type AdminStore interface {
 	// SaveRaw inserts a memory without generating an embedding.
 	// Used for merge operations where embedding will be backfilled later.
 	SaveRaw(ctx context.Context, mem *Memory) error
+
+	// ListEmbeddedMemories は埋め込みベクトルを持つ全メモリを type, created_at 順で返す。
+	// メンテナンスパイプラインで使用。
+	ListEmbeddedMemories(ctx context.Context) ([]Memory, error)
+
+	// ListAllEmbeddings は全埋め込みベクトルを ID をキーとした map で返す。
+	// メンテナンスパイプラインでペアワイズ cosine distance 計算に使用。
+	ListAllEmbeddings(ctx context.Context) (map[string][]float32, error)
 
 	// DB returns the underlying *sql.DB for direct queries.
 	// Deprecated: prefer using typed methods instead. Will be removed in a future phase.
