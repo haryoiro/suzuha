@@ -41,19 +41,19 @@ var (
 	rn38AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn43AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
 	rn45AllowedHeaders = map[string]string{
-		"POST": "Content-Type",
+		"PUT": "Content-Type",
 	}
 	rn47AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
+		"POST": "Content-Type",
 	}
-	rn51AllowedHeaders = map[string]string{
+	rn49AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 	rn53AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn55AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 )
@@ -851,61 +851,163 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				}
 
-			case 'm': // Prefix: "memories"
+			case 'm': // Prefix: "me"
 
-				if l := len("memories"); len(elem) >= l && elem[0:l] == "memories" {
+				if l := len("me"); len(elem) >= l && elem[0:l] == "me" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					switch r.Method {
-					case "GET":
-						s.handleMemoriesListRequest([0]string{}, elemIsEscaped, w, r)
-					case "POST":
-						s.handleMemoriesCreateRequest([0]string{}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "GET,POST",
-							allowedHeaders: rn36AllowedHeaders,
-							acceptPost:     "application/json",
-							acceptPatch:    "",
-						})
-					}
-
-					return
+					break
 				}
 				switch elem[0] {
-				case '/': // Prefix: "/"
+				case 'm': // Prefix: "mories"
 
-					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+					if l := len("mories"); len(elem) >= l && elem[0:l] == "mories" {
 						elem = elem[l:]
 					} else {
 						break
 					}
 
 					if len(elem) == 0 {
-						break
+						switch r.Method {
+						case "GET":
+							s.handleMemoriesListRequest([0]string{}, elemIsEscaped, w, r)
+						case "POST":
+							s.handleMemoriesCreateRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET,POST",
+								allowedHeaders: rn36AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
 					}
 					switch elem[0] {
-					case 'd': // Prefix: "duplicates"
-						origElem := elem
-						if l := len("duplicates"); len(elem) >= l && elem[0:l] == "duplicates" {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 							elem = elem[l:]
 						} else {
 							break
 						}
 
 						if len(elem) == 0 {
+							break
+						}
+						switch elem[0] {
+						case 'd': // Prefix: "duplicates"
+							origElem := elem
+							if l := len("duplicates"); len(elem) >= l && elem[0:l] == "duplicates" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleMemoriesDuplicatesRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+							elem = origElem
+						case 'v': // Prefix: "vec-stats"
+							origElem := elem
+							if l := len("vec-stats"); len(elem) >= l && elem[0:l] == "vec-stats" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleMemoriesVecStatsRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+							elem = origElem
+						case 'w': // Prefix: "with-vec"
+							origElem := elem
+							if l := len("with-vec"); len(elem) >= l && elem[0:l] == "with-vec" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleMemoriesListWithVecRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+							elem = origElem
+						}
+						// Param: "id"
+						// Leaf parameter, slashes are prohibited
+						idx := strings.IndexByte(elem, '/')
+						if idx >= 0 {
+							break
+						}
+						args[0] = elem
+						elem = ""
+
+						if len(elem) == 0 {
 							// Leaf node.
 							switch r.Method {
+							case "DELETE":
+								s.handleMemoriesDeleteRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
 							case "GET":
-								s.handleMemoriesDuplicatesRequest([0]string{}, elemIsEscaped, w, r)
+								s.handleMemoriesGetRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
+							case "PUT":
+								s.handleMemoriesUpdateRequest([1]string{
+									args[0],
+								}, elemIsEscaped, w, r)
 							default:
 								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
+									allowedMethods: "DELETE,GET,PUT",
+									allowedHeaders: rn38AllowedHeaders,
 									acceptPost:     "",
 									acceptPatch:    "",
 								})
@@ -914,88 +1016,25 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
-						elem = origElem
-					case 'v': // Prefix: "vec-stats"
-						origElem := elem
-						if l := len("vec-stats"); len(elem) >= l && elem[0:l] == "vec-stats" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleMemoriesVecStatsRequest([0]string{}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
-						elem = origElem
-					case 'w': // Prefix: "with-vec"
-						origElem := elem
-						if l := len("with-vec"); len(elem) >= l && elem[0:l] == "with-vec" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleMemoriesListWithVecRequest([0]string{}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
-						elem = origElem
 					}
-					// Param: "id"
-					// Leaf parameter, slashes are prohibited
-					idx := strings.IndexByte(elem, '/')
-					if idx >= 0 {
+
+				case 't': // Prefix: "trics/json"
+
+					if l := len("trics/json"); len(elem) >= l && elem[0:l] == "trics/json" {
+						elem = elem[l:]
+					} else {
 						break
 					}
-					args[0] = elem
-					elem = ""
 
 					if len(elem) == 0 {
 						// Leaf node.
 						switch r.Method {
-						case "DELETE":
-							s.handleMemoriesDeleteRequest([1]string{
-								args[0],
-							}, elemIsEscaped, w, r)
 						case "GET":
-							s.handleMemoriesGetRequest([1]string{
-								args[0],
-							}, elemIsEscaped, w, r)
-						case "PUT":
-							s.handleMemoriesUpdateRequest([1]string{
-								args[0],
-							}, elemIsEscaped, w, r)
+							s.handleMetricsJSONRequest([0]string{}, elemIsEscaped, w, r)
 						default:
 							s.notAllowed(w, r, notAllowedParams{
-								allowedMethods: "DELETE,GET,PUT",
-								allowedHeaders: rn38AllowedHeaders,
+								allowedMethods: "GET",
+								allowedHeaders: nil,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -1061,7 +1100,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PUT",
-								allowedHeaders: rn43AllowedHeaders,
+								allowedHeaders: rn45AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -1089,7 +1128,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,POST",
-							allowedHeaders: rn45AllowedHeaders,
+							allowedHeaders: rn47AllowedHeaders,
 							acceptPost:     "application/json",
 							acceptPatch:    "",
 						})
@@ -1129,7 +1168,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "DELETE,PUT",
-								allowedHeaders: rn47AllowedHeaders,
+								allowedHeaders: rn49AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -1203,7 +1242,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "PUT",
-									allowedHeaders: rn51AllowedHeaders,
+									allowedHeaders: rn53AllowedHeaders,
 									acceptPost:     "",
 									acceptPatch:    "",
 								})
@@ -1270,7 +1309,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PUT",
-								allowedHeaders: rn53AllowedHeaders,
+								allowedHeaders: rn55AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -2212,168 +2251,207 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 				}
 
-			case 'm': // Prefix: "memories"
+			case 'm': // Prefix: "me"
 
-				if l := len("memories"); len(elem) >= l && elem[0:l] == "memories" {
+				if l := len("me"); len(elem) >= l && elem[0:l] == "me" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					switch method {
-					case "GET":
-						r.name = MemoriesListOperation
-						r.summary = ""
-						r.operationID = "Memories_list"
-						r.operationGroup = ""
-						r.pathPattern = "/api/memories"
-						r.args = args
-						r.count = 0
-						return r, true
-					case "POST":
-						r.name = MemoriesCreateOperation
-						r.summary = ""
-						r.operationID = "Memories_create"
-						r.operationGroup = ""
-						r.pathPattern = "/api/memories"
-						r.args = args
-						r.count = 0
-						return r, true
-					default:
-						return
-					}
+					break
 				}
 				switch elem[0] {
-				case '/': // Prefix: "/"
+				case 'm': // Prefix: "mories"
 
-					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+					if l := len("mories"); len(elem) >= l && elem[0:l] == "mories" {
 						elem = elem[l:]
 					} else {
 						break
 					}
 
 					if len(elem) == 0 {
-						break
+						switch method {
+						case "GET":
+							r.name = MemoriesListOperation
+							r.summary = ""
+							r.operationID = "Memories_list"
+							r.operationGroup = ""
+							r.pathPattern = "/api/memories"
+							r.args = args
+							r.count = 0
+							return r, true
+						case "POST":
+							r.name = MemoriesCreateOperation
+							r.summary = ""
+							r.operationID = "Memories_create"
+							r.operationGroup = ""
+							r.pathPattern = "/api/memories"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
 					}
 					switch elem[0] {
-					case 'd': // Prefix: "duplicates"
-						origElem := elem
-						if l := len("duplicates"); len(elem) >= l && elem[0:l] == "duplicates" {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 							elem = elem[l:]
 						} else {
 							break
 						}
 
 						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = MemoriesDuplicatesOperation
-								r.summary = ""
-								r.operationID = "Memories_duplicates"
-								r.operationGroup = ""
-								r.pathPattern = "/api/memories/duplicates"
-								r.args = args
-								r.count = 0
-								return r, true
-							default:
-								return
-							}
-						}
-
-						elem = origElem
-					case 'v': // Prefix: "vec-stats"
-						origElem := elem
-						if l := len("vec-stats"); len(elem) >= l && elem[0:l] == "vec-stats" {
-							elem = elem[l:]
-						} else {
 							break
 						}
+						switch elem[0] {
+						case 'd': // Prefix: "duplicates"
+							origElem := elem
+							if l := len("duplicates"); len(elem) >= l && elem[0:l] == "duplicates" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = MemoriesDuplicatesOperation
+									r.summary = ""
+									r.operationID = "Memories_duplicates"
+									r.operationGroup = ""
+									r.pathPattern = "/api/memories/duplicates"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+
+							elem = origElem
+						case 'v': // Prefix: "vec-stats"
+							origElem := elem
+							if l := len("vec-stats"); len(elem) >= l && elem[0:l] == "vec-stats" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = MemoriesVecStatsOperation
+									r.summary = ""
+									r.operationID = "Memories_vecStats"
+									r.operationGroup = ""
+									r.pathPattern = "/api/memories/vec-stats"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+
+							elem = origElem
+						case 'w': // Prefix: "with-vec"
+							origElem := elem
+							if l := len("with-vec"); len(elem) >= l && elem[0:l] == "with-vec" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = MemoriesListWithVecOperation
+									r.summary = ""
+									r.operationID = "Memories_listWithVec"
+									r.operationGroup = ""
+									r.pathPattern = "/api/memories/with-vec"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+
+							elem = origElem
+						}
+						// Param: "id"
+						// Leaf parameter, slashes are prohibited
+						idx := strings.IndexByte(elem, '/')
+						if idx >= 0 {
+							break
+						}
+						args[0] = elem
+						elem = ""
 
 						if len(elem) == 0 {
 							// Leaf node.
 							switch method {
-							case "GET":
-								r.name = MemoriesVecStatsOperation
+							case "DELETE":
+								r.name = MemoriesDeleteOperation
 								r.summary = ""
-								r.operationID = "Memories_vecStats"
+								r.operationID = "Memories_delete"
 								r.operationGroup = ""
-								r.pathPattern = "/api/memories/vec-stats"
+								r.pathPattern = "/api/memories/{id}"
 								r.args = args
-								r.count = 0
+								r.count = 1
+								return r, true
+							case "GET":
+								r.name = MemoriesGetOperation
+								r.summary = ""
+								r.operationID = "Memories_get"
+								r.operationGroup = ""
+								r.pathPattern = "/api/memories/{id}"
+								r.args = args
+								r.count = 1
+								return r, true
+							case "PUT":
+								r.name = MemoriesUpdateOperation
+								r.summary = ""
+								r.operationID = "Memories_update"
+								r.operationGroup = ""
+								r.pathPattern = "/api/memories/{id}"
+								r.args = args
+								r.count = 1
 								return r, true
 							default:
 								return
 							}
 						}
 
-						elem = origElem
-					case 'w': // Prefix: "with-vec"
-						origElem := elem
-						if l := len("with-vec"); len(elem) >= l && elem[0:l] == "with-vec" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = MemoriesListWithVecOperation
-								r.summary = ""
-								r.operationID = "Memories_listWithVec"
-								r.operationGroup = ""
-								r.pathPattern = "/api/memories/with-vec"
-								r.args = args
-								r.count = 0
-								return r, true
-							default:
-								return
-							}
-						}
-
-						elem = origElem
 					}
-					// Param: "id"
-					// Leaf parameter, slashes are prohibited
-					idx := strings.IndexByte(elem, '/')
-					if idx >= 0 {
+
+				case 't': // Prefix: "trics/json"
+
+					if l := len("trics/json"); len(elem) >= l && elem[0:l] == "trics/json" {
+						elem = elem[l:]
+					} else {
 						break
 					}
-					args[0] = elem
-					elem = ""
 
 					if len(elem) == 0 {
 						// Leaf node.
 						switch method {
-						case "DELETE":
-							r.name = MemoriesDeleteOperation
-							r.summary = ""
-							r.operationID = "Memories_delete"
-							r.operationGroup = ""
-							r.pathPattern = "/api/memories/{id}"
-							r.args = args
-							r.count = 1
-							return r, true
 						case "GET":
-							r.name = MemoriesGetOperation
+							r.name = MetricsJSONOperation
 							r.summary = ""
-							r.operationID = "Memories_get"
+							r.operationID = "Metrics_json"
 							r.operationGroup = ""
-							r.pathPattern = "/api/memories/{id}"
+							r.pathPattern = "/api/metrics/json"
 							r.args = args
-							r.count = 1
-							return r, true
-						case "PUT":
-							r.name = MemoriesUpdateOperation
-							r.summary = ""
-							r.operationID = "Memories_update"
-							r.operationGroup = ""
-							r.pathPattern = "/api/memories/{id}"
-							r.args = args
-							r.count = 1
+							r.count = 0
 							return r, true
 						default:
 							return

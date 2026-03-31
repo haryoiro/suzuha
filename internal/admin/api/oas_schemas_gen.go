@@ -1208,6 +1208,10 @@ type Memory struct {
 	Type      string            `json:"type"`
 	Content   string            `json:"content"`
 	Metadata  OptMemoryMetadata `json:"metadata"`
+	Keywords  []string          `json:"keywords"`
+	Topic     OptString         `json:"topic"`
+	Persons   []string          `json:"persons"`
+	EventTime OptString         `json:"event_time"`
 	CreatedAt string            `json:"created_at"`
 	UpdatedAt string            `json:"updated_at"`
 }
@@ -1230,6 +1234,26 @@ func (s *Memory) GetContent() string {
 // GetMetadata returns the value of Metadata.
 func (s *Memory) GetMetadata() OptMemoryMetadata {
 	return s.Metadata
+}
+
+// GetKeywords returns the value of Keywords.
+func (s *Memory) GetKeywords() []string {
+	return s.Keywords
+}
+
+// GetTopic returns the value of Topic.
+func (s *Memory) GetTopic() OptString {
+	return s.Topic
+}
+
+// GetPersons returns the value of Persons.
+func (s *Memory) GetPersons() []string {
+	return s.Persons
+}
+
+// GetEventTime returns the value of EventTime.
+func (s *Memory) GetEventTime() OptString {
+	return s.EventTime
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -1262,6 +1286,26 @@ func (s *Memory) SetMetadata(val OptMemoryMetadata) {
 	s.Metadata = val
 }
 
+// SetKeywords sets the value of Keywords.
+func (s *Memory) SetKeywords(val []string) {
+	s.Keywords = val
+}
+
+// SetTopic sets the value of Topic.
+func (s *Memory) SetTopic(val OptString) {
+	s.Topic = val
+}
+
+// SetPersons sets the value of Persons.
+func (s *Memory) SetPersons(val []string) {
+	s.Persons = val
+}
+
+// SetEventTime sets the value of EventTime.
+func (s *Memory) SetEventTime(val OptString) {
+	s.EventTime = val
+}
+
 // SetCreatedAt sets the value of CreatedAt.
 func (s *Memory) SetCreatedAt(val string) {
 	s.CreatedAt = val
@@ -1281,6 +1325,197 @@ func (s *MemoryMetadata) init() MemoryMetadata {
 		*s = m
 	}
 	return m
+}
+
+// Ref: #/components/schemas/MetricBucket
+type MetricBucket struct {
+	Le    float64 `json:"le"`
+	Count int64   `json:"count"`
+}
+
+// GetLe returns the value of Le.
+func (s *MetricBucket) GetLe() float64 {
+	return s.Le
+}
+
+// GetCount returns the value of Count.
+func (s *MetricBucket) GetCount() int64 {
+	return s.Count
+}
+
+// SetLe sets the value of Le.
+func (s *MetricBucket) SetLe(val float64) {
+	s.Le = val
+}
+
+// SetCount sets the value of Count.
+func (s *MetricBucket) SetCount(val int64) {
+	s.Count = val
+}
+
+// Ref: #/components/schemas/MetricEntry
+type MetricEntry struct {
+	Name    string               `json:"name"`
+	Help    string               `json:"help"`
+	Type    MetricEntryType      `json:"type"`
+	Value   OptFloat64           `json:"value"`
+	Labels  OptMetricEntryLabels `json:"labels"`
+	Buckets []MetricBucket       `json:"buckets"`
+	Sum     OptFloat64           `json:"sum"`
+	Count   OptFloat64           `json:"count"`
+}
+
+// GetName returns the value of Name.
+func (s *MetricEntry) GetName() string {
+	return s.Name
+}
+
+// GetHelp returns the value of Help.
+func (s *MetricEntry) GetHelp() string {
+	return s.Help
+}
+
+// GetType returns the value of Type.
+func (s *MetricEntry) GetType() MetricEntryType {
+	return s.Type
+}
+
+// GetValue returns the value of Value.
+func (s *MetricEntry) GetValue() OptFloat64 {
+	return s.Value
+}
+
+// GetLabels returns the value of Labels.
+func (s *MetricEntry) GetLabels() OptMetricEntryLabels {
+	return s.Labels
+}
+
+// GetBuckets returns the value of Buckets.
+func (s *MetricEntry) GetBuckets() []MetricBucket {
+	return s.Buckets
+}
+
+// GetSum returns the value of Sum.
+func (s *MetricEntry) GetSum() OptFloat64 {
+	return s.Sum
+}
+
+// GetCount returns the value of Count.
+func (s *MetricEntry) GetCount() OptFloat64 {
+	return s.Count
+}
+
+// SetName sets the value of Name.
+func (s *MetricEntry) SetName(val string) {
+	s.Name = val
+}
+
+// SetHelp sets the value of Help.
+func (s *MetricEntry) SetHelp(val string) {
+	s.Help = val
+}
+
+// SetType sets the value of Type.
+func (s *MetricEntry) SetType(val MetricEntryType) {
+	s.Type = val
+}
+
+// SetValue sets the value of Value.
+func (s *MetricEntry) SetValue(val OptFloat64) {
+	s.Value = val
+}
+
+// SetLabels sets the value of Labels.
+func (s *MetricEntry) SetLabels(val OptMetricEntryLabels) {
+	s.Labels = val
+}
+
+// SetBuckets sets the value of Buckets.
+func (s *MetricEntry) SetBuckets(val []MetricBucket) {
+	s.Buckets = val
+}
+
+// SetSum sets the value of Sum.
+func (s *MetricEntry) SetSum(val OptFloat64) {
+	s.Sum = val
+}
+
+// SetCount sets the value of Count.
+func (s *MetricEntry) SetCount(val OptFloat64) {
+	s.Count = val
+}
+
+type MetricEntryLabels map[string]string
+
+func (s *MetricEntryLabels) init() MetricEntryLabels {
+	m := *s
+	if m == nil {
+		m = map[string]string{}
+		*s = m
+	}
+	return m
+}
+
+type MetricEntryType string
+
+const (
+	MetricEntryTypeCounter   MetricEntryType = "counter"
+	MetricEntryTypeHistogram MetricEntryType = "histogram"
+	MetricEntryTypeGauge     MetricEntryType = "gauge"
+)
+
+// AllValues returns all MetricEntryType values.
+func (MetricEntryType) AllValues() []MetricEntryType {
+	return []MetricEntryType{
+		MetricEntryTypeCounter,
+		MetricEntryTypeHistogram,
+		MetricEntryTypeGauge,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s MetricEntryType) MarshalText() ([]byte, error) {
+	switch s {
+	case MetricEntryTypeCounter:
+		return []byte(s), nil
+	case MetricEntryTypeHistogram:
+		return []byte(s), nil
+	case MetricEntryTypeGauge:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *MetricEntryType) UnmarshalText(data []byte) error {
+	switch MetricEntryType(data) {
+	case MetricEntryTypeCounter:
+		*s = MetricEntryTypeCounter
+		return nil
+	case MetricEntryTypeHistogram:
+		*s = MetricEntryTypeHistogram
+		return nil
+	case MetricEntryTypeGauge:
+		*s = MetricEntryTypeGauge
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+type MetricsJSONOK struct {
+	Metrics []MetricEntry `json:"metrics"`
+}
+
+// GetMetrics returns the value of Metrics.
+func (s *MetricsJSONOK) GetMetrics() []MetricEntry {
+	return s.Metrics
+}
+
+// SetMetrics sets the value of Metrics.
+func (s *MetricsJSONOK) SetMetrics(val []MetricEntry) {
+	s.Metrics = val
 }
 
 // Ref: #/components/schemas/OkResponse
@@ -1660,6 +1895,52 @@ func (o OptMemoryMetadata) Get() (v MemoryMetadata, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptMemoryMetadata) Or(d MemoryMetadata) MemoryMetadata {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptMetricEntryLabels returns new OptMetricEntryLabels with value set to v.
+func NewOptMetricEntryLabels(v MetricEntryLabels) OptMetricEntryLabels {
+	return OptMetricEntryLabels{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptMetricEntryLabels is optional MetricEntryLabels.
+type OptMetricEntryLabels struct {
+	Value MetricEntryLabels
+	Set   bool
+}
+
+// IsSet returns true if OptMetricEntryLabels was set.
+func (o OptMetricEntryLabels) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptMetricEntryLabels) Reset() {
+	var v MetricEntryLabels
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptMetricEntryLabels) SetTo(v MetricEntryLabels) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptMetricEntryLabels) Get() (v MetricEntryLabels, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptMetricEntryLabels) Or(d MetricEntryLabels) MetricEntryLabels {
 	if v, ok := o.Get(); ok {
 		return v
 	}

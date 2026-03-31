@@ -156,6 +156,10 @@ type Handler interface {
 	//
 	// GET /api/memories/vec-stats
 	MemoriesVecStats(ctx context.Context) (*VecStats, error)
+	// MetricsJSON implements Metrics_json operation.
+	//
+	// GET /api/metrics/json
+	MetricsJSON(ctx context.Context) (*MetricsJSONOK, error)
 	// PromptsGet implements Prompts_get operation.
 	//
 	// GET /api/prompts/{name}

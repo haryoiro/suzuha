@@ -268,6 +268,13 @@ func (UnimplementedHandler) MemoriesVecStats(ctx context.Context) (r *VecStats, 
 	return r, ht.ErrNotImplemented
 }
 
+// MetricsJSON implements Metrics_json operation.
+//
+// GET /api/metrics/json
+func (UnimplementedHandler) MetricsJSON(ctx context.Context) (r *MetricsJSONOK, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // PromptsGet implements Prompts_get operation.
 //
 // GET /api/prompts/{name}
