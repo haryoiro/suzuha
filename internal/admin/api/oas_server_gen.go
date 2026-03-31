@@ -48,6 +48,10 @@ type Handler interface {
 	//
 	// GET /api/conversation-logs
 	ConversationLogsList(ctx context.Context) (*ConversationLogsListOK, error)
+	// DiaryList implements Diary_list operation.
+	//
+	// GET /api/diary
+	DiaryList(ctx context.Context, params DiaryListParams) (*DiaryListOK, error)
 	// ForgetDelete implements Forget_delete operation.
 	//
 	// POST /api/forget/delete

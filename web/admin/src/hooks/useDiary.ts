@@ -1,13 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { memoriesApi } from "../lib/api";
-import type { Memory } from "../lib/api";
+import { diaryApi } from "../lib/api";
+import type { DiaryEntry } from "../lib/api";
 
-export interface DailyDiary extends Memory {
+export interface DailyDiary {
+  id: string;
   date: string;
+  content: string;
 }
 
-export interface HourlyDigest extends Memory {
+export interface HourlyDigest {
+  id: string;
   hour: string;
+  content: string;
 }
 
 export interface DiaryDay {
@@ -16,44 +20,32 @@ export interface DiaryDay {
   hourly: HourlyDigest[];
 }
 
-function getDiaryMeta(mem: Memory): { kind?: string; hour?: string; date?: string } {
-  const md = mem.metadata ?? {};
-  return {
-    kind: md.kind as string | undefined,
-    hour: md.hour as string | undefined,
-    date: md.date as string | undefined,
-  };
-}
-
 export function useDiary(targetDate: string) {
   return useQuery({
     queryKey: ["diary", targetDate],
     queryFn: async (): Promise<DiaryDay> => {
-      // Fetch self memories, ordered by creation date descending.
-      // We fetch a generous amount to cover all hourly digests + daily.
-      const res = await memoriesApi.list({
-        type: "self",
-        limit: 100,
-        order: "created_at",
-        dir: "desc",
-      });
+      const res = await diaryApi.list({ limit: 200 });
 
       let daily: DailyDiary | null = null;
       const hourly: HourlyDigest[] = [];
 
-      for (const mem of res.data) {
-        const meta = getDiaryMeta(mem);
+      for (const entry of res.data) {
+        const periodDate = entry.period_start.slice(0, 10);
 
-        if (meta.kind === "daily_diary" && meta.date === targetDate) {
-          daily = { ...mem, date: meta.date };
+        if (entry.kind === "daily" && periodDate === targetDate) {
+          daily = { id: entry.id, date: periodDate, content: entry.content };
         }
 
-        if (meta.kind === "hourly_digest" && meta.hour?.startsWith(targetDate)) {
-          hourly.push({ ...mem, hour: meta.hour });
+        if (entry.kind === "hourly" && periodDate === targetDate) {
+          hourly.push({
+            id: entry.id,
+            hour: entry.period_start.slice(0, 16).replace(" ", "T"),
+            content: entry.content,
+          });
         }
       }
 
-      // Sort hourly chronologically.
+      // 時系列順にソート。
       hourly.sort((a, b) => a.hour.localeCompare(b.hour));
 
       return { date: targetDate, daily, hourly };
@@ -62,27 +54,17 @@ export function useDiary(targetDate: string) {
   });
 }
 
-/** Get a list of dates that have diary entries (for the date picker). */
+/** 日記エントリがある日付の一覧を取得（DatePicker 用）。 */
 export function useDiaryDates() {
   return useQuery({
     queryKey: ["diary-dates"],
     queryFn: async (): Promise<string[]> => {
-      const res = await memoriesApi.list({
-        type: "self",
-        limit: 500,
-        order: "created_at",
-        dir: "desc",
-      });
+      const res = await diaryApi.list({ limit: 500 });
 
       const dates = new Set<string>();
-      for (const mem of res.data) {
-        const meta = getDiaryMeta(mem);
-        if (meta.kind === "daily_diary" && meta.date) {
-          dates.add(meta.date);
-        }
-        if (meta.kind === "hourly_digest" && meta.hour) {
-          dates.add(meta.hour.slice(0, 10));
-        }
+      for (const entry of res.data) {
+        const periodDate = entry.period_start.slice(0, 10);
+        dates.add(periodDate);
       }
 
       return Array.from(dates).sort().reverse();

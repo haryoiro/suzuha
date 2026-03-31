@@ -110,6 +110,26 @@ export const memoriesApi = {
   },
 };
 
+// Diary API
+export interface DiaryEntry {
+  id: string;
+  kind: string;
+  content: string;
+  period_start: string;
+  period_end: string;
+  created_at: string;
+}
+
+export interface DiaryListResponse {
+  data: DiaryEntry[];
+  total: number;
+}
+
+export const diaryApi = {
+  list: (params: { kind?: string; offset?: number; limit?: number }) =>
+    fetchJSON<DiaryListResponse>(`/api/diary${toQuery(params)}`),
+};
+
 export function getMediaURL(key: string): string {
   return `${BASE_URL}/api/media/${key}`;
 }

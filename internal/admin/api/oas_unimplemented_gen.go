@@ -79,6 +79,13 @@ func (UnimplementedHandler) ConversationLogsList(ctx context.Context) (r *Conver
 	return r, ht.ErrNotImplemented
 }
 
+// DiaryList implements Diary_list operation.
+//
+// GET /api/diary
+func (UnimplementedHandler) DiaryList(ctx context.Context, params DiaryListParams) (r *DiaryListOK, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ForgetDelete implements Forget_delete operation.
 //
 // POST /api/forget/delete

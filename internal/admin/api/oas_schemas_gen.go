@@ -688,6 +688,102 @@ func (s *DeviceMapping) SetCreatedAt(val string) {
 	s.CreatedAt = val
 }
 
+// Ref: #/components/schemas/DiaryEntry
+type DiaryEntry struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Content     string `json:"content"`
+	PeriodStart string `json:"period_start"`
+	PeriodEnd   string `json:"period_end"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *DiaryEntry) GetID() string {
+	return s.ID
+}
+
+// GetKind returns the value of Kind.
+func (s *DiaryEntry) GetKind() string {
+	return s.Kind
+}
+
+// GetContent returns the value of Content.
+func (s *DiaryEntry) GetContent() string {
+	return s.Content
+}
+
+// GetPeriodStart returns the value of PeriodStart.
+func (s *DiaryEntry) GetPeriodStart() string {
+	return s.PeriodStart
+}
+
+// GetPeriodEnd returns the value of PeriodEnd.
+func (s *DiaryEntry) GetPeriodEnd() string {
+	return s.PeriodEnd
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *DiaryEntry) GetCreatedAt() string {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *DiaryEntry) SetID(val string) {
+	s.ID = val
+}
+
+// SetKind sets the value of Kind.
+func (s *DiaryEntry) SetKind(val string) {
+	s.Kind = val
+}
+
+// SetContent sets the value of Content.
+func (s *DiaryEntry) SetContent(val string) {
+	s.Content = val
+}
+
+// SetPeriodStart sets the value of PeriodStart.
+func (s *DiaryEntry) SetPeriodStart(val string) {
+	s.PeriodStart = val
+}
+
+// SetPeriodEnd sets the value of PeriodEnd.
+func (s *DiaryEntry) SetPeriodEnd(val string) {
+	s.PeriodEnd = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *DiaryEntry) SetCreatedAt(val string) {
+	s.CreatedAt = val
+}
+
+// Paginated list wrapper.
+type DiaryListOK struct {
+	Data  []DiaryEntry `json:"data"`
+	Total int32        `json:"total"`
+}
+
+// GetData returns the value of Data.
+func (s *DiaryListOK) GetData() []DiaryEntry {
+	return s.Data
+}
+
+// GetTotal returns the value of Total.
+func (s *DiaryListOK) GetTotal() int32 {
+	return s.Total
+}
+
+// SetData sets the value of Data.
+func (s *DiaryListOK) SetData(val []DiaryEntry) {
+	s.Data = val
+}
+
+// SetTotal sets the value of Total.
+func (s *DiaryListOK) SetTotal(val int32) {
+	s.Total = val
+}
+
 // Ref: #/components/schemas/DuplicateGroup
 type DuplicateGroup struct {
 	Memories []Memory `json:"memories"`

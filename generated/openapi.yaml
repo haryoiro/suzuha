@@ -17,6 +17,7 @@ tags:
   - name: Logs
   - name: Agent
   - name: Forget
+  - name: Diary
 paths:
   /api/agent/compact:
     post:
@@ -200,6 +201,51 @@ paths:
                 type: string
       tags:
         - Logs
+  /api/diary:
+    get:
+      operationId: Diary_list
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+          explode: false
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiaryEntry'
+                  total:
+                    type: integer
+                    format: int32
+                description: Paginated list wrapper.
+      tags:
+        - Diary
   /api/forget/delete:
     post:
       operationId: Forget_delete
@@ -1362,6 +1408,28 @@ components:
         owner_name:
           type: string
         user_id:
+          type: string
+        created_at:
+          type: string
+    DiaryEntry:
+      type: object
+      required:
+        - id
+        - kind
+        - content
+        - period_start
+        - period_end
+        - created_at
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        content:
+          type: string
+        period_start:
+          type: string
+        period_end:
           type: string
         created_at:
           type: string

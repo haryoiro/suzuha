@@ -49,15 +49,22 @@ func (s *Store) Save(ctx context.Context, e *Entry) error {
 }
 
 // ListByKind は指定 kind の日記エントリを period_start 降順で返す。
+// kind が空文字列の場合は全 kind を返す。
 func (s *Store) ListByKind(ctx context.Context, kind string, since time.Time, limit int) ([]Entry, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, kind, content, period_start, period_end, created_at
-		 FROM diary_entries
-		 WHERE kind = ? AND period_start >= ?
-		 ORDER BY period_start DESC
-		 LIMIT ?`,
-		kind, since, limit,
-	)
+	var q string
+	var args []any
+	if kind != "" {
+		q = `SELECT id, kind, content, period_start, period_end, created_at
+		     FROM diary_entries WHERE kind = ? AND period_start >= ?
+		     ORDER BY period_start DESC LIMIT ?`
+		args = []any{kind, since, limit}
+	} else {
+		q = `SELECT id, kind, content, period_start, period_end, created_at
+		     FROM diary_entries WHERE period_start >= ?
+		     ORDER BY period_start DESC LIMIT ?`
+		args = []any{since, limit}
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("diary: 一覧取得に失敗: %w", err)
 	}

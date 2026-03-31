@@ -13,6 +13,7 @@ import "./prompts.tsp";
 import "./tools.tsp";
 import "./logs.tsp";
 import "./agent.tsp";
+import "./diary.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;

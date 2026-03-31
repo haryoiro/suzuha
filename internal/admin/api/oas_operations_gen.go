@@ -15,6 +15,7 @@ const (
 	ContextGetOperation             OperationName = "ContextGet"
 	ConversationLogsExportOperation OperationName = "ConversationLogsExport"
 	ConversationLogsListOperation   OperationName = "ConversationLogsList"
+	DiaryListOperation              OperationName = "DiaryList"
 	ForgetDeleteOperation           OperationName = "ForgetDelete"
 	ForgetGroupsOperation           OperationName = "ForgetGroups"
 	ForgetMergeOperation            OperationName = "ForgetMerge"
