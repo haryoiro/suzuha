@@ -14,6 +14,9 @@ func Package(i do.Injector) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[*memory.SQLiteStore](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return NewServer(llmClient, store, logger), nil
+		srv := NewServer(llmClient, store, DefaultConfig(), logger)
+		// AdminStore is the same SQLiteStore implementing both interfaces.
+		srv.SetAdminStore(store)
+		return srv, nil
 	})
 }
