@@ -265,6 +265,18 @@ func (c *Context) RemoveChannelHistory(channelID string) {
 	c.messages = filtered
 }
 
+// HasMessagesForChannel はこのチャンネルの user/assistant メッセージが context にあるか返す。
+func (c *Context) HasMessagesForChannel(channelID string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, m := range c.messages {
+		if m.Channel == channelID && (m.Role == "user" || m.Role == "assistant") {
+			return true
+		}
+	}
+	return false
+}
+
 // RemoveByChannel removes all messages belonging to the given channel ID.
 // Returns the number of messages removed.
 func (c *Context) RemoveByChannel(channelID string) int {

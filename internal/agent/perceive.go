@@ -299,6 +299,12 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 	if agentCtx.HasChannelHistory(channelID) {
 		return
 	}
+	// context に既にこのチャンネルの会話メッセージがある場合は
+	// history 注入をスキップ（重複を防ぐ）。
+	if agentCtx.HasMessagesForChannel(channelID) {
+		agentCtx.MarkChannelSeen(channelID)
+		return
+	}
 	// Remove stale history (e.g. from DB restore) before injecting fresh one.
 	agentCtx.RemoveChannelHistory(channelID)
 	agentCtx.MarkChannelSeen(channelID)
