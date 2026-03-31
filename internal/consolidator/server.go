@@ -4,150 +4,58 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path"
-	"strings"
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
-// collectMediaKeysByIndex maps message indices to their media keys.
-func collectMediaKeysByIndex(msgs []llm.Message) map[int][]string {
-	result := make(map[int][]string)
-	for i, m := range msgs {
-		if len(m.MediaKeys) > 0 {
-			result[i] = m.MediaKeys
-		}
-	}
-	return result
+// completer はLLM補完呼び出しを抽象化するインターフェース。
+// *llm.Client が実装する。テストではモックに差し替え可能。
+type completer interface {
+	CompleteRawDefault(ctx context.Context, msgs []providers.Message) (*llm.Response, error)
 }
 
-// attachMediaByIndices links media keys to a memory using image_indices from LLM output.
-func attachMediaByIndices(mem *memory.Memory, mediaByIndex map[int][]string) {
-	if mem.Metadata == nil || len(mediaByIndex) == 0 {
-		return
-	}
-
-	indices, ok := mem.Metadata["image_indices"]
-	if !ok {
-		return
-	}
-
-	// Parse indices (may be []int or []any from JSON).
-	var idxList []int
-	switch v := indices.(type) {
-	case []int:
-		idxList = v
-	case []any:
-		for _, item := range v {
-			switch n := item.(type) {
-			case int:
-				idxList = append(idxList, n)
-			case float64:
-				idxList = append(idxList, int(n))
-			}
-		}
-	}
-
-	// Remove image_indices from metadata (internal use only).
-	delete(mem.Metadata, "image_indices")
-
-	seen := make(map[string]bool)
-	for _, idx := range idxList {
-		for _, key := range mediaByIndex[idx] {
-			if !seen[key] {
-				seen[key] = true
-				mem.Attachments = append(mem.Attachments, memory.Attachment{
-					Key:      key,
-					Modality: modalityFromKey(key),
-					MimeType: mimeFromKey(key),
-				})
-			}
-		}
-	}
-}
-
-func modalityFromKey(key string) string {
-	ext := strings.ToLower(path.Ext(key))
-	switch ext {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-		return "image"
-	case ".wav", ".mp3", ".ogg", ".webm":
-		return "audio"
-	default:
-		return "image"
-	}
-}
-
-func mimeFromKey(key string) string {
-	ext := strings.ToLower(path.Ext(key))
-	switch ext {
-	case ".png":
-		return "image/png"
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".wav":
-		return "audio/wav"
-	case ".mp3":
-		return "audio/mpeg"
-	default:
-		return "application/octet-stream"
-	}
-}
-
-// Server implements the consolidation logic.
-// It uses an LLM to decide which messages to keep and what to extract
-// as long-term memories.
+// Server は Client および Maintainer インターフェースを実装する。
+// メモリの全ライフサイクルを管理する: 抽出（書き込みパス）とメンテナンス（バックグラウンドパス）。
 type Server struct {
-	llmClient *llm.Client
+	llmClient completer
 	store     memory.Store
+	admin     memory.AdminStore // Maintain の DeleteBatch で必要; nil の場合あり
+	config    Config
 	logger    *slog.Logger
 }
 
-// NewServer creates a consolidator server.
-func NewServer(llmClient *llm.Client, store memory.Store, logger *slog.Logger) *Server {
+// NewServer はコンソリデーターサーバーを作成する。
+func NewServer(llmClient *llm.Client, store memory.Store, cfg Config, logger *slog.Logger) *Server {
 	return &Server{
 		llmClient: llmClient,
 		store:     store,
+		config:    cfg,
 		logger:    logger,
 	}
 }
 
-// Compact extracts long-term memories from the given messages.
+// SetAdminStore はメンテナンス操作用のAdminStoreを設定する。
+func (s *Server) SetAdminStore(admin memory.AdminStore) {
+	s.admin = admin
+}
+
+// Compact は指定されたメッセージから長期メモリを抽出する。
 func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResult, error) {
 	if len(req.Messages) == 0 {
 		return &CompactResult{}, nil
 	}
 
-	// Build a prompt asking the LLM to extract memories from the conversation.
-	prompt := buildCompactPrompt(req.Messages)
-
-	resp, err := s.llmClient.CompleteRawDefault(ctx, []providers.Message{
-		{Role: "system", Content: compactSystemPrompt},
-		{Role: "user", Content: prompt},
-	})
+	// 抽出パイプラインを実行: コンテキスト取得 → LLM → パース → メディア添付。
+	memories, err := s.extract(ctx, req.Messages)
 	if err != nil {
-		return nil, fmt.Errorf("consolidator: コンパクト処理のLLM呼び出しに失敗: %w", err)
+		return nil, fmt.Errorf("consolidator: 抽出に失敗: %w", err)
 	}
 
-	result := parseCompactResponse(resp.Text)
-
-	// Build per-message-index media key map.
-	mediaByIndex := collectMediaKeysByIndex(req.Messages)
-
-	// Attach media to all candidates first.
-	for i := range result.Memories {
-		attachMediaByIndices(&result.Memories[i], mediaByIndex)
-	}
-
-	// Batch dedup check — single embedding API call for all candidates.
-	candidates := make([]memory.DupCandidate, len(result.Memories))
-	for i, mem := range result.Memories {
+	// バッチ重複チェック — 全候補に対して1回の埋め込みAPI呼び出し。
+	candidates := make([]memory.DupCandidate, len(memories))
+	for i, mem := range memories {
 		candidates[i] = memory.DupCandidate{Content: mem.Content, Type: mem.Type}
 	}
 	dupResults, dupErr := s.store.IsDuplicateBatch(ctx, candidates)
@@ -155,9 +63,10 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 		s.logger.Warn("consolidator: バッチ重複チェックに失敗", "error", dupErr)
 	}
 
-	// Save non-duplicate memories, reusing embeddings from the dedup check.
-	for i := range result.Memories {
-		mem := &result.Memories[i]
+	// 重複でないメモリを保存し、重複チェックで得た埋め込みを再利用する。
+	result := &CompactResult{}
+	for i := range memories {
+		mem := &memories[i]
 		if dupResults != nil && dupResults[i].DupID != "" {
 			s.logger.Debug("consolidator: 重複メモリをスキップ", "existing_id", dupResults[i].DupID, "content", mem.Content)
 			continue
@@ -166,157 +75,10 @@ func (s *Server) Compact(ctx context.Context, req *CompactRequest) (*CompactResu
 			mem.Embedding = dupResults[i].Embedding
 		}
 		if err := s.store.Save(ctx, mem); err != nil {
-			s.logger.Warn("consolidator: メモリの保存に失敗しました", "error", err)
+			s.logger.Warn("consolidator: メモリの保存に失敗", "error", err)
 		}
+		result.Memories = append(result.Memories, *mem)
 	}
 
 	return result, nil
 }
-
-const compactSystemPrompt = `You are a memory extraction agent. Your job is to analyze a conversation and extract key information that should be stored as long-term memories.
-
-IMPORTANT: Write all MEMORIES content in Japanese (日本語). The conversation is in Japanese, and memories must also be in Japanese.
-
-Respond in this exact format:
-
-MEMORIES:
-- [user user_id=<platform_user_id>] そのユーザーに関する情報や好み
-- [world] 会話で出た一般的な知識や事実
-- [tool] ツールの使用パターンや覚えておくべき結果
-- [episode participants=<id1>,<id2> tone=<感情> images=<comma-separated message indices with images>] 出来事の要約
-- [self] 自分自身について新しく気づいたこと、確認できたこと
-
-[episode] の使い分け:
-- 複数人が関わった会話イベント（盛り上がった話題、一緒に何かした体験）→ episode
-- 個人の属性・好み → user
-- 出来事のコンテンツには参加者のIDも含めること（検索用）
-- 例: [episode participants=123,456 tone=楽しい images=3,7] 123と456がアニメの話で盛り上がった
-- images= にはそのエピソードに関連する画像付きメッセージのインデックスを指定（[IMG]マーカー付きのもの）。関連する画像がなければ省略
-
-[self] の使い分け:
-- 自分（のの）の行動パターンに新しい発見があった時だけ
-- 例: 「プログラミングの話になると饒舌になる」「朝は機嫌が悪い」「○○の話題が苦手」
-- 毎回出す必要はない。本当に新しい自己認識があった時だけ
-
-抽出するに値しない雑談・挨拶だけの場合は「MEMORIES:」のみ書いて空にしてよい。
-
-IMPORTANT: For [user] memories, always include the user_id of the person the fact is about.
-The user_id can be found in message metadata (user_id=... in the message header).
-If the fact is about a user whose user_id is not clear, omit the user_id.`
-
-func buildCompactPrompt(messages []llm.Message) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Here are %d messages. Extract important information as long-term memories.\n\n", len(messages))
-	for i, m := range messages {
-		imgTag := ""
-		if len(m.MediaKeys) > 0 || len(m.ImageURLs) > 0 {
-			imgTag = " [IMG]"
-		}
-		if m.UserID != "" {
-			fmt.Fprintf(&sb, "[%d]%s %s (user_id=%s, platform=%s, name=%s): %s\n",
-				i, imgTag, m.Role, m.UserID, m.Source, m.UserName, m.Content)
-		} else {
-			fmt.Fprintf(&sb, "[%d]%s %s: %s\n", i, imgTag, m.Role, m.Content)
-		}
-	}
-	return sb.String()
-}
-
-func parseCompactResponse(text string) *CompactResult {
-	result := &CompactResult{}
-
-	lines := strings.Split(text, "\n")
-	inMemories := false
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		if strings.HasPrefix(strings.ToUpper(line), "MEMORIES:") {
-			inMemories = true
-			continue
-		}
-
-		if !inMemories || !strings.HasPrefix(line, "- ") {
-			continue
-		}
-		content := strings.TrimPrefix(line, "- ")
-		if mem, ok := parseMemoryLine(content); ok {
-			result.Memories = append(result.Memories, mem)
-		}
-	}
-
-	return result
-}
-
-func parseMemoryLine(content string) (memory.Memory, bool) {
-	memType := memory.MemoryTypeWorld
-	var metadata map[string]any
-
-	switch {
-	case strings.HasPrefix(content, "[user"):
-		memType = memory.MemoryTypeUser
-		// Parse optional user_id: [user user_id=abc123] or [user]
-		endBracket := strings.Index(content, "]")
-		if endBracket < 0 {
-			return memory.Memory{}, false
-		}
-		tag := content[1:endBracket] // "user user_id=abc123" or "user"
-		content = content[endBracket+1:]
-
-		// Extract user_id from tag if present.
-		if idx := strings.Index(tag, "user_id="); idx >= 0 {
-			userID := tag[idx+len("user_id="):]
-			userID = strings.TrimSpace(userID)
-			if userID != "" {
-				metadata = map[string]any{"user_id": userID}
-			}
-		}
-	case strings.HasPrefix(content, "[episode"):
-		memType = memory.MemoryTypeEpisode
-		endBracket := strings.Index(content, "]")
-		if endBracket < 0 {
-			return memory.Memory{}, false
-		}
-		tag := content[len("[episode"):endBracket]
-		content = content[endBracket+1:]
-		metadata = map[string]any{}
-		for _, part := range strings.Fields(tag) {
-			if k, v, ok := strings.Cut(part, "="); ok {
-				switch k {
-				case "participants":
-					metadata["participants"] = strings.Split(v, ",")
-				case "tone":
-					metadata["emotional_tone"] = v
-				case "images":
-					// Parse message indices that have images.
-					var indices []int
-					for _, s := range strings.Split(v, ",") {
-						s = strings.TrimSpace(s)
-						var idx int
-						if _, err := fmt.Sscanf(s, "%d", &idx); err == nil {
-							indices = append(indices, idx)
-						}
-					}
-					if len(indices) > 0 {
-						metadata["image_indices"] = indices
-					}
-				}
-			}
-		}
-	case strings.HasPrefix(content, "[world]"):
-		memType = memory.MemoryTypeWorld
-		content = strings.TrimPrefix(content, "[world]")
-	case strings.HasPrefix(content, "[tool]"):
-		memType = memory.MemoryTypeTool
-		content = strings.TrimPrefix(content, "[tool]")
-	case strings.HasPrefix(content, "[self]"):
-		memType = memory.MemoryTypeSelf
-		content = strings.TrimPrefix(content, "[self]")
-	}
-	content = strings.TrimSpace(content)
-	if content == "" {
-		return memory.Memory{}, false
-	}
-	return memory.Memory{Type: memType, Content: content, Metadata: metadata}, true
-}
-
