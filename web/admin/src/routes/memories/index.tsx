@@ -98,6 +98,21 @@ export const MemoriesPage = memo(function MemoriesPage({ onViewDetail }: Props) 
       ),
     },
     {
+      title: "Topic",
+      dataIndex: "topic",
+      width: 120,
+      responsive: ["lg"],
+      ellipsis: true,
+      render: (v?: string) => v ? <Tag>{v}</Tag> : null,
+    },
+    {
+      title: "Persons",
+      dataIndex: "persons",
+      width: 120,
+      responsive: ["lg"],
+      render: (v?: string[]) => v?.length ? v.map(p => <Tag key={p} color="blue">{p}</Tag>) : null,
+    },
+    {
       title: "Updated",
       dataIndex: "updated_at",
       width: 180,

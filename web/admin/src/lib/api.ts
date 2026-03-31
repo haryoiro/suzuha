@@ -23,6 +23,10 @@ export interface Memory {
   type: "user" | "world" | "tool" | "episode" | "self" | "memo";
   content: string;
   metadata?: Record<string, unknown>;
+  keywords?: string[];
+  topic?: string;
+  persons?: string[];
+  event_time?: string;
   created_at: string;
   updated_at: string;
 }
