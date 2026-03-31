@@ -11,6 +11,10 @@ model Memory {
   type: string;
   content: string;
   metadata?: Record<unknown>;
+  keywords?: string[];
+  topic?: string;
+  persons?: string[];
+  event_time?: string;
   created_at: string;
   updated_at: string;
 }
