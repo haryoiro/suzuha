@@ -10,6 +10,7 @@ import (
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	"github.com/haryoiro/suzuha/internal/diary"
 	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/jtime"
@@ -609,40 +610,32 @@ func responseDirective(evt event.Event, botID string, cs convState, es episodeSi
 // diaryLookback is how far back to fetch hourly digests for ephemeral injection.
 const diaryLookback = 12 * time.Hour
 
-// buildDiaryContext fetches recent hourly digests and formats them as a
-// system message for ephemeral injection. Returns "" if no digests exist.
+// buildDiaryContext fetches recent hourly digests from diary_entries table
+// and formats them as a system message for ephemeral injection.
 func (a *Agent) buildDiaryContext(ctx context.Context) string {
+	if a.db == nil {
+		return ""
+	}
+	ds := diary.NewStore(a.db)
 	since := jtime.Now().Add(-diaryLookback)
-	mems, err := a.memory.ListRecentByType(ctx, memory.MemoryTypeSelf, since, 24)
+	entries, err := ds.ListByKind(ctx, "hourly", since, 24)
 	if err != nil {
 		a.logger.Debug("日記を取得できなかった", "error", err)
 		return ""
 	}
-
-	// Filter to hourly_digest kind.
-	var digests []memory.Memory
-	for _, m := range mems {
-		if m.Metadata == nil {
-			continue
-		}
-		if kind, _ := m.Metadata["kind"].(string); kind == "hourly_digest" {
-			digests = append(digests, m)
-		}
-	}
-	if len(digests) == 0 {
+	if len(entries) == 0 {
 		return ""
 	}
 
-	// Reverse to chronological order (ListRecentByType returns DESC).
-	for i, j := 0, len(digests)-1; i < j; i, j = i+1, j-1 {
-		digests[i], digests[j] = digests[j], digests[i]
+	// 時系列順にソート（ListByKind は DESC で返す）。
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
 	}
 
 	var sb strings.Builder
 	sb.WriteString("Recent diary (past 12h):\n")
-	for _, d := range digests {
-		hour, _ := d.Metadata["hour"].(string)
-		fmt.Fprintf(&sb, "- [%s] %s\n", hour, d.Content)
+	for _, e := range entries {
+		fmt.Fprintf(&sb, "- [%s] %s\n", e.PeriodStart.Format("2006-01-02T15:00"), e.Content)
 	}
 	return sb.String()
 }
