@@ -56,6 +56,10 @@ type Response struct {
 	Usage        providers.Usage
 }
 
+// RawMessage は providers.Message の型エイリアス。
+// 外部パッケージが providers を直接 import せずに済むようにする。
+type RawMessage = providers.Message
+
 // HasToolCalls returns true if the response contains tool calls.
 func (r *Response) HasToolCalls() bool {
 	return len(r.ToolCalls) > 0

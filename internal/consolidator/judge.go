@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mozilla-ai/any-llm-go/providers"
+	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 // --- LLM判定 ---
@@ -28,7 +28,7 @@ const judgeSystemPrompt = `あなたは記憶の管理者です。類似した�
 func (s *Server) judgeBatch(ctx context.Context, groups []memoryGroup) ([]decision, error) {
 	prompt := buildJudgePrompt(groups)
 
-	resp, err := s.llmClient.CompleteRawDefault(ctx, []providers.Message{
+	resp, err := s.llmClient.CompleteRawDefault(ctx, []llm.RawMessage{
 		{Role: "system", Content: judgeSystemPrompt},
 		{Role: "user", Content: prompt},
 	})

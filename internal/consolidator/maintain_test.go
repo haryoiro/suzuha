@@ -8,7 +8,6 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 // --- モック ---
@@ -38,7 +37,7 @@ type mockCompleter struct {
 	err      error
 }
 
-func (m *mockCompleter) CompleteRawDefault(_ context.Context, _ []providers.Message) (*llm.Response, error) {
+func (m *mockCompleter) CompleteRawDefault(_ context.Context, _ []llm.RawMessage) (*llm.Response, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

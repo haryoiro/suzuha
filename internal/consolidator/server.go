@@ -7,13 +7,12 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 // completer はLLM補完呼び出しを抽象化するインターフェース。
 // *llm.Client が実装する。テストではモックに差し替え可能。
 type completer interface {
-	CompleteRawDefault(ctx context.Context, msgs []providers.Message) (*llm.Response, error)
+	CompleteRawDefault(ctx context.Context, msgs []llm.RawMessage) (*llm.Response, error)
 }
 
 // Server は Client および Maintainer インターフェースを実装する。

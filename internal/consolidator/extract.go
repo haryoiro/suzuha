@@ -9,7 +9,6 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 // extract は完全な抽出パイプラインを実行する: コンテキスト取得 → プロンプト → LLM → パース → メディア添付。
@@ -22,7 +21,7 @@ func (s *Server) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memo
 	userPrompt := buildCompactPrompt(msgs, existing)
 
 	// LLMを呼び出す。
-	resp, err := s.llmClient.CompleteRawDefault(ctx, []providers.Message{
+	resp, err := s.llmClient.CompleteRawDefault(ctx, []llm.RawMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	})
