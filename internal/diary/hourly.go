@@ -56,23 +56,22 @@ func (t *HourlyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ j
 		return err
 	}
 
-	// 5. Save as self memory.
-	hourKey := localStart.Format("2006-01-02T15:00")
-	mem := memory.Memory{
-		Type:    memory.MemoryTypeSelf,
-		Content: summary,
-		Metadata: map[string]any{
-			"kind": "hourly_digest",
-			"hour": hourKey,
-		},
+	// 5. Save to diary_entries table (not memories).
+	ds := NewStore(cc.DB)
+	entry := &Entry{
+		Kind:        "hourly",
+		Content:     summary,
+		PeriodStart: windowStart,
+		PeriodEnd:   windowEnd,
 	}
-	if err := cc.Memory.Save(ctx, &mem); err != nil {
-		cc.Logger.Error("diary_hourly: メモリ保存に失敗", "error", err)
+	if err := ds.Save(ctx, entry); err != nil {
+		cc.Logger.Error("diary_hourly: 日記保存に失敗", "error", err)
 		return err
 	}
 
 	cc.Logger.Info("diary_hourly: 記録した",
-		"hour", hourKey, "conv_logs", len(convLogs), "memories", len(recentMems))
+		"period", localStart.Format("2006-01-02T15:00"),
+		"conv_logs", len(convLogs), "memories", len(recentMems))
 	return nil
 }
 
@@ -152,33 +151,26 @@ func fetchRecentMemos(ctx context.Context, cc *scheduler.CronContext, since time
 	return mems
 }
 
-// fetchPreviousDigests returns the last 1-2 hourly digests before the given window.
-func fetchPreviousDigests(ctx context.Context, cc *scheduler.CronContext, windowStart time.Time) []memory.Memory {
-	if cc.Memory == nil {
+// fetchPreviousDigests returns the last few hourly digests before the given window.
+func fetchPreviousDigests(ctx context.Context, cc *scheduler.CronContext, windowStart time.Time) []Entry {
+	if cc.DB == nil {
 		return nil
 	}
+	ds := NewStore(cc.DB)
 	lookback := windowStart.Add(-3 * time.Hour)
-	mems, err := cc.Memory.ListRecentByType(ctx, memory.MemoryTypeSelf, lookback, 10)
+	entries, err := ds.ListByKind(ctx, "hourly", lookback, 10)
 	if err != nil {
 		return nil
 	}
 
-	var digests []memory.Memory
-	for _, m := range mems {
-		if m.Metadata == nil {
-			continue
-		}
-		kind, _ := m.Metadata["kind"].(string)
-		if kind != "hourly_digest" {
-			continue
-		}
-		// Only include digests before the current window.
-		if !m.CreatedAt.Before(windowStart.UTC()) {
-			continue
-		}
-		digests = append(digests, m)
-		if len(digests) >= 2 {
-			break
+	// Only include digests before the current window.
+	var digests []Entry
+	for _, e := range entries {
+		if e.PeriodStart.Before(windowStart) {
+			digests = append(digests, e)
+			if len(digests) >= 2 {
+				break
+			}
 		}
 	}
 	return digests
@@ -218,7 +210,7 @@ func sectionHeading(sk sectionKey) string {
 	}
 }
 
-func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []memory.Memory) (string, error) {
+func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []Entry) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("以下はこの1時間の出来事です。日記の一節として主観的に2〜3文で要約してください。\n")
@@ -234,8 +226,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 	if len(prevDigests) > 0 {
 		sb.WriteString("## 前の記録（被らないように）\n")
 		for _, d := range prevDigests {
-			hour, _ := d.Metadata["hour"].(string)
-			fmt.Fprintf(&sb, "- [%s] %s\n", hour, d.Content)
+			fmt.Fprintf(&sb, "- [%s] %s\n", d.PeriodStart.Format("2006-01-02T15:00"), d.Content)
 		}
 		sb.WriteString("\n")
 	}

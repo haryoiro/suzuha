@@ -9,9 +9,8 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/mozilla-ai/any-llm-go/providers"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 // DailyTask creates a daily diary from hourly digests.
@@ -26,83 +25,63 @@ func (t *DailyTask) Setup(_ context.Context, _ *scheduler.CronContext) error { r
 
 func (t *DailyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
 	now := jtime.Now()
-	// Summarize the previous day (run at midnight → yesterday).
 	yesterday := now.Add(-24 * time.Hour)
 	localYesterday := jtime.In(yesterday)
 	dayStart := time.Date(localYesterday.Year(), localYesterday.Month(), localYesterday.Day(), 0, 0, 0, 0, localYesterday.Location())
 
-	// Collect hourly digests from yesterday.
-	digests := fetchHourlyDigests(ctx, cc, dayStart)
-	if len(digests) == 0 {
+	// diary_entries テーブルから hourly digest を取得。
+	ds := NewStore(cc.DB)
+	digests, err := ds.ListByKind(ctx, "hourly", dayStart, 50)
+	if err != nil {
+		cc.Logger.Debug("diary_daily: hourly digest 取得に失敗", "error", err)
+		return nil
+	}
+
+	// 対象日のみフィルタし、時系列順にソート。
+	dayEnd := dayStart.Add(24 * time.Hour)
+	var filtered []Entry
+	for _, e := range digests {
+		if !e.PeriodStart.Before(dayStart) && e.PeriodStart.Before(dayEnd) {
+			filtered = append(filtered, e)
+		}
+	}
+	// ListByKind は DESC なので反転して時系列順に。
+	for i, j := 0, len(filtered)-1; i < j; i, j = i+1, j-1 {
+		filtered[i], filtered[j] = filtered[j], filtered[i]
+	}
+
+	if len(filtered) == 0 {
 		cc.Logger.Debug("diary_daily: hourly digest がないのでスキップ",
 			"date", dayStart.Format("2006-01-02"))
 		return nil
 	}
 
-	// LLM summarize.
+	// LLM で日記を要約。
 	dateStr := dayStart.Format("2006-01-02")
-	summary, err := summarizeDay(ctx, cc.LLM, cc.SystemPrompt, dateStr, digests)
+	summary, err := summarizeDay(ctx, cc.LLM, cc.SystemPrompt, dateStr, filtered)
 	if err != nil {
 		cc.Logger.Error("diary_daily: 要約に失敗", "error", err)
 		return err
 	}
 
-	// Save as self memory.
-	mem := memory.Memory{
-		Type:    memory.MemoryTypeSelf,
-		Content: summary,
-		Metadata: map[string]any{
-			"kind": "daily_diary",
-			"date": dateStr,
-		},
+	// diary_entries テーブルに保存。
+	entry := &Entry{
+		Kind:        "daily",
+		Content:     summary,
+		PeriodStart: dayStart,
+		PeriodEnd:   dayEnd,
 	}
-	if err := cc.Memory.Save(ctx, &mem); err != nil {
-		cc.Logger.Error("diary_daily: メモリ保存に失敗", "error", err)
+	if err := ds.Save(ctx, entry); err != nil {
+		cc.Logger.Error("diary_daily: 日記保存に失敗", "error", err)
 		return err
 	}
 
 	cc.Logger.Info("diary_daily: 日記を書いた",
-		"date", dateStr, "hourly_count", len(digests))
+		"date", dateStr, "hourly_count", len(filtered))
 	return nil
 }
 
-func fetchHourlyDigests(ctx context.Context, cc *scheduler.CronContext, dayStart time.Time) []memory.Memory {
-	if cc.Memory == nil {
-		return nil
-	}
-	// Get all self memories from the day.
-	since := dayStart.UTC()
-	mems, err := cc.Memory.ListRecentByType(ctx, memory.MemoryTypeSelf, since, 50)
-	if err != nil {
-		cc.Logger.Debug("diary_daily: list hourly digests", "error", err)
-		return nil
-	}
-
-	// Filter to hourly_digest kind and within the target day.
-	dayEnd := dayStart.Add(24 * time.Hour)
-	var digests []memory.Memory
-	for _, m := range mems {
-		if m.Metadata == nil {
-			continue
-		}
-		kind, _ := m.Metadata["kind"].(string)
-		if kind != "hourly_digest" {
-			continue
-		}
-		if m.CreatedAt.Before(since) || m.CreatedAt.After(dayEnd.UTC()) {
-			continue
-		}
-		digests = append(digests, m)
-	}
-
-	// Sort chronologically (ListRecentByType returns DESC).
-	for i, j := 0, len(digests)-1; i < j; i, j = i+1, j-1 {
-		digests[i], digests[j] = digests[j], digests[i]
-	}
-	return digests
-}
-
-func summarizeDay(ctx context.Context, llmClient *llm.Client, systemPrompt string, dateStr string, digests []memory.Memory) (string, error) {
+func summarizeDay(ctx context.Context, llmClient *llm.Client, systemPrompt string, dateStr string, digests []Entry) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("以下は今日1日の時間ごとの記録です。1日を振り返って日記を書いてください。\n")
@@ -112,8 +91,7 @@ func summarizeDay(ctx context.Context, llmClient *llm.Client, systemPrompt strin
 	fmt.Fprintf(&sb, "日付: %s\n\n", dateStr)
 
 	for _, d := range digests {
-		hour, _ := d.Metadata["hour"].(string)
-		fmt.Fprintf(&sb, "### %s\n%s\n\n", hour, d.Content)
+		fmt.Fprintf(&sb, "### %s\n%s\n\n", d.PeriodStart.Format("2006-01-02T15:00"), d.Content)
 	}
 
 	var messages []providers.Message
