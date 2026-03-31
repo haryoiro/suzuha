@@ -19,7 +19,7 @@ Respond with a JSON array. Each element has these fields:
 - "type": one of "user", "world", "tool", "episode", "self"
 - "content": the memory text (Japanese, self-contained)
 - "keywords": array of search keywords (names, places, entities, topic words)
-- "topic": topic classification (e.g. "技術/Go", "日常/食事", "趣味/アニメ")
+- "topic": 「大カテゴリ/自由記述」形式。大カテゴリは 技術, 日常, 趣味, 仕事, 人間関係, 知識, その他 から選ぶ (例: "技術/Go", "日常/食事", "趣味/アニメ", "その他/天気")
 - "persons": array of user IDs of people involved
 - "event_time": ISO 8601 datetime if a specific time is mentioned, null otherwise
 - "emotional_tone": emotion label for episodes (e.g. "楽しい"), omit for non-episodes
