@@ -16,8 +16,16 @@ func memToAPI(m memory.Memory) api.Memory {
 		ID:        m.ID,
 		Type:      string(m.Type),
 		Content:   m.Content,
+		Keywords:  m.Keywords,
+		Persons:   m.Persons,
 		CreatedAt: m.CreatedAt.Format("2006-01-02 15:04:05"),
 		UpdatedAt: m.UpdatedAt.Format("2006-01-02 15:04:05"),
+	}
+	if m.Topic != "" {
+		am.Topic = api.NewOptString(m.Topic)
+	}
+	if m.EventTime != nil {
+		am.EventTime = api.NewOptString(m.EventTime.Format("2006-01-02 15:04:05"))
 	}
 	if m.Metadata != nil {
 		meta := make(api.MemoryMetadata, len(m.Metadata))
