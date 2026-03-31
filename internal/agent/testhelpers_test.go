@@ -21,6 +21,9 @@ func (m *mockMemory) Save(_ context.Context, _ *memory.Memory) error            
 func (m *mockMemory) Search(_ context.Context, _ string, _ int) ([]memory.Memory, error) {
 	return nil, nil
 }
+func (m *mockMemory) SearchWithContext(_ context.Context, _ string, _ int, _ memory.SymbolicFilter) ([]memory.Memory, error) {
+	return nil, nil
+}
 func (m *mockMemory) SearchByType(_ context.Context, _ string, _ memory.MemoryType, _ int) ([]memory.Memory, error) {
 	return nil, nil
 }
@@ -37,6 +40,9 @@ func (m *mockMemory) ListByType(_ context.Context, _ memory.MemoryType, _ int) (
 	return nil, nil
 }
 func (m *mockMemory) ListRecentByType(_ context.Context, _ memory.MemoryType, _ time.Time, _ int) ([]memory.Memory, error) {
+	return nil, nil
+}
+func (m *mockMemory) ListRecent(_ context.Context, _ time.Time, _ int) ([]memory.Memory, error) {
 	return nil, nil
 }
 func (m *mockMemory) SearchByParts(_ context.Context, _ []embedding.Part, _ int) ([]memory.Memory, error) {
