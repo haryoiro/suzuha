@@ -144,7 +144,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			memMsgs = a.buildMemoryContext(ctx, p.LastMessage.Content, p.LastMessage.ImageURLs)
+			memMsgs = a.buildMemoryContext(ctx, p.LastMessage.Content, p.LastMessage.ImageURLs, agentCtx)
 		}()
 		wg.Add(1)
 		go func() {
@@ -260,8 +260,27 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 // as LLM messages. If imageURLs are provided (data URIs from Discord),
 // also performs multimodal vector search. Attachments (images) are loaded
 // from MediaStore and included as data URIs for vision-capable LLMs.
-func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs []string) []llm.Message {
-	memories, err := a.memory.Search(ctx, query, 5)
+func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs []string, agentCtx *Context) []llm.Message {
+	// 会話コンテキストから参加者IDを抽出し、Symbolic 検索フィルタに使う。
+	filter := memory.SymbolicFilter{}
+	if agentCtx != nil {
+		seen := make(map[string]bool)
+		msgs := agentCtx.Messages()
+		count := 0
+		for i := len(msgs) - 1; i >= 0 && count < 10; i-- {
+			m := msgs[i]
+			if m.UserID == "" || m.UserID == a.botID || m.Role != "user" {
+				continue
+			}
+			count++
+			if !seen[m.UserID] {
+				seen[m.UserID] = true
+				filter.PersonIDs = append(filter.PersonIDs, m.UserID)
+			}
+		}
+	}
+
+	memories, err := a.memory.SearchWithContext(ctx, query, 5, filter)
 	if err != nil {
 		a.logger.Debug("思い出せなかった", "error", err)
 	}
@@ -306,31 +325,24 @@ func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs 
 	var textParts []string
 	for _, m := range memories {
 		label := string(m.Type)
+		// 構造化フィールドからラベルを構築。
+		if len(m.Persons) > 0 {
+			label += " persons=" + strings.Join(m.Persons, ",")
+		}
+		if m.Topic != "" {
+			label += " topic=" + m.Topic
+		}
 		if m.Metadata != nil {
-			if uid, ok := m.Metadata["user_id"].(string); ok && uid != "" {
-				label += " user_id=" + uid
-			}
-			switch v := m.Metadata["participants"].(type) {
-			case []any:
-				var ids []string
-				for _, p := range v {
-					if s, ok := p.(string); ok {
-						ids = append(ids, s)
-					}
-				}
-				if len(ids) > 0 {
-					label += " participants=" + strings.Join(ids, ",")
-				}
-			case []string:
-				if len(v) > 0 {
-					label += " participants=" + strings.Join(v, ",")
-				}
-			}
 			if tone, ok := m.Metadata["emotional_tone"].(string); ok && tone != "" {
 				label += " tone=" + tone
 			}
 		}
-		textParts = append(textParts, fmt.Sprintf("- [%s] %s (%s)", label, m.Content, m.CreatedAt.Format("2006-01-02")))
+		// 日付: EventTime があればそちらを優先、なければ CreatedAt。
+		date := m.CreatedAt.Format("2006-01-02")
+		if m.EventTime != nil {
+			date = m.EventTime.Format("2006-01-02")
+		}
+		textParts = append(textParts, fmt.Sprintf("- [%s] %s (%s)", label, m.Content, date))
 	}
 	textContent := "Relevant memories:\n" + strings.Join(textParts, "\n")
 
