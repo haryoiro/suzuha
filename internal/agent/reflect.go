@@ -5,11 +5,27 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
+
+// filterOutInjectedHistory は Compact に渡すメッセージから
+// injectChannelHistoryWith で注入されたチャンネル履歴を除外する。
+// これにより Compact → クリア → 再注入 の重複抽出ループを防ぐ。
+func filterOutInjectedHistory(msgs []llm.Message) []llm.Message {
+	filtered := make([]llm.Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Role == "system" && (strings.HasPrefix(m.Content, "[Recent history for channel=") ||
+			strings.HasPrefix(m.Content, "[Recent related memories for channel=")) {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	return filtered
+}
 
 // Reflect is the backward-compatible wrapper that calls ReflectWith
 // with the discord source key.
@@ -67,9 +83,11 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 	n := len(msgs)
 
 	// Extract long-term memories via consolidator (best-effort).
+	// 注入されたチャンネル履歴は除外する（再注入で重複抽出されるのを防ぐ）。
 	if a.consol != nil {
+		filtered := filterOutInjectedHistory(msgs)
 		_, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
-			Messages: msgs,
+			Messages: filtered,
 		})
 		if err != nil {
 			a.logger.Warn("記憶の抽出に失敗", "error", err)
