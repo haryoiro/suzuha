@@ -194,7 +194,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				topics.New(),
 				research.New(searxURL, 5),
 				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
-				forget.New(),
+				forget.New(do.MustInvoke[*consolidator.Server](i)),
 				diary.New(),
 			}
 
