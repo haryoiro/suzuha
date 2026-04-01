@@ -25,9 +25,10 @@ type Config struct {
 	Consolidator Consolidator `yaml:"consolidator"`
 	Observe      Observe      `yaml:"observe"`
 	Admin        Admin        `yaml:"admin"`
-	Location     Location     `yaml:"location"`
-	SelfImprove  SelfImprove  `yaml:"self_improve"`
-	Langfuse     Langfuse     `yaml:"langfuse"`
+	Location      Location     `yaml:"location"`
+	SelfImprove   SelfImprove  `yaml:"self_improve"`
+	Langfuse      Langfuse     `yaml:"langfuse"`
+	EncryptionKey string       `yaml:"-"` // SUZUHA_ENCRYPTION_KEY 環境変数から設定 (hex 64文字 = 32byte)
 }
 
 // Langfuse configures LLM observability tracing via OTLP.
@@ -287,6 +288,9 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("LANGFUSE_SECRET_KEY"); v != "" {
 		c.Langfuse.SecretKey = v
+	}
+	if v := os.Getenv("SUZUHA_ENCRYPTION_KEY"); v != "" {
+		c.EncryptionKey = v
 	}
 	if v := os.Getenv("DEEPGRAM_API_KEY"); v != "" {
 		for i := range c.Voice.STT {
