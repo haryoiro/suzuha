@@ -72,6 +72,25 @@ func (h *AdminHandler) proxyPutRaw(ctx context.Context, path string, reqBody io.
 	return jx.Raw(body), nil
 }
 
+// proxyDeleteRaw performs a DELETE proxy.
+func (h *AdminHandler) proxyDeleteRaw(ctx context.Context, path string) (jx.Raw, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, h.agentBase+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("proxy request failed: %w", err)
+	}
+	resp, err := h.client.Do(req)
+	if err != nil {
+		h.logger.Error("プロキシに失敗", "path", path, "error", err.Error())
+		return nil, fmt.Errorf("agent unreachable")
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+	return jx.Raw(body), nil
+}
+
 func (h *AdminHandler) AgentCompact(ctx context.Context) (jx.Raw, error) {
 	return h.proxyPostRaw(ctx, "/internal/compact", nil)
 }
@@ -102,6 +121,71 @@ func (h *AdminHandler) LLMGet(ctx context.Context) (jx.Raw, error) {
 
 func (h *AdminHandler) LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error) {
 	return h.proxyPutRaw(ctx, "/internal/llm", jxReader(req))
+}
+
+// --- LLM Preset / Assignment proxy handlers ---
+
+func (h *AdminHandler) proxyPresetsList(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyGet(r.Context(), "/internal/llm/presets")
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyPresetsCreate(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyPostRaw(r.Context(), "/internal/llm/presets", r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyPresetsUpdate(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	data, err := h.proxyPutRaw(r.Context(), "/internal/llm/presets/"+name, r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyPresetsDelete(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	data, err := h.proxyDeleteRaw(r.Context(), "/internal/llm/presets/"+name)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyAssignmentsList(w http.ResponseWriter, r *http.Request) {
+	data, err := h.proxyGet(r.Context(), "/internal/llm/assignments")
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func (h *AdminHandler) proxyAssignmentsUpdate(w http.ResponseWriter, r *http.Request) {
+	role := r.PathValue("role")
+	data, err := h.proxyPutRaw(r.Context(), "/internal/llm/assignments/"+role, r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
 }
 
 func (h *AdminHandler) ForgetRun(ctx context.Context, req api.OptForgetRunReq) (jx.Raw, error) {

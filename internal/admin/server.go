@@ -53,6 +53,14 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	// Tool execution proxy.
 	mux.HandleFunc("POST /api/tools/{name}/execute", adminHandler.proxyToolExecute)
 
+	// LLM preset / assignment proxy.
+	mux.HandleFunc("GET /api/llm/presets", adminHandler.proxyPresetsList)
+	mux.HandleFunc("POST /api/llm/presets", adminHandler.proxyPresetsCreate)
+	mux.HandleFunc("PUT /api/llm/presets/{name}", adminHandler.proxyPresetsUpdate)
+	mux.HandleFunc("DELETE /api/llm/presets/{name}", adminHandler.proxyPresetsDelete)
+	mux.HandleFunc("GET /api/llm/assignments", adminHandler.proxyAssignmentsList)
+	mux.HandleFunc("PUT /api/llm/assignments/{role}", adminHandler.proxyAssignmentsUpdate)
+
 	// Device camera/detection proxy to internal server.
 	mux.HandleFunc("GET /api/device/frame", adminHandler.proxyDeviceFrame)
 	mux.HandleFunc("GET /api/device/detections", adminHandler.proxyDeviceDetections)
