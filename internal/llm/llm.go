@@ -116,26 +116,38 @@ func IsSilentResponse(text string) bool {
 	return text == "" || strings.Contains(strings.ToUpper(text), "[SKIP]")
 }
 
-// Client is a thin wrapper around any-llm-go provider.
+// roleProvider はロールに割り当てられたプロバイダの状態。
+type roleProvider struct {
+	provider     providers.Provider
+	providerName string
+	model        string
+	apiBase      string
+	maxCtx       int
+	capabilities []string // ["text"], ["text","vision"], etc.
+}
+
+// hasCapability はこのプロバイダが指定 capability を持つか返す。
+func (rp *roleProvider) hasCapability(cap string) bool {
+	for _, c := range rp.capabilities {
+		if c == cap {
+			return true
+		}
+	}
+	return false
+}
+
+// Client is a thin wrapper around any-llm-go provider with role-based provider management.
 type Client struct {
-	mu              sync.RWMutex
-	provider        providers.Provider
-	providerName    string
-	model           string
-	apiBase         string
-	// defaultProvider is the original provider from config — used for tasks
-	// like compaction that should always use the large model.
-	defaultProvider providers.Provider
-	defaultModel    string
-	embeddingProv   providers.Provider // may differ from provider (e.g. OpenAI for embeddings)
-	embeddingModel  string
-	embeddingDims   int
-	visionProv      providers.Provider
-	visionModel     string
-	visionCapable   bool // true if active provider supports vision natively
-	maxCtx          int
+	mu    sync.RWMutex
+	roles map[string]roleProvider // "conversation", "background", "vision", etc.
+
+	// Embedding は Embedder インターフェース経由のため据え置き。
+	embeddingProv  providers.Provider
+	embeddingModel string
+	embeddingDims  int
+
 	logger *slog.Logger
-	tracer          trace.Tracer // nil when tracing is disabled
+	tracer trace.Tracer // nil when tracing is disabled
 }
 
 // SetTracer sets the OpenTelemetry tracer for LLM call tracing.
@@ -145,33 +157,115 @@ func (c *Client) SetTracer(t trace.Tracer) {
 	c.tracer = t
 }
 
-// ProviderInfo returns the current provider name, model, API base URL, and vision capability.
+// ProviderInfo returns the current conversation provider name, model, API base URL, and vision capability.
+// 後方互換シム: conversation ロールの情報を返す。
 func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapable bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.providerName, c.model, c.apiBase, c.visionCapable
+	rp, ok := c.roles["conversation"]
+	if !ok {
+		return "", "", "", false
+	}
+	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
 }
 
-// SwapProvider atomically replaces the completion provider and model.
-// If maxCtx > 0, the max context window is also updated.
-// Embedding and vision providers are not affected.
+// SwapProvider atomically replaces the conversation provider.
+// 後方互換シム: SwapRole("conversation", ...) に委譲する。
 func (c *Client) SwapProvider(providerName, model, apiKey, apiBase string, maxCtx int, visionCapable bool) error {
-	p, err := newProvider(providerName, apiKey, apiBase)
+	caps := []string{"text"}
+	if visionCapable {
+		caps = append(caps, "vision")
+	}
+	return c.SwapRole("conversation", Preset{
+		Provider:     providerName,
+		Model:        model,
+		APIKey:       apiKey,
+		APIBase:      apiBase,
+		MaxTokens:    maxCtx,
+		Capabilities: caps,
+	})
+}
+
+// SwapRole はロールのプロバイダを切り替える。
+func (c *Client) SwapRole(role string, preset Preset) error {
+	p, err := newProvider(preset.Provider, preset.APIKey, preset.APIBase)
 	if err != nil {
 		return err
 	}
+	rp := roleProvider{
+		provider:     p,
+		providerName: preset.Provider,
+		model:        preset.Model,
+		apiBase:      preset.APIBase,
+		maxCtx:       preset.MaxTokens,
+		capabilities: preset.Capabilities,
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.provider = p
-	c.providerName = providerName
-	c.model = model
-	c.apiBase = apiBase
-	c.visionCapable = visionCapable
-	if maxCtx > 0 {
-		c.maxCtx = maxCtx
+	if c.roles == nil {
+		c.roles = make(map[string]roleProvider)
 	}
-	c.logger.Info("LLMを切り替えた", "provider", providerName, "model", model, "api_base", apiBase, "max_ctx", c.maxCtx, "vision", visionCapable)
+	c.roles[role] = rp
+	c.logger.Info("LLMロールを切り替えた", "role", role, "provider", preset.Provider, "model", preset.Model, "api_base", preset.APIBase, "max_ctx", preset.MaxTokens)
 	return nil
+}
+
+// RoleClient はロールに紐づくプロバイダで補完を実行する。
+type RoleClient struct {
+	rp     roleProvider
+	logger *slog.Logger
+	tracer trace.Tracer
+}
+
+// For はロールに割り当てられたプロバイダを返す。
+// フォールバック: role → "background" → "conversation"
+func (c *Client) For(role string) *RoleClient {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	fallback := []string{role, "background", "conversation"}
+	for _, r := range fallback {
+		if rp, ok := c.roles[r]; ok {
+			return &RoleClient{rp: rp, logger: c.logger, tracer: c.tracer}
+		}
+	}
+	// 全てのフォールバック失敗 — 最初に見つかったロールを返す
+	for _, rp := range c.roles {
+		return &RoleClient{rp: rp, logger: c.logger, tracer: c.tracer}
+	}
+	return &RoleClient{logger: c.logger}
+}
+
+// WithCapability はロールの capability 解決を行い、RoleClient と inline フラグを返す。
+// inline=true: ロールのプロバイダがネイティブ対応。
+// inline=false: capability 名のロールにフォールバック。
+func (c *Client) WithCapability(role, capability string) (*RoleClient, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// ロールのプロバイダを取得
+	rp, ok := c.roles[role]
+	if !ok {
+		// フォールバック
+		for _, r := range []string{"background", "conversation"} {
+			if rp, ok = c.roles[r]; ok {
+				break
+			}
+		}
+	}
+
+	// ロールのプロバイダが capability を持つ → inline
+	if ok && rp.hasCapability(capability) {
+		return &RoleClient{rp: rp, logger: c.logger, tracer: c.tracer}, true
+	}
+
+	// capability 名のロールにフォールバック
+	if capRp, ok := c.roles[capability]; ok {
+		return &RoleClient{rp: capRp, logger: c.logger, tracer: c.tracer}, false
+	}
+
+	// 見つからない
+	return nil, false
 }
 
 // EmbeddingConfig holds optional embedding provider settings.
@@ -200,17 +294,23 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		return nil, err
 	}
 
+	mainRP := roleProvider{
+		provider:     p,
+		providerName: providerName,
+		model:        model,
+		apiBase:      apiBase,
+		maxCtx:       maxCtx,
+		capabilities: []string{"text"},
+	}
+
 	c := &Client{
-		provider:        p,
-		providerName:    providerName,
-		model:           model,
-		apiBase:         apiBase,
-		defaultProvider: p,
-		defaultModel:    model,
-		embeddingModel:  emb.Model,
-		embeddingDims:   emb.Dims,
-		maxCtx: maxCtx,
-		logger: logger,
+		roles: map[string]roleProvider{
+			"conversation": mainRP,
+			"background":   mainRP, // デフォルトは conversation と同じ
+		},
+		embeddingModel: emb.Model,
+		embeddingDims:  emb.Dims,
+		logger:         logger,
 	}
 
 	// Build embedding provider: use separate provider if configured, otherwise reuse main.
@@ -228,17 +328,63 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 
 	// Build vision provider: use separate provider if configured.
 	if vis.Model != "" {
-		c.visionModel = vis.Model
+		visRP := roleProvider{
+			providerName: vis.Provider,
+			model:        vis.Model,
+			apiBase:      vis.APIBase,
+			capabilities: []string{"text", "vision"},
+		}
 		if vis.Provider != "" && (vis.Provider != providerName || vis.APIKey != apiKey || vis.APIBase != apiBase) {
 			vp, err := newProvider(vis.Provider, vis.APIKey, vis.APIBase)
 			if err != nil {
 				return nil, fmt.Errorf("llm: ビジョンプロバイダの初期化に失敗: %w", err)
 			}
-			c.visionProv = vp
+			visRP.provider = vp
 		} else {
-			c.visionProv = p
+			visRP.provider = p
 		}
+		c.roles["vision"] = visRP
 		logger.Info("ビジョンモデルを有効にした", "model", vis.Model)
+	}
+
+	return c, nil
+}
+
+// NewClientFromRoles はロールマップから Client を構築する。
+func NewClientFromRoles(roles map[string]Preset, emb EmbeddingConfig, logger *slog.Logger) (*Client, error) {
+	c := &Client{
+		roles:          make(map[string]roleProvider),
+		embeddingModel: emb.Model,
+		embeddingDims:  emb.Dims,
+		logger:         logger,
+	}
+
+	for role, preset := range roles {
+		p, err := newProvider(preset.Provider, preset.APIKey, preset.APIBase)
+		if err != nil {
+			return nil, fmt.Errorf("llm: role %q のプロバイダ初期化に失敗: %w", role, err)
+		}
+		c.roles[role] = roleProvider{
+			provider:     p,
+			providerName: preset.Provider,
+			model:        preset.Model,
+			apiBase:      preset.APIBase,
+			maxCtx:       preset.MaxTokens,
+			capabilities: preset.Capabilities,
+		}
+	}
+
+	// Embedding provider: use "embedding" role's provider or conversation fallback.
+	if emb.Model != "" {
+		if emb.Provider != "" {
+			ep, err := newProvider(emb.Provider, emb.APIKey, emb.APIBase)
+			if err != nil {
+				return nil, fmt.Errorf("llm: 埋め込みプロバイダの初期化に失敗: %w", err)
+			}
+			c.embeddingProv = ep
+		} else if rp, ok := c.roles["conversation"]; ok {
+			c.embeddingProv = rp.provider
+		}
 	}
 
 	return c, nil
@@ -268,18 +414,36 @@ func newProvider(providerName, apiKey, apiBase string) (providers.Provider, erro
 	}
 }
 
-// MaxContextTokens returns the max context window size.
+// MaxContextTokens returns the max context window size for the conversation role.
+// 後方互換シム。
 func (c *Client) MaxContextTokens() int {
-	return c.maxCtx
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if rp, ok := c.roles["conversation"]; ok {
+		return rp.maxCtx
+	}
+	return 0
+}
+
+// SetMaxContextTokens updates the conversation role's max context window.
+func (c *Client) SetMaxContextTokens(maxCtx int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if rp, ok := c.roles["conversation"]; ok {
+		rp.maxCtx = maxCtx
+		c.roles["conversation"] = rp
+	}
 }
 
 // Complete sends a completion request with optional tools.
+// 後方互換シム: conversation ロールを使用する。
 func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.Tool) (*Response, error) {
 	c.mu.RLock()
-	prov := c.provider
-	provName := c.providerName
-	model := c.model
-	vision := c.visionCapable
+	rp := c.roles["conversation"]
+	prov := rp.provider
+	provName := rp.providerName
+	model := rp.model
+	vision := rp.hasCapability("vision")
 	tracer := c.tracer
 	c.mu.RUnlock()
 
@@ -377,20 +541,24 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 }
 
 // CompleteRaw sends a completion request with pre-built provider messages (no tool support).
-// Uses the currently active provider (which may have been swapped at runtime).
+// 後方互換シム: conversation ロールを使用する。
 func (c *Client) CompleteRaw(ctx context.Context, messages []providers.Message) (*Response, error) {
 	c.mu.RLock()
-	prov := c.provider
-	model := c.model
+	rp := c.roles["conversation"]
 	c.mu.RUnlock()
-	return c.completeRaw(ctx, prov, model, messages)
+	return c.completeRaw(ctx, rp.provider, rp.model, messages)
 }
 
-// CompleteRawDefault sends a completion request using the default (config) provider,
-// regardless of any runtime provider swap. Use this for background tasks like
-// compaction that should always use the large model.
+// CompleteRawDefault sends a completion request using the background provider.
+// 後方互換シム: background ロールを使用する。
 func (c *Client) CompleteRawDefault(ctx context.Context, messages []providers.Message) (*Response, error) {
-	return c.completeRaw(ctx, c.defaultProvider, c.defaultModel, messages)
+	c.mu.RLock()
+	rp, ok := c.roles["background"]
+	if !ok {
+		rp = c.roles["conversation"]
+	}
+	c.mu.RUnlock()
+	return c.completeRaw(ctx, rp.provider, rp.model, messages)
 }
 
 func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model string, messages []providers.Message) (*Response, error) {
@@ -596,38 +764,32 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 }
 
 // HasVision returns true if vision is available (either via dedicated provider or active VLM).
+// 後方互換シム。
 func (c *Client) HasVision() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.visionCapable {
-		return true
-	}
-	return c.visionModel != "" && c.visionProv != nil
+	_, ok := c.WithCapability("conversation", "vision")
+	return ok
 }
 
-// IsVisionCapable returns true if the active LLM provider supports vision natively
-// (images can be sent inline in messages).
+// IsVisionCapable returns true if the active conversation LLM provider supports vision natively.
+// 後方互換シム。
 func (c *Client) IsVisionCapable() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.visionCapable
+	if rp, ok := c.roles["conversation"]; ok {
+		return rp.hasCapability("vision")
+	}
+	return false
 }
 
 // DescribeImage sends an image URL to a vision model and returns a text description.
-// If the active provider is vision-capable, it is used directly; otherwise falls back
-// to the dedicated vision provider from config.
+// 後方互換シム: WithCapability("conversation", "vision") を使用する。
 func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, error) {
-	c.mu.RLock()
-	prov, model := c.visionProv, c.visionModel
-	if c.visionCapable {
-		prov = c.provider
-		model = c.model
-	}
-	c.mu.RUnlock()
-
-	if prov == nil {
+	rc, _ := c.WithCapability("conversation", "vision")
+	if rc == nil || rc.rp.provider == nil {
 		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
 	}
+	prov := rc.rp.provider
+	model := rc.rp.model
 
 	params := providers.CompletionParams{
 		Model: model,
