@@ -208,6 +208,71 @@ func decodeChannelSettingsUpdateParams(args [1]string, argsEscaped bool, r *http
 	return params, nil
 }
 
+// ChannelsDeleteParams is parameters of Channels_delete operation.
+type ChannelsDeleteParams struct {
+	ChannelId string
+}
+
+func unpackChannelsDeleteParams(packed middleware.Parameters) (params ChannelsDeleteParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "channelId",
+			In:   "path",
+		}
+		params.ChannelId = packed[key].(string)
+	}
+	return params
+}
+
+func decodeChannelsDeleteParams(args [1]string, argsEscaped bool, r *http.Request) (params ChannelsDeleteParams, _ error) {
+	// Decode path: channelId.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "channelId",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ChannelId = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "channelId",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ContextGetParams is parameters of Context_get operation.
 type ContextGetParams struct {
 	Source OptContextGetSource `json:",omitempty,omitzero"`
@@ -756,6 +821,201 @@ func decodeGuildsChannelsParams(args [1]string, argsEscaped bool, r *http.Reques
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// LLMAssignmentsUpdateParams is parameters of LLM_assignmentsUpdate operation.
+type LLMAssignmentsUpdateParams struct {
+	Role string
+}
+
+func unpackLLMAssignmentsUpdateParams(packed middleware.Parameters) (params LLMAssignmentsUpdateParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "role",
+			In:   "path",
+		}
+		params.Role = packed[key].(string)
+	}
+	return params
+}
+
+func decodeLLMAssignmentsUpdateParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMAssignmentsUpdateParams, _ error) {
+	// Decode path: role.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "role",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Role = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "role",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// LLMPresetsDeleteParams is parameters of LLM_presetsDelete operation.
+type LLMPresetsDeleteParams struct {
+	Name string
+}
+
+func unpackLLMPresetsDeleteParams(packed middleware.Parameters) (params LLMPresetsDeleteParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "name",
+			In:   "path",
+		}
+		params.Name = packed[key].(string)
+	}
+	return params
+}
+
+func decodeLLMPresetsDeleteParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMPresetsDeleteParams, _ error) {
+	// Decode path: name.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "name",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Name = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "name",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// LLMPresetsUpdateParams is parameters of LLM_presetsUpdate operation.
+type LLMPresetsUpdateParams struct {
+	Name string
+}
+
+func unpackLLMPresetsUpdateParams(packed middleware.Parameters) (params LLMPresetsUpdateParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "name",
+			In:   "path",
+		}
+		params.Name = packed[key].(string)
+	}
+	return params
+}
+
+func decodeLLMPresetsUpdateParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMPresetsUpdateParams, _ error) {
+	// Decode path: name.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "name",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Name = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "name",
 			In:   "path",
 			Err:  err,
 		}
@@ -2368,6 +2628,136 @@ func decodeScheduledActionsUpdateParams(args [1]string, argsEscaped bool, r *htt
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// SchedulerTriggerParams is parameters of Scheduler_trigger operation.
+type SchedulerTriggerParams struct {
+	Task string
+}
+
+func unpackSchedulerTriggerParams(packed middleware.Parameters) (params SchedulerTriggerParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "task",
+			In:   "path",
+		}
+		params.Task = packed[key].(string)
+	}
+	return params
+}
+
+func decodeSchedulerTriggerParams(args [1]string, argsEscaped bool, r *http.Request) (params SchedulerTriggerParams, _ error) {
+	// Decode path: task.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "task",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Task = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "task",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// ToolsExecuteParams is parameters of Tools_execute operation.
+type ToolsExecuteParams struct {
+	Name string
+}
+
+func unpackToolsExecuteParams(packed middleware.Parameters) (params ToolsExecuteParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "name",
+			In:   "path",
+		}
+		params.Name = packed[key].(string)
+	}
+	return params
+}
+
+func decodeToolsExecuteParams(args [1]string, argsEscaped bool, r *http.Request) (params ToolsExecuteParams, _ error) {
+	// Decode path: name.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "name",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Name = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "name",
 			In:   "path",
 			Err:  err,
 		}

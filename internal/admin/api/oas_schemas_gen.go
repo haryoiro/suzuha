@@ -1127,6 +1127,112 @@ func (s *HealthCheckOK) SetStatus(val string) {
 	s.Status = val
 }
 
+type LLMAssignmentsUpdateReq struct {
+	Preset string `json:"preset"`
+}
+
+// GetPreset returns the value of Preset.
+func (s *LLMAssignmentsUpdateReq) GetPreset() string {
+	return s.Preset
+}
+
+// SetPreset sets the value of Preset.
+func (s *LLMAssignmentsUpdateReq) SetPreset(val string) {
+	s.Preset = val
+}
+
+// Ref: #/components/schemas/LLMPreset
+type LLMPreset struct {
+	Name         string    `json:"name"`
+	Provider     string    `json:"provider"`
+	Model        string    `json:"model"`
+	APIKey       OptString `json:"api_key"`
+	APIBase      string    `json:"api_base"`
+	MaxTokens    int32     `json:"max_tokens"`
+	Capabilities []string  `json:"capabilities"`
+	Source       OptString `json:"source"`
+}
+
+// GetName returns the value of Name.
+func (s *LLMPreset) GetName() string {
+	return s.Name
+}
+
+// GetProvider returns the value of Provider.
+func (s *LLMPreset) GetProvider() string {
+	return s.Provider
+}
+
+// GetModel returns the value of Model.
+func (s *LLMPreset) GetModel() string {
+	return s.Model
+}
+
+// GetAPIKey returns the value of APIKey.
+func (s *LLMPreset) GetAPIKey() OptString {
+	return s.APIKey
+}
+
+// GetAPIBase returns the value of APIBase.
+func (s *LLMPreset) GetAPIBase() string {
+	return s.APIBase
+}
+
+// GetMaxTokens returns the value of MaxTokens.
+func (s *LLMPreset) GetMaxTokens() int32 {
+	return s.MaxTokens
+}
+
+// GetCapabilities returns the value of Capabilities.
+func (s *LLMPreset) GetCapabilities() []string {
+	return s.Capabilities
+}
+
+// GetSource returns the value of Source.
+func (s *LLMPreset) GetSource() OptString {
+	return s.Source
+}
+
+// SetName sets the value of Name.
+func (s *LLMPreset) SetName(val string) {
+	s.Name = val
+}
+
+// SetProvider sets the value of Provider.
+func (s *LLMPreset) SetProvider(val string) {
+	s.Provider = val
+}
+
+// SetModel sets the value of Model.
+func (s *LLMPreset) SetModel(val string) {
+	s.Model = val
+}
+
+// SetAPIKey sets the value of APIKey.
+func (s *LLMPreset) SetAPIKey(val OptString) {
+	s.APIKey = val
+}
+
+// SetAPIBase sets the value of APIBase.
+func (s *LLMPreset) SetAPIBase(val string) {
+	s.APIBase = val
+}
+
+// SetMaxTokens sets the value of MaxTokens.
+func (s *LLMPreset) SetMaxTokens(val int32) {
+	s.MaxTokens = val
+}
+
+// SetCapabilities sets the value of Capabilities.
+func (s *LLMPreset) SetCapabilities(val []string) {
+	s.Capabilities = val
+}
+
+// SetSource sets the value of Source.
+func (s *LLMPreset) SetSource(val OptString) {
+	s.Source = val
+}
+
 // LocationDeleteDeviceNoContent is response for LocationDeleteDevice operation.
 type LocationDeleteDeviceNoContent struct{}
 

@@ -123,69 +123,116 @@ func (h *AdminHandler) LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error
 	return h.proxyPutRaw(ctx, "/internal/llm", jxReader(req))
 }
 
-// --- LLM Preset / Assignment proxy handlers ---
+// --- LLM Preset / Assignment (ogen interface) ---
 
-func (h *AdminHandler) proxyPresetsList(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyGet(r.Context(), "/internal/llm/presets")
+func (h *AdminHandler) LLMPresetsList(ctx context.Context) ([]api.LLMPreset, error) {
+	data, err := h.proxyGet(ctx, "/internal/llm/presets")
 	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	var presets []api.LLMPreset
+	if err := json.Unmarshal(data, &presets); err != nil {
+		return nil, err
+	}
+	return presets, nil
 }
 
-func (h *AdminHandler) proxyPresetsCreate(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyPostRaw(r.Context(), "/internal/llm/presets", r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
+func (h *AdminHandler) LLMPresetsCreate(ctx context.Context, req *api.LLMPreset) (*api.OkResponse, error) {
+	body, _ := json.Marshal(req)
+	if _, err := h.proxyPostRaw(ctx, "/internal/llm/presets", bytes.NewReader(body)); err != nil {
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	return &api.OkResponse{Ok: true}, nil
 }
 
-func (h *AdminHandler) proxyPresetsUpdate(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	data, err := h.proxyPutRaw(r.Context(), "/internal/llm/presets/"+name, r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
+func (h *AdminHandler) LLMPresetsUpdate(ctx context.Context, req *api.LLMPreset, params api.LLMPresetsUpdateParams) (*api.OkResponse, error) {
+	body, _ := json.Marshal(req)
+	if _, err := h.proxyPutRaw(ctx, "/internal/llm/presets/"+params.Name, bytes.NewReader(body)); err != nil {
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	return &api.OkResponse{Ok: true}, nil
 }
 
-func (h *AdminHandler) proxyPresetsDelete(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	data, err := h.proxyDeleteRaw(r.Context(), "/internal/llm/presets/"+name)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
+func (h *AdminHandler) LLMPresetsDelete(ctx context.Context, params api.LLMPresetsDeleteParams) (*api.OkResponse, error) {
+	if _, err := h.proxyDeleteRaw(ctx, "/internal/llm/presets/"+params.Name); err != nil {
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	return &api.OkResponse{Ok: true}, nil
 }
 
-func (h *AdminHandler) proxyAssignmentsList(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyGet(r.Context(), "/internal/llm/assignments")
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+func (h *AdminHandler) LLMAssignmentsList(ctx context.Context) (jx.Raw, error) {
+	return h.proxyGet(ctx, "/internal/llm/assignments")
 }
 
-func (h *AdminHandler) proxyAssignmentsUpdate(w http.ResponseWriter, r *http.Request) {
-	role := r.PathValue("role")
-	data, err := h.proxyPutRaw(r.Context(), "/internal/llm/assignments/"+role, r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
+func (h *AdminHandler) LLMAssignmentsUpdate(ctx context.Context, req *api.LLMAssignmentsUpdateReq, params api.LLMAssignmentsUpdateParams) (*api.OkResponse, error) {
+	body, _ := json.Marshal(req)
+	if _, err := h.proxyPutRaw(ctx, "/internal/llm/assignments/"+params.Role, bytes.NewReader(body)); err != nil {
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	return &api.OkResponse{Ok: true}, nil
+}
+
+// --- Scheduler (ogen interface) ---
+
+func (h *AdminHandler) SchedulerJobs(ctx context.Context) (jx.Raw, error) {
+	return h.proxyGet(ctx, "/internal/scheduler/jobs")
+}
+
+func (h *AdminHandler) SchedulerTrigger(ctx context.Context, req jx.Raw, params api.SchedulerTriggerParams) (jx.Raw, error) {
+	return h.proxyPostRaw(ctx, "/internal/trigger/"+params.Task, jxReader(req))
+}
+
+// --- Tools execute (ogen interface) ---
+
+func (h *AdminHandler) ToolsExecute(ctx context.Context, req jx.Raw, params api.ToolsExecuteParams) (jx.Raw, error) {
+	return h.proxyPostRaw(ctx, "/internal/tools/"+params.Name+"/execute", jxReader(req))
+}
+
+// --- Device (ogen interface) ---
+
+func (h *AdminHandler) DeviceVisionGet(ctx context.Context) (jx.Raw, error) {
+	return h.proxyGet(ctx, "/internal/device/vision")
+}
+
+func (h *AdminHandler) DeviceVisionSet(ctx context.Context, req jx.Raw) (jx.Raw, error) {
+	return h.proxyPutRaw(ctx, "/internal/device/vision", jxReader(req))
+}
+
+func (h *AdminHandler) DeviceServo(ctx context.Context, req jx.Raw) (jx.Raw, error) {
+	return h.proxyPostRaw(ctx, "/internal/device/servo", jxReader(req))
+}
+
+func (h *AdminHandler) DeviceVolume(ctx context.Context, req jx.Raw) (jx.Raw, error) {
+	return h.proxyPutRaw(ctx, "/internal/device/volume", jxReader(req))
+}
+
+func (h *AdminHandler) DeviceTrackerGet(ctx context.Context) (jx.Raw, error) {
+	return h.proxyGet(ctx, "/internal/device/tracker")
+}
+
+func (h *AdminHandler) DeviceTrackerSet(ctx context.Context, req jx.Raw) (jx.Raw, error) {
+	return h.proxyPutRaw(ctx, "/internal/device/tracker", jxReader(req))
+}
+
+// --- Voicevox (ogen interface) ---
+
+func (h *AdminHandler) VoicevoxSpeakers(ctx context.Context) (jx.Raw, error) {
+	return h.proxyGet(ctx, "/internal/voicevox/speakers")
+}
+
+func (h *AdminHandler) VoicevoxCurrentSpeaker(ctx context.Context) (jx.Raw, error) {
+	return h.proxyGet(ctx, "/internal/voicevox/speaker")
+}
+
+func (h *AdminHandler) VoicevoxSetSpeaker(ctx context.Context, req jx.Raw) (jx.Raw, error) {
+	return h.proxyPutRaw(ctx, "/internal/voicevox/speaker", jxReader(req))
+}
+
+// --- Channels delete (ogen interface) ---
+
+func (h *AdminHandler) ChannelsDelete(ctx context.Context, params api.ChannelsDeleteParams) (*api.OkResponse, error) {
+	h.deleteChannelByID(ctx, params.ChannelId)
+	return &api.OkResponse{Ok: true}, nil
 }
 
 func (h *AdminHandler) ForgetRun(ctx context.Context, req api.OptForgetRunReq) (jx.Raw, error) {
@@ -211,67 +258,9 @@ func (h *AdminHandler) ForgetStatus(ctx context.Context) (jx.Raw, error) {
 	return jx.Raw(stateJSON), nil
 }
 
-func (h *AdminHandler) proxySchedulerJobs(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyGet(r.Context(), "/internal/scheduler/jobs")
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
-
-func (h *AdminHandler) proxySchedulerTrigger(w http.ResponseWriter, r *http.Request) {
-	task := r.PathValue("task")
-	data, err := h.proxyPostRaw(r.Context(), "/internal/trigger/"+task, r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
-
-func (h *AdminHandler) proxyToolExecute(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	data, err := h.proxyPostRaw(r.Context(), "/internal/tools/"+name+"/execute", r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
-
-func (h *AdminHandler) proxyVoicevoxSpeakers(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyGet(r.Context(), "/internal/voicevox/speakers")
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
-
-func (h *AdminHandler) proxyVoicevoxCurrentSpeaker(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyGet(r.Context(), "/internal/voicevox/speaker")
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
-
-func (h *AdminHandler) proxyVoicevoxSetSpeaker(w http.ResponseWriter, r *http.Request) {
-	data, err := h.proxyPutRaw(r.Context(), "/internal/voicevox/speaker", r.Body)
-	if err != nil {
-		http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
+// Note: proxySchedulerJobs, proxySchedulerTrigger, proxyToolExecute,
+// proxyVoicevoxSpeakers, proxyVoicevoxCurrentSpeaker, proxyVoicevoxSetSpeaker
+// are now implemented via ogen interface methods above.
 
 // proxyDeviceFrame proxies the latest camera frame from the internal server.
 func (h *AdminHandler) proxyDeviceFrame(w http.ResponseWriter, r *http.Request) {

@@ -14,6 +14,9 @@ import "./tools.tsp";
 import "./logs.tsp";
 import "./agent.tsp";
 import "./diary.tsp";
+import "./scheduler.tsp";
+import "./device.tsp";
+import "./voicevox.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;

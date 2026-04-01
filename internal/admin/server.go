@@ -42,103 +42,18 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	// Mount ogen server for /api/ routes.
 	mux.Handle("/api/", ogenServer)
 
-	// SSE log streaming (not in OpenAPI spec, handled separately).
+	// SSE log streaming (binary/streaming, not in OpenAPI spec).
 	logH := handler.NewLogHandler(cfg.AgentLogs, "", logger)
 	mux.HandleFunc("GET /api/logs/stream", logH.Stream)
 
-	// Scheduler jobs proxy (not in OpenAPI spec yet).
-	mux.HandleFunc("GET /api/scheduler/jobs", adminHandler.proxySchedulerJobs)
-	mux.HandleFunc("POST /api/scheduler/trigger/{task}", adminHandler.proxySchedulerTrigger)
-
-	// Tool execution proxy.
-	mux.HandleFunc("POST /api/tools/{name}/execute", adminHandler.proxyToolExecute)
-
-	// LLM preset / assignment proxy.
-	mux.HandleFunc("GET /api/llm/presets", adminHandler.proxyPresetsList)
-	mux.HandleFunc("POST /api/llm/presets", adminHandler.proxyPresetsCreate)
-	mux.HandleFunc("PUT /api/llm/presets/{name}", adminHandler.proxyPresetsUpdate)
-	mux.HandleFunc("DELETE /api/llm/presets/{name}", adminHandler.proxyPresetsDelete)
-	mux.HandleFunc("GET /api/llm/assignments", adminHandler.proxyAssignmentsList)
-	mux.HandleFunc("PUT /api/llm/assignments/{role}", adminHandler.proxyAssignmentsUpdate)
-
-	// Device camera/detection proxy to internal server.
+	// Device binary/SSE proxy (not in OpenAPI spec).
 	mux.HandleFunc("GET /api/device/frame", adminHandler.proxyDeviceFrame)
 	mux.HandleFunc("GET /api/device/detections", adminHandler.proxyDeviceDetections)
 
-	// Device vision toggle proxy.
-	mux.HandleFunc("GET /api/device/vision", func(w http.ResponseWriter, r *http.Request) {
-		data, err := adminHandler.proxyGet(r.Context(), "/internal/device/vision")
-		if err != nil {
-			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	})
-	mux.HandleFunc("PUT /api/device/vision", func(w http.ResponseWriter, r *http.Request) {
-		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/vision", r.Body)
-		if err != nil {
-			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	})
-
-	// Device servo proxy.
-	mux.HandleFunc("POST /api/device/servo", func(w http.ResponseWriter, r *http.Request) {
-		data, err := adminHandler.proxyPostRaw(r.Context(), "/internal/device/servo", r.Body)
-		if err != nil {
-			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	})
-
-	// Device volume proxy.
-	mux.HandleFunc("PUT /api/device/volume", func(w http.ResponseWriter, r *http.Request) {
-		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/volume", r.Body)
-		if err != nil {
-			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	})
-
-	// Device tracker proxy.
-	mux.HandleFunc("GET /api/device/tracker", func(w http.ResponseWriter, r *http.Request) {
-		data, err := adminHandler.proxyGet(r.Context(), "/internal/device/tracker")
-		if err != nil {
-			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	})
-	mux.HandleFunc("PUT /api/device/tracker", func(w http.ResponseWriter, r *http.Request) {
-		data, err := adminHandler.proxyPutRaw(r.Context(), "/internal/device/tracker", r.Body)
-		if err != nil {
-			http.Error(w, `{"error":"agent unreachable"}`, http.StatusBadGateway)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
-	})
-
-	// Media serve, upload, and image search (binary, not in OpenAPI spec).
+	// Media serve, upload, and image search (binary/multipart, not in OpenAPI spec).
 	mux.HandleFunc("GET /api/media/", adminHandler.serveMedia)
 	mux.HandleFunc("POST /api/memories/{id}/media", adminHandler.uploadMedia)
 	mux.HandleFunc("POST /api/memories/search-image", adminHandler.searchByImage)
-
-	// Channel deletion (DB).
-	mux.HandleFunc("DELETE /api/channels/{channelId}", adminHandler.deleteChannel)
-
-	// VOICEVOX speaker proxy.
-	mux.HandleFunc("GET /api/voicevox/speakers", adminHandler.proxyVoicevoxSpeakers)
-	mux.HandleFunc("GET /api/voicevox/speaker", adminHandler.proxyVoicevoxCurrentSpeaker)
-	mux.HandleFunc("PUT /api/voicevox/speaker", adminHandler.proxyVoicevoxSetSpeaker)
 
 	// SPA static files.
 	staticDir := cfg.StaticDir

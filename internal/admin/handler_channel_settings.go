@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
@@ -92,20 +91,13 @@ func (h *AdminHandler) ChannelSettingsUpdate(ctx context.Context, req *api.Updat
 }
 
 // deleteChannel removes all DB records for a channel and notifies the agent.
-func (h *AdminHandler) deleteChannel(w http.ResponseWriter, r *http.Request) {
-	channelID := r.PathValue("channelId")
-	if channelID == "" {
-		http.Error(w, `{"error":"channelId is required"}`, http.StatusBadRequest)
-		return
-	}
-	ctx := r.Context()
+// deleteChannelByID はチャンネルに関連する全データを DB から削除する。
+func (h *AdminHandler) deleteChannelByID(ctx context.Context, channelID string) {
 	h.db.ExecContext(ctx, `DELETE FROM channel_settings WHERE channel_id = ?`, channelID)
 	h.db.ExecContext(ctx, `DELETE FROM channel_activity WHERE channel_id = ?`, channelID)
 	h.db.ExecContext(ctx, `DELETE FROM conversation_logs WHERE channel_id = ?`, channelID)
 	h.db.ExecContext(ctx, `DELETE FROM user_guild_channels WHERE channel_id = ?`, channelID)
 	h.notifyAgentReload(ctx, "/internal/reload-channel-settings")
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"ok":true}`))
 }
 
 func (h *AdminHandler) ChannelSettingsDelete(ctx context.Context, params api.ChannelSettingsDeleteParams) error {

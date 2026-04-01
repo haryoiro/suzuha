@@ -18,6 +18,9 @@ tags:
   - name: Agent
   - name: Forget
   - name: Diary
+  - name: Scheduler
+  - name: Device
+  - name: Voicevox
 paths:
   /api/agent/compact:
     post:
@@ -127,6 +130,24 @@ paths:
                   - data
       tags:
         - Channels
+  /api/channels/{channelId}:
+    delete:
+      operationId: Channels_delete
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+      tags:
+        - Channels
   /api/context:
     get:
       operationId: Context_get
@@ -201,6 +222,96 @@ paths:
                 type: string
       tags:
         - Logs
+  /api/device/servo:
+    post:
+      operationId: Device_servo
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+  /api/device/tracker:
+    get:
+      operationId: Device_trackerGet
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Device
+    put:
+      operationId: Device_trackerSet
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+  /api/device/vision:
+    get:
+      operationId: Device_visionGet
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Device
+    put:
+      operationId: Device_visionSet
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+  /api/device/volume:
+    put:
+      operationId: Device_volume
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
   /api/diary:
     get:
       operationId: Diary_list
@@ -468,6 +579,121 @@ paths:
         content:
           application/json:
             schema: {}
+  /api/llm/assignments:
+    get:
+      operationId: LLM_assignmentsList
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - LLM
+  /api/llm/assignments/{role}:
+    put:
+      operationId: LLM_assignmentsUpdate
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+      tags:
+        - LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preset:
+                  type: string
+              required:
+                - preset
+  /api/llm/presets:
+    get:
+      operationId: LLM_presetsList
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LLMPreset'
+      tags:
+        - LLM
+    post:
+      operationId: LLM_presetsCreate
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+      tags:
+        - LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LLMPreset'
+  /api/llm/presets/{name}:
+    put:
+      operationId: LLM_presetsUpdate
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+      tags:
+        - LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LLMPreset'
+    delete:
+      operationId: LLM_presetsDelete
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+      tags:
+        - LLM
   /api/location/devices:
     get:
       operationId: Location_listDevices
@@ -1073,6 +1299,40 @@ paths:
                 $ref: '#/components/schemas/OkResponse'
       tags:
         - Scheduled Actions
+  /api/scheduler/jobs:
+    get:
+      operationId: Scheduler_jobs
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Scheduler
+  /api/scheduler/trigger/{task}:
+    post:
+      operationId: Scheduler_trigger
+      parameters:
+        - name: task
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Scheduler
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {}
   /api/tools:
     get:
       operationId: Tools_list
@@ -1088,6 +1348,28 @@ paths:
   /api/tools/{name}/enabled:
     put:
       operationId: Tools_setEnabled
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Tools
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+  /api/tools/{name}/execute:
+    post:
+      operationId: Tools_execute
       parameters:
         - name: name
           in: path
@@ -1249,6 +1531,46 @@ paths:
                   - data
       tags:
         - Users
+  /api/voicevox/speaker:
+    get:
+      operationId: Voicevox_currentSpeaker
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Voicevox
+    put:
+      operationId: Voicevox_setSpeaker
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Voicevox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+  /api/voicevox/speakers:
+    get:
+      operationId: Voicevox_speakers
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema: {}
+      tags:
+        - Voicevox
 components:
   schemas:
     BoredomStatus:
@@ -1528,6 +1850,35 @@ components:
         last_seen_at:
           type: string
         last_user_message_at:
+          type: string
+    LLMPreset:
+      type: object
+      required:
+        - name
+        - provider
+        - model
+        - api_base
+        - max_tokens
+        - capabilities
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        api_key:
+          type: string
+        api_base:
+          type: string
+        max_tokens:
+          type: integer
+          format: int32
+        capabilities:
+          type: array
+          items:
+            type: string
+        source:
           type: string
     Memory:
       type: object

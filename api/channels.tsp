@@ -35,6 +35,7 @@ model UpdateChannelSettingRequest {
 @tag("Channels")
 interface Channels {
   @get op list(): { data: Channel[] };
+  @route("{channelId}") @delete op delete(@path channelId: string): OkResponse;
 }
 
 @route("/api/channel-settings")

@@ -30,6 +30,10 @@ type Handler interface {
 	//
 	// PUT /api/channel-settings/{channelId}
 	ChannelSettingsUpdate(ctx context.Context, req *UpdateChannelSettingRequest, params ChannelSettingsUpdateParams) (*OkResponse, error)
+	// ChannelsDelete implements Channels_delete operation.
+	//
+	// DELETE /api/channels/{channelId}
+	ChannelsDelete(ctx context.Context, params ChannelsDeleteParams) (*OkResponse, error)
 	// ChannelsList implements Channels_list operation.
 	//
 	// GET /api/channels
@@ -48,6 +52,30 @@ type Handler interface {
 	//
 	// GET /api/conversation-logs
 	ConversationLogsList(ctx context.Context) (*ConversationLogsListOK, error)
+	// DeviceServo implements Device_servo operation.
+	//
+	// POST /api/device/servo
+	DeviceServo(ctx context.Context, req jx.Raw) (jx.Raw, error)
+	// DeviceTrackerGet implements Device_trackerGet operation.
+	//
+	// GET /api/device/tracker
+	DeviceTrackerGet(ctx context.Context) (jx.Raw, error)
+	// DeviceTrackerSet implements Device_trackerSet operation.
+	//
+	// PUT /api/device/tracker
+	DeviceTrackerSet(ctx context.Context, req jx.Raw) (jx.Raw, error)
+	// DeviceVisionGet implements Device_visionGet operation.
+	//
+	// GET /api/device/vision
+	DeviceVisionGet(ctx context.Context) (jx.Raw, error)
+	// DeviceVisionSet implements Device_visionSet operation.
+	//
+	// PUT /api/device/vision
+	DeviceVisionSet(ctx context.Context, req jx.Raw) (jx.Raw, error)
+	// DeviceVolume implements Device_volume operation.
+	//
+	// PUT /api/device/volume
+	DeviceVolume(ctx context.Context, req jx.Raw) (jx.Raw, error)
 	// DiaryList implements Diary_list operation.
 	//
 	// GET /api/diary
@@ -88,10 +116,34 @@ type Handler interface {
 	//
 	// GET /api/identity
 	IdentityGet(ctx context.Context) (jx.Raw, error)
+	// LLMAssignmentsList implements LLM_assignmentsList operation.
+	//
+	// GET /api/llm/assignments
+	LLMAssignmentsList(ctx context.Context) (jx.Raw, error)
+	// LLMAssignmentsUpdate implements LLM_assignmentsUpdate operation.
+	//
+	// PUT /api/llm/assignments/{role}
+	LLMAssignmentsUpdate(ctx context.Context, req *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (*OkResponse, error)
 	// LLMGet implements LLM_get operation.
 	//
 	// GET /api/llm
 	LLMGet(ctx context.Context) (jx.Raw, error)
+	// LLMPresetsCreate implements LLM_presetsCreate operation.
+	//
+	// POST /api/llm/presets
+	LLMPresetsCreate(ctx context.Context, req *LLMPreset) (*OkResponse, error)
+	// LLMPresetsDelete implements LLM_presetsDelete operation.
+	//
+	// DELETE /api/llm/presets/{name}
+	LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (*OkResponse, error)
+	// LLMPresetsList implements LLM_presetsList operation.
+	//
+	// GET /api/llm/presets
+	LLMPresetsList(ctx context.Context) ([]LLMPreset, error)
+	// LLMPresetsUpdate implements LLM_presetsUpdate operation.
+	//
+	// PUT /api/llm/presets/{name}
+	LLMPresetsUpdate(ctx context.Context, req *LLMPreset, params LLMPresetsUpdateParams) (*OkResponse, error)
 	// LLMUpdate implements LLM_update operation.
 	//
 	// PUT /api/llm
@@ -192,6 +244,18 @@ type Handler interface {
 	//
 	// PUT /api/scheduled-actions/{id}
 	ScheduledActionsUpdate(ctx context.Context, req *UpdateActionRequest, params ScheduledActionsUpdateParams) (*OkResponse, error)
+	// SchedulerJobs implements Scheduler_jobs operation.
+	//
+	// GET /api/scheduler/jobs
+	SchedulerJobs(ctx context.Context) (jx.Raw, error)
+	// SchedulerTrigger implements Scheduler_trigger operation.
+	//
+	// POST /api/scheduler/trigger/{task}
+	SchedulerTrigger(ctx context.Context, req jx.Raw, params SchedulerTriggerParams) (jx.Raw, error)
+	// ToolsExecute implements Tools_execute operation.
+	//
+	// POST /api/tools/{name}/execute
+	ToolsExecute(ctx context.Context, req jx.Raw, params ToolsExecuteParams) (jx.Raw, error)
 	// ToolsList implements Tools_list operation.
 	//
 	// GET /api/tools
@@ -220,6 +284,18 @@ type Handler interface {
 	//
 	// PUT /api/users/{id}
 	UsersUpdate(ctx context.Context, req *UpdateUserRequest, params UsersUpdateParams) (*OkResponse, error)
+	// VoicevoxCurrentSpeaker implements Voicevox_currentSpeaker operation.
+	//
+	// GET /api/voicevox/speaker
+	VoicevoxCurrentSpeaker(ctx context.Context) (jx.Raw, error)
+	// VoicevoxSetSpeaker implements Voicevox_setSpeaker operation.
+	//
+	// PUT /api/voicevox/speaker
+	VoicevoxSetSpeaker(ctx context.Context, req jx.Raw) (jx.Raw, error)
+	// VoicevoxSpeakers implements Voicevox_speakers operation.
+	//
+	// GET /api/voicevox/speakers
+	VoicevoxSpeakers(ctx context.Context) (jx.Raw, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

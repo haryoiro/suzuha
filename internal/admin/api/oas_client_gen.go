@@ -48,6 +48,10 @@ type Invoker interface {
 	//
 	// PUT /api/channel-settings/{channelId}
 	ChannelSettingsUpdate(ctx context.Context, request *UpdateChannelSettingRequest, params ChannelSettingsUpdateParams) (*OkResponse, error)
+	// ChannelsDelete invokes Channels_delete operation.
+	//
+	// DELETE /api/channels/{channelId}
+	ChannelsDelete(ctx context.Context, params ChannelsDeleteParams) (*OkResponse, error)
 	// ChannelsList invokes Channels_list operation.
 	//
 	// GET /api/channels
@@ -66,6 +70,30 @@ type Invoker interface {
 	//
 	// GET /api/conversation-logs
 	ConversationLogsList(ctx context.Context) (*ConversationLogsListOK, error)
+	// DeviceServo invokes Device_servo operation.
+	//
+	// POST /api/device/servo
+	DeviceServo(ctx context.Context, request jx.Raw) (jx.Raw, error)
+	// DeviceTrackerGet invokes Device_trackerGet operation.
+	//
+	// GET /api/device/tracker
+	DeviceTrackerGet(ctx context.Context) (jx.Raw, error)
+	// DeviceTrackerSet invokes Device_trackerSet operation.
+	//
+	// PUT /api/device/tracker
+	DeviceTrackerSet(ctx context.Context, request jx.Raw) (jx.Raw, error)
+	// DeviceVisionGet invokes Device_visionGet operation.
+	//
+	// GET /api/device/vision
+	DeviceVisionGet(ctx context.Context) (jx.Raw, error)
+	// DeviceVisionSet invokes Device_visionSet operation.
+	//
+	// PUT /api/device/vision
+	DeviceVisionSet(ctx context.Context, request jx.Raw) (jx.Raw, error)
+	// DeviceVolume invokes Device_volume operation.
+	//
+	// PUT /api/device/volume
+	DeviceVolume(ctx context.Context, request jx.Raw) (jx.Raw, error)
 	// DiaryList invokes Diary_list operation.
 	//
 	// GET /api/diary
@@ -106,10 +134,34 @@ type Invoker interface {
 	//
 	// GET /api/identity
 	IdentityGet(ctx context.Context) (jx.Raw, error)
+	// LLMAssignmentsList invokes LLM_assignmentsList operation.
+	//
+	// GET /api/llm/assignments
+	LLMAssignmentsList(ctx context.Context) (jx.Raw, error)
+	// LLMAssignmentsUpdate invokes LLM_assignmentsUpdate operation.
+	//
+	// PUT /api/llm/assignments/{role}
+	LLMAssignmentsUpdate(ctx context.Context, request *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (*OkResponse, error)
 	// LLMGet invokes LLM_get operation.
 	//
 	// GET /api/llm
 	LLMGet(ctx context.Context) (jx.Raw, error)
+	// LLMPresetsCreate invokes LLM_presetsCreate operation.
+	//
+	// POST /api/llm/presets
+	LLMPresetsCreate(ctx context.Context, request *LLMPreset) (*OkResponse, error)
+	// LLMPresetsDelete invokes LLM_presetsDelete operation.
+	//
+	// DELETE /api/llm/presets/{name}
+	LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (*OkResponse, error)
+	// LLMPresetsList invokes LLM_presetsList operation.
+	//
+	// GET /api/llm/presets
+	LLMPresetsList(ctx context.Context) ([]LLMPreset, error)
+	// LLMPresetsUpdate invokes LLM_presetsUpdate operation.
+	//
+	// PUT /api/llm/presets/{name}
+	LLMPresetsUpdate(ctx context.Context, request *LLMPreset, params LLMPresetsUpdateParams) (*OkResponse, error)
 	// LLMUpdate invokes LLM_update operation.
 	//
 	// PUT /api/llm
@@ -210,6 +262,18 @@ type Invoker interface {
 	//
 	// PUT /api/scheduled-actions/{id}
 	ScheduledActionsUpdate(ctx context.Context, request *UpdateActionRequest, params ScheduledActionsUpdateParams) (*OkResponse, error)
+	// SchedulerJobs invokes Scheduler_jobs operation.
+	//
+	// GET /api/scheduler/jobs
+	SchedulerJobs(ctx context.Context) (jx.Raw, error)
+	// SchedulerTrigger invokes Scheduler_trigger operation.
+	//
+	// POST /api/scheduler/trigger/{task}
+	SchedulerTrigger(ctx context.Context, request jx.Raw, params SchedulerTriggerParams) (jx.Raw, error)
+	// ToolsExecute invokes Tools_execute operation.
+	//
+	// POST /api/tools/{name}/execute
+	ToolsExecute(ctx context.Context, request jx.Raw, params ToolsExecuteParams) (jx.Raw, error)
 	// ToolsList invokes Tools_list operation.
 	//
 	// GET /api/tools
@@ -238,6 +302,18 @@ type Invoker interface {
 	//
 	// PUT /api/users/{id}
 	UsersUpdate(ctx context.Context, request *UpdateUserRequest, params UsersUpdateParams) (*OkResponse, error)
+	// VoicevoxCurrentSpeaker invokes Voicevox_currentSpeaker operation.
+	//
+	// GET /api/voicevox/speaker
+	VoicevoxCurrentSpeaker(ctx context.Context) (jx.Raw, error)
+	// VoicevoxSetSpeaker invokes Voicevox_setSpeaker operation.
+	//
+	// PUT /api/voicevox/speaker
+	VoicevoxSetSpeaker(ctx context.Context, request jx.Raw) (jx.Raw, error)
+	// VoicevoxSpeakers invokes Voicevox_speakers operation.
+	//
+	// GET /api/voicevox/speakers
+	VoicevoxSpeakers(ctx context.Context) (jx.Raw, error)
 }
 
 // Client implements OAS client.
@@ -699,6 +775,96 @@ func (c *Client) sendChannelSettingsUpdate(ctx context.Context, request *UpdateC
 	return result, nil
 }
 
+// ChannelsDelete invokes Channels_delete operation.
+//
+// DELETE /api/channels/{channelId}
+func (c *Client) ChannelsDelete(ctx context.Context, params ChannelsDeleteParams) (*OkResponse, error) {
+	res, err := c.sendChannelsDelete(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendChannelsDelete(ctx context.Context, params ChannelsDeleteParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Channels_delete"),
+		semconv.HTTPRequestMethodKey.String("DELETE"),
+		semconv.URLTemplateKey.String("/api/channels/{channelId}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ChannelsDeleteOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/api/channels/"
+	{
+		// Encode "channelId" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "channelId",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.ChannelId))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "DELETE", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeChannelsDeleteResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // ChannelsList invokes Channels_list operation.
 //
 // GET /api/channels
@@ -1058,6 +1224,450 @@ func (c *Client) sendConversationLogsList(ctx context.Context) (res *Conversatio
 
 	stage = "DecodeResponse"
 	result, err := decodeConversationLogsListResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeviceServo invokes Device_servo operation.
+//
+// POST /api/device/servo
+func (c *Client) DeviceServo(ctx context.Context, request jx.Raw) (jx.Raw, error) {
+	res, err := c.sendDeviceServo(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendDeviceServo(ctx context.Context, request jx.Raw) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Device_servo"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/api/device/servo"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeviceServoOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/device/servo"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeDeviceServoRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeviceServoResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeviceTrackerGet invokes Device_trackerGet operation.
+//
+// GET /api/device/tracker
+func (c *Client) DeviceTrackerGet(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendDeviceTrackerGet(ctx)
+	return res, err
+}
+
+func (c *Client) sendDeviceTrackerGet(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Device_trackerGet"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/device/tracker"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeviceTrackerGetOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/device/tracker"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeviceTrackerGetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeviceTrackerSet invokes Device_trackerSet operation.
+//
+// PUT /api/device/tracker
+func (c *Client) DeviceTrackerSet(ctx context.Context, request jx.Raw) (jx.Raw, error) {
+	res, err := c.sendDeviceTrackerSet(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendDeviceTrackerSet(ctx context.Context, request jx.Raw) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Device_trackerSet"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/device/tracker"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeviceTrackerSetOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/device/tracker"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeDeviceTrackerSetRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeviceTrackerSetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeviceVisionGet invokes Device_visionGet operation.
+//
+// GET /api/device/vision
+func (c *Client) DeviceVisionGet(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendDeviceVisionGet(ctx)
+	return res, err
+}
+
+func (c *Client) sendDeviceVisionGet(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Device_visionGet"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/device/vision"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeviceVisionGetOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/device/vision"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeviceVisionGetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeviceVisionSet invokes Device_visionSet operation.
+//
+// PUT /api/device/vision
+func (c *Client) DeviceVisionSet(ctx context.Context, request jx.Raw) (jx.Raw, error) {
+	res, err := c.sendDeviceVisionSet(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendDeviceVisionSet(ctx context.Context, request jx.Raw) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Device_visionSet"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/device/vision"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeviceVisionSetOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/device/vision"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeDeviceVisionSetRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeviceVisionSetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// DeviceVolume invokes Device_volume operation.
+//
+// PUT /api/device/volume
+func (c *Client) DeviceVolume(ctx context.Context, request jx.Raw) (jx.Raw, error) {
+	res, err := c.sendDeviceVolume(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendDeviceVolume(ctx context.Context, request jx.Raw) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Device_volume"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/device/volume"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, DeviceVolumeOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/device/volume"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeDeviceVolumeRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeDeviceVolumeResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1889,6 +2499,171 @@ func (c *Client) sendIdentityGet(ctx context.Context) (res jx.Raw, err error) {
 	return result, nil
 }
 
+// LLMAssignmentsList invokes LLM_assignmentsList operation.
+//
+// GET /api/llm/assignments
+func (c *Client) LLMAssignmentsList(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendLLMAssignmentsList(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMAssignmentsList(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_assignmentsList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/llm/assignments"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMAssignmentsListOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/llm/assignments"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMAssignmentsListResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMAssignmentsUpdate invokes LLM_assignmentsUpdate operation.
+//
+// PUT /api/llm/assignments/{role}
+func (c *Client) LLMAssignmentsUpdate(ctx context.Context, request *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (*OkResponse, error) {
+	res, err := c.sendLLMAssignmentsUpdate(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendLLMAssignmentsUpdate(ctx context.Context, request *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_assignmentsUpdate"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/llm/assignments/{role}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMAssignmentsUpdateOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/api/llm/assignments/"
+	{
+		// Encode "role" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "role",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Role))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeLLMAssignmentsUpdateRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMAssignmentsUpdateResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // LLMGet invokes LLM_get operation.
 //
 // GET /api/llm
@@ -1954,6 +2729,336 @@ func (c *Client) sendLLMGet(ctx context.Context) (res jx.Raw, err error) {
 
 	stage = "DecodeResponse"
 	result, err := decodeLLMGetResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMPresetsCreate invokes LLM_presetsCreate operation.
+//
+// POST /api/llm/presets
+func (c *Client) LLMPresetsCreate(ctx context.Context, request *LLMPreset) (*OkResponse, error) {
+	res, err := c.sendLLMPresetsCreate(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_presetsCreate"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/api/llm/presets"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsCreateOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/llm/presets"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeLLMPresetsCreateRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMPresetsCreateResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMPresetsDelete invokes LLM_presetsDelete operation.
+//
+// DELETE /api/llm/presets/{name}
+func (c *Client) LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (*OkResponse, error) {
+	res, err := c.sendLLMPresetsDelete(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendLLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_presetsDelete"),
+		semconv.HTTPRequestMethodKey.String("DELETE"),
+		semconv.URLTemplateKey.String("/api/llm/presets/{name}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsDeleteOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/api/llm/presets/"
+	{
+		// Encode "name" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "name",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Name))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "DELETE", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMPresetsDeleteResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMPresetsList invokes LLM_presetsList operation.
+//
+// GET /api/llm/presets
+func (c *Client) LLMPresetsList(ctx context.Context) ([]LLMPreset, error) {
+	res, err := c.sendLLMPresetsList(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMPresetsList(ctx context.Context) (res []LLMPreset, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_presetsList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/llm/presets"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsListOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/llm/presets"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMPresetsListResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMPresetsUpdate invokes LLM_presetsUpdate operation.
+//
+// PUT /api/llm/presets/{name}
+func (c *Client) LLMPresetsUpdate(ctx context.Context, request *LLMPreset, params LLMPresetsUpdateParams) (*OkResponse, error) {
+	res, err := c.sendLLMPresetsUpdate(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendLLMPresetsUpdate(ctx context.Context, request *LLMPreset, params LLMPresetsUpdateParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_presetsUpdate"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/llm/presets/{name}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsUpdateOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/api/llm/presets/"
+	{
+		// Encode "name" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "name",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Name))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeLLMPresetsUpdateRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMPresetsUpdateResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -4275,6 +5380,265 @@ func (c *Client) sendScheduledActionsUpdate(ctx context.Context, request *Update
 	return result, nil
 }
 
+// SchedulerJobs invokes Scheduler_jobs operation.
+//
+// GET /api/scheduler/jobs
+func (c *Client) SchedulerJobs(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendSchedulerJobs(ctx)
+	return res, err
+}
+
+func (c *Client) sendSchedulerJobs(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Scheduler_jobs"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/scheduler/jobs"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, SchedulerJobsOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/scheduler/jobs"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeSchedulerJobsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// SchedulerTrigger invokes Scheduler_trigger operation.
+//
+// POST /api/scheduler/trigger/{task}
+func (c *Client) SchedulerTrigger(ctx context.Context, request jx.Raw, params SchedulerTriggerParams) (jx.Raw, error) {
+	res, err := c.sendSchedulerTrigger(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendSchedulerTrigger(ctx context.Context, request jx.Raw, params SchedulerTriggerParams) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Scheduler_trigger"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/api/scheduler/trigger/{task}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, SchedulerTriggerOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/api/scheduler/trigger/"
+	{
+		// Encode "task" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "task",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Task))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeSchedulerTriggerRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeSchedulerTriggerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// ToolsExecute invokes Tools_execute operation.
+//
+// POST /api/tools/{name}/execute
+func (c *Client) ToolsExecute(ctx context.Context, request jx.Raw, params ToolsExecuteParams) (jx.Raw, error) {
+	res, err := c.sendToolsExecute(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendToolsExecute(ctx context.Context, request jx.Raw, params ToolsExecuteParams) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Tools_execute"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/api/tools/{name}/execute"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ToolsExecuteOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/api/tools/"
+	{
+		// Encode "name" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "name",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Name))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/execute"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeToolsExecuteRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeToolsExecuteResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // ToolsList invokes Tools_list operation.
 //
 // GET /api/tools
@@ -4930,6 +6294,225 @@ func (c *Client) sendUsersUpdate(ctx context.Context, request *UpdateUserRequest
 
 	stage = "DecodeResponse"
 	result, err := decodeUsersUpdateResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// VoicevoxCurrentSpeaker invokes Voicevox_currentSpeaker operation.
+//
+// GET /api/voicevox/speaker
+func (c *Client) VoicevoxCurrentSpeaker(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendVoicevoxCurrentSpeaker(ctx)
+	return res, err
+}
+
+func (c *Client) sendVoicevoxCurrentSpeaker(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Voicevox_currentSpeaker"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/voicevox/speaker"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, VoicevoxCurrentSpeakerOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/voicevox/speaker"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeVoicevoxCurrentSpeakerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// VoicevoxSetSpeaker invokes Voicevox_setSpeaker operation.
+//
+// PUT /api/voicevox/speaker
+func (c *Client) VoicevoxSetSpeaker(ctx context.Context, request jx.Raw) (jx.Raw, error) {
+	res, err := c.sendVoicevoxSetSpeaker(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendVoicevoxSetSpeaker(ctx context.Context, request jx.Raw) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Voicevox_setSpeaker"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/voicevox/speaker"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, VoicevoxSetSpeakerOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/voicevox/speaker"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeVoicevoxSetSpeakerRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeVoicevoxSetSpeakerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// VoicevoxSpeakers invokes Voicevox_speakers operation.
+//
+// GET /api/voicevox/speakers
+func (c *Client) VoicevoxSpeakers(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendVoicevoxSpeakers(ctx)
+	return res, err
+}
+
+func (c *Client) sendVoicevoxSpeakers(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Voicevox_speakers"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/voicevox/speakers"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, VoicevoxSpeakersOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/voicevox/speakers"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeVoicevoxSpeakersResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

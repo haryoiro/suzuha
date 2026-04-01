@@ -49,6 +49,13 @@ func (UnimplementedHandler) ChannelSettingsUpdate(ctx context.Context, req *Upda
 	return r, ht.ErrNotImplemented
 }
 
+// ChannelsDelete implements Channels_delete operation.
+//
+// DELETE /api/channels/{channelId}
+func (UnimplementedHandler) ChannelsDelete(ctx context.Context, params ChannelsDeleteParams) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ChannelsList implements Channels_list operation.
 //
 // GET /api/channels
@@ -76,6 +83,48 @@ func (UnimplementedHandler) ConversationLogsExport(ctx context.Context, params C
 //
 // GET /api/conversation-logs
 func (UnimplementedHandler) ConversationLogsList(ctx context.Context) (r *ConversationLogsListOK, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeviceServo implements Device_servo operation.
+//
+// POST /api/device/servo
+func (UnimplementedHandler) DeviceServo(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeviceTrackerGet implements Device_trackerGet operation.
+//
+// GET /api/device/tracker
+func (UnimplementedHandler) DeviceTrackerGet(ctx context.Context) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeviceTrackerSet implements Device_trackerSet operation.
+//
+// PUT /api/device/tracker
+func (UnimplementedHandler) DeviceTrackerSet(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeviceVisionGet implements Device_visionGet operation.
+//
+// GET /api/device/vision
+func (UnimplementedHandler) DeviceVisionGet(ctx context.Context) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeviceVisionSet implements Device_visionSet operation.
+//
+// PUT /api/device/vision
+func (UnimplementedHandler) DeviceVisionSet(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// DeviceVolume implements Device_volume operation.
+//
+// PUT /api/device/volume
+func (UnimplementedHandler) DeviceVolume(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -149,10 +198,52 @@ func (UnimplementedHandler) IdentityGet(ctx context.Context) (r jx.Raw, _ error)
 	return r, ht.ErrNotImplemented
 }
 
+// LLMAssignmentsList implements LLM_assignmentsList operation.
+//
+// GET /api/llm/assignments
+func (UnimplementedHandler) LLMAssignmentsList(ctx context.Context) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMAssignmentsUpdate implements LLM_assignmentsUpdate operation.
+//
+// PUT /api/llm/assignments/{role}
+func (UnimplementedHandler) LLMAssignmentsUpdate(ctx context.Context, req *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // LLMGet implements LLM_get operation.
 //
 // GET /api/llm
 func (UnimplementedHandler) LLMGet(ctx context.Context) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMPresetsCreate implements LLM_presetsCreate operation.
+//
+// POST /api/llm/presets
+func (UnimplementedHandler) LLMPresetsCreate(ctx context.Context, req *LLMPreset) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMPresetsDelete implements LLM_presetsDelete operation.
+//
+// DELETE /api/llm/presets/{name}
+func (UnimplementedHandler) LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMPresetsList implements LLM_presetsList operation.
+//
+// GET /api/llm/presets
+func (UnimplementedHandler) LLMPresetsList(ctx context.Context) (r []LLMPreset, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMPresetsUpdate implements LLM_presetsUpdate operation.
+//
+// PUT /api/llm/presets/{name}
+func (UnimplementedHandler) LLMPresetsUpdate(ctx context.Context, req *LLMPreset, params LLMPresetsUpdateParams) (r *OkResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -331,6 +422,27 @@ func (UnimplementedHandler) ScheduledActionsUpdate(ctx context.Context, req *Upd
 	return r, ht.ErrNotImplemented
 }
 
+// SchedulerJobs implements Scheduler_jobs operation.
+//
+// GET /api/scheduler/jobs
+func (UnimplementedHandler) SchedulerJobs(ctx context.Context) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// SchedulerTrigger implements Scheduler_trigger operation.
+//
+// POST /api/scheduler/trigger/{task}
+func (UnimplementedHandler) SchedulerTrigger(ctx context.Context, req jx.Raw, params SchedulerTriggerParams) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ToolsExecute implements Tools_execute operation.
+//
+// POST /api/tools/{name}/execute
+func (UnimplementedHandler) ToolsExecute(ctx context.Context, req jx.Raw, params ToolsExecuteParams) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // ToolsList implements Tools_list operation.
 //
 // GET /api/tools
@@ -377,5 +489,26 @@ func (UnimplementedHandler) UsersMemories(ctx context.Context, params UsersMemor
 //
 // PUT /api/users/{id}
 func (UnimplementedHandler) UsersUpdate(ctx context.Context, req *UpdateUserRequest, params UsersUpdateParams) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// VoicevoxCurrentSpeaker implements Voicevox_currentSpeaker operation.
+//
+// GET /api/voicevox/speaker
+func (UnimplementedHandler) VoicevoxCurrentSpeaker(ctx context.Context) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// VoicevoxSetSpeaker implements Voicevox_setSpeaker operation.
+//
+// PUT /api/voicevox/speaker
+func (UnimplementedHandler) VoicevoxSetSpeaker(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// VoicevoxSpeakers implements Voicevox_speakers operation.
+//
+// GET /api/voicevox/speakers
+func (UnimplementedHandler) VoicevoxSpeakers(ctx context.Context) (r jx.Raw, _ error) {
 	return r, ht.ErrNotImplemented
 }
