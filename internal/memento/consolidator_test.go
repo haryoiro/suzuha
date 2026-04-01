@@ -1,4 +1,4 @@
-package consolidator
+package memento
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 // --- モック ---
 
-// mockAdminStore は maintain テスト用の AdminStore モック。
+// mockAdminStore は consolidate テスト用の AdminStore モック。
 type mockAdminStore struct {
 	memory.AdminStore // 未実装メソッドは panic する（テスト対象外）
 	memories          []memory.Memory
@@ -57,22 +57,22 @@ func (m *mockSaveStore) Save(_ context.Context, mem *memory.Memory) error {
 
 // --- テストケース ---
 
-func TestMaintain_NilAdmin(t *testing.T) {
-	srv := &Server{logger: slog.Default()}
-	_, err := srv.Maintain(context.Background(), MaintainOpts{})
+func TestConsolidate_NilAdmin(t *testing.T) {
+	c := &Consolidator{logger: slog.Default()}
+	_, err := c.Consolidate(context.Background(), &ConsolidateOpts{})
 	if err == nil {
 		t.Error("AdminStore nil でエラーを期待")
 	}
 }
 
-func TestMaintain_SingleEntry(t *testing.T) {
+func TestConsolidate_SingleEntry(t *testing.T) {
 	admin := &mockAdminStore{
 		memories: []memory.Memory{
 			{ID: "a", Type: memory.MemoryTypeUser, Content: "テスト", CreatedAt: time.Now()},
 		},
 	}
-	srv := &Server{admin: admin, logger: slog.Default()}
-	result, err := srv.Maintain(context.Background(), MaintainOpts{SimilarityThreshold: 0.3, MaxGroupSize: 8})
+	c := &Consolidator{admin: admin, logger: slog.Default()}
+	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{SimilarityThreshold: 0.3, MaxGroupSize: 8})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestMaintain_SingleEntry(t *testing.T) {
 	}
 }
 
-func TestMaintain_KeepAction(t *testing.T) {
+func TestConsolidate_KeepAction(t *testing.T) {
 	now := time.Now()
 	admin := &mockAdminStore{
 		memories: []memory.Memory{
@@ -97,9 +97,9 @@ func TestMaintain_KeepAction(t *testing.T) {
 	mc := &mockCompleter{
 		response: `[{"group":1,"action":"keep","keep_id":"b","reason":"bの方が詳しい"}]`,
 	}
-	srv := &Server{llmClient: mc, store: store, admin: admin, logger: slog.Default()}
+	c := &Consolidator{llm: mc, store: store, admin: admin, logger: slog.Default()}
 
-	result, err := srv.Maintain(context.Background(), MaintainOpts{
+	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -118,7 +118,7 @@ func TestMaintain_KeepAction(t *testing.T) {
 	}
 }
 
-func TestMaintain_MergeAction(t *testing.T) {
+func TestConsolidate_MergeAction(t *testing.T) {
 	now := time.Now()
 	admin := &mockAdminStore{
 		memories: []memory.Memory{
@@ -134,9 +134,9 @@ func TestMaintain_MergeAction(t *testing.T) {
 	mc := &mockCompleter{
 		response: `[{"group":1,"action":"merge","merged_content":"GoとPythonが好き","reason":"統合"}]`,
 	}
-	srv := &Server{llmClient: mc, store: store, admin: admin, logger: slog.Default()}
+	c := &Consolidator{llm: mc, store: store, admin: admin, logger: slog.Default()}
 
-	result, err := srv.Maintain(context.Background(), MaintainOpts{
+	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -155,7 +155,7 @@ func TestMaintain_MergeAction(t *testing.T) {
 	}
 }
 
-func TestMaintain_DryRun(t *testing.T) {
+func TestConsolidate_DryRun(t *testing.T) {
 	now := time.Now()
 	admin := &mockAdminStore{
 		memories: []memory.Memory{
@@ -171,9 +171,9 @@ func TestMaintain_DryRun(t *testing.T) {
 	mc := &mockCompleter{
 		response: `[{"group":1,"action":"keep","keep_id":"a","reason":"test"}]`,
 	}
-	srv := &Server{llmClient: mc, store: store, admin: admin, logger: slog.Default()}
+	c := &Consolidator{llm: mc, store: store, admin: admin, logger: slog.Default()}
 
-	result, err := srv.Maintain(context.Background(), MaintainOpts{
+	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -190,7 +190,7 @@ func TestMaintain_DryRun(t *testing.T) {
 	}
 }
 
-func TestMaintain_LLMError(t *testing.T) {
+func TestConsolidate_LLMError(t *testing.T) {
 	now := time.Now()
 	admin := &mockAdminStore{
 		memories: []memory.Memory{
@@ -203,9 +203,9 @@ func TestMaintain_LLMError(t *testing.T) {
 		},
 	}
 	mc := &mockCompleter{err: context.DeadlineExceeded}
-	srv := &Server{llmClient: mc, store: &mockSaveStore{}, admin: admin, logger: slog.Default()}
+	c := &Consolidator{llm: mc, store: &mockSaveStore{}, admin: admin, logger: slog.Default()}
 
-	result, err := srv.Maintain(context.Background(), MaintainOpts{
+	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,

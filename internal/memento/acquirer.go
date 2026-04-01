@@ -1,8 +1,9 @@
-package consolidator
+package memento
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -11,22 +12,77 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
+// Acquirer は会話コンテキストから長期メモリを抽出する。
+type Acquirer struct {
+	llm    completer
+	store  memory.Store
+	config AcquireConfig
+	logger *slog.Logger
+}
+
+// NewAcquirer は Acquirer を作成する。
+func NewAcquirer(llm *llm.Client, store memory.Store, cfg AcquireConfig, logger *slog.Logger) *Acquirer {
+	return &Acquirer{llm: llm, store: store, config: cfg, logger: logger}
+}
+
+// Acquire は指定されたメッセージから長期メモリを抽出する。
+func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResult, error) {
+	if len(req.Messages) == 0 {
+		return &AcquireResult{}, nil
+	}
+
+	// 抽出パイプラインを実行: コンテキスト取得 → LLM → パース → メディア添付。
+	memories, err := a.extract(ctx, req.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("acquire: 抽出に失敗: %w", err)
+	}
+
+	// バッチ重複チェック — 全候補に対して1回の埋め込みAPI呼び出し。
+	candidates := make([]memory.DupCandidate, len(memories))
+	for i, mem := range memories {
+		candidates[i] = memory.DupCandidate{Content: mem.Content, Type: mem.Type}
+	}
+	dupResults, dupErr := a.store.IsDuplicateBatch(ctx, candidates)
+	if dupErr != nil {
+		a.logger.Warn("acquire: バッチ重複チェックに失敗", "error", dupErr)
+	}
+
+	// 重複でないメモリを保存し、重複チェックで得た埋め込みを再利用する。
+	result := &AcquireResult{}
+	for i := range memories {
+		mem := &memories[i]
+		if dupResults != nil && dupResults[i].DupID != "" {
+			a.logger.Debug("acquire: 重複メモリをスキップ", "existing_id", dupResults[i].DupID, "content", mem.Content)
+			continue
+		}
+		if dupResults != nil && len(dupResults[i].Embedding) > 0 {
+			mem.Embedding = dupResults[i].Embedding
+		}
+		if err := a.store.Save(ctx, mem); err != nil {
+			a.logger.Warn("acquire: メモリの保存に失敗", "error", err)
+		}
+		result.Memories = append(result.Memories, *mem)
+	}
+
+	return result, nil
+}
+
 // extract は完全な抽出パイプラインを実行する: コンテキスト取得 → プロンプト → LLM → パース → メディア添付。
-func (s *Server) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memory, error) {
+func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memory, error) {
 	// 重複排除コンテキスト用に最近の既存メモリを取得する。
-	existing := s.fetchRecentMemories(ctx)
+	existing := a.fetchRecentMemories(ctx)
 
 	// プロンプトを構築する。
-	systemPrompt := buildSystemPrompt(s.config.Extraction.Rules)
+	systemPrompt := buildSystemPrompt(a.config.Rules)
 	userPrompt := buildCompactPrompt(msgs, existing)
 
 	// LLMを呼び出す。
-	resp, err := s.llmClient.CompleteRawDefault(ctx, []llm.RawMessage{
+	resp, err := a.llm.CompleteRawDefault(ctx, []llm.RawMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("consolidator: LLM呼び出しに失敗: %w", err)
+		return nil, fmt.Errorf("acquire: LLM呼び出しに失敗: %w", err)
 	}
 
 	// JSON出力をパースする。
@@ -34,7 +90,7 @@ func (s *Server) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memo
 	if err != nil {
 		// レガシーフォールバック: 構造化フィールド（Keywords/Topic/Persons/EventTime）は全て欠落する。
 		// このパスの発動頻度が高い場合はプロンプトの見直しが必要。
-		s.logger.Error("consolidator: JSON解析に失敗、レガシーフォールバック発動（構造化フィールド欠落）",
+		a.logger.Error("acquire: JSON解析に失敗、レガシーフォールバック発動（構造化フィールド欠落）",
 			"error", err, "response_prefix", truncate(resp.Text, 100))
 		result := parseLegacyCompactResponse(resp.Text)
 		memories = result.Memories
@@ -50,16 +106,16 @@ func (s *Server) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memo
 }
 
 // fetchRecentMemories は重複排除コンテキスト用にストアから最近のメモリを取得する。
-func (s *Server) fetchRecentMemories(ctx context.Context) []memory.Memory {
-	cfg := s.config.Extraction
+func (a *Acquirer) fetchRecentMemories(ctx context.Context) []memory.Memory {
+	cfg := a.config
 	if cfg.RecentMemoryLimit <= 0 {
 		return nil
 	}
 
 	since := time.Now().Add(-cfg.RecentMemoryWindow)
-	mems, err := s.store.ListRecent(ctx, since, cfg.RecentMemoryLimit)
+	mems, err := a.store.ListRecent(ctx, since, cfg.RecentMemoryLimit)
 	if err != nil {
-		s.logger.Debug("consolidator: 既存メモリの取得に失敗", "error", err)
+		a.logger.Debug("acquire: 既存メモリの取得に失敗", "error", err)
 		return nil
 	}
 	return mems
@@ -152,8 +208,8 @@ func mimeFromKey(key string) string {
 }
 
 // parseLegacyCompactResponse はフォールバックとして旧テキスト形式をパースする。
-func parseLegacyCompactResponse(text string) *CompactResult {
-	result := &CompactResult{}
+func parseLegacyCompactResponse(text string) *AcquireResult {
+	result := &AcquireResult{}
 
 	lines := strings.Split(text, "\n")
 	inMemories := false

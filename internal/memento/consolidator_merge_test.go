@@ -1,4 +1,4 @@
-package consolidator
+package memento
 
 import (
 	"testing"

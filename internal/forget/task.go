@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/consolidator"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
 
 // Task は scheduler.CronTask を実装する薄いアダプタで、
-// 実際の重複排除・統合ロジックは consolidator.Maintainer に委譲する。
+// 実際の重複排除・統合ロジックは consolidator インターフェースに委譲する。
 type Task struct {
-	maintainer consolidator.Maintainer
+	consolidator consolidator
 }
 
 var _ scheduler.CronTask = (*Task)(nil)
@@ -25,8 +25,8 @@ func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error {
 }
 
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
-	// MaintainOpts を直接 unmarshal する（json タグ付き）。
-	opts := consolidator.MaintainOpts{
+	// ConsolidateOpts を直接 unmarshal する（json タグ付き）。
+	opts := memento.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -37,7 +37,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		}
 	}
 
-	result, err := t.maintainer.Maintain(ctx, opts)
+	result, err := t.consolidator.Consolidate(ctx, &opts)
 	if err != nil {
 		return err
 	}

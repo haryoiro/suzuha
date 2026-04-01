@@ -1,4 +1,4 @@
-package consolidator
+package memento
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ func parseExtractedMemories(raw string) ([]memory.Memory, error) {
 
 	var items []extractedMemory
 	if err := json.Unmarshal([]byte(raw), &items); err != nil {
-		return nil, fmt.Errorf("consolidator: JSON解析に失敗: %w (raw: %s)", err, truncate(raw, 200))
+		return nil, fmt.Errorf("acquire: JSON解析に失敗: %w (raw: %s)", err, truncate(raw, 200))
 	}
 
 	var memories []memory.Memory
@@ -59,7 +59,7 @@ func parseExtractedMemories(raw string) ([]memory.Memory, error) {
 			meta["emotional_tone"] = item.EmotionalTone
 		}
 
-		// メディア添付用の image_indices を格納する（extract.go で使用）。
+		// メディア添付用の image_indices を格納する（acquirer.go で使用）。
 		if len(item.ImageIndices) > 0 {
 			meta["image_indices"] = item.ImageIndices
 		}
@@ -88,24 +88,4 @@ func toMemoryType(s string) memory.MemoryType {
 	default:
 		return memory.MemoryTypeWorld
 	}
-}
-
-// stripJSONFence はJSON周囲のMarkdownコードフェンスを除去する。
-func stripJSONFence(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```json") {
-		s = strings.TrimPrefix(s, "```json")
-	} else if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```")
-	}
-	s = strings.TrimSuffix(s, "```")
-	return strings.TrimSpace(s)
-}
-
-func truncate(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
 }

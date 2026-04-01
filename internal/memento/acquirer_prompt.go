@@ -1,4 +1,4 @@
-package consolidator
+package memento
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 // compactSystemPromptBase はメモリ抽出用のベースシステムプロンプト。
-// 抽出ルールは ExtractionConfig.Rules を通じて動的に追加される。
+// 抽出ルールは AcquireConfig.Rules を通じて動的に追加される。
 const compactSystemPromptBase = `You are a memory extraction agent. Your job is to analyze a conversation and extract key information that should be stored as long-term memories.
 
 IMPORTANT: Write all memory content in Japanese (日本語). The conversation is in Japanese, and memories must also be in Japanese.

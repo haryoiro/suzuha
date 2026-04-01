@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 )
 
 // filterOutInjectedHistory は Compact に渡すメッセージから
@@ -82,11 +82,11 @@ func (a *Agent) compact(ctx context.Context) {
 func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey, msgs []llm.Message, async bool) {
 	n := len(msgs)
 
-	// Extract long-term memories via consolidator (best-effort).
+	// Extract long-term memories via acquirer (best-effort).
 	// 注入されたチャンネル履歴は除外する（再注入で重複抽出されるのを防ぐ）。
-	if a.consol != nil {
+	if a.acquirer != nil {
 		filtered := filterOutInjectedHistory(msgs)
-		_, err := a.consol.Compact(ctx, &consolidator.CompactRequest{
+		_, err := a.acquirer.Acquire(ctx, &memento.AcquireRequest{
 			Messages: filtered,
 		})
 		if err != nil {

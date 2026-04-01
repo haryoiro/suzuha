@@ -1,4 +1,4 @@
-package consolidator
+package memento
 
 import (
 	"context"
@@ -25,10 +25,10 @@ const judgeSystemPrompt = `あなたは記憶の管理者です。類似した�
 
 重要: 迷ったら skip にしてください。誤って削除・統合すると情報が失われます。`
 
-func (s *Server) judgeBatch(ctx context.Context, groups []memoryGroup) ([]decision, error) {
+func (c *Consolidator) judgeBatch(ctx context.Context, groups []memoryGroup) ([]decision, error) {
 	prompt := buildJudgePrompt(groups)
 
-	resp, err := s.llmClient.CompleteRawDefault(ctx, []llm.RawMessage{
+	resp, err := c.llm.CompleteRawDefault(ctx, []llm.RawMessage{
 		{Role: "system", Content: judgeSystemPrompt},
 		{Role: "user", Content: prompt},
 	})

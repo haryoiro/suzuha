@@ -10,7 +10,7 @@ import (
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
-	"github.com/haryoiro/suzuha/internal/consolidator"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
@@ -25,6 +25,11 @@ import (
 // finalizing a batch. This allows closely-spaced messages to be grouped.
 const DefaultDrainWindow = 3 * time.Second
 
+// acquirer は agent が必要とするメモリ獲得機能を定義する (consumer-side interface)。
+type acquirer interface {
+	Acquire(ctx context.Context, req *memento.AcquireRequest) (*memento.AcquireResult, error)
+}
+
 // Agent is the main event loop that processes events, calls the LLM,
 // executes tools, and sends responses.
 type Agent struct {
@@ -36,7 +41,7 @@ type Agent struct {
 	memory    memory.Store
 	users     user.Store
 	bus       *event.Bus
-	consol    consolidator.Client
+	acquirer  acquirer
 	db              *sql.DB // shared DB for channel activity tracking
 	channelSettings *channelpkg.Store
 	locationStore   *location.Store
@@ -101,7 +106,7 @@ func New(
 	userStore user.Store,
 	bus *event.Bus,
 	chatIface chat.Interface,
-	consolClient consolidator.Client,
+	acq acquirer,
 	db *sql.DB,
 	channelSettings *channelpkg.Store,
 	logger *slog.Logger,
@@ -151,7 +156,7 @@ func New(
 		memory:           memStore,
 		users:            userStore,
 		bus:              bus,
-		consol:           consolClient,
+		acquirer:         acq,
 		db:               db,
 		channelSettings:  channelSettings,
 		logger:       logger,

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/consolidator"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -97,20 +97,18 @@ type mockChat struct {
 func (m *mockChat) Run(_ context.Context) error                  { return nil }
 func (m *mockChat) Send(_ context.Context, _, text string) error { m.sent = append(m.sent, text); return nil }
 
-// --- Mock consolidator.Client ---
+// --- Mock acquirer ---
 
-type mockConsolidator struct {
-	compactResult *consolidator.CompactResult
+type mockAcquirer struct {
+	acquireResult *memento.AcquireResult
 }
 
-func (m *mockConsolidator) Compact(_ context.Context, _ *consolidator.CompactRequest) (*consolidator.CompactResult, error) {
-	if m.compactResult != nil {
-		return m.compactResult, nil
+func (m *mockAcquirer) Acquire(_ context.Context, _ *memento.AcquireRequest) (*memento.AcquireResult, error) {
+	if m.acquireResult != nil {
+		return m.acquireResult, nil
 	}
-	return &consolidator.CompactResult{}, nil
+	return &memento.AcquireResult{}, nil
 }
-
-var _ consolidator.Client = (*mockConsolidator)(nil)
 
 // --- Test Agent builder ---
 
@@ -129,7 +127,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		&mockUsers{},
 		bus,
 		&mockChat{},
-		&mockConsolidator{},
+		&mockAcquirer{},
 		nil, // db — nil is OK for tests that don't track channel activity
 		nil, // channelSettings — nil skips channel filtering
 		slog.Default(),

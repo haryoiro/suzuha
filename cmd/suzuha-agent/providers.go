@@ -17,7 +17,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/chat/cli"
 	"github.com/haryoiro/suzuha/internal/chat/discord"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/consolidator"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/diary"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/research"
@@ -50,7 +50,7 @@ func allPackages(cfgPath string) []func(do.Injector) {
 		memory.Package,
 		llm.Package,
 		mcp.Package,
-		consolidator.Package,
+		memento.Package,
 		user.Package,
 		channel.Package,
 	}
@@ -80,6 +80,49 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Shared DB extracted from memory store.
 		do.ProvideNamed(i, "shared-db", func(i do.Injector) (*sql.DB, error) {
 			return do.MustInvoke[*memory.SQLiteStore](i).DB(), nil
+		})
+
+		// LLM Preset Store (requires shared-db + encryption key).
+		do.Provide(i, func(i do.Injector) (*llm.PresetStore, error) {
+			cfg := do.MustInvoke[*config.Config](i)
+			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+			logger := do.MustInvoke[*slog.Logger](i)
+
+			if cfg.EncryptionKey == "" {
+				return nil, fmt.Errorf("SUZUHA_ENCRYPTION_KEY が設定されていません")
+			}
+			cipher, err := llm.NewAESGCMCipher(cfg.EncryptionKey)
+			if err != nil {
+				return nil, fmt.Errorf("暗号化の初期化に失敗: %w", err)
+			}
+			store := llm.NewPresetStore(db, cipher, logger)
+
+			// config.yaml からプリセットをシード
+			defaultPresetName := ""
+			if len(cfg.LLM.Presets) > 0 {
+				defaultPresetName = cfg.LLM.Presets[0].Name
+			}
+			visionPreset := ""
+			if cfg.Vision.Model != "" {
+				// Vision 用プリセットを config から生成
+				visionPreset = "vision-" + cfg.Vision.Provider
+				store.Save(context.Background(), &llm.Preset{
+					Name:         visionPreset,
+					Provider:     cfg.Vision.Provider,
+					Model:        cfg.Vision.Model,
+					APIKey:       cfg.Vision.APIKey,
+					APIBase:      cfg.Vision.APIBase,
+					Capabilities: []string{"text", "vision"},
+					Source:       "seed",
+				})
+			}
+			if err := store.Seed(context.Background(), cfg.LLM.Presets, llm.SeedDefaults{
+				Conversation: defaultPresetName,
+				Vision:       visionPreset,
+			}); err != nil {
+				logger.Warn("プリセットのシードに失敗", "error", err)
+			}
+			return store, nil
 		})
 
 		// Location store (nil when location tracking is not configured).
@@ -137,7 +180,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvoke[*user.SQLiteStore](i),
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[chat.Interface](i),
-				do.MustInvoke[*consolidator.Server](i),
+				do.MustInvoke[*memento.Acquirer](i),
 				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
 				do.MustInvoke[*channel.Store](i),
 				do.MustInvoke[*slog.Logger](i),
@@ -194,7 +237,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				topics.New(),
 				research.New(searxURL, 5),
 				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
-				forget.New(do.MustInvoke[*consolidator.Server](i)),
+				forget.New(do.MustInvoke[*memento.Consolidator](i)),
 				diary.New(),
 			}
 

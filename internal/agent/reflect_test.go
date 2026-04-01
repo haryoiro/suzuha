@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/consolidator"
 	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -97,26 +97,26 @@ func TestDoCompactWith_ResetsInjectedUsers(t *testing.T) {
 	}
 }
 
-// trackingConsolidator records whether Compact was called and what was passed.
-type trackingConsolidator struct {
+// trackingAcquirer records whether Acquire was called and what was passed.
+type trackingAcquirer struct {
 	called   bool
 	messages []llm.Message
 }
 
-func (c *trackingConsolidator) Compact(_ context.Context, req *consolidator.CompactRequest) (*consolidator.CompactResult, error) {
+func (c *trackingAcquirer) Acquire(_ context.Context, req *memento.AcquireRequest) (*memento.AcquireResult, error) {
 	c.called = true
 	c.messages = req.Messages
-	return &consolidator.CompactResult{
+	return &memento.AcquireResult{
 		Memories: []memory.Memory{
 			{Type: memory.MemoryTypeWorld, Content: "extracted"},
 		},
 	}, nil
 }
 
-func TestDoCompactWith_CallsConsolidator(t *testing.T) {
-	tc := &trackingConsolidator{}
+func TestDoCompactWith_CallsAcquirer(t *testing.T) {
+	tc := &trackingAcquirer{}
 	ag := newTestAgent(func(a *Agent) {
-		a.consol = tc
+		a.acquirer = tc
 	})
 	ctx := context.Background()
 	agentCtx := ag.contexts[SourceKeyDiscord]
@@ -128,10 +128,10 @@ func TestDoCompactWith_CallsConsolidator(t *testing.T) {
 	ag.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 
 	if !tc.called {
-		t.Error("consolidator should have been called")
+		t.Error("acquirer should have been called")
 	}
 	if len(tc.messages) != 2 {
-		t.Errorf("consolidator should receive 2 messages, got %d", len(tc.messages))
+		t.Errorf("acquirer should receive 2 messages, got %d", len(tc.messages))
 	}
 	// Context should still be cleared.
 	if got := len(agentCtx.Messages()); got != 0 {
@@ -139,9 +139,9 @@ func TestDoCompactWith_CallsConsolidator(t *testing.T) {
 	}
 }
 
-func TestDoCompactWith_NoConsolidator(t *testing.T) {
+func TestDoCompactWith_NoAcquirer(t *testing.T) {
 	ag := newTestAgent(func(a *Agent) {
-		a.consol = nil
+		a.acquirer = nil
 	})
 	ctx := context.Background()
 	agentCtx := ag.contexts[SourceKeyDiscord]
@@ -153,17 +153,17 @@ func TestDoCompactWith_NoConsolidator(t *testing.T) {
 
 	ag.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 
-	// Should still clear even without consolidator.
+	// Should still clear even without acquirer.
 	if got := len(agentCtx.Messages()); got != 0 {
 		t.Errorf("expected 0 messages, got %d", got)
 	}
 }
 
 func TestCompactAsyncFor_SkipsConcurrent(t *testing.T) {
-	// Use a slow consolidator to test concurrent skip.
-	slow := &slowConsolidator{delay: 100 * time.Millisecond}
+	// Use a slow acquirer to test concurrent skip.
+	slow := &slowAcquirer{delay: 100 * time.Millisecond}
 	ag := newTestAgent(func(a *Agent) {
-		a.consol = slow
+		a.acquirer = slow
 	})
 	agentCtx := ag.contexts[SourceKeyDiscord]
 
@@ -181,17 +181,17 @@ func TestCompactAsyncFor_SkipsConcurrent(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	if slow.callCount != 1 {
-		t.Errorf("expected consolidator called once, got %d", slow.callCount)
+		t.Errorf("expected acquirer called once, got %d", slow.callCount)
 	}
 }
 
-type slowConsolidator struct {
+type slowAcquirer struct {
 	delay     time.Duration
 	callCount int
 }
 
-func (c *slowConsolidator) Compact(_ context.Context, _ *consolidator.CompactRequest) (*consolidator.CompactResult, error) {
+func (c *slowAcquirer) Acquire(_ context.Context, _ *memento.AcquireRequest) (*memento.AcquireResult, error) {
 	c.callCount++
 	time.Sleep(c.delay)
-	return &consolidator.CompactResult{}, nil
+	return &memento.AcquireResult{}, nil
 }

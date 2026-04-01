@@ -1,4 +1,4 @@
-package consolidator
+package memento
 
 import (
 	"sort"
@@ -8,6 +8,7 @@ import (
 )
 
 // MergeSourceTag はメンテナンス統合で生成されたメモリに付与するメタデータタグ。
+// DB に格納済みの値のため変更しないこと。
 const MergeSourceTag = "consolidator_merge"
 
 // mergeMemoryFields は複数のソースメモリからメタデータと構造化フィールドを統合し、
