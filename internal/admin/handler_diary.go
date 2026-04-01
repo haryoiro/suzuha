@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
-	"github.com/haryoiro/suzuha/internal/diary"
+	"github.com/haryoiro/suzuha/internal/feature/diary"
 )
 
 func (h *AdminHandler) DiaryList(ctx context.Context, params api.DiaryListParams) (*api.DiaryListOK, error) {

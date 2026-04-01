@@ -10,7 +10,7 @@ import (
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/diary"
+	"github.com/haryoiro/suzuha/internal/feature/diary"
 	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/jtime"

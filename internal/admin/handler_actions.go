@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/jtime"
-	"github.com/haryoiro/suzuha/internal/action"
+	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/robfig/cron/v3"
 )
 

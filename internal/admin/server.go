@@ -12,7 +12,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/action"
+	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
