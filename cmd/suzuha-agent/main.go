@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/haryoiro/suzuha/external/stt"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
@@ -36,7 +38,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
-	"github.com/haryoiro/suzuha/internal/voice"
 	"github.com/samber/do/v2"
 )
 
@@ -163,22 +164,22 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 
 		// Voice chat setup.
 		if cfg.Voice.Enabled {
-			sttConfigs := make([]voice.STTProviderConfig, len(cfg.Voice.STT))
+			sttConfigs := make([]stt.STTProviderConfig, len(cfg.Voice.STT))
 			for i, p := range cfg.Voice.STT {
-				sttConfigs[i] = voice.STTProviderConfig{
+				sttConfigs[i] = stt.STTProviderConfig{
 					Provider: p.Provider,
 					APIKey:   p.APIKey,
 					Model:    p.Model,
 					URL:      p.URL,
 				}
 			}
-			sttClient, err := voice.NewSTTChain(sttConfigs, logger)
+			sttClient, err := stt.NewSTTChain(sttConfigs, logger)
 			if err != nil {
 				logger.Error("voice: STT初期化失敗", "error", err)
 			} else {
-				ttsConfigs := make([]voice.TTSProviderConfig, len(cfg.Voice.TTS))
+				ttsConfigs := make([]tts.TTSProviderConfig, len(cfg.Voice.TTS))
 				for i, p := range cfg.Voice.TTS {
-					ttsConfigs[i] = voice.TTSProviderConfig{
+					ttsConfigs[i] = tts.TTSProviderConfig{
 						Provider:  p.Provider,
 						URL:       p.URL,
 						SpeakerID: p.SpeakerID,
@@ -186,7 +187,7 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 						Style:     p.Style,
 					}
 				}
-				ttsClient, ttsErr := voice.NewTTSChain(ttsConfigs, logger)
+				ttsClient, ttsErr := tts.NewTTSChain(ttsConfigs, logger)
 				if ttsErr != nil {
 					logger.Error("voice: TTS初期化失敗", "error", ttsErr)
 				} else {
@@ -709,11 +710,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 	// Physical device (ESP32) WebSocket endpoint.
 	{
 		bus := do.MustInvoke[*event.Bus](injector)
-		var ttsClient voice.TTS
+		var ttsClient tts.TTS
 		if cfg.Voice.Enabled && len(cfg.Voice.TTS) > 0 {
-			deviceTTSConfigs := make([]voice.TTSProviderConfig, len(cfg.Voice.TTS))
+			deviceTTSConfigs := make([]tts.TTSProviderConfig, len(cfg.Voice.TTS))
 			for i, p := range cfg.Voice.TTS {
-				deviceTTSConfigs[i] = voice.TTSProviderConfig{
+				deviceTTSConfigs[i] = tts.TTSProviderConfig{
 					Provider:  p.Provider,
 					URL:       p.URL,
 					SpeakerID: p.SpeakerID,
@@ -721,7 +722,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 					Style:     p.Style,
 				}
 			}
-			ttsClient, _ = voice.NewTTSChain(deviceTTSConfigs, logger)
+			ttsClient, _ = tts.NewTTSChain(deviceTTSConfigs, logger)
 		}
 		yoloURL := os.Getenv("YOLO_URL")
 		if yoloURL == "" {
@@ -731,9 +732,9 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		var deviceChannel string
 		db := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
 		_ = db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = 1 LIMIT 1").Scan(&deviceChannel)
-		var sttClient voice.STT
+		var sttClient stt.STT
 		if cfg.Voice.Enabled && len(cfg.Voice.STT) > 0 {
-			sttClient, _ = voice.NewSTT(voice.STTProviderConfig{
+			sttClient, _ = stt.NewSTT(stt.STTProviderConfig{
 				Provider: cfg.Voice.STT[0].Provider,
 				APIKey:   cfg.Voice.STT[0].APIKey,
 				Model:    cfg.Voice.STT[0].Model,

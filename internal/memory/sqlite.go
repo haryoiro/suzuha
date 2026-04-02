@@ -14,7 +14,7 @@ import (
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/embedding"
+	"github.com/haryoiro/suzuha/external/embedding"
 	_ "github.com/mattn/go-sqlite3" // register sqlite3 driver
 )
 

@@ -3,8 +3,8 @@ package memory
 import (
 	"log/slog"
 
+	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/samber/do/v2"
 )
 

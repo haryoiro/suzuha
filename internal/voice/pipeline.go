@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/haryoiro/suzuha/external/stt"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/event"
 )
 
@@ -21,8 +23,8 @@ func base64EncodeBytes(b []byte) string {
 type Pipeline struct {
 	discordSession *discordgo.Session
 	bus            *event.Bus
-	stt            STT
-	tts            TTS
+	stt            stt.STT
+	tts            tts.TTS
 	logger         *slog.Logger
 	streamWatcher  *StreamWatcher
 
@@ -31,7 +33,7 @@ type Pipeline struct {
 }
 
 // NewPipeline creates a voice pipeline.
-func NewPipeline(ds *discordgo.Session, bus *event.Bus, sttClient STT, ttsClient TTS, logger *slog.Logger) *Pipeline {
+func NewPipeline(ds *discordgo.Session, bus *event.Bus, sttClient stt.STT, ttsClient tts.TTS, logger *slog.Logger) *Pipeline {
 	p := &Pipeline{
 		discordSession: ds,
 		bus:            bus,
@@ -87,7 +89,7 @@ func (p *Pipeline) handleStreamPreview(guildID string, jpeg []byte) {
 
 // SetSpeakerID changes the VOICEVOX speaker ID at runtime.
 func (p *Pipeline) SetSpeakerID(id int) {
-	if vc, ok := p.tts.(*VoicevoxClient); ok {
+	if vc, ok := p.tts.(*tts.VoicevoxClient); ok {
 		vc.SetSpeakerID(id)
 	}
 }

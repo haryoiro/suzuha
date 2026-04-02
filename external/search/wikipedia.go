@@ -1,4 +1,4 @@
-package websearch
+package search
 
 import (
 	"context"

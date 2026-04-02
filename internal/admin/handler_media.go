@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/embedding"
+	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -112,8 +112,8 @@ func (h *AdminHandler) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"key":      key,
-		"modality": modality,
+		"key":       key,
+		"modality":  modality,
 		"mime_type": mime,
 	})
 }

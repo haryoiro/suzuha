@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/websearch"
 )
 
 const (
@@ -101,7 +101,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		maxDepth = defaultMaxDepth
 	}
 
-	searx := websearch.NewSearXNG(wc.SearXNGURL)
+	searx := search.NewSearXNG(wc.SearXNGURL)
 	systemPrompt := cc.SystemPrompt
 
 	// --- Step 1: Determine starting point ---
@@ -130,7 +130,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 
 	if startTitle == "" {
-		article, err := websearch.RandomArticle(ctx)
+		article, err := search.RandomArticle(ctx)
 		if err != nil {
 			cc.Logger.Error("wander: wikipedia random", "error", err)
 			return nil
@@ -149,7 +149,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	for depth := 0; depth < maxDepth; depth++ {
 		// Pre-search related topics so LLM can pick in the same call.
-		var searchResults []websearch.SearchResult
+		var searchResults []search.SearchResult
 		if depth < maxDepth-1 {
 			// Broad search based on current title to give LLM options.
 			searchResults, _ = searx.Search(ctx, title, searchResultsMax)
@@ -204,7 +204,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		}
 
 		// Use LLM's pick if valid, otherwise search for next_query.
-		var picked *websearch.SearchResult
+		var picked *search.SearchResult
 		if eval.Pick > 0 && eval.Pick <= len(searchResults) {
 			picked = &searchResults[eval.Pick-1]
 		} else {

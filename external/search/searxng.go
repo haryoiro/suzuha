@@ -1,4 +1,4 @@
-package websearch
+package search
 
 import (
 	"context"
@@ -20,7 +20,7 @@ const maxFetchBytes = 512 * 1024 // 512KB raw HTML limit
 type SearchResult struct {
 	Title     string `json:"title"`
 	URL       string `json:"url"`
-	Content   string `json:"content"`   // snippet
+	Content   string `json:"content"` // snippet
 	Engine    string `json:"engine"`
 	Thumbnail string `json:"thumbnail"` // thumbnail URL (optional)
 	ImgSrc    string `json:"img_src"`   // full image URL (optional, images category)

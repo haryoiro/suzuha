@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/websearch"
+	"github.com/haryoiro/suzuha/external/search"
 )
 
 const (
@@ -29,8 +29,8 @@ type source struct {
 var skipExtensions = []string{".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".tar", ".gz"}
 
 // filterHTMLResults removes non-HTML URLs (PDF, docs, etc.) from search results.
-func filterHTMLResults(results []websearch.SearchResult) []websearch.SearchResult {
-	var out []websearch.SearchResult
+func filterHTMLResults(results []search.SearchResult) []search.SearchResult {
+	var out []search.SearchResult
 	for _, r := range results {
 		lower := strings.ToLower(r.URL)
 		skip := false
@@ -50,8 +50,8 @@ func filterHTMLResults(results []websearch.SearchResult) []websearch.SearchResul
 // fetchAll fetches multiple pages in parallel using readability.
 func fetchAll(
 	ctx context.Context,
-	searx *websearch.SearXNGClient,
-	results []websearch.SearchResult,
+	searx *search.SearXNGClient,
+	results []search.SearchResult,
 	maxSources int,
 	maxRunes int,
 ) []source {
@@ -64,7 +64,7 @@ func fetchAll(
 	var wg sync.WaitGroup
 	for i, r := range results {
 		wg.Add(1)
-		go func(idx int, sr websearch.SearchResult) {
+		go func(idx int, sr search.SearchResult) {
 			defer wg.Done()
 			start := time.Now()
 			content, err := searx.FetchPage(ctx, sr.URL, maxRunes)

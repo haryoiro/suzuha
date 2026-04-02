@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/embedding"
+	"github.com/haryoiro/suzuha/external/embedding"
 )
 
 // MemoryType categorizes memory entries.
@@ -40,9 +40,9 @@ type Memory struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 
 	// 構造化フィールド — コンソリデーターが抽出し、検索・フィルタリングに使用する。
-	Keywords  []string   `json:"keywords,omitempty"`  // 検索キーワード（名前、エンティティ、トピック語）
-	Topic     string     `json:"topic,omitempty"`     // トピック分類（"技術/Go", "日常/食事"）
-	Persons   []string   `json:"persons,omitempty"`   // 関連ユーザーID（user_id + participants を統合）
+	Keywords  []string   `json:"keywords,omitempty"`   // 検索キーワード（名前、エンティティ、トピック語）
+	Topic     string     `json:"topic,omitempty"`      // トピック分類（"技術/Go", "日常/食事"）
+	Persons   []string   `json:"persons,omitempty"`    // 関連ユーザーID（user_id + participants を統合）
 	EventTime *time.Time `json:"event_time,omitempty"` // イベント発生日時（CreatedAt とは異なる）
 }
 
@@ -195,4 +195,3 @@ type ListOpts struct {
 	OrderBy  string     // "created_at" | "updated_at", default "updated_at"
 	OrderDir string     // "asc" | "desc", default "desc"
 }
-

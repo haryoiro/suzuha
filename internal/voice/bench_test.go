@@ -70,21 +70,3 @@ func BenchmarkMonoToStereo(b *testing.B) {
 		monoToStereo(pcm)
 	}
 }
-
-func BenchmarkPcmToWAV_1s(b *testing.B) {
-	pcm := generateTone(frameSamples1s, 5000)
-	b.SetBytes(int64(len(pcm)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pcmToWAV(pcm, 48000, 1, 16)
-	}
-}
-
-func BenchmarkPcmToWAV_5s(b *testing.B) {
-	pcm := generateTone(frameSamples1s*5, 5000)
-	b.SetBytes(int64(len(pcm)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pcmToWAV(pcm, 48000, 1, 16)
-	}
-}

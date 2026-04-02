@@ -13,20 +13,20 @@ import (
 )
 
 // Compile-time checks for optional interfaces.
-var _ chat.Replier  = (*Chat)(nil)
+var _ chat.Replier = (*Chat)(nil)
 var _ chat.IDSender = (*Chat)(nil)
-var _ chat.Typer    = (*Chat)(nil)
+var _ chat.Typer = (*Chat)(nil)
 
 // Chat implements chat.Interface for Discord using discordgo.
 type Chat struct {
-	token            string
-	botID            string
-	bus              *event.Bus
-	log              *slog.Logger
-	session          *discordgo.Session
-	onReady          func(*discordgo.Session)
-	onChannelDelete  func(channelID string)
-	voicePipeline    *voice.Pipeline
+	token           string
+	botID           string
+	bus             *event.Bus
+	log             *slog.Logger
+	session         *discordgo.Session
+	onReady         func(*discordgo.Session)
+	onChannelDelete func(channelID string)
+	voicePipeline   *voice.Pipeline
 }
 
 // OnChannelDelete registers a callback fired when a Discord channel is deleted.

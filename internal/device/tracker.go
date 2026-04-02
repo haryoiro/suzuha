@@ -4,23 +4,25 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+
+	"github.com/haryoiro/suzuha/external/detect"
 )
 
 // TrackerConfig holds tunable parameters for the object tracker.
 type TrackerConfig struct {
-	TargetLabel    string  `json:"target_label"`     // lock to single label ("" = cascade mode)
-	ConfirmFrames  int     `json:"confirm_frames"`   // consecutive detections to confirm
-	LostFrames     int     `json:"lost_frames"`      // consecutive misses to drop
-	IoUThreshold   float64 `json:"iou_threshold"`    // min IoU for matching
-	MinConfidence  float64 `json:"min_confidence"`   // ignore detections below this
-	SmoothingAlpha float64 `json:"smoothing_alpha"`  // EMA alpha (0-1)
-	DeadZone       float64 `json:"dead_zone"`        // fraction of frame (0-1)
+	TargetLabel      string  `json:"target_label"`      // lock to single label ("" = cascade mode)
+	ConfirmFrames    int     `json:"confirm_frames"`    // consecutive detections to confirm
+	LostFrames       int     `json:"lost_frames"`       // consecutive misses to drop
+	IoUThreshold     float64 `json:"iou_threshold"`     // min IoU for matching
+	MinConfidence    float64 `json:"min_confidence"`    // ignore detections below this
+	SmoothingAlpha   float64 `json:"smoothing_alpha"`   // EMA alpha (0-1)
+	DeadZone         float64 `json:"dead_zone"`         // fraction of frame (0-1)
 	ProportionalGain float64 `json:"proportional_gain"` // deg per pixel
-	MaxDegPerFrame float64 `json:"max_deg_per_frame"`
-	FrameWidth     int     `json:"frame_width"`
-	FrameHeight    int     `json:"frame_height"`
-	InvertPan      bool    `json:"invert_pan"`
-	InvertTilt     bool    `json:"invert_tilt"`
+	MaxDegPerFrame   float64 `json:"max_deg_per_frame"`
+	FrameWidth       int     `json:"frame_width"`
+	FrameHeight      int     `json:"frame_height"`
+	InvertPan        bool    `json:"invert_pan"`
+	InvertTilt       bool    `json:"invert_tilt"`
 }
 
 // labelPriority returns the tracking priority for a label.
@@ -42,7 +44,7 @@ func labelPriority(label string) int {
 // targetPoint returns the point to aim at for a given detection.
 // For body, aim at the estimated head position (top 12% of bbox).
 // For face/head, aim at bbox center.
-func targetPoint(d Detection) (float64, float64) {
+func targetPoint(d detect.Detection) (float64, float64) {
 	if d.Label == "body" {
 		cx := float64(d.BBox[0]+d.BBox[2]) / 2.0
 		top := float64(d.BBox[1])
@@ -188,7 +190,7 @@ func (t *ObjectTracker) ApplyPartial(p TrackerPatch) {
 }
 
 // Feed processes a new set of YOLO detections. Called from handleImage goroutine.
-func (t *ObjectTracker) Feed(detections []Detection) {
+func (t *ObjectTracker) Feed(detections []detect.Detection) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -197,7 +199,7 @@ func (t *ObjectTracker) Feed(detections []Detection) {
 	}
 
 	// Step 1: Filter detections
-	var relevant []Detection
+	var relevant []detect.Detection
 	for _, d := range detections {
 		if d.Confidence < t.cfg.MinConfidence {
 			continue
@@ -217,7 +219,7 @@ func (t *ObjectTracker) Feed(detections []Detection) {
 	}
 
 	// Step 2: IoU matching (greedy)
-	matched := make([]bool, len(relevant))    // which detections are matched
+	matched := make([]bool, len(relevant))     // which detections are matched
 	objMatched := make([]bool, len(t.objects)) // which tracked objects are matched
 
 	for i, obj := range t.objects {
@@ -364,7 +366,7 @@ func (t *ObjectTracker) Feed(detections []Detection) {
 	}()
 }
 
-func (t *ObjectTracker) updateMatched(obj *trackedObject, d Detection) {
+func (t *ObjectTracker) updateMatched(obj *trackedObject, d detect.Detection) {
 	obj.bbox = d.BBox
 	obj.confidence = d.Confidence
 	obj.label = d.Label

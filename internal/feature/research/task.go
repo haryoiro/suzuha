@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/websearch"
 )
 
 type taskConfig struct {
@@ -68,9 +68,9 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		maxSources = defaultMaxSources
 	}
 
-	searx := websearch.NewSearXNG(tc.SearXNGURL)
+	searx := search.NewSearXNG(tc.SearXNGURL)
 
-	article, err := websearch.RandomArticle(ctx)
+	article, err := search.RandomArticle(ctx)
 	if err != nil {
 		cc.Logger.Error("research: wikipedia random", "error", err)
 		return nil

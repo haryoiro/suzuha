@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/embedding"
+	"github.com/haryoiro/suzuha/external/embedding"
 )
 
 func newTestStore(t *testing.T) *SQLiteStore {
@@ -129,8 +129,10 @@ func (e *testEmbedder) EmbedBatch(_ context.Context, inputs [][]embedding.Part) 
 	}
 	return out, nil
 }
-func (e *testEmbedder) Dimensions() int                  { return e.dims }
-func (e *testEmbedder) Modalities() []embedding.Modality { return []embedding.Modality{embedding.ModalityText} }
+func (e *testEmbedder) Dimensions() int { return e.dims }
+func (e *testEmbedder) Modalities() []embedding.Modality {
+	return []embedding.Modality{embedding.ModalityText}
+}
 
 func TestSaveWithEmbedFunc(t *testing.T) {
 	dir := t.TempDir()

@@ -2,22 +2,6 @@ package voice
 
 import "encoding/binary"
 
-// wavSampleRate extracts the sample rate from a WAV header.
-func wavSampleRate(wav []byte) int {
-	if len(wav) < 28 {
-		return 0
-	}
-	return int(binary.LittleEndian.Uint32(wav[24:28]))
-}
-
-// wavPCM strips the 44-byte WAV header and returns raw PCM data.
-func wavPCM(wav []byte) []byte {
-	if len(wav) <= 44 {
-		return nil
-	}
-	return wav[44:]
-}
-
 // ResamplePCM resamples 16-bit LE mono PCM from srcRate to dstRate.
 // For downsampling, uses averaging (box filter) as anti-aliasing.
 // For upsampling, uses linear interpolation.

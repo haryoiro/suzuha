@@ -51,7 +51,7 @@ func (e *TextOnlyEmbedder) EmbedBatch(ctx context.Context, inputs [][]Part) ([][
 	return results, nil
 }
 
-func (e *TextOnlyEmbedder) Dimensions() int       { return e.dims }
+func (e *TextOnlyEmbedder) Dimensions() int        { return e.dims }
 func (e *TextOnlyEmbedder) Modalities() []Modality { return []Modality{ModalityText} }
 
 var _ Embedder = (*TextOnlyEmbedder)(nil)

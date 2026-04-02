@@ -93,7 +93,7 @@ func (e *GeminiEmbedder) EmbedBatch(ctx context.Context, inputs [][]Part) ([][]f
 }
 
 func (e *GeminiEmbedder) Dimensions() int        { return e.dims }
-func (e *GeminiEmbedder) Modalities() []Modality  { return []Modality{ModalityText, ModalityImage} }
+func (e *GeminiEmbedder) Modalities() []Modality { return []Modality{ModalityText, ModalityImage} }
 
 // partsToContent converts embedding Parts to a genai.Content.
 // Role is intentionally left empty — the embedding API does not require it,

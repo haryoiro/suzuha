@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/memento"
-	"github.com/haryoiro/suzuha/internal/embedding"
+	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -17,7 +17,7 @@ import (
 
 type mockMemory struct{}
 
-func (m *mockMemory) Save(_ context.Context, _ *memory.Memory) error            { return nil }
+func (m *mockMemory) Save(_ context.Context, _ *memory.Memory) error { return nil }
 func (m *mockMemory) Search(_ context.Context, _ string, _ int) ([]memory.Memory, error) {
 	return nil, nil
 }
@@ -73,7 +73,7 @@ func (m *mockUsers) Resolve(_ context.Context, _, _, _ string) (*user.User, erro
 func (m *mockUsers) Get(_ context.Context, _ string) (*user.User, error) {
 	return &user.User{ID: "u1"}, nil
 }
-func (m *mockUsers) UpdateDisplayName(_ context.Context, _, _ string) error   { return nil }
+func (m *mockUsers) UpdateDisplayName(_ context.Context, _, _ string) error          { return nil }
 func (m *mockUsers) TrackGuildChannel(_ context.Context, _, _, _, _, _ string) error { return nil }
 func (m *mockUsers) GetUserGuilds(_ context.Context, _ string) ([]user.UserGuild, error) {
 	return nil, nil
@@ -94,8 +94,11 @@ type mockChat struct {
 	sent []string
 }
 
-func (m *mockChat) Run(_ context.Context) error                  { return nil }
-func (m *mockChat) Send(_ context.Context, _, text string) error { m.sent = append(m.sent, text); return nil }
+func (m *mockChat) Run(_ context.Context) error { return nil }
+func (m *mockChat) Send(_ context.Context, _, text string) error {
+	m.sent = append(m.sent, text)
+	return nil
+}
 
 // --- Mock acquirer ---
 

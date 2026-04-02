@@ -7,6 +7,8 @@ import (
 	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/haryoiro/suzuha/external/stt"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/voice"
 )
@@ -19,7 +21,7 @@ func (c *Chat) VoicePipeline() *voice.Pipeline {
 
 // SetupVoice initializes the voice pipeline with STT and TTS clients.
 // Must be called after Discord session is established (in OnReady).
-func (c *Chat) SetupVoice(sttClient voice.STT, ttsClient voice.TTS) {
+func (c *Chat) SetupVoice(sttClient stt.STT, ttsClient tts.TTS) {
 	if c.session == nil {
 		c.log.Warn("voice: セッション未初期化のためセットアップをスキップ")
 		return
@@ -46,7 +48,7 @@ func NewVoiceJoin(pipeline *voice.Pipeline, session *discordgo.Session, allowedC
 	return &voiceJoinTool{pipeline: pipeline, session: session, allowedChannels: allowed, logger: logger}
 }
 
-func (t *voiceJoinTool) Name() string    { return "voice_join" }
+func (t *voiceJoinTool) Name() string   { return "voice_join" }
 func (t *voiceJoinTool) ReadOnly() bool { return false }
 func (t *voiceJoinTool) Description() string {
 	return "ボイスチャンネルに参加する。ユーザーに「VCに来て」と言われたときに使う。user_idを指定するとそのユーザーがいるVCに自動参加する。"
@@ -144,7 +146,7 @@ func NewVoiceLeave(pipeline *voice.Pipeline, session *discordgo.Session, logger 
 	return &voiceLeaveTool{pipeline: pipeline, session: session, logger: logger}
 }
 
-func (t *voiceLeaveTool) Name() string    { return "voice_leave" }
+func (t *voiceLeaveTool) Name() string   { return "voice_leave" }
 func (t *voiceLeaveTool) ReadOnly() bool { return false }
 func (t *voiceLeaveTool) Description() string {
 	return "現在参加しているボイスチャンネルから離脱する。"

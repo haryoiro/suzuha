@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/external/embedding"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/feature/diary"
-	"github.com/haryoiro/suzuha/internal/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/feature/diary"
 	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -56,11 +56,11 @@ func parseDataURI(uri string) ([]byte, string) {
 
 // Conversation-state thresholds — tunables for directive priority 2 & 3.
 const (
-	convActiveWindow   = 2 * time.Minute // priority 2: bot spoke within this window
-	convActiveMaxMsgs  = 3               // priority 2: max user messages since bot spoke
-	convRecentWindow   = 5 * time.Minute // priority 3: bot spoke within this window
-	convRecentMaxMsgs  = 6               // priority 3: max user messages since bot spoke
-	convScanLimit      = 50              // max messages to scan backwards
+	convActiveWindow  = 2 * time.Minute // priority 2: bot spoke within this window
+	convActiveMaxMsgs = 3               // priority 2: max user messages since bot spoke
+	convRecentWindow  = 5 * time.Minute // priority 3: bot spoke within this window
+	convRecentMaxMsgs = 6               // priority 3: max user messages since bot spoke
+	convScanLimit     = 50              // max messages to scan backwards
 
 	// noTimeReport is appended to all directives.
 	noTimeReport = "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
@@ -117,7 +117,7 @@ func conversationStateFrom(msgs []llm.Message, channel, botID string) convState 
 
 	cs.recentDistinctUsers = len(userSet)
 	if cs.botLastSpokeAgo < 0 {
-		cs.botLastSpokeAgo = 0 // normalize: never spoke → 0 (handled by large messagesSince)
+		cs.botLastSpokeAgo = 0                   // normalize: never spoke → 0 (handled by large messagesSince)
 		cs.messagesSinceBotSpoke = convScanLimit // ensure no active-conversation match
 	}
 	return cs

@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/external/detect"
+	"github.com/haryoiro/suzuha/external/stt"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/voice"
 	"golang.org/x/sync/semaphore"
@@ -36,14 +39,14 @@ type Speaker interface {
 
 // Hub manages device and web client connections.
 type Hub struct {
-	mu      sync.RWMutex
-	clients map[string]Client // all connected clients (ESP + Web)
-	bus     *event.Bus
-	tts     voice.TTS
-	stt     voice.STT
-	yolo    *YOLOClient
-	frames  *FrameStore
-	changes *ChangeDetector
+	mu        sync.RWMutex
+	clients   map[string]Client // all connected clients (ESP + Web)
+	bus       *event.Bus
+	tts       tts.TTS
+	stt       stt.STT
+	yolo      *detect.YOLOClient
+	frames    *FrameStore
+	changes   *ChangeDetector
 	tracker   *ObjectTracker
 	detectSem *semaphore.Weighted // limit concurrent YOLO detections to 1
 	logger    *slog.Logger
@@ -59,16 +62,16 @@ type Hub struct {
 
 // NewHub creates a new device Hub.
 // defaultChannel is the Discord channel ID for vision change notifications.
-func NewHub(bus *event.Bus, tts voice.TTS, stt voice.STT, yoloURL, defaultChannel, ownerID, ownerName string, logger *slog.Logger) *Hub {
-	var yolo *YOLOClient
+func NewHub(bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, yoloURL, defaultChannel, ownerID, ownerName string, logger *slog.Logger) *Hub {
+	var yolo *detect.YOLOClient
 	if yoloURL != "" {
-		yolo = NewYOLOClient(yoloURL)
+		yolo = detect.NewYOLOClient(yoloURL)
 	}
 	h := &Hub{
 		clients:   make(map[string]Client),
 		bus:       bus,
-		tts:       tts,
-		stt:       stt,
+		tts:       ttsClient,
+		stt:       sttClient,
 		yolo:      yolo,
 		frames:    NewFrameStore(),
 		changes:   NewChangeDetector(bus, 30*time.Second, defaultChannel),

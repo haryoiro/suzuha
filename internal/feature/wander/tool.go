@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
-	"github.com/haryoiro/suzuha/internal/websearch"
 )
 
 // WanderTool allows the LLM to trigger a casual web wandering session.
 type WanderTool struct {
-	searx        *websearch.SearXNGClient
+	searx        *search.SearXNGClient
 	llm          *llm.Client
 	mem          memory.Store
 	systemPrompt string
@@ -28,7 +28,7 @@ func NewWanderTool(searxngURL string, llmClient *llm.Client, memStore memory.Sto
 		maxDepth = defaultMaxDepth
 	}
 	return &WanderTool{
-		searx:        websearch.NewSearXNG(searxngURL),
+		searx:        search.NewSearXNG(searxngURL),
 		llm:          llmClient,
 		mem:          memStore,
 		systemPrompt: systemPrompt,
@@ -36,7 +36,7 @@ func NewWanderTool(searxngURL string, llmClient *llm.Client, memStore memory.Sto
 	}
 }
 
-func (t *WanderTool) Name() string    { return "wander" }
+func (t *WanderTool) Name() string   { return "wander" }
 func (t *WanderTool) ReadOnly() bool { return true }
 func (t *WanderTool) Description() string {
 	return "ネットを散歩して情報を探索する。気になるトピックから出発して関連情報を芋づる式にたどる。ゆっくり深く探索したい時に使う。結果はメモリに保存されるが、みんなには共有されていないので共有したかったら知ったことを共有しよう。"
@@ -90,7 +90,7 @@ func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth i
 	if startQuery != "" {
 		results, err := t.searx.Search(ctx, startQuery, searchResultsMax)
 		if err != nil || len(results) == 0 {
-			article, wErr := websearch.RandomArticle(ctx)
+			article, wErr := search.RandomArticle(ctx)
 			if wErr != nil {
 				return "", fmt.Errorf("wander: 検索結果がなくWikipediaも失敗しました: %w", wErr)
 			}
@@ -101,7 +101,7 @@ func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth i
 			content = results[0].Content
 		}
 	} else {
-		article, err := websearch.RandomArticle(ctx)
+		article, err := search.RandomArticle(ctx)
 		if err != nil {
 			return "", fmt.Errorf("wander: Wikipediaランダム記事の取得に失敗: %w", err)
 		}
@@ -114,7 +114,7 @@ func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth i
 
 	for depth := 0; depth < maxDepth; depth++ {
 		// Pre-search so LLM can evaluate + pick in one call.
-		var searchResults []websearch.SearchResult
+		var searchResults []search.SearchResult
 		if depth < maxDepth-1 {
 			searchResults, _ = t.searx.Search(ctx, title, searchResultsMax)
 		}
@@ -137,7 +137,7 @@ func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth i
 		}
 
 		// Use LLM's pick if valid, otherwise search with next_query.
-		var picked *websearch.SearchResult
+		var picked *search.SearchResult
 		if eval.Pick > 0 && eval.Pick <= len(searchResults) {
 			picked = &searchResults[eval.Pick-1]
 		} else {

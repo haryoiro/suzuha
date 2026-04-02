@@ -1,4 +1,4 @@
-package voice
+package stt
 
 // pcmToWAV wraps raw PCM data in a minimal WAV header.
 func pcmToWAV(pcm []byte, sampleRate, channels, bitsPerSample int) []byte {

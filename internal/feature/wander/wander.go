@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/websearch"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
@@ -20,7 +20,7 @@ func evaluateAndPick(
 	systemPrompt string,
 	title, content string,
 	path []hop,
-	searchResults []websearch.SearchResult,
+	searchResults []search.SearchResult,
 ) (*evaluation, error) {
 	var sb strings.Builder
 
@@ -38,7 +38,7 @@ func evaluateAndPick(
 
 	if len(searchResults) > 0 {
 		sb.WriteString("関連する検索結果:\n")
-		sb.WriteString(websearch.TruncateResults(searchResults, snippetMaxRunes))
+		sb.WriteString(search.TruncateResults(searchResults, snippetMaxRunes))
 		sb.WriteString("\n")
 		sb.WriteString("気になることがあったら感想と、上の検索結果から読みたいものの番号を教えて。\n")
 		sb.WriteString("もう十分なら pick を 0 にして。\n\n")
