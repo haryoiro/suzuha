@@ -122,6 +122,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 
 	maxIter := 10
 	var intermediateText string
+	var lowProgressStreak int // 連続して出力が少ない回数 (diminishing returns 検知用)
 
 	for iter := range maxIter {
 		// Send typing indicator only on subsequent iterations (tool loops),
@@ -159,7 +160,23 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			msgs = agentCtx.MessagesWithSystem()
 		}
 		// Trim messages to fit within max context, reserving space for tools.
-		msgs = trimMessagesToFit(msgs, allTools, a.llm.MaxContextTokens())
+		maxCtx := a.llm.MaxContextTokens()
+		msgs = trimMessagesToFit(msgs, allTools, maxCtx)
+
+		// Reactive Compact: ツールループ中にコンテキストが 90% を超えたら
+		// 緊急圧縮してコンテキストを解放する。
+		if iter > 0 && maxCtx > 0 {
+			estimated := agentCtx.EstimatedTokens()
+			if float64(estimated)/float64(maxCtx) > 0.9 {
+				a.logger.Warn("ツールループ中にコンテキスト逼迫、緊急圧縮",
+					"usage_ratio", fmt.Sprintf("%.2f", float64(estimated)/float64(maxCtx)),
+					"estimated", estimated, "max", maxCtx)
+				a.compactAsyncFor(ctx, agentCtx, sourceKeyFromChannel(channel, a.contexts))
+				// 圧縮後のメッセージで再構築
+				msgs = agentCtx.MessagesWithSystem()
+				msgs = trimMessagesToFit(msgs, allTools, maxCtx)
+			}
+		}
 
 		// チャンネルごとにグルーピングし、現チャンネルを末尾に寄せる。
 		// LLM の recency bias を活かして現チャンネルの会話にフォーカスさせる。
@@ -191,6 +208,19 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 		}
 
 		if !resp.HasToolCalls() {
+			return resp, intermediateText, nil
+		}
+
+		// Diminishing returns detection: 出力トークンが少ない iteration が
+		// 3 回以上続いたらツールループを打ち切る (空回り防止)。
+		if resp.Usage.CompletionTokens < 500 {
+			lowProgressStreak++
+		} else {
+			lowProgressStreak = 0
+		}
+		if lowProgressStreak >= 3 {
+			a.logger.Warn("ツールループの進捗が停滞、打ち切り",
+				"iteration", iter, "low_progress_streak", lowProgressStreak)
 			return resp, intermediateText, nil
 		}
 
@@ -508,6 +538,7 @@ func (a *Agent) executeToolSingle(ctx context.Context, r *toolCallResult, iter i
 }
 
 // executeToolBatchParallel は ReadOnly ツールのバッチを並列実行する。
+// 1 つがエラーになったら他の実行中ツールを中断する (side-channel abort)。
 func (a *Agent) executeToolBatchParallel(ctx context.Context, batch []toolCallResult, iter int) {
 	if len(batch) == 1 {
 		a.executeToolSingle(ctx, &batch[0], iter)
@@ -519,12 +550,20 @@ func (a *Agent) executeToolBatchParallel(ctx context.Context, batch []toolCallRe
 		"count", len(batch),
 		"tools", toolNames(batch))
 
+	batchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	for i := range batch {
 		wg.Add(1)
 		go func(r *toolCallResult) {
 			defer wg.Done()
-			a.executeToolSingle(ctx, r, iter)
+			a.executeToolSingle(batchCtx, r, iter)
+			// エラーが発生したら他の兄弟ツールを中断
+			if r.err != nil {
+				a.logger.Debug("並列ツールでエラー、兄弟を中断", "tool", r.tc.Function.Name)
+				cancel()
+			}
 		}(&batch[i])
 	}
 	wg.Wait()
@@ -561,6 +600,15 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 		content += c.Text
 	}
 
+	// Tool Result Budget: 8KB を超えるツール結果は truncate して
+	// context window の爆発を防ぐ。
+	const maxToolResultBytes = 8192
+	if len(content) > maxToolResultBytes {
+		a.logger.Warn("ツール結果が大きすぎるため切り詰め",
+			"tool", r.tc.Function.Name, "original_bytes", len(content), "max", maxToolResultBytes)
+		content = content[:maxToolResultBytes] + "\n\n... (結果が大きいため省略)"
+	}
+
 	a.logger.Info("ツールの結果",
 		"tool", r.tc.Function.Name,
 		"elapsed_ms", r.elapsed.Milliseconds(),
@@ -592,6 +640,18 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 			Timestamp: jtime.Now(),
 		})
 	}
+}
+
+// sourceKeyFromChannel は channel が属する SourceKey を逆引きする。
+func sourceKeyFromChannel(channel string, contexts map[SourceKey]*Context) SourceKey {
+	for key, ctx := range contexts {
+		for _, m := range ctx.Messages() {
+			if m.Channel == channel {
+				return key
+			}
+		}
+	}
+	return SourceKeyDiscord
 }
 
 // toolNames は toolCallResult のスライスからツール名を抽出する。
