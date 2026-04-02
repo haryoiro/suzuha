@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -157,6 +158,12 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 		}
 		// Trim messages to fit within max context, reserving space for tools.
 		msgs = trimMessagesToFit(msgs, allTools, a.llm.MaxContextTokens())
+
+		// チャンネルごとにグルーピングし、現チャンネルを末尾に寄せる。
+		// LLM の recency bias を活かして現チャンネルの会話にフォーカスさせる。
+		if channel != "" {
+			msgs = groupByChannel(msgs, channel)
+		}
 
 		resp, err := a.llm.Complete(ctx, msgs, allTools)
 		if err != nil {
@@ -402,5 +409,94 @@ func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []l
 	result := make([]llm.Message, 0, leading+(len(msgs)-trimStart))
 	result = append(result, msgs[:leading]...)
 	result = append(result, msgs[trimStart:]...)
+	return result
+}
+
+// groupByChannel はメッセージをチャンネルごとにグルーピングし、
+// activeChannel を末尾に配置する。各チャンネル内の順序は維持される。
+// 他チャンネルは最終メッセージ時刻の古い順に並ぶ。
+// system/tool ロールのメッセージは先頭にそのまま残す。
+func groupByChannel(msgs []llm.Message, activeChannel string) []llm.Message {
+	if activeChannel == "" || len(msgs) == 0 {
+		return msgs
+	}
+
+	// system/tool メッセージ (先頭部分) とチャンネル付きメッセージを分離する。
+	var head []llm.Message
+	var channelMsgs []llm.Message
+	inHead := true
+	for _, m := range msgs {
+		// 先頭の system メッセージ群はそのまま維持。
+		// Channel が空の assistant/tool メッセージ (ツールループ中) も
+		// 直前のチャンネルに属するので channelMsgs に含める。
+		if inHead && (m.Role == "system") {
+			head = append(head, m)
+			continue
+		}
+		inHead = false
+		channelMsgs = append(channelMsgs, m)
+	}
+
+	if len(channelMsgs) == 0 {
+		return msgs
+	}
+
+	// チャンネルごとにグルーピング (出現順を維持)。
+	type channelGroup struct {
+		channel string
+		msgs    []llm.Message
+		lastTS  time.Time
+	}
+	groupMap := make(map[string]*channelGroup)
+	var groupOrder []string
+
+	for _, m := range channelMsgs {
+		ch := m.Channel
+		// Channel が空のメッセージ (assistant 応答, tool 結果) は
+		// 直前のチャンネルに帰属させる。
+		if ch == "" && len(groupOrder) > 0 {
+			ch = groupOrder[len(groupOrder)-1]
+		}
+		if ch == "" {
+			ch = activeChannel
+		}
+
+		g, ok := groupMap[ch]
+		if !ok {
+			g = &channelGroup{channel: ch}
+			groupMap[ch] = g
+			groupOrder = append(groupOrder, ch)
+		}
+		g.msgs = append(g.msgs, m)
+		if !m.Timestamp.IsZero() && m.Timestamp.After(g.lastTS) {
+			g.lastTS = m.Timestamp
+		}
+	}
+
+	// activeChannel 以外を最終メッセージ時刻でソート。
+	var others []*channelGroup
+	var active *channelGroup
+	for _, ch := range groupOrder {
+		g := groupMap[ch]
+		if ch == activeChannel {
+			active = g
+		} else {
+			others = append(others, g)
+		}
+	}
+	sort.Slice(others, func(i, j int) bool {
+		return others[i].lastTS.Before(others[j].lastTS)
+	})
+
+	// 結合: head → 他チャンネル (古い順) → 現チャンネル
+	result := make([]llm.Message, 0, len(msgs))
+	result = append(result, head...)
+	for _, g := range others {
+		result = append(result, g.msgs...)
+	}
+	if active != nil {
+		result = append(result, active.msgs...)
+	}
+
 	return result
 }
