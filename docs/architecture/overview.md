@@ -36,9 +36,9 @@
                     |   Memento   |    | Features|     | MCP/Builtin|
                     | Acquire     |    +----+----+     +-----------+
                     | Consolidate |         |
-                    +-------------+    +----+----+----+----+----+----+
-                                       |    |    |    |    |    |
-                                     diary topics action forget wander research
+                    +-------------+    +----+----+----+----+----+----+----+
+                                       |    |    |    |    |    |    |
+                                     diary topics action forget wander research video
 ```
 
 ## Pipeline Detail
@@ -201,7 +201,12 @@ Scheduler (cron)
   |     Web search -> evaluate -> follow links -> memorize
   |
   +-- research       (on-demand via tool)
-        SearXNG search -> fetch pages -> extract -> memorize
+  |     SearXNG search -> fetch pages -> extract -> memorize
+  |
+  +-- video          (on-demand via tool)
+        video_watch: YouTube 等の字幕取得 (external/transcript)
+        video_look: フレーム切り出し + VLM 描写 (yt-dlp + ffmpeg)
+        Perceive: URL 自動検知 → [動画: "タイトル" (MM:SS)] アノテーション
 ```
 
 ## Memory System

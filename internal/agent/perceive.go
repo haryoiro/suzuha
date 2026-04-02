@@ -132,13 +132,15 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 				msg.MediaKeys = mediaKeys
 			}
 
-			if a.llm.IsVisionCapable() {
-				// Vision-capable LLM: data URIs already set above.
-			} else if a.llm.HasVision() {
-				// Separate VLM: also describe images as text for the main LLM.
-				descriptions := a.describeImages(ctx, urls)
-				if descriptions != "" {
-					msg.Content += "\n" + descriptions
+			if rc, inline := a.llm.WithCapability("conversation", "vision"); rc != nil {
+				if inline {
+					// Vision-capable LLM: data URIs already set above.
+				} else {
+					// Separate VLM: describe images as text for the main LLM.
+					descriptions := a.describeImages(ctx, urls)
+					if descriptions != "" {
+						msg.Content += "\n" + descriptions
+					}
 				}
 			}
 		}

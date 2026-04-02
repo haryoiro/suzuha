@@ -12,8 +12,10 @@ import (
 
 // VisionDescriber is the interface for describing images via VLM.
 type VisionDescriber interface {
-	HasVision() bool
-	IsVisionCapable() bool
+	// HasVisionCapability returns (available, inline).
+	// available=true: vision is available.
+	// inline=true: the conversation model supports vision natively.
+	HasVisionCapability() (available bool, inline bool)
 	DescribeImage(ctx context.Context, imageURL string, prompt ...string) (string, error)
 }
 
@@ -175,18 +177,23 @@ func (t *lookTool) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolRe
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame))
 
-	// If the active LLM supports vision natively, return the image directly.
-	if t.vision != nil && t.vision.IsVisionCapable() {
+	if t.vision == nil {
+		return tool.ErrorResult("今は目が見えない"), nil
+	}
+
+	available, inline := t.vision.HasVisionCapability()
+	if !available {
+		return tool.ErrorResult("今は目が見えない"), nil
+	}
+
+	if inline {
+		// Vision-capable LLM: return the image directly.
 		result := tool.TextResult("[今の視界]")
 		result.ImageURLs = []string{dataURI}
 		return result, nil
 	}
 
-	// Otherwise, fall back to separate VLM for text description.
-	if t.vision == nil || !t.vision.HasVision() {
-		return tool.ErrorResult("今は目が見えない"), nil
-	}
-
+	// Separate VLM: describe as text.
 	desc, err := t.vision.DescribeImage(ctx, dataURI)
 	if err != nil {
 		return tool.ErrorResult("うまく見えなかった"), nil

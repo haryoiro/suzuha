@@ -817,22 +817,25 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	return result, nil
 }
 
-// HasVision returns true if vision is available (either via dedicated provider or active VLM).
+// HasVisionCapability returns whether vision is available and whether it's inline.
+// Satisfies device.VisionDescriber interface.
+func (c *Client) HasVisionCapability() (available bool, inline bool) {
+	rc, inl := c.WithCapability("conversation", "vision")
+	return rc != nil, inl
+}
+
+// HasVision returns true if vision is available.
 // 後方互換シム。
 func (c *Client) HasVision() bool {
-	rc, _ := c.WithCapability("conversation", "vision")
-	return rc != nil
+	avail, _ := c.HasVisionCapability()
+	return avail
 }
 
 // IsVisionCapable returns true if the active conversation LLM provider supports vision natively.
 // 後方互換シム。
 func (c *Client) IsVisionCapable() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if rp, ok := c.roles["conversation"]; ok {
-		return rp.hasCapability("vision")
-	}
-	return false
+	_, inline := c.HasVisionCapability()
+	return inline
 }
 
 // DescribeImage sends an image URL to a vision model and returns a text description.
