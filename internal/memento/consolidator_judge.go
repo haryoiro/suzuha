@@ -28,7 +28,7 @@ const judgeSystemPrompt = `あなたは記憶の管理者です。類似した�
 func (c *Consolidator) judgeBatch(ctx context.Context, groups []memoryGroup) ([]decision, error) {
 	prompt := buildJudgePrompt(groups)
 
-	resp, err := c.llm.CompleteRawDefault(ctx, []llm.RawMessage{
+	resp, err := c.llm.CompleteRaw(ctx, []llm.RawMessage{
 		{Role: "system", Content: judgeSystemPrompt},
 		{Role: "user", Content: prompt},
 	})

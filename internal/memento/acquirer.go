@@ -21,7 +21,8 @@ type Acquirer struct {
 }
 
 // NewAcquirer は Acquirer を作成する。
-func NewAcquirer(llm *llm.Client, store memory.Store, cfg AcquireConfig, logger *slog.Logger) *Acquirer {
+// llm には *llm.RoleClient (e.g. client.For("background")) を渡す。
+func NewAcquirer(llm completer, store memory.Store, cfg AcquireConfig, logger *slog.Logger) *Acquirer {
 	return &Acquirer{llm: llm, store: store, config: cfg, logger: logger}
 }
 
@@ -77,7 +78,7 @@ func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Me
 	userPrompt := buildCompactPrompt(msgs, existing)
 
 	// LLMを呼び出す。
-	resp, err := a.llm.CompleteRawDefault(ctx, []llm.RawMessage{
+	resp, err := a.llm.CompleteRaw(ctx, []llm.RawMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	})

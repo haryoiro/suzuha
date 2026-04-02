@@ -217,6 +217,46 @@ type RoleClient struct {
 	tracer trace.Tracer
 }
 
+// CompleteRaw はこのロールのプロバイダで completion を実行する。
+func (rc *RoleClient) CompleteRaw(ctx context.Context, messages []providers.Message) (*Response, error) {
+	if rc.rp.provider == nil {
+		return nil, fmt.Errorf("llm: ロールにプロバイダが設定されていません")
+	}
+	params := providers.CompletionParams{
+		Model:    rc.rp.model,
+		Messages: messages,
+	}
+
+	var resp *providers.ChatCompletion
+	err := retryOnRateLimit(ctx, rc.logger, func() error {
+		var callErr error
+		resp, callErr = rc.rp.provider.Completion(ctx, params)
+		return callErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("llm: 空のレスポンス")
+	}
+	choice := resp.Choices[0]
+	reasoning, cleaned := parseThinkTags(choice.Message.ContentString())
+	r := &Response{
+		Text:         cleaned,
+		Reasoning:    reasoning,
+		FinishReason: choice.FinishReason,
+	}
+	if resp.Usage != nil {
+		r.Usage = *resp.Usage
+	}
+	return r, nil
+}
+
+// MaxContextTokens はこのロールの最大コンテキストトークン数を返す。
+func (rc *RoleClient) MaxContextTokens() int {
+	return rc.rp.maxCtx
+}
+
 // For はロールに割り当てられたプロバイダを返す。
 // フォールバック: role → "background" → "conversation"
 func (c *Client) For(role string) *RoleClient {

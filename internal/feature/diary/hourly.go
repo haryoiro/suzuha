@@ -274,7 +274,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 	}
 	messages = append(messages, providers.Message{Role: "user", Content: sb.String()})
 
-	resp, err := llmClient.CompleteRawDefault(ctx, messages)
+	resp, err := llmClient.For("background").CompleteRaw(ctx, messages)
 	if err != nil {
 		return "", fmt.Errorf("LLM completion: %w", err)
 	}

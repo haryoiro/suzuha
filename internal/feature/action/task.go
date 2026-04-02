@@ -110,7 +110,7 @@ func generateFromPrompt(ctx context.Context, cc *scheduler.CronContext, prompt s
 		messages = append([]providers.Message{{Role: "system", Content: cc.SystemPrompt}}, messages...)
 	}
 
-	resp, err := cc.LLM.CompleteRawDefault(ctx, messages)
+	resp, err := cc.LLM.For("background").CompleteRaw(ctx, messages)
 	if err != nil {
 		return "", fmt.Errorf("llm: %w", err)
 	}

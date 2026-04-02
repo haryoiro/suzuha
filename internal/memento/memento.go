@@ -9,9 +9,9 @@ import (
 )
 
 // completer はLLM補完呼び出しを抽象化するインターフェース。
-// *llm.Client が実装する。テストではモックに差し替え可能。
+// *llm.RoleClient が実装する。テストではモックに差し替え可能。
 type completer interface {
-	CompleteRawDefault(ctx context.Context, msgs []llm.RawMessage) (*llm.Response, error)
+	CompleteRaw(ctx context.Context, msgs []llm.RawMessage) (*llm.Response, error)
 }
 
 // --- Acquire 系 ---

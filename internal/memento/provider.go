@@ -14,13 +14,13 @@ func Package(i do.Injector) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[*memory.SQLiteStore](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return NewAcquirer(llmClient, store, DefaultAcquireConfig(), logger), nil
+		return NewAcquirer(llmClient.For("background"), store, DefaultAcquireConfig(), logger), nil
 	})
 
 	do.Provide(i, func(i do.Injector) (*Consolidator, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[*memory.SQLiteStore](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return NewConsolidator(llmClient, store, store, logger), nil
+		return NewConsolidator(llmClient.For("background"), store, store, logger), nil
 	})
 }

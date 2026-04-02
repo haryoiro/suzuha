@@ -59,7 +59,7 @@ func evaluateAndPick(
 		messages = append([]providers.Message{{Role: "system", Content: systemPrompt}}, messages...)
 	}
 
-	resp, err := llmClient.CompleteRawDefault(ctx, messages)
+	resp, err := llmClient.For("background").CompleteRaw(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("llm: %w", err)
 	}
@@ -106,7 +106,7 @@ func reflectOnExploration(
 	sb.WriteString("- キャラクターの口調や感想は入れない\n")
 	sb.WriteString("- 2-4文で簡潔に\n")
 
-	resp, err := llmClient.CompleteRawDefault(ctx, []providers.Message{
+	resp, err := llmClient.For("background").CompleteRaw(ctx, []providers.Message{
 		{Role: "user", Content: sb.String()},
 	})
 	if err != nil {

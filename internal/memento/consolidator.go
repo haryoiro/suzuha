@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -19,7 +18,9 @@ type Consolidator struct {
 }
 
 // NewConsolidator は Consolidator を作成する。
-func NewConsolidator(llm *llm.Client, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
+// NewConsolidator は Consolidator を作成する。
+// llm には *llm.RoleClient (e.g. client.For("background")) を渡す。
+func NewConsolidator(llm completer, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
 	return &Consolidator{llm: llm, admin: admin, store: store, logger: logger}
 }
 
