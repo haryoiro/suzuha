@@ -25,7 +25,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.42.0
 	go.opentelemetry.io/otel/sdk v1.42.0
 	go.opentelemetry.io/otel/trace v1.42.0
-	golang.org/x/image v0.37.0
+	golang.org/x/image v0.38.0
 	google.golang.org/genai v1.50.0
 	gopkg.in/yaml.v3 v3.0.1
 )
