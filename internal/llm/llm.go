@@ -766,8 +766,8 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 // HasVision returns true if vision is available (either via dedicated provider or active VLM).
 // 後方互換シム。
 func (c *Client) HasVision() bool {
-	_, ok := c.WithCapability("conversation", "vision")
-	return ok
+	rc, _ := c.WithCapability("conversation", "vision")
+	return rc != nil
 }
 
 // IsVisionCapable returns true if the active conversation LLM provider supports vision natively.
