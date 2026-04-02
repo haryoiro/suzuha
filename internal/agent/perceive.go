@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/external/twitter"
 
 	"golang.org/x/image/webp"
 
@@ -150,6 +151,9 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 	if a.videoMeta != nil {
 		msg.Content = annotateVideoURLs(ctx, msg.Content, a.videoMeta, a.logger)
 	}
+
+	// Annotate X/Twitter URLs with tweet preview.
+	msg.Content = annotateTwitterURLs(ctx, msg.Content, a.logger)
 
 	// Bootstrap channel history if this is a new channel (unless SkipChannelHistory is set).
 	if !dc.SkipChannelHistory {
@@ -414,6 +418,31 @@ func annotateVideoURLs(ctx context.Context, text string, meta transcript.Metadat
 		durMin := int(info.Duration) / 60
 		durSec := int(info.Duration) % 60
 		annotation := fmt.Sprintf("[動画: %q (%d:%02d) | video_watch で視聴可能] ", info.Title, durMin, durSec)
+		text = strings.Replace(text, u, annotation+u, 1)
+	}
+	return text
+}
+
+// annotateTwitterURLs はメッセージ中の X/Twitter URL を検知し、ツイート内容でアノテーションする。
+func annotateTwitterURLs(ctx context.Context, text string, logger *slog.Logger) string {
+	urls := twitter.ExtractTwitterURLs(text)
+	if len(urls) == 0 {
+		return text
+	}
+
+	fetcher := twitter.NewFxTwitterFetcher()
+	for _, u := range urls {
+		tweet, err := fetcher.Fetch(ctx, u)
+		if err != nil {
+			logger.Debug("twitter: ツイート取得失敗", "url", u, "error", err)
+			continue
+		}
+		// ツイートテキストのプレビュー (50 文字まで)
+		preview := []rune(tweet.Text)
+		if len(preview) > 50 {
+			preview = append(preview[:50], []rune("...")...)
+		}
+		annotation := fmt.Sprintf("[Tweet: @%s「%s」| fetch で詳細取得可能] ", tweet.AuthorID, string(preview))
 		text = strings.Replace(text, u, annotation+u, 1)
 	}
 	return text

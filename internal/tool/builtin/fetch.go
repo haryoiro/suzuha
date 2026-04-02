@@ -10,6 +10,7 @@ import (
 	"time"
 
 	readability "codeberg.org/readeck/go-readability/v2"
+	"github.com/haryoiro/suzuha/external/twitter"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
@@ -54,6 +55,11 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
+	// X/Twitter URL は FxTwitter API 経由で取得。
+	if twitter.IsTwitterURL(in.URL) {
+		return f.fetchTweet(ctx, in.URL)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, in.URL, nil)
 	if err != nil {
 		return tool.ErrorResult("不正なリクエスト: " + err.Error()), nil
@@ -87,6 +93,16 @@ func (f *Fetch) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolR
 	}
 
 	return tool.TextResult(text), nil
+}
+
+// fetchTweet は FxTwitter API で X の投稿を取得する。
+func (f *Fetch) fetchTweet(ctx context.Context, rawURL string) (*tool.ToolResult, error) {
+	fetcher := twitter.NewFxTwitterFetcher()
+	tweet, err := fetcher.Fetch(ctx, rawURL)
+	if err != nil {
+		return tool.ErrorResult("ツイート取得に失敗: " + err.Error()), nil
+	}
+	return tool.TextResult(twitter.FormatTweet(tweet)), nil
 }
 
 var _ tool.Tool = (*Fetch)(nil)
