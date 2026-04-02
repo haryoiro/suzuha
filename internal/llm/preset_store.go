@@ -88,9 +88,14 @@ func (s *PresetStore) Save(ctx context.Context, p *Preset) error {
 		return fmt.Errorf("preset: capabilities の JSON 変換に失敗: %w", err)
 	}
 
-	encKey, err := s.cipher.Encrypt(p.APIKey)
-	if err != nil {
-		return fmt.Errorf("preset: API キーの暗号化に失敗: %w", err)
+	// api_key が空なら既存値を保持する。
+	encKey := ""
+	if p.APIKey != "" {
+		var err error
+		encKey, err = s.cipher.Encrypt(p.APIKey)
+		if err != nil {
+			return fmt.Errorf("preset: API キーの暗号化に失敗: %w", err)
+		}
 	}
 
 	source := p.Source
@@ -98,13 +103,14 @@ func (s *PresetStore) Save(ctx context.Context, p *Preset) error {
 		source = "user"
 	}
 
+	// api_key が空の場合は既存値を維持する (COALESCE + NULLIF)。
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO llm_presets (name, provider, model, api_key, api_base, max_tokens, capabilities, source, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
 		 ON CONFLICT(name) DO UPDATE SET
 		   provider = excluded.provider,
 		   model = excluded.model,
-		   api_key = excluded.api_key,
+		   api_key = CASE WHEN excluded.api_key = '' THEN llm_presets.api_key ELSE excluded.api_key END,
 		   api_base = excluded.api_base,
 		   max_tokens = excluded.max_tokens,
 		   capabilities = excluded.capabilities,
