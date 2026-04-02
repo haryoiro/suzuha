@@ -47,10 +47,19 @@ discord:
 
 voice:
   enabled: false
-  whisper_url: "http://whisper:8001"
-  voicevox_url: "http://voicevox:50021"
-  speaker_id: 3             # zundamon normal
-  allowed_channels: []      # 空 = 全チャンネル許可
+  stt:                        # STT プロバイダー (優先度順)
+    - provider: "deepgram"
+      api_key: ""             # 環境変数 DEEPGRAM_API_KEY
+      model: "nova-3"
+    - provider: "whispercpp"
+      url: "http://whisper:8001"
+  tts:                        # TTS プロバイダー (優先度順)
+    - provider: "voicevox"
+      url: "http://voicevox:50021"
+      speaker_id: 3
+    - provider: "sbv2"
+      url: "http://sbv2:5000"
+  allowed_channels: []        # 空 = 全チャンネル許可
 
 tool_servers:               # MCP ツールサーバー（静的定義）
   - name: "example"
@@ -71,8 +80,7 @@ agent:
   interest_threshold: 0.5
   context_window_pct: 0.8   # この使用率で圧縮トリガー
 
-consolidator:
-  api_addr: ":9091"
+consolidator:               # 旧名。scheduler 設定のみ使用
   scheduler:
     enabled: true
     timezone: "Asia/Tokyo"
@@ -105,7 +113,7 @@ admin:
   agent_metrics: "http://localhost:9090/metrics"
   agent_logs: "http://localhost:9090/internal/logs"
   agent_context: "http://localhost:9090/internal/context"
-  consolidator_api: "http://localhost:9091"
+  # consolidator_api は廃止 (インプロセスに移行済み)
   static_dir: "web/admin/dist"
   prompt_dir: ".suzuha"
   auth:
@@ -122,10 +130,12 @@ location:
 | 変数 | 用途 |
 |------|------|
 | `SUZUHA_CONFIG` | config.yaml のパス |
+| `SUZUHA_ENCRYPTION_KEY` | API キー暗号化用マスターキー (hex 64文字 = 32byte) |
 | `LLM_API_KEY` | LLM API キー |
 | `EMBEDDING_API_KEY` | 埋め込み API キー |
 | `VISION_API_KEY` | ビジョン API キー |
 | `DISCORD_TOKEN` | Discord Bot トークン |
+| `DEEPGRAM_API_KEY` | Deepgram STT API キー |
 | `OVERLAND_TOKEN` | Overland GPS トラッキングトークン |
 | `YOLO_URL` | YOLO サーバー URL（デフォルト: `http://yolo:8002`） |
 
@@ -140,35 +150,34 @@ location:
 
 起動時に `IDENTITY.md` + `SOUL.md` を結合して `Agent.SystemPrompt` に設定。Admin UI の Prompts ページから編集・リロード可能。
 
-## LLM プロバイダー切り替え
+## LLM プロバイダー管理
 
-### プリセット方式
+プリセットは DB (`llm_presets` テーブル) で管理され、config.yaml は初期シードとして使われる。
+詳細は [11-llm.md](./11-llm.md) を参照。
+
+### ロール割り当て切り替え
 
 ```bash
-curl -X PUT http://localhost:9090/internal/llm \
+# conversation ロールを切り替え
+curl -X PUT http://localhost:9090/internal/llm/assignments/conversation \
   -H "Content-Type: application/json" \
   -d '{"preset": "local-qwen"}'
 ```
 
-### カスタム指定
+### プリセット管理
 
 ```bash
-curl -X PUT http://localhost:9090/internal/llm \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "openai",
-    "model": "gpt-4o-mini",
-    "api_base": "https://api.openai.com/v1",
-    "max_ctx": 128000,
-    "vision": true
-  }'
-```
+# 一覧
+curl http://localhost:9090/internal/llm/presets
 
-切り替え時の動作:
-1. LLM クライアントのプロバイダーを変更
-2. コンテキストの `maxTokens` を更新
-3. 使用率 > 50% なら即座にコンテキスト圧縮
-4. 設定を `app_settings` テーブルに永続化（再起動後も維持）
+# 追加
+curl -X POST http://localhost:9090/internal/llm/presets \
+  -d '{"name":"new-preset","provider":"openai","model":"gpt-4o","api_key":"sk-...","capabilities":["text","vision"]}'
+
+# モデルだけ変更 (api_key は既存値を保持)
+curl -X PUT http://localhost:9090/internal/llm/presets/zhipu \
+  -d '{"provider":"zhipu","model":"glm-5","api_base":"https://open.bigmodel.cn/api/coding/paas/v4"}'
+```
 
 ## DI コンテナ
 
@@ -185,14 +194,14 @@ func allPackages(cfgPath string) []func(do.Injector) {
         memory.Package,
         llm.Package,
         mcp.Package,
-        consolidator.Package,
+        memento.Package,
         user.Package,
         channel.Package,
     }
 }
 ```
 
-各パッケージは `Package` 関数で自身のプロバイダーを登録。循環依存を避けるため、`agentPackages` でブリッジ（例: `memory.EmbedFunc → llm.Client.Embed`）。
+各パッケージは `Package` 関数で自身のプロバイダーを登録。循環依存を避けるため、`agentPackages` でブリッジ（例: `memory.EmbedFunc → llm.Client.Embed`）。`PresetStore` は `agentPackages` 側で登録 (shared-db 依存)。
 
 ## Docker 構成
 

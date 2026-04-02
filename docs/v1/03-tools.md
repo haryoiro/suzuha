@@ -86,9 +86,10 @@ type ToolResult struct {
 
 | Feature | ツール | 説明 |
 |---------|--------|------|
-| Schedule (`internal/action/`) | `schedule_create`, `schedule_list`, `schedule_cancel` | 予約アクション管理 |
+| Schedule (`internal/feature/action/`) | `schedule_create`, `schedule_list`, `schedule_cancel` | 予約アクション管理 |
 | MCP Apps (`internal/mcp/`) | `mcp_search`, `mcp_install`, `mcp_uninstall`, `mcp_list_apps` | MCP ツールサーバー管理 |
-| Explore (`internal/explore/`) | `explore` | ウェブ探索（SearXNG 検索 + LLM 評価） |
+| Research (`internal/feature/research/`) | `research` | ウェブ検索（SearXNG + ページ取得） |
+| Wander (`internal/feature/wander/`) | `wander` | 好奇心探索（SearXNG + LLM 評価） |
 | Location (`internal/location/`) | ロケーション関連ツール | GPS 位置情報 |
 
 ### MCP ツール（`internal/mcp/`）
