@@ -783,7 +783,7 @@ func (c *Client) IsVisionCapable() bool {
 
 // DescribeImage sends an image URL to a vision model and returns a text description.
 // 後方互換シム: WithCapability("conversation", "vision") を使用する。
-func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, error) {
+func (c *Client) DescribeImage(ctx context.Context, imageURL string, prompt ...string) (string, error) {
 	rc, _ := c.WithCapability("conversation", "vision")
 	if rc == nil || rc.rp.provider == nil {
 		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
@@ -791,13 +791,18 @@ func (c *Client) DescribeImage(ctx context.Context, imageURL string) (string, er
 	prov := rc.rp.provider
 	model := rc.rp.model
 
+	textPrompt := "この画像の内容を簡潔に描写してください。"
+	if len(prompt) > 0 && prompt[0] != "" {
+		textPrompt = prompt[0]
+	}
+
 	params := providers.CompletionParams{
 		Model: model,
 		Messages: []providers.Message{
 			{
 				Role: "user",
 				Content: []providers.ContentPart{
-					{Type: "text", Text: "この画像の内容を簡潔に描写してください。"},
+					{Type: "text", Text: textPrompt},
 					{Type: "image_url", ImageURL: &providers.ImageURL{URL: imageURL}},
 				},
 			},

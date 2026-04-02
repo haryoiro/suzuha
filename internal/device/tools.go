@@ -14,7 +14,7 @@ import (
 type VisionDescriber interface {
 	HasVision() bool
 	IsVisionCapable() bool
-	DescribeImage(ctx context.Context, imageURL string) (string, error)
+	DescribeImage(ctx context.Context, imageURL string, prompt ...string) (string, error)
 }
 
 // NewServoTool creates a tool for controlling the device's pan/tilt servos.
