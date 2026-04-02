@@ -35,7 +35,9 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/feature/topics"
+	"github.com/haryoiro/suzuha/internal/feature/video"
 	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/external/transcript"
 	"github.com/samber/do/v2"
 )
 
@@ -231,6 +233,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			// Web search features (searxng is always on the compose network).
 			searxURL := "http://searxng:8080"
 
+			// Video transcript fetcher (YouTube Go library → yt-dlp fallback).
+			videoFetcher := transcript.NewChain(logger,
+				transcript.NewYouTubeFetcher(),
+				// transcript.NewYtDlpFetcher(), // yt-dlp がコンテナに入ったら有効化
+			)
+
 			features := []scheduler.Feature{
 				action.New(store.DB()),
 				mcp.NewFeature(mcpMgr, logger),
@@ -239,6 +247,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
 				forget.New(do.MustInvoke[*memento.Consolidator](i)),
 				diary.New(),
+				video.New(videoFetcher, logger),
 			}
 
 			// Add location feature if enabled.
