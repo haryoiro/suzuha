@@ -26,7 +26,8 @@ func NewLookTool(extractor transcript.FrameExtractor, llmClient *llm.Client, log
 	return &lookTool{extractor: extractor, llmClient: llmClient, logger: logger}
 }
 
-func (t *lookTool) Name() string { return "video_look" }
+func (t *lookTool) Name() string    { return "video_look" }
+func (t *lookTool) ReadOnly() bool { return true }
 
 func (t *lookTool) Description() string {
 	return "動画の特定時点のフレームを視覚的に確認する。video_watch の字幕で気になった箇所の映像を確認する際に使う。timestamp は \"1:23\" や秒数で指定。"

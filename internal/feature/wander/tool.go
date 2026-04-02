@@ -36,7 +36,8 @@ func NewWanderTool(searxngURL string, llmClient *llm.Client, memStore memory.Sto
 	}
 }
 
-func (t *WanderTool) Name() string { return "wander" }
+func (t *WanderTool) Name() string    { return "wander" }
+func (t *WanderTool) ReadOnly() bool { return true }
 func (t *WanderTool) Description() string {
 	return "ネットを散歩して情報を探索する。気になるトピックから出発して関連情報を芋づる式にたどる。ゆっくり深く探索したい時に使う。結果はメモリに保存されるが、みんなには共有されていないので共有したかったら知ったことを共有しよう。"
 }

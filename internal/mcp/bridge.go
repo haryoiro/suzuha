@@ -258,6 +258,7 @@ type MCPTool struct {
 }
 
 func (t *MCPTool) Name() string                { return t.name }
+func (t *MCPTool) ReadOnly() bool              { return false }
 func (t *MCPTool) Description() string          { return t.description }
 func (t *MCPTool) InputSchema() json.RawMessage { return t.inputSchema }
 

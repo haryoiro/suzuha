@@ -20,7 +20,8 @@ func NewMemoCreate(store memory.Store) *MemoCreate {
 	return &MemoCreate{store: store}
 }
 
-func (t *MemoCreate) Name() string { return "memo_create" }
+func (t *MemoCreate) Name() string    { return "memo_create" }
+func (t *MemoCreate) ReadOnly() bool { return false }
 func (t *MemoCreate) Description() string {
 	return "メモを作成する。思いついたこと、気づき、TODOなどを自由に記録できる。#tag で自動タグ付け。"
 }
@@ -80,7 +81,8 @@ func NewMemoSearch(store memory.Store) *MemoSearch {
 	return &MemoSearch{store: store}
 }
 
-func (t *MemoSearch) Name() string { return "memo_search" }
+func (t *MemoSearch) Name() string    { return "memo_search" }
+func (t *MemoSearch) ReadOnly() bool { return true }
 func (t *MemoSearch) Description() string {
 	return "メモを検索する。意味的な類似検索ができる。タグでの絞り込みも可能。"
 }
@@ -154,7 +156,8 @@ func NewMemoUpdate(store memory.Store) *MemoUpdate {
 	return &MemoUpdate{store: store}
 }
 
-func (t *MemoUpdate) Name() string { return "memo_update" }
+func (t *MemoUpdate) Name() string    { return "memo_update" }
+func (t *MemoUpdate) ReadOnly() bool { return false }
 func (t *MemoUpdate) Description() string {
 	return "既存のメモを更新する。内容を書き換えるとタグも再抽出される。"
 }

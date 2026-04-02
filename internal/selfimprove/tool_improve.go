@@ -27,7 +27,8 @@ func NewImproveTool(s *discordgo.Session, channelID string) *ImproveTool {
 	return &ImproveTool{session: s, channelID: channelID}
 }
 
-func (t *ImproveTool) Name() string { return "self_improve" }
+func (t *ImproveTool) Name() string    { return "self_improve" }
+func (t *ImproveTool) ReadOnly() bool { return false }
 
 func (t *ImproveTool) Description() string {
 	return `自分自身のコードを改善するためのリクエストを、開発チャンネルに投稿する。

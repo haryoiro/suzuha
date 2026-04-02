@@ -24,7 +24,8 @@ func NewCreateTool(store *Store) *CreateTool {
 	return &CreateTool{store: store}
 }
 
-func (t *CreateTool) Name() string { return "schedule_create" }
+func (t *CreateTool) Name() string    { return "schedule_create" }
+func (t *CreateTool) ReadOnly() bool { return false }
 
 func (t *CreateTool) Description() string {
 	return `指定した時間にDiscordチャンネルへメッセージを送る予約をする。channel_idはメッセージのメタデータから取得すること。
@@ -147,7 +148,8 @@ func NewListTool(store *Store) *ListTool {
 	return &ListTool{store: store}
 }
 
-func (t *ListTool) Name() string { return "schedule_list" }
+func (t *ListTool) Name() string    { return "schedule_list" }
+func (t *ListTool) ReadOnly() bool { return true }
 
 func (t *ListTool) Description() string {
 	return "予約済みのメッセージ一覧を見る。ユーザーIDで絞り込みもできる。"
@@ -212,7 +214,8 @@ func NewCancelTool(store *Store) *CancelTool {
 	return &CancelTool{store: store}
 }
 
-func (t *CancelTool) Name() string { return "schedule_cancel" }
+func (t *CancelTool) Name() string    { return "schedule_cancel" }
+func (t *CancelTool) ReadOnly() bool { return false }
 
 func (t *CancelTool) Description() string {
 	return "予約済みのメッセージをIDで取り消す。繰り返し予約も止まる。"

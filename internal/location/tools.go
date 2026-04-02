@@ -23,7 +23,8 @@ func NewGetLocationTool(store *Store) *GetLocation {
 	return &GetLocation{store: store}
 }
 
-func (t *GetLocation) Name() string { return "get_location" }
+func (t *GetLocation) Name() string    { return "get_location" }
+func (t *GetLocation) ReadOnly() bool { return true }
 func (t *GetLocation) Description() string {
 	return "ユーザーIDまたはデバイスIDから現在の位置情報を取得する。登録済みの場所（自宅・職場など）にいるかどうかも返す。"
 }
@@ -106,7 +107,8 @@ func NewGetLocationHistoryTool(store *Store) *GetLocationHistory {
 	return &GetLocationHistory{store: store}
 }
 
-func (t *GetLocationHistory) Name() string { return "get_location_history" }
+func (t *GetLocationHistory) Name() string    { return "get_location_history" }
+func (t *GetLocationHistory) ReadOnly() bool { return true }
 func (t *GetLocationHistory) Description() string {
 	return "直近の位置情報履歴を取得する。ユーザーの過去の移動パターンを確認できる。"
 }
@@ -215,7 +217,8 @@ var _ tool.Tool = (*GetLocationHistory)(nil)
 // ReverseGeocode resolves lat/lon to a place name via Nominatim (OpenStreetMap).
 type ReverseGeocode struct{}
 
-func (t *ReverseGeocode) Name() string { return "reverse_geocode" }
+func (t *ReverseGeocode) Name() string    { return "reverse_geocode" }
+func (t *ReverseGeocode) ReadOnly() bool { return true }
 func (t *ReverseGeocode) Description() string {
 	return "緯度経度から地名・住所を取得する（逆ジオコーディング）。"
 }

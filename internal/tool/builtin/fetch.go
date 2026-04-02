@@ -28,7 +28,8 @@ func NewFetch() *Fetch {
 	}
 }
 
-func (f *Fetch) Name() string { return "fetch" }
+func (f *Fetch) Name() string    { return "fetch" }
+func (f *Fetch) ReadOnly() bool { return true }
 func (f *Fetch) Description() string {
 	return "URLの内容を取得してテキストで返す。Webページは本文が自動で抽出される。"
 }

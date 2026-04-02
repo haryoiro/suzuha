@@ -24,7 +24,8 @@ func NewUpdateUserProfile(users user.Store, onUpdate ContextUpdater) *UpdateUser
 	return &UpdateUserProfile{users: users, onUpdate: onUpdate}
 }
 
-func (u *UpdateUserProfile) Name() string { return "update_user_profile" }
+func (u *UpdateUserProfile) Name() string    { return "update_user_profile" }
+func (u *UpdateUserProfile) ReadOnly() bool { return false }
 
 func (u *UpdateUserProfile) Description() string {
 	return `ユーザーの表示名（ニックネーム）を変更する。「〇〇と呼んで」と言われたときに使う。メッセージのuser_idとplatformの値を使うこと。`

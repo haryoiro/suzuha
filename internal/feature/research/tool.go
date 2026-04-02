@@ -28,7 +28,8 @@ func NewResearchTool(searxngURL string, maxSources int) *ResearchTool {
 	}
 }
 
-func (t *ResearchTool) Name() string { return "research" }
+func (t *ResearchTool) Name() string    { return "research" }
+func (t *ResearchTool) ReadOnly() bool { return true }
 func (t *ResearchTool) Description() string {
 	return "トピックについて高速にリサーチする。検索して上位ページの内容を取得する。何かについてしっかり調べたい時に使う。結果はみんなには共有されていないので共有したかったら知ったことを共有しよう。"
 }

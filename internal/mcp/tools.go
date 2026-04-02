@@ -22,7 +22,8 @@ func NewSearchTool(reg *RegistryClient) *SearchTool {
 	return &SearchTool{registry: reg}
 }
 
-func (t *SearchTool) Name() string { return "search_mcp_apps" }
+func (t *SearchTool) Name() string    { return "search_mcp_apps" }
+func (t *SearchTool) ReadOnly() bool { return true }
 func (t *SearchTool) Description() string {
 	return `Search the MCP Registry for available MCP server apps. Returns a list of servers matching the query with their name, description, and required environment variables. Use this to discover new tools you can install.`
 }
@@ -118,7 +119,8 @@ func NewInstallTool(store *AppStore, mcpMgr *Manager, reg *RegistryClient, logge
 	return &InstallTool{store: store, mcpMgr: mcpMgr, registry: reg, logger: logger}
 }
 
-func (t *InstallTool) Name() string { return "install_mcp_app" }
+func (t *InstallTool) Name() string    { return "install_mcp_app" }
+func (t *InstallTool) ReadOnly() bool { return false }
 func (t *InstallTool) Description() string {
 	return `Install an MCP server app from the registry. The server will be started immediately and its tools will become available. The installation is persisted and survives restarts. Use search_mcp_apps first to find the server name.`
 }
@@ -239,7 +241,8 @@ func NewUninstallTool(store *AppStore, mcpMgr *Manager) *UninstallTool {
 	return &UninstallTool{store: store, mcpMgr: mcpMgr}
 }
 
-func (t *UninstallTool) Name() string { return "uninstall_mcp_app" }
+func (t *UninstallTool) Name() string    { return "uninstall_mcp_app" }
+func (t *UninstallTool) ReadOnly() bool { return false }
 func (t *UninstallTool) Description() string {
 	return "Uninstall a previously installed MCP app. Stops the server and removes all its tools."
 }
@@ -289,7 +292,8 @@ func NewListAppsTool(store *AppStore, mcpMgr *Manager) *ListAppsTool {
 	return &ListAppsTool{store: store, mcpMgr: mcpMgr}
 }
 
-func (t *ListAppsTool) Name() string { return "list_mcp_apps" }
+func (t *ListAppsTool) Name() string    { return "list_mcp_apps" }
+func (t *ListAppsTool) ReadOnly() bool { return true }
 func (t *ListAppsTool) Description() string {
 	return "List all installed MCP apps and their available tools."
 }

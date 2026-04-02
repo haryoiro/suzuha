@@ -46,7 +46,8 @@ func NewVoiceJoin(pipeline *voice.Pipeline, session *discordgo.Session, allowedC
 	return &voiceJoinTool{pipeline: pipeline, session: session, allowedChannels: allowed, logger: logger}
 }
 
-func (t *voiceJoinTool) Name() string { return "voice_join" }
+func (t *voiceJoinTool) Name() string    { return "voice_join" }
+func (t *voiceJoinTool) ReadOnly() bool { return false }
 func (t *voiceJoinTool) Description() string {
 	return "ボイスチャンネルに参加する。ユーザーに「VCに来て」と言われたときに使う。user_idを指定するとそのユーザーがいるVCに自動参加する。"
 }
@@ -143,7 +144,8 @@ func NewVoiceLeave(pipeline *voice.Pipeline, session *discordgo.Session, logger 
 	return &voiceLeaveTool{pipeline: pipeline, session: session, logger: logger}
 }
 
-func (t *voiceLeaveTool) Name() string { return "voice_leave" }
+func (t *voiceLeaveTool) Name() string    { return "voice_leave" }
+func (t *voiceLeaveTool) ReadOnly() bool { return false }
 func (t *voiceLeaveTool) Description() string {
 	return "現在参加しているボイスチャンネルから離脱する。"
 }

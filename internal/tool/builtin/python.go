@@ -22,7 +22,8 @@ func NewPythonExec() *PythonExec {
 	return &PythonExec{timeout: 30 * time.Second}
 }
 
-func (p *PythonExec) Name() string { return "python_exec" }
+func (p *PythonExec) Name() string    { return "python_exec" }
+func (p *PythonExec) ReadOnly() bool { return false }
 
 func (p *PythonExec) Description() string {
 	return `Pythonコードを実行して結果を返す。計算、問題解決、コードの検証、Webからのデータ取得などに使える。

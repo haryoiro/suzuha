@@ -23,7 +23,8 @@ func NewWatchTool(fetcher transcript.Fetcher, logger *slog.Logger) tool.Tool {
 	return &watchTool{fetcher: fetcher, logger: logger}
 }
 
-func (t *watchTool) Name() string { return "video_watch" }
+func (t *watchTool) Name() string    { return "video_watch" }
+func (t *watchTool) ReadOnly() bool { return true }
 
 func (t *watchTool) Description() string {
 	return "動画の字幕を取得して内容を理解する。YouTube, ニコニコ動画, Twitch 等の動画 URL に対応。会話に動画 URL が出てきて内容を知りたいときに使う。"

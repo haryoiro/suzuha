@@ -12,21 +12,24 @@ import (
 
 // discordTool is a generic tool backed by a discordgo.Session.
 type discordTool struct {
-	session *discordgo.Session
-	name    string
-	desc    string
-	schema  json.RawMessage
-	fn      func(*discordgo.Session, context.Context, json.RawMessage) (*tool.ToolResult, error)
+	session  *discordgo.Session
+	name     string
+	desc     string
+	schema   json.RawMessage
+	readOnly bool
+	fn       func(*discordgo.Session, context.Context, json.RawMessage) (*tool.ToolResult, error)
 }
 
 func (d *discordTool) Name() string                { return d.name }
 func (d *discordTool) Description() string          { return d.desc }
 func (d *discordTool) InputSchema() json.RawMessage { return d.schema }
+func (d *discordTool) ReadOnly() bool               { return d.readOnly }
 func (d *discordTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	return d.fn(d.session, ctx, input)
 }
 
 var _ tool.Tool = (*discordTool)(nil)
+var _ tool.ReadOnlyTool = (*discordTool)(nil)
 
 // unmarshal is a helper that unmarshals input and returns an error result on failure.
 func unmarshal[T any](input json.RawMessage) (T, *tool.ToolResult) {
@@ -137,9 +140,10 @@ func newDiscordReply(s *discordgo.Session) tool.Tool {
 
 func newDiscordGetHistory(s *discordgo.Session) tool.Tool {
 	return &discordTool{
-		session: s,
-		name:    "discord_get_history",
-		desc:    "チャンネルの最近の会話を見て、流れを把握する。",
+		session:  s,
+		name:     "discord_get_history",
+		readOnly: true,
+		desc:     "チャンネルの最近の会話を見て、流れを把握する。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -405,9 +409,10 @@ func newDiscordDeleteChannel(s *discordgo.Session) tool.Tool {
 
 func newDiscordListChannels(s *discordgo.Session) tool.Tool {
 	return &discordTool{
-		session: s,
-		name:    "discord_list_channels",
-		desc:    "サーバーのチャンネル一覧を見る。",
+		session:  s,
+		name:     "discord_list_channels",
+		readOnly: true,
+		desc:     "サーバーのチャンネル一覧を見る。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -569,8 +574,9 @@ func newDiscordTimeoutMember(s *discordgo.Session) tool.Tool {
 
 func newDiscordListMembers(s *discordgo.Session) tool.Tool {
 	return &discordTool{
-		session: s,
-		name:    "discord_list_members",
+		session:  s,
+		name:     "discord_list_members",
+		readOnly: true,
 		desc:    "サーバーのメンバー一覧を見る（最大100人）。",
 		schema: json.RawMessage(`{
 			"type": "object",
@@ -686,8 +692,9 @@ func newDiscordRemoveRole(s *discordgo.Session) tool.Tool {
 
 func newDiscordListRoles(s *discordgo.Session) tool.Tool {
 	return &discordTool{
-		session: s,
-		name:    "discord_list_roles",
+		session:  s,
+		name:     "discord_list_roles",
+		readOnly: true,
 		desc:    "サーバーのロール一覧を見る。",
 		schema: json.RawMessage(`{
 			"type": "object",
@@ -728,9 +735,10 @@ func newDiscordListRoles(s *discordgo.Session) tool.Tool {
 
 func newDiscordServerInfo(s *discordgo.Session) tool.Tool {
 	return &discordTool{
-		session: s,
-		name:    "discord_server_info",
-		desc:    "サーバーの基本情報を見る（名前、人数、オーナーなど）。",
+		session:  s,
+		name:     "discord_server_info",
+		readOnly: true,
+		desc:     "サーバーの基本情報を見る（名前、人数、オーナーなど）。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {

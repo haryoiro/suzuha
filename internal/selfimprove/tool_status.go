@@ -21,7 +21,8 @@ func NewStatusTool(repoRoot string) *StatusTool {
 	return &StatusTool{repoRoot: repoRoot}
 }
 
-func (t *StatusTool) Name() string { return "self_improve_status" }
+func (t *StatusTool) Name() string    { return "self_improve_status" }
+func (t *StatusTool) ReadOnly() bool { return true }
 
 func (t *StatusTool) Description() string {
 	return "マージされていない self-improve/* ブランチの一覧を表示する。各ブランチのコミットサマリーを含む。"

@@ -27,6 +27,7 @@ func NewServoTool(hub *Hub) tool.Tool {
 type servoTool struct{ hub *Hub }
 
 func (t *servoTool) Name() string        { return "body_turn_head" }
+func (t *servoTool) ReadOnly() bool      { return false }
 func (t *servoTool) Description() string { return "首を動かす。pan=左右(0-180,90が正面), tilt=上下(0-180,90が正面)" }
 func (t *servoTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -77,6 +78,7 @@ func NewCaptureTool(hub *Hub) tool.Tool {
 type captureTool struct{ hub *Hub }
 
 func (t *captureTool) Name() string        { return "body_blink" }
+func (t *captureTool) ReadOnly() bool      { return false }
 func (t *captureTool) Description() string { return "まばたきして視界のスナップショットを保存する。" }
 func (t *captureTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{"type": "object", "properties": {}}`)
@@ -103,6 +105,7 @@ func NewFaceTool(hub *Hub) tool.Tool {
 type faceTool struct{ hub *Hub }
 
 func (t *faceTool) Name() string        { return "body_expression" }
+func (t *faceTool) ReadOnly() bool      { return false }
 func (t *faceTool) Description() string { return "自分の表情を変える。0=通常, 1=嬉しい, 2=悲しい, 3=驚き, 4=怒り, 5=眠い, 6=考え中, 7=喋り中" }
 func (t *faceTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
@@ -150,7 +153,8 @@ type lookTool struct {
 	vision VisionDescriber
 }
 
-func (t *lookTool) Name() string { return "body_look" }
+func (t *lookTool) Name() string    { return "body_look" }
+func (t *lookTool) ReadOnly() bool { return true }
 func (t *lookTool) Description() string {
 	return "自分の目で見る。今この瞬間、視界に何が映っているかを認識する。"
 }

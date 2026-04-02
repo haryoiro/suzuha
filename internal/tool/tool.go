@@ -13,6 +13,22 @@ type Tool interface {
 	Execute(ctx context.Context, input json.RawMessage) (*ToolResult, error)
 }
 
+// ReadOnlyTool はツールが読み取り専用であることを示すオプショナルインターフェース。
+// 読み取り専用ツールは他の読み取り専用ツールと並列実行される。
+// Tool が ReadOnlyTool を実装しない場合、副作用ありとして直列実行される。
+type ReadOnlyTool interface {
+	ReadOnly() bool
+}
+
+// IsReadOnly はツールが読み取り専用かを返す。
+// ReadOnlyTool を実装していなければ false (安全側)。
+func IsReadOnly(t Tool) bool {
+	if ro, ok := t.(ReadOnlyTool); ok {
+		return ro.ReadOnly()
+	}
+	return false
+}
+
 // ToolResult is the result of a tool execution.
 type ToolResult struct {
 	Content   []Content `json:"content"`
