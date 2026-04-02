@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/external/transcript"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/memento"
@@ -46,6 +47,7 @@ type Agent struct {
 	channelSettings *channelpkg.Store
 	locationStore   *location.Store
 	mediaStore      memory.MediaStore
+	videoMeta       transcript.MetadataFetcher // nil if video feature not configured
 	logger          *slog.Logger
 	hooks  []PipelineHook
 	tracer trace.Tracer // nil when tracing is disabled
@@ -232,6 +234,11 @@ func (a *Agent) GetSession(key SourceKey) Session {
 // SetLocationStore sets the location store for GPS context injection.
 func (a *Agent) SetLocationStore(s *location.Store) {
 	a.locationStore = s
+}
+
+// SetVideoMeta sets the video metadata fetcher for URL annotation in Perceive.
+func (a *Agent) SetVideoMeta(m transcript.MetadataFetcher) {
+	a.videoMeta = m
 }
 
 // SetMediaStore sets the media store for loading memory attachments.

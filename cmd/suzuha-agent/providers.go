@@ -234,10 +234,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			searxURL := "http://searxng:8080"
 
 			// Video transcript fetcher (YouTube Go library → yt-dlp fallback).
+			ytFetcher := transcript.NewYouTubeFetcher()
 			videoFetcher := transcript.NewChain(logger,
-				transcript.NewYouTubeFetcher(),
+				ytFetcher,
 				// transcript.NewYtDlpFetcher(), // yt-dlp がコンテナに入ったら有効化
 			)
+			ag.SetVideoMeta(ytFetcher)
 
 			features := []scheduler.Feature{
 				action.New(store.DB()),

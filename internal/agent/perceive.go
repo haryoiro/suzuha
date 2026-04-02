@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"image/png"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/haryoiro/suzuha/external/transcript"
 
 	"golang.org/x/image/webp"
 
@@ -139,6 +142,11 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 				}
 			}
 		}
+	}
+
+	// Annotate video URLs with metadata (title, duration).
+	if a.videoMeta != nil {
+		msg.Content = annotateVideoURLs(ctx, msg.Content, a.videoMeta, a.logger)
 	}
 
 	// Bootstrap channel history if this is a new channel (unless SkipChannelHistory is set).
@@ -383,4 +391,28 @@ func (a *Agent) formatChannelHistory(ctx context.Context, channelID, rawJSON, so
 		fmt.Fprintf(&b, "[%s] %s: %s\n", m.Time, name, m.Content)
 	}
 	return b.String()
+}
+
+// annotateVideoURLs はメッセージ中の動画 URL を検知し、メタデータで enrich する。
+func annotateVideoURLs(ctx context.Context, text string, meta transcript.MetadataFetcher, logger *slog.Logger) string {
+	urls := transcript.ExtractVideoURLs(text)
+	if len(urls) == 0 {
+		return text
+	}
+
+	for _, u := range urls {
+		if !meta.Supports(u) {
+			continue
+		}
+		info, err := meta.FetchMetadata(ctx, u)
+		if err != nil {
+			logger.Debug("video: メタデータ取得失敗", "url", u, "error", err)
+			continue
+		}
+		durMin := int(info.Duration) / 60
+		durSec := int(info.Duration) % 60
+		annotation := fmt.Sprintf("[動画: %q (%d:%02d) | video_watch で視聴可能] ", info.Title, durMin, durSec)
+		text = strings.Replace(text, u, annotation+u, 1)
+	}
+	return text
 }
