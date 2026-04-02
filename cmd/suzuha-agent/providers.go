@@ -237,8 +237,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			ytFetcher := transcript.NewYouTubeFetcher()
 			videoFetcher := transcript.NewChain(logger,
 				ytFetcher,
-				// transcript.NewYtDlpFetcher(), // yt-dlp がコンテナに入ったら有効化
+				transcript.NewYtDlpFetcher(),
 			)
+			videoExtractor := transcript.NewYtDlpFrameExtractor()
 			ag.SetVideoMeta(ytFetcher)
 
 			features := []scheduler.Feature{
@@ -249,7 +250,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
 				forget.New(do.MustInvoke[*memento.Consolidator](i)),
 				diary.New(),
-				video.New(videoFetcher, logger),
+				video.New(videoFetcher, videoExtractor, llmClient, logger),
 			}
 
 			// Add location feature if enabled.

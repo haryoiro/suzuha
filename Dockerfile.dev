@@ -29,6 +29,12 @@ RUN ARCH=$(uname -m) && \
 # Install Claude Code CLI (for dynamic tool generation)
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install yt-dlp + ffmpeg for video transcript/frame extraction
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg python3-pip \
+    && pip3 install --break-system-packages yt-dlp \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Air for hot reloading
 RUN go install github.com/air-verse/air@latest
 
