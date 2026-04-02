@@ -55,8 +55,8 @@ func TestWithCapability_Inline(t *testing.T) {
 	if !inline {
 		t.Error("conversation がネイティブ対応なら inline = true")
 	}
-	if rc.rp.model != "gpt-4o" {
-		t.Errorf("conversation のモデルを期待、got %q", rc.rp.model)
+	if rc.resolve().model != "gpt-4o" {
+		t.Errorf("conversation のモデルを期待、got %q", rc.resolve().model)
 	}
 }
 
@@ -72,8 +72,8 @@ func TestWithCapability_Fallback(t *testing.T) {
 	if inline {
 		t.Error("conversation が非対応でフォールバック時は inline = false")
 	}
-	if rc.rp.model != "gpt-4.1-mini" {
-		t.Errorf("vision ロールのモデルを期待、got %q", rc.rp.model)
+	if rc.resolve().model != "gpt-4.1-mini" {
+		t.Errorf("vision ロールのモデルを期待、got %q", rc.resolve().model)
 	}
 }
 
@@ -93,8 +93,8 @@ func TestFor_DirectRole(t *testing.T) {
 		"background":   {model: "bg-model"},
 	})
 	rc := c.For("background")
-	if rc.rp.model != "bg-model" {
-		t.Errorf("background ロールを期待、got %q", rc.rp.model)
+	if rc.resolve().model != "bg-model" {
+		t.Errorf("background ロールを期待、got %q", rc.resolve().model)
 	}
 }
 
@@ -104,8 +104,8 @@ func TestFor_FallbackToBackground(t *testing.T) {
 		"background":   {model: "bg-model"},
 	})
 	rc := c.For("diary")
-	if rc.rp.model != "bg-model" {
-		t.Errorf("diary は未割当 → background にフォールバック、got %q", rc.rp.model)
+	if rc.resolve().model != "bg-model" {
+		t.Errorf("diary は未割当 → background にフォールバック、got %q", rc.resolve().model)
 	}
 }
 
@@ -115,8 +115,8 @@ func TestFor_FallbackToConversation(t *testing.T) {
 	})
 	rc := c.For("background")
 	// background が存在しない → conversation にフォールバック
-	if rc.rp.model != "conv-model" {
-		t.Errorf("background なし → conversation にフォールバック、got %q", rc.rp.model)
+	if rc.resolve().model != "conv-model" {
+		t.Errorf("background なし → conversation にフォールバック、got %q", rc.resolve().model)
 	}
 }
 
@@ -160,6 +160,32 @@ func TestSwapRole_NewRole(t *testing.T) {
 	}
 	if _, ok := c.roles["vision"]; !ok {
 		t.Error("vision ロールが追加されるべき")
+	}
+}
+
+func TestRoleClient_ReflectsSwapRole(t *testing.T) {
+	c := buildTestClient(t, map[string]roleProvider{
+		"background": {model: "old-bg"},
+	})
+
+	// RoleClient を先に取得
+	rc := c.For("background")
+	if rc.resolve().model != "old-bg" {
+		t.Fatalf("初期状態: got %q, want old-bg", rc.resolve().model)
+	}
+
+	// SwapRole で切り替え
+	c.SwapRole("background", Preset{
+		Provider:     "openai",
+		Model:        "new-bg",
+		APIKey:       "key",
+		APIBase:      "https://api.openai.com/v1",
+		Capabilities: []string{"text"},
+	})
+
+	// 既存の RoleClient が新しいモデルを参照する
+	if rc.resolve().model != "new-bg" {
+		t.Errorf("SwapRole 後: got %q, want new-bg", rc.resolve().model)
 	}
 }
 

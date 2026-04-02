@@ -211,26 +211,38 @@ func (c *Client) SwapRole(role string, preset Preset) error {
 }
 
 // RoleClient はロールに紐づくプロバイダで補完を実行する。
+// Client への参照を保持し、呼び出し時に最新の provider を解決する。
+// これにより SwapRole() の変更が即座に反映される。
 type RoleClient struct {
-	rp     roleProvider
-	logger *slog.Logger
-	tracer trace.Tracer
+	client *Client
+	role   string // 解決済みのロール名
+}
+
+// resolve は呼び出し時に最新の roleProvider を取得する。
+func (rc *RoleClient) resolve() roleProvider {
+	rc.client.mu.RLock()
+	defer rc.client.mu.RUnlock()
+	if rp, ok := rc.client.roles[rc.role]; ok {
+		return rp
+	}
+	return roleProvider{}
 }
 
 // CompleteRaw はこのロールのプロバイダで completion を実行する。
 func (rc *RoleClient) CompleteRaw(ctx context.Context, messages []providers.Message) (*Response, error) {
-	if rc.rp.provider == nil {
-		return nil, fmt.Errorf("llm: ロールにプロバイダが設定されていません")
+	rp := rc.resolve()
+	if rp.provider == nil {
+		return nil, fmt.Errorf("llm: ロール %q にプロバイダが設定されていません", rc.role)
 	}
 	params := providers.CompletionParams{
-		Model:    rc.rp.model,
+		Model:    rp.model,
 		Messages: messages,
 	}
 
 	var resp *providers.ChatCompletion
-	err := retryOnRateLimit(ctx, rc.logger, func() error {
+	err := retryOnRateLimit(ctx, rc.client.logger, func() error {
 		var callErr error
-		resp, callErr = rc.rp.provider.Completion(ctx, params)
+		resp, callErr = rp.provider.Completion(ctx, params)
 		return callErr
 	})
 	if err != nil {
@@ -254,26 +266,27 @@ func (rc *RoleClient) CompleteRaw(ctx context.Context, messages []providers.Mess
 
 // MaxContextTokens はこのロールの最大コンテキストトークン数を返す。
 func (rc *RoleClient) MaxContextTokens() int {
-	return rc.rp.maxCtx
+	return rc.resolve().maxCtx
 }
 
 // For はロールに割り当てられたプロバイダを返す。
 // フォールバック: role → "background" → "conversation"
+// 返される RoleClient は Client への参照を保持し、SwapRole() の変更が即座に反映される。
 func (c *Client) For(role string) *RoleClient {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// 解決されたロール名を決定
+	resolved := role
 	fallback := []string{role, "background", "conversation"}
 	for _, r := range fallback {
-		if rp, ok := c.roles[r]; ok {
-			return &RoleClient{rp: rp, logger: c.logger, tracer: c.tracer}
+		if _, ok := c.roles[r]; ok {
+			resolved = r
+			break
 		}
 	}
-	// 全てのフォールバック失敗 — 最初に見つかったロールを返す
-	for _, rp := range c.roles {
-		return &RoleClient{rp: rp, logger: c.logger, tracer: c.tracer}
-	}
-	return &RoleClient{logger: c.logger}
+
+	return &RoleClient{client: c, role: resolved}
 }
 
 // WithCapability はロールの capability 解決を行い、RoleClient と inline フラグを返す。
@@ -289,6 +302,7 @@ func (c *Client) WithCapability(role, capability string) (*RoleClient, bool) {
 		// フォールバック
 		for _, r := range []string{"background", "conversation"} {
 			if rp, ok = c.roles[r]; ok {
+				role = r
 				break
 			}
 		}
@@ -296,12 +310,12 @@ func (c *Client) WithCapability(role, capability string) (*RoleClient, bool) {
 
 	// ロールのプロバイダが capability を持つ → inline
 	if ok && rp.hasCapability(capability) {
-		return &RoleClient{rp: rp, logger: c.logger, tracer: c.tracer}, true
+		return &RoleClient{client: c, role: role}, true
 	}
 
 	// capability 名のロールにフォールバック
-	if capRp, ok := c.roles[capability]; ok {
-		return &RoleClient{rp: capRp, logger: c.logger, tracer: c.tracer}, false
+	if _, ok := c.roles[capability]; ok {
+		return &RoleClient{client: c, role: capability}, false
 	}
 
 	// 見つからない
@@ -825,11 +839,15 @@ func (c *Client) IsVisionCapable() bool {
 // 後方互換シム: WithCapability("conversation", "vision") を使用する。
 func (c *Client) DescribeImage(ctx context.Context, imageURL string, prompt ...string) (string, error) {
 	rc, _ := c.WithCapability("conversation", "vision")
-	if rc == nil || rc.rp.provider == nil {
+	if rc == nil {
 		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
 	}
-	prov := rc.rp.provider
-	model := rc.rp.model
+	rp := rc.resolve()
+	if rp.provider == nil {
+		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
+	}
+	prov := rp.provider
+	model := rp.model
 
 	textPrompt := "この画像の内容を簡潔に描写してください。"
 	if len(prompt) > 0 && prompt[0] != "" {
