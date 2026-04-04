@@ -38,29 +38,45 @@ interface Tools {
   @route("{name}/execute") @post op execute(@path name: string, @body body: unknown): unknown;
 }
 
-// LLM (proxy to agent)
-model LLMPreset {
+// LLM Provider/Model/Role (3-layer architecture)
+model LLMProvider {
   name: string;
-  provider: string;
-  @encodedName("application/json", "model") llmModel: string;
+  type: string;
   api_key?: string;
   api_base: string;
-  max_tokens: int32;
-  capabilities: string[];
   source?: string;
+}
+
+model LLMModel {
+  provider_name: string;
+  model_id: string;
+  capabilities: string[];
+  max_context: int32;
+  source?: string;
+}
+
+model LLMRoleAssignment {
+  role: string;
+  provider_name: string;
+  model_id: string;
+}
+
+model LLMRoleUpdateReq {
+  provider: string;
+  @encodedName("application/json", "model") llmModel: string;
 }
 
 @route("/api/llm")
 @tag("LLM")
 interface LLM {
   @get op get(): unknown;
-  @put op update(@body body: unknown): unknown;
 
-  @route("presets") @get op presetsList(): LLMPreset[];
-  @route("presets") @post op presetsCreate(@body body: LLMPreset): OkResponse;
-  @route("presets/{name}") @put op presetsUpdate(@path name: string, @body body: LLMPreset): OkResponse;
-  @route("presets/{name}") @delete op presetsDelete(@path name: string): OkResponse;
+  @route("providers") @get op providersList(): LLMProvider[];
 
-  @route("assignments") @get op assignmentsList(): unknown;
-  @route("assignments/{role}") @put op assignmentsUpdate(@path role: string, @body body: { preset: string }): OkResponse;
+  @route("models") @get op modelsList(@query provider?: string): LLMModel[];
+  @route("models") @post op modelsCreate(@body body: LLMModel): OkResponse;
+  @route("models/refresh") @post op modelsRefresh(): unknown;
+
+  @route("roles") @get op rolesList(): LLMRoleAssignment[];
+  @route("roles/{role}") @put op rolesUpdate(@path role: string, @body body: LLMRoleUpdateReq): OkResponse;
 }

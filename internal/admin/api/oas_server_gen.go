@@ -116,38 +116,34 @@ type Handler interface {
 	//
 	// GET /api/identity
 	IdentityGet(ctx context.Context) (jx.Raw, error)
-	// LLMAssignmentsList implements LLM_assignmentsList operation.
-	//
-	// GET /api/llm/assignments
-	LLMAssignmentsList(ctx context.Context) (jx.Raw, error)
-	// LLMAssignmentsUpdate implements LLM_assignmentsUpdate operation.
-	//
-	// PUT /api/llm/assignments/{role}
-	LLMAssignmentsUpdate(ctx context.Context, req *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (*OkResponse, error)
 	// LLMGet implements LLM_get operation.
 	//
 	// GET /api/llm
 	LLMGet(ctx context.Context) (jx.Raw, error)
-	// LLMPresetsCreate implements LLM_presetsCreate operation.
+	// LLMModelsCreate implements LLM_modelsCreate operation.
 	//
-	// POST /api/llm/presets
-	LLMPresetsCreate(ctx context.Context, req *LLMPreset) (*OkResponse, error)
-	// LLMPresetsDelete implements LLM_presetsDelete operation.
+	// POST /api/llm/models
+	LLMModelsCreate(ctx context.Context, req *LLMModel) (*OkResponse, error)
+	// LLMModelsList implements LLM_modelsList operation.
 	//
-	// DELETE /api/llm/presets/{name}
-	LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (*OkResponse, error)
-	// LLMPresetsList implements LLM_presetsList operation.
+	// GET /api/llm/models
+	LLMModelsList(ctx context.Context, params LLMModelsListParams) ([]LLMModel, error)
+	// LLMModelsRefresh implements LLM_modelsRefresh operation.
 	//
-	// GET /api/llm/presets
-	LLMPresetsList(ctx context.Context) ([]LLMPreset, error)
-	// LLMPresetsUpdate implements LLM_presetsUpdate operation.
+	// POST /api/llm/models/refresh
+	LLMModelsRefresh(ctx context.Context) (jx.Raw, error)
+	// LLMProvidersList implements LLM_providersList operation.
 	//
-	// PUT /api/llm/presets/{name}
-	LLMPresetsUpdate(ctx context.Context, req *LLMPreset, params LLMPresetsUpdateParams) (*OkResponse, error)
-	// LLMUpdate implements LLM_update operation.
+	// GET /api/llm/providers
+	LLMProvidersList(ctx context.Context) ([]LLMProvider, error)
+	// LLMRolesList implements LLM_rolesList operation.
 	//
-	// PUT /api/llm
-	LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error)
+	// GET /api/llm/roles
+	LLMRolesList(ctx context.Context) ([]LLMRoleAssignment, error)
+	// LLMRolesUpdate implements LLM_rolesUpdate operation.
+	//
+	// PUT /api/llm/roles/{role}
+	LLMRolesUpdate(ctx context.Context, req *LLMRoleUpdateReq, params LLMRolesUpdateParams) (*OkResponse, error)
 	// LocationCreatePlace implements Location_createPlace operation.
 	//
 	// POST /api/location/places

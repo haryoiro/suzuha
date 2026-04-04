@@ -123,50 +123,63 @@ func (h *AdminHandler) LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error
 	return h.proxyPutRaw(ctx, "/internal/llm", jxReader(req))
 }
 
-// --- LLM Preset / Assignment (ogen interface) ---
+// --- LLM Provider / Model / Role (ogen interface) ---
 
-func (h *AdminHandler) LLMPresetsList(ctx context.Context) ([]api.LLMPreset, error) {
-	data, err := h.proxyGet(ctx, "/internal/llm/presets")
+func (h *AdminHandler) LLMProvidersList(ctx context.Context) ([]api.LLMProvider, error) {
+	data, err := h.proxyGet(ctx, "/internal/llm/providers")
 	if err != nil {
 		return nil, err
 	}
-	var presets []api.LLMPreset
-	if err := json.Unmarshal(data, &presets); err != nil {
+	var providers []api.LLMProvider
+	if err := json.Unmarshal(data, &providers); err != nil {
 		return nil, err
 	}
-	return presets, nil
+	return providers, nil
 }
 
-func (h *AdminHandler) LLMPresetsCreate(ctx context.Context, req *api.LLMPreset) (*api.OkResponse, error) {
+func (h *AdminHandler) LLMModelsList(ctx context.Context, params api.LLMModelsListParams) ([]api.LLMModel, error) {
+	path := "/internal/llm/models"
+	if params.Provider.Set {
+		path += "?provider=" + params.Provider.Value
+	}
+	data, err := h.proxyGet(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	var models []api.LLMModel
+	if err := json.Unmarshal(data, &models); err != nil {
+		return nil, err
+	}
+	return models, nil
+}
+
+func (h *AdminHandler) LLMModelsCreate(ctx context.Context, req *api.LLMModel) (*api.OkResponse, error) {
 	body, _ := json.Marshal(req)
-	if _, err := h.proxyPostRaw(ctx, "/internal/llm/presets", bytes.NewReader(body)); err != nil {
+	if _, err := h.proxyPostRaw(ctx, "/internal/llm/models", bytes.NewReader(body)); err != nil {
 		return nil, err
 	}
 	return &api.OkResponse{Ok: true}, nil
 }
 
-func (h *AdminHandler) LLMPresetsUpdate(ctx context.Context, req *api.LLMPreset, params api.LLMPresetsUpdateParams) (*api.OkResponse, error) {
-	body, _ := json.Marshal(req)
-	if _, err := h.proxyPutRaw(ctx, "/internal/llm/presets/"+params.Name, bytes.NewReader(body)); err != nil {
+func (h *AdminHandler) LLMModelsRefresh(ctx context.Context) (jx.Raw, error) {
+	return h.proxyPostRaw(ctx, "/internal/llm/models/refresh", nil)
+}
+
+func (h *AdminHandler) LLMRolesList(ctx context.Context) ([]api.LLMRoleAssignment, error) {
+	data, err := h.proxyGet(ctx, "/internal/llm/roles")
+	if err != nil {
 		return nil, err
 	}
-	return &api.OkResponse{Ok: true}, nil
-}
-
-func (h *AdminHandler) LLMPresetsDelete(ctx context.Context, params api.LLMPresetsDeleteParams) (*api.OkResponse, error) {
-	if _, err := h.proxyDeleteRaw(ctx, "/internal/llm/presets/"+params.Name); err != nil {
+	var roles []api.LLMRoleAssignment
+	if err := json.Unmarshal(data, &roles); err != nil {
 		return nil, err
 	}
-	return &api.OkResponse{Ok: true}, nil
+	return roles, nil
 }
 
-func (h *AdminHandler) LLMAssignmentsList(ctx context.Context) (jx.Raw, error) {
-	return h.proxyGet(ctx, "/internal/llm/assignments")
-}
-
-func (h *AdminHandler) LLMAssignmentsUpdate(ctx context.Context, req *api.LLMAssignmentsUpdateReq, params api.LLMAssignmentsUpdateParams) (*api.OkResponse, error) {
+func (h *AdminHandler) LLMRolesUpdate(ctx context.Context, req *api.LLMRoleUpdateReq, params api.LLMRolesUpdateParams) (*api.OkResponse, error) {
 	body, _ := json.Marshal(req)
-	if _, err := h.proxyPutRaw(ctx, "/internal/llm/assignments/"+params.Role, bytes.NewReader(body)); err != nil {
+	if _, err := h.proxyPutRaw(ctx, "/internal/llm/roles/"+params.Role, bytes.NewReader(body)); err != nil {
 		return nil, err
 	}
 	return &api.OkResponse{Ok: true}, nil

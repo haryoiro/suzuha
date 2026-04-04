@@ -35,13 +35,7 @@ var (
 	rn28AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn39AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn38AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn41AllowedHeaders = map[string]string{
+	rn37AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn43AllowedHeaders = map[string]string{
@@ -895,12 +889,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						switch r.Method {
 						case "GET":
 							s.handleLLMGetRequest([0]string{}, elemIsEscaped, w, r)
-						case "PUT":
-							s.handleLLMUpdateRequest([0]string{}, elemIsEscaped, w, r)
 						default:
 							s.notAllowed(w, r, notAllowedParams{
-								allowedMethods: "GET,PUT",
-								allowedHeaders: rn39AllowedHeaders,
+								allowedMethods: "GET",
+								allowedHeaders: nil,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -921,9 +913,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							break
 						}
 						switch elem[0] {
-						case 'a': // Prefix: "assignments"
+						case 'm': // Prefix: "models"
 
-							if l := len("assignments"); len(elem) >= l && elem[0:l] == "assignments" {
+							if l := len("models"); len(elem) >= l && elem[0:l] == "models" {
 								elem = elem[l:]
 							} else {
 								break
@@ -932,7 +924,85 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							if len(elem) == 0 {
 								switch r.Method {
 								case "GET":
-									s.handleLLMAssignmentsListRequest([0]string{}, elemIsEscaped, w, r)
+									s.handleLLMModelsListRequest([0]string{}, elemIsEscaped, w, r)
+								case "POST":
+									s.handleLLMModelsCreateRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET,POST",
+										allowedHeaders: rn37AllowedHeaders,
+										acceptPost:     "application/json",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+							switch elem[0] {
+							case '/': // Prefix: "/refresh"
+
+								if l := len("/refresh"); len(elem) >= l && elem[0:l] == "/refresh" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch r.Method {
+									case "POST":
+										s.handleLLMModelsRefreshRequest([0]string{}, elemIsEscaped, w, r)
+									default:
+										s.notAllowed(w, r, notAllowedParams{
+											allowedMethods: "POST",
+											allowedHeaders: nil,
+											acceptPost:     "",
+											acceptPatch:    "",
+										})
+									}
+
+									return
+								}
+
+							}
+
+						case 'p': // Prefix: "providers"
+
+							if l := len("providers"); len(elem) >= l && elem[0:l] == "providers" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch r.Method {
+								case "GET":
+									s.handleLLMProvidersListRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET",
+										allowedHeaders: nil,
+										acceptPost:     "",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+
+						case 'r': // Prefix: "roles"
+
+							if l := len("roles"); len(elem) >= l && elem[0:l] == "roles" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								switch r.Method {
+								case "GET":
+									s.handleLLMRolesListRequest([0]string{}, elemIsEscaped, w, r)
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "GET",
@@ -966,80 +1036,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									// Leaf node.
 									switch r.Method {
 									case "PUT":
-										s.handleLLMAssignmentsUpdateRequest([1]string{
+										s.handleLLMRolesUpdateRequest([1]string{
 											args[0],
 										}, elemIsEscaped, w, r)
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "PUT",
-											allowedHeaders: rn38AllowedHeaders,
-											acceptPost:     "",
-											acceptPatch:    "",
-										})
-									}
-
-									return
-								}
-
-							}
-
-						case 'p': // Prefix: "presets"
-
-							if l := len("presets"); len(elem) >= l && elem[0:l] == "presets" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								switch r.Method {
-								case "GET":
-									s.handleLLMPresetsListRequest([0]string{}, elemIsEscaped, w, r)
-								case "POST":
-									s.handleLLMPresetsCreateRequest([0]string{}, elemIsEscaped, w, r)
-								default:
-									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "GET,POST",
-										allowedHeaders: rn41AllowedHeaders,
-										acceptPost:     "application/json",
-										acceptPatch:    "",
-									})
-								}
-
-								return
-							}
-							switch elem[0] {
-							case '/': // Prefix: "/"
-
-								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
-									elem = elem[l:]
-								} else {
-									break
-								}
-
-								// Param: "name"
-								// Leaf parameter, slashes are prohibited
-								idx := strings.IndexByte(elem, '/')
-								if idx >= 0 {
-									break
-								}
-								args[0] = elem
-								elem = ""
-
-								if len(elem) == 0 {
-									// Leaf node.
-									switch r.Method {
-									case "DELETE":
-										s.handleLLMPresetsDeleteRequest([1]string{
-											args[0],
-										}, elemIsEscaped, w, r)
-									case "PUT":
-										s.handleLLMPresetsUpdateRequest([1]string{
-											args[0],
-										}, elemIsEscaped, w, r)
-									default:
-										s.notAllowed(w, r, notAllowedParams{
-											allowedMethods: "DELETE,PUT",
 											allowedHeaders: rn43AllowedHeaders,
 											acceptPost:     "",
 											acceptPatch:    "",
@@ -2832,15 +2834,6 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.args = args
 							r.count = 0
 							return r, true
-						case "PUT":
-							r.name = LLMUpdateOperation
-							r.summary = ""
-							r.operationID = "LLM_update"
-							r.operationGroup = ""
-							r.pathPattern = "/api/llm"
-							r.args = args
-							r.count = 0
-							return r, true
 						default:
 							return
 						}
@@ -2858,9 +2851,9 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							break
 						}
 						switch elem[0] {
-						case 'a': // Prefix: "assignments"
+						case 'm': // Prefix: "models"
 
-							if l := len("assignments"); len(elem) >= l && elem[0:l] == "assignments" {
+							if l := len("models"); len(elem) >= l && elem[0:l] == "models" {
 								elem = elem[l:]
 							} else {
 								break
@@ -2869,11 +2862,96 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							if len(elem) == 0 {
 								switch method {
 								case "GET":
-									r.name = LLMAssignmentsListOperation
+									r.name = LLMModelsListOperation
 									r.summary = ""
-									r.operationID = "LLM_assignmentsList"
+									r.operationID = "LLM_modelsList"
 									r.operationGroup = ""
-									r.pathPattern = "/api/llm/assignments"
+									r.pathPattern = "/api/llm/models"
+									r.args = args
+									r.count = 0
+									return r, true
+								case "POST":
+									r.name = LLMModelsCreateOperation
+									r.summary = ""
+									r.operationID = "LLM_modelsCreate"
+									r.operationGroup = ""
+									r.pathPattern = "/api/llm/models"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+							switch elem[0] {
+							case '/': // Prefix: "/refresh"
+
+								if l := len("/refresh"); len(elem) >= l && elem[0:l] == "/refresh" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch method {
+									case "POST":
+										r.name = LLMModelsRefreshOperation
+										r.summary = ""
+										r.operationID = "LLM_modelsRefresh"
+										r.operationGroup = ""
+										r.pathPattern = "/api/llm/models/refresh"
+										r.args = args
+										r.count = 0
+										return r, true
+									default:
+										return
+									}
+								}
+
+							}
+
+						case 'p': // Prefix: "providers"
+
+							if l := len("providers"); len(elem) >= l && elem[0:l] == "providers" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								// Leaf node.
+								switch method {
+								case "GET":
+									r.name = LLMProvidersListOperation
+									r.summary = ""
+									r.operationID = "LLM_providersList"
+									r.operationGroup = ""
+									r.pathPattern = "/api/llm/providers"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+
+						case 'r': // Prefix: "roles"
+
+							if l := len("roles"); len(elem) >= l && elem[0:l] == "roles" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								switch method {
+								case "GET":
+									r.name = LLMRolesListOperation
+									r.summary = ""
+									r.operationID = "LLM_rolesList"
+									r.operationGroup = ""
+									r.pathPattern = "/api/llm/roles"
 									r.args = args
 									r.count = 0
 									return r, true
@@ -2903,89 +2981,11 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									// Leaf node.
 									switch method {
 									case "PUT":
-										r.name = LLMAssignmentsUpdateOperation
+										r.name = LLMRolesUpdateOperation
 										r.summary = ""
-										r.operationID = "LLM_assignmentsUpdate"
+										r.operationID = "LLM_rolesUpdate"
 										r.operationGroup = ""
-										r.pathPattern = "/api/llm/assignments/{role}"
-										r.args = args
-										r.count = 1
-										return r, true
-									default:
-										return
-									}
-								}
-
-							}
-
-						case 'p': // Prefix: "presets"
-
-							if l := len("presets"); len(elem) >= l && elem[0:l] == "presets" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								switch method {
-								case "GET":
-									r.name = LLMPresetsListOperation
-									r.summary = ""
-									r.operationID = "LLM_presetsList"
-									r.operationGroup = ""
-									r.pathPattern = "/api/llm/presets"
-									r.args = args
-									r.count = 0
-									return r, true
-								case "POST":
-									r.name = LLMPresetsCreateOperation
-									r.summary = ""
-									r.operationID = "LLM_presetsCreate"
-									r.operationGroup = ""
-									r.pathPattern = "/api/llm/presets"
-									r.args = args
-									r.count = 0
-									return r, true
-								default:
-									return
-								}
-							}
-							switch elem[0] {
-							case '/': // Prefix: "/"
-
-								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
-									elem = elem[l:]
-								} else {
-									break
-								}
-
-								// Param: "name"
-								// Leaf parameter, slashes are prohibited
-								idx := strings.IndexByte(elem, '/')
-								if idx >= 0 {
-									break
-								}
-								args[0] = elem
-								elem = ""
-
-								if len(elem) == 0 {
-									// Leaf node.
-									switch method {
-									case "DELETE":
-										r.name = LLMPresetsDeleteOperation
-										r.summary = ""
-										r.operationID = "LLM_presetsDelete"
-										r.operationGroup = ""
-										r.pathPattern = "/api/llm/presets/{name}"
-										r.args = args
-										r.count = 1
-										return r, true
-									case "PUT":
-										r.name = LLMPresetsUpdateOperation
-										r.summary = ""
-										r.operationID = "LLM_presetsUpdate"
-										r.operationGroup = ""
-										r.pathPattern = "/api/llm/presets/{name}"
+										r.pathPattern = "/api/llm/roles/{role}"
 										r.args = args
 										r.count = 1
 										return r, true

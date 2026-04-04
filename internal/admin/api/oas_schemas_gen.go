@@ -1127,110 +1127,185 @@ func (s *HealthCheckOK) SetStatus(val string) {
 	s.Status = val
 }
 
-type LLMAssignmentsUpdateReq struct {
-	Preset string `json:"preset"`
-}
-
-// GetPreset returns the value of Preset.
-func (s *LLMAssignmentsUpdateReq) GetPreset() string {
-	return s.Preset
-}
-
-// SetPreset sets the value of Preset.
-func (s *LLMAssignmentsUpdateReq) SetPreset(val string) {
-	s.Preset = val
-}
-
-// Ref: #/components/schemas/LLMPreset
-type LLMPreset struct {
-	Name         string    `json:"name"`
-	Provider     string    `json:"provider"`
-	Model        string    `json:"model"`
-	APIKey       OptString `json:"api_key"`
-	APIBase      string    `json:"api_base"`
-	MaxTokens    int32     `json:"max_tokens"`
+// Ref: #/components/schemas/LLMModel
+type LLMModel struct {
+	ProviderName string    `json:"provider_name"`
+	ModelID      string    `json:"model_id"`
 	Capabilities []string  `json:"capabilities"`
+	MaxContext   int32     `json:"max_context"`
 	Source       OptString `json:"source"`
 }
 
+// GetProviderName returns the value of ProviderName.
+func (s *LLMModel) GetProviderName() string {
+	return s.ProviderName
+}
+
+// GetModelID returns the value of ModelID.
+func (s *LLMModel) GetModelID() string {
+	return s.ModelID
+}
+
+// GetCapabilities returns the value of Capabilities.
+func (s *LLMModel) GetCapabilities() []string {
+	return s.Capabilities
+}
+
+// GetMaxContext returns the value of MaxContext.
+func (s *LLMModel) GetMaxContext() int32 {
+	return s.MaxContext
+}
+
+// GetSource returns the value of Source.
+func (s *LLMModel) GetSource() OptString {
+	return s.Source
+}
+
+// SetProviderName sets the value of ProviderName.
+func (s *LLMModel) SetProviderName(val string) {
+	s.ProviderName = val
+}
+
+// SetModelID sets the value of ModelID.
+func (s *LLMModel) SetModelID(val string) {
+	s.ModelID = val
+}
+
+// SetCapabilities sets the value of Capabilities.
+func (s *LLMModel) SetCapabilities(val []string) {
+	s.Capabilities = val
+}
+
+// SetMaxContext sets the value of MaxContext.
+func (s *LLMModel) SetMaxContext(val int32) {
+	s.MaxContext = val
+}
+
+// SetSource sets the value of Source.
+func (s *LLMModel) SetSource(val OptString) {
+	s.Source = val
+}
+
+// Ref: #/components/schemas/LLMProvider
+type LLMProvider struct {
+	Name    string    `json:"name"`
+	Type    string    `json:"type"`
+	APIKey  OptString `json:"api_key"`
+	APIBase string    `json:"api_base"`
+	Source  OptString `json:"source"`
+}
+
 // GetName returns the value of Name.
-func (s *LLMPreset) GetName() string {
+func (s *LLMProvider) GetName() string {
 	return s.Name
 }
 
-// GetProvider returns the value of Provider.
-func (s *LLMPreset) GetProvider() string {
-	return s.Provider
-}
-
-// GetModel returns the value of Model.
-func (s *LLMPreset) GetModel() string {
-	return s.Model
+// GetType returns the value of Type.
+func (s *LLMProvider) GetType() string {
+	return s.Type
 }
 
 // GetAPIKey returns the value of APIKey.
-func (s *LLMPreset) GetAPIKey() OptString {
+func (s *LLMProvider) GetAPIKey() OptString {
 	return s.APIKey
 }
 
 // GetAPIBase returns the value of APIBase.
-func (s *LLMPreset) GetAPIBase() string {
+func (s *LLMProvider) GetAPIBase() string {
 	return s.APIBase
 }
 
-// GetMaxTokens returns the value of MaxTokens.
-func (s *LLMPreset) GetMaxTokens() int32 {
-	return s.MaxTokens
-}
-
-// GetCapabilities returns the value of Capabilities.
-func (s *LLMPreset) GetCapabilities() []string {
-	return s.Capabilities
-}
-
 // GetSource returns the value of Source.
-func (s *LLMPreset) GetSource() OptString {
+func (s *LLMProvider) GetSource() OptString {
 	return s.Source
 }
 
 // SetName sets the value of Name.
-func (s *LLMPreset) SetName(val string) {
+func (s *LLMProvider) SetName(val string) {
 	s.Name = val
 }
 
-// SetProvider sets the value of Provider.
-func (s *LLMPreset) SetProvider(val string) {
-	s.Provider = val
-}
-
-// SetModel sets the value of Model.
-func (s *LLMPreset) SetModel(val string) {
-	s.Model = val
+// SetType sets the value of Type.
+func (s *LLMProvider) SetType(val string) {
+	s.Type = val
 }
 
 // SetAPIKey sets the value of APIKey.
-func (s *LLMPreset) SetAPIKey(val OptString) {
+func (s *LLMProvider) SetAPIKey(val OptString) {
 	s.APIKey = val
 }
 
 // SetAPIBase sets the value of APIBase.
-func (s *LLMPreset) SetAPIBase(val string) {
+func (s *LLMProvider) SetAPIBase(val string) {
 	s.APIBase = val
 }
 
-// SetMaxTokens sets the value of MaxTokens.
-func (s *LLMPreset) SetMaxTokens(val int32) {
-	s.MaxTokens = val
-}
-
-// SetCapabilities sets the value of Capabilities.
-func (s *LLMPreset) SetCapabilities(val []string) {
-	s.Capabilities = val
-}
-
 // SetSource sets the value of Source.
-func (s *LLMPreset) SetSource(val OptString) {
+func (s *LLMProvider) SetSource(val OptString) {
 	s.Source = val
+}
+
+// Ref: #/components/schemas/LLMRoleAssignment
+type LLMRoleAssignment struct {
+	Role         string `json:"role"`
+	ProviderName string `json:"provider_name"`
+	ModelID      string `json:"model_id"`
+}
+
+// GetRole returns the value of Role.
+func (s *LLMRoleAssignment) GetRole() string {
+	return s.Role
+}
+
+// GetProviderName returns the value of ProviderName.
+func (s *LLMRoleAssignment) GetProviderName() string {
+	return s.ProviderName
+}
+
+// GetModelID returns the value of ModelID.
+func (s *LLMRoleAssignment) GetModelID() string {
+	return s.ModelID
+}
+
+// SetRole sets the value of Role.
+func (s *LLMRoleAssignment) SetRole(val string) {
+	s.Role = val
+}
+
+// SetProviderName sets the value of ProviderName.
+func (s *LLMRoleAssignment) SetProviderName(val string) {
+	s.ProviderName = val
+}
+
+// SetModelID sets the value of ModelID.
+func (s *LLMRoleAssignment) SetModelID(val string) {
+	s.ModelID = val
+}
+
+// Ref: #/components/schemas/LLMRoleUpdateReq
+type LLMRoleUpdateReq struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+}
+
+// GetProvider returns the value of Provider.
+func (s *LLMRoleUpdateReq) GetProvider() string {
+	return s.Provider
+}
+
+// GetModel returns the value of Model.
+func (s *LLMRoleUpdateReq) GetModel() string {
+	return s.Model
+}
+
+// SetProvider sets the value of Provider.
+func (s *LLMRoleUpdateReq) SetProvider(val string) {
+	s.Provider = val
+}
+
+// SetModel sets the value of Model.
+func (s *LLMRoleUpdateReq) SetModel(val string) {
+	s.Model = val
 }
 
 // LocationDeleteDeviceNoContent is response for LocationDeleteDevice operation.

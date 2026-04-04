@@ -134,38 +134,34 @@ type Invoker interface {
 	//
 	// GET /api/identity
 	IdentityGet(ctx context.Context) (jx.Raw, error)
-	// LLMAssignmentsList invokes LLM_assignmentsList operation.
-	//
-	// GET /api/llm/assignments
-	LLMAssignmentsList(ctx context.Context) (jx.Raw, error)
-	// LLMAssignmentsUpdate invokes LLM_assignmentsUpdate operation.
-	//
-	// PUT /api/llm/assignments/{role}
-	LLMAssignmentsUpdate(ctx context.Context, request *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (*OkResponse, error)
 	// LLMGet invokes LLM_get operation.
 	//
 	// GET /api/llm
 	LLMGet(ctx context.Context) (jx.Raw, error)
-	// LLMPresetsCreate invokes LLM_presetsCreate operation.
+	// LLMModelsCreate invokes LLM_modelsCreate operation.
 	//
-	// POST /api/llm/presets
-	LLMPresetsCreate(ctx context.Context, request *LLMPreset) (*OkResponse, error)
-	// LLMPresetsDelete invokes LLM_presetsDelete operation.
+	// POST /api/llm/models
+	LLMModelsCreate(ctx context.Context, request *LLMModel) (*OkResponse, error)
+	// LLMModelsList invokes LLM_modelsList operation.
 	//
-	// DELETE /api/llm/presets/{name}
-	LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (*OkResponse, error)
-	// LLMPresetsList invokes LLM_presetsList operation.
+	// GET /api/llm/models
+	LLMModelsList(ctx context.Context, params LLMModelsListParams) ([]LLMModel, error)
+	// LLMModelsRefresh invokes LLM_modelsRefresh operation.
 	//
-	// GET /api/llm/presets
-	LLMPresetsList(ctx context.Context) ([]LLMPreset, error)
-	// LLMPresetsUpdate invokes LLM_presetsUpdate operation.
+	// POST /api/llm/models/refresh
+	LLMModelsRefresh(ctx context.Context) (jx.Raw, error)
+	// LLMProvidersList invokes LLM_providersList operation.
 	//
-	// PUT /api/llm/presets/{name}
-	LLMPresetsUpdate(ctx context.Context, request *LLMPreset, params LLMPresetsUpdateParams) (*OkResponse, error)
-	// LLMUpdate invokes LLM_update operation.
+	// GET /api/llm/providers
+	LLMProvidersList(ctx context.Context) ([]LLMProvider, error)
+	// LLMRolesList invokes LLM_rolesList operation.
 	//
-	// PUT /api/llm
-	LLMUpdate(ctx context.Context, request jx.Raw) (jx.Raw, error)
+	// GET /api/llm/roles
+	LLMRolesList(ctx context.Context) ([]LLMRoleAssignment, error)
+	// LLMRolesUpdate invokes LLM_rolesUpdate operation.
+	//
+	// PUT /api/llm/roles/{role}
+	LLMRolesUpdate(ctx context.Context, request *LLMRoleUpdateReq, params LLMRolesUpdateParams) (*OkResponse, error)
 	// LocationCreatePlace invokes Location_createPlace operation.
 	//
 	// POST /api/location/places
@@ -2499,171 +2495,6 @@ func (c *Client) sendIdentityGet(ctx context.Context) (res jx.Raw, err error) {
 	return result, nil
 }
 
-// LLMAssignmentsList invokes LLM_assignmentsList operation.
-//
-// GET /api/llm/assignments
-func (c *Client) LLMAssignmentsList(ctx context.Context) (jx.Raw, error) {
-	res, err := c.sendLLMAssignmentsList(ctx)
-	return res, err
-}
-
-func (c *Client) sendLLMAssignmentsList(ctx context.Context) (res jx.Raw, err error) {
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_assignmentsList"),
-		semconv.HTTPRequestMethodKey.String("GET"),
-		semconv.URLTemplateKey.String("/api/llm/assignments"),
-	}
-	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		elapsedDuration := time.Since(startTime)
-		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
-	}()
-
-	// Increment request counter.
-	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-
-	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMAssignmentsListOperation,
-		trace.WithAttributes(otelAttrs...),
-		clientSpanKind,
-	)
-	// Track stage for error reporting.
-	var stage string
-	defer func() {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, stage)
-			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-		}
-		span.End()
-	}()
-
-	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [1]string
-	pathParts[0] = "/api/llm/assignments"
-	uri.AddPathParts(u, pathParts[:]...)
-
-	stage = "EncodeRequest"
-	r, err := ht.NewRequest(ctx, "GET", u)
-	if err != nil {
-		return res, errors.Wrap(err, "create request")
-	}
-
-	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
-	if err != nil {
-		return res, errors.Wrap(err, "do request")
-	}
-	body := resp.Body
-	defer body.Close()
-
-	stage = "DecodeResponse"
-	result, err := decodeLLMAssignmentsListResponse(resp)
-	if err != nil {
-		return res, errors.Wrap(err, "decode response")
-	}
-
-	return result, nil
-}
-
-// LLMAssignmentsUpdate invokes LLM_assignmentsUpdate operation.
-//
-// PUT /api/llm/assignments/{role}
-func (c *Client) LLMAssignmentsUpdate(ctx context.Context, request *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (*OkResponse, error) {
-	res, err := c.sendLLMAssignmentsUpdate(ctx, request, params)
-	return res, err
-}
-
-func (c *Client) sendLLMAssignmentsUpdate(ctx context.Context, request *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (res *OkResponse, err error) {
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_assignmentsUpdate"),
-		semconv.HTTPRequestMethodKey.String("PUT"),
-		semconv.URLTemplateKey.String("/api/llm/assignments/{role}"),
-	}
-	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		elapsedDuration := time.Since(startTime)
-		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
-	}()
-
-	// Increment request counter.
-	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-
-	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMAssignmentsUpdateOperation,
-		trace.WithAttributes(otelAttrs...),
-		clientSpanKind,
-	)
-	// Track stage for error reporting.
-	var stage string
-	defer func() {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, stage)
-			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-		}
-		span.End()
-	}()
-
-	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [2]string
-	pathParts[0] = "/api/llm/assignments/"
-	{
-		// Encode "role" parameter.
-		e := uri.NewPathEncoder(uri.PathEncoderConfig{
-			Param:   "role",
-			Style:   uri.PathStyleSimple,
-			Explode: false,
-		})
-		if err := func() error {
-			return e.EncodeValue(conv.StringToString(params.Role))
-		}(); err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		encoded, err := e.Result()
-		if err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		pathParts[1] = encoded
-	}
-	uri.AddPathParts(u, pathParts[:]...)
-
-	stage = "EncodeRequest"
-	r, err := ht.NewRequest(ctx, "PUT", u)
-	if err != nil {
-		return res, errors.Wrap(err, "create request")
-	}
-	if err := encodeLLMAssignmentsUpdateRequest(request, r); err != nil {
-		return res, errors.Wrap(err, "encode request")
-	}
-
-	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
-	if err != nil {
-		return res, errors.Wrap(err, "do request")
-	}
-	body := resp.Body
-	defer body.Close()
-
-	stage = "DecodeResponse"
-	result, err := decodeLLMAssignmentsUpdateResponse(resp)
-	if err != nil {
-		return res, errors.Wrap(err, "decode response")
-	}
-
-	return result, nil
-}
-
 // LLMGet invokes LLM_get operation.
 //
 // GET /api/llm
@@ -2736,19 +2567,19 @@ func (c *Client) sendLLMGet(ctx context.Context) (res jx.Raw, err error) {
 	return result, nil
 }
 
-// LLMPresetsCreate invokes LLM_presetsCreate operation.
+// LLMModelsCreate invokes LLM_modelsCreate operation.
 //
-// POST /api/llm/presets
-func (c *Client) LLMPresetsCreate(ctx context.Context, request *LLMPreset) (*OkResponse, error) {
-	res, err := c.sendLLMPresetsCreate(ctx, request)
+// POST /api/llm/models
+func (c *Client) LLMModelsCreate(ctx context.Context, request *LLMModel) (*OkResponse, error) {
+	res, err := c.sendLLMModelsCreate(ctx, request)
 	return res, err
 }
 
-func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (res *OkResponse, err error) {
+func (c *Client) sendLLMModelsCreate(ctx context.Context, request *LLMModel) (res *OkResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsCreate"),
+		otelogen.OperationID("LLM_modelsCreate"),
 		semconv.HTTPRequestMethodKey.String("POST"),
-		semconv.URLTemplateKey.String("/api/llm/presets"),
+		semconv.URLTemplateKey.String("/api/llm/models"),
 	}
 	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
 
@@ -2764,7 +2595,7 @@ func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsCreateOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMModelsCreateOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2782,7 +2613,7 @@ func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (
 	stage = "BuildURL"
 	u := uri.Clone(c.requestURL(ctx))
 	var pathParts [1]string
-	pathParts[0] = "/api/llm/presets"
+	pathParts[0] = "/api/llm/models"
 	uri.AddPathParts(u, pathParts[:]...)
 
 	stage = "EncodeRequest"
@@ -2790,7 +2621,7 @@ func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeLLMPresetsCreateRequest(request, r); err != nil {
+	if err := encodeLLMModelsCreateRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -2803,7 +2634,7 @@ func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeLLMPresetsCreateResponse(resp)
+	result, err := decodeLLMModelsCreateResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2811,109 +2642,19 @@ func (c *Client) sendLLMPresetsCreate(ctx context.Context, request *LLMPreset) (
 	return result, nil
 }
 
-// LLMPresetsDelete invokes LLM_presetsDelete operation.
+// LLMModelsList invokes LLM_modelsList operation.
 //
-// DELETE /api/llm/presets/{name}
-func (c *Client) LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (*OkResponse, error) {
-	res, err := c.sendLLMPresetsDelete(ctx, params)
+// GET /api/llm/models
+func (c *Client) LLMModelsList(ctx context.Context, params LLMModelsListParams) ([]LLMModel, error) {
+	res, err := c.sendLLMModelsList(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendLLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (res *OkResponse, err error) {
+func (c *Client) sendLLMModelsList(ctx context.Context, params LLMModelsListParams) (res []LLMModel, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsDelete"),
-		semconv.HTTPRequestMethodKey.String("DELETE"),
-		semconv.URLTemplateKey.String("/api/llm/presets/{name}"),
-	}
-	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		elapsedDuration := time.Since(startTime)
-		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
-	}()
-
-	// Increment request counter.
-	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-
-	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsDeleteOperation,
-		trace.WithAttributes(otelAttrs...),
-		clientSpanKind,
-	)
-	// Track stage for error reporting.
-	var stage string
-	defer func() {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, stage)
-			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-		}
-		span.End()
-	}()
-
-	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [2]string
-	pathParts[0] = "/api/llm/presets/"
-	{
-		// Encode "name" parameter.
-		e := uri.NewPathEncoder(uri.PathEncoderConfig{
-			Param:   "name",
-			Style:   uri.PathStyleSimple,
-			Explode: false,
-		})
-		if err := func() error {
-			return e.EncodeValue(conv.StringToString(params.Name))
-		}(); err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		encoded, err := e.Result()
-		if err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		pathParts[1] = encoded
-	}
-	uri.AddPathParts(u, pathParts[:]...)
-
-	stage = "EncodeRequest"
-	r, err := ht.NewRequest(ctx, "DELETE", u)
-	if err != nil {
-		return res, errors.Wrap(err, "create request")
-	}
-
-	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
-	if err != nil {
-		return res, errors.Wrap(err, "do request")
-	}
-	body := resp.Body
-	defer body.Close()
-
-	stage = "DecodeResponse"
-	result, err := decodeLLMPresetsDeleteResponse(resp)
-	if err != nil {
-		return res, errors.Wrap(err, "decode response")
-	}
-
-	return result, nil
-}
-
-// LLMPresetsList invokes LLM_presetsList operation.
-//
-// GET /api/llm/presets
-func (c *Client) LLMPresetsList(ctx context.Context) ([]LLMPreset, error) {
-	res, err := c.sendLLMPresetsList(ctx)
-	return res, err
-}
-
-func (c *Client) sendLLMPresetsList(ctx context.Context) (res []LLMPreset, err error) {
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsList"),
+		otelogen.OperationID("LLM_modelsList"),
 		semconv.HTTPRequestMethodKey.String("GET"),
-		semconv.URLTemplateKey.String("/api/llm/presets"),
+		semconv.URLTemplateKey.String("/api/llm/models"),
 	}
 	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
 
@@ -2929,7 +2670,7 @@ func (c *Client) sendLLMPresetsList(ctx context.Context) (res []LLMPreset, err e
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsListOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMModelsListOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2947,7 +2688,172 @@ func (c *Client) sendLLMPresetsList(ctx context.Context) (res []LLMPreset, err e
 	stage = "BuildURL"
 	u := uri.Clone(c.requestURL(ctx))
 	var pathParts [1]string
-	pathParts[0] = "/api/llm/presets"
+	pathParts[0] = "/api/llm/models"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeQueryParams"
+	q := uri.NewQueryEncoder()
+	{
+		// Encode "provider" parameter.
+		cfg := uri.QueryParameterEncodingConfig{
+			Name:    "provider",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.EncodeParam(cfg, func(e uri.Encoder) error {
+			if val, ok := params.Provider.Get(); ok {
+				return e.EncodeValue(conv.StringToString(val))
+			}
+			return nil
+		}); err != nil {
+			return res, errors.Wrap(err, "encode query")
+		}
+	}
+	u.RawQuery = q.Values().Encode()
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMModelsListResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMModelsRefresh invokes LLM_modelsRefresh operation.
+//
+// POST /api/llm/models/refresh
+func (c *Client) LLMModelsRefresh(ctx context.Context) (jx.Raw, error) {
+	res, err := c.sendLLMModelsRefresh(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMModelsRefresh(ctx context.Context) (res jx.Raw, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_modelsRefresh"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/api/llm/models/refresh"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMModelsRefreshOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/llm/models/refresh"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMModelsRefreshResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMProvidersList invokes LLM_providersList operation.
+//
+// GET /api/llm/providers
+func (c *Client) LLMProvidersList(ctx context.Context) ([]LLMProvider, error) {
+	res, err := c.sendLLMProvidersList(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMProvidersList(ctx context.Context) (res []LLMProvider, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_providersList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/llm/providers"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMProvidersListOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/llm/providers"
 	uri.AddPathParts(u, pathParts[:]...)
 
 	stage = "EncodeRequest"
@@ -2965,7 +2871,7 @@ func (c *Client) sendLLMPresetsList(ctx context.Context) (res []LLMPreset, err e
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeLLMPresetsListResponse(resp)
+	result, err := decodeLLMProvidersListResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2973,19 +2879,19 @@ func (c *Client) sendLLMPresetsList(ctx context.Context) (res []LLMPreset, err e
 	return result, nil
 }
 
-// LLMPresetsUpdate invokes LLM_presetsUpdate operation.
+// LLMRolesList invokes LLM_rolesList operation.
 //
-// PUT /api/llm/presets/{name}
-func (c *Client) LLMPresetsUpdate(ctx context.Context, request *LLMPreset, params LLMPresetsUpdateParams) (*OkResponse, error) {
-	res, err := c.sendLLMPresetsUpdate(ctx, request, params)
+// GET /api/llm/roles
+func (c *Client) LLMRolesList(ctx context.Context) ([]LLMRoleAssignment, error) {
+	res, err := c.sendLLMRolesList(ctx)
 	return res, err
 }
 
-func (c *Client) sendLLMPresetsUpdate(ctx context.Context, request *LLMPreset, params LLMPresetsUpdateParams) (res *OkResponse, err error) {
+func (c *Client) sendLLMRolesList(ctx context.Context) (res []LLMRoleAssignment, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsUpdate"),
-		semconv.HTTPRequestMethodKey.String("PUT"),
-		semconv.URLTemplateKey.String("/api/llm/presets/{name}"),
+		otelogen.OperationID("LLM_rolesList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/api/llm/roles"),
 	}
 	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
 
@@ -3001,100 +2907,7 @@ func (c *Client) sendLLMPresetsUpdate(ctx context.Context, request *LLMPreset, p
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMPresetsUpdateOperation,
-		trace.WithAttributes(otelAttrs...),
-		clientSpanKind,
-	)
-	// Track stage for error reporting.
-	var stage string
-	defer func() {
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, stage)
-			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-		}
-		span.End()
-	}()
-
-	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
-	var pathParts [2]string
-	pathParts[0] = "/api/llm/presets/"
-	{
-		// Encode "name" parameter.
-		e := uri.NewPathEncoder(uri.PathEncoderConfig{
-			Param:   "name",
-			Style:   uri.PathStyleSimple,
-			Explode: false,
-		})
-		if err := func() error {
-			return e.EncodeValue(conv.StringToString(params.Name))
-		}(); err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		encoded, err := e.Result()
-		if err != nil {
-			return res, errors.Wrap(err, "encode path")
-		}
-		pathParts[1] = encoded
-	}
-	uri.AddPathParts(u, pathParts[:]...)
-
-	stage = "EncodeRequest"
-	r, err := ht.NewRequest(ctx, "PUT", u)
-	if err != nil {
-		return res, errors.Wrap(err, "create request")
-	}
-	if err := encodeLLMPresetsUpdateRequest(request, r); err != nil {
-		return res, errors.Wrap(err, "encode request")
-	}
-
-	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
-	if err != nil {
-		return res, errors.Wrap(err, "do request")
-	}
-	body := resp.Body
-	defer body.Close()
-
-	stage = "DecodeResponse"
-	result, err := decodeLLMPresetsUpdateResponse(resp)
-	if err != nil {
-		return res, errors.Wrap(err, "decode response")
-	}
-
-	return result, nil
-}
-
-// LLMUpdate invokes LLM_update operation.
-//
-// PUT /api/llm
-func (c *Client) LLMUpdate(ctx context.Context, request jx.Raw) (jx.Raw, error) {
-	res, err := c.sendLLMUpdate(ctx, request)
-	return res, err
-}
-
-func (c *Client) sendLLMUpdate(ctx context.Context, request jx.Raw) (res jx.Raw, err error) {
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_update"),
-		semconv.HTTPRequestMethodKey.String("PUT"),
-		semconv.URLTemplateKey.String("/api/llm"),
-	}
-	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		elapsedDuration := time.Since(startTime)
-		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
-	}()
-
-	// Increment request counter.
-	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
-
-	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, LLMUpdateOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMRolesListOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -3112,7 +2925,97 @@ func (c *Client) sendLLMUpdate(ctx context.Context, request jx.Raw) (res jx.Raw,
 	stage = "BuildURL"
 	u := uri.Clone(c.requestURL(ctx))
 	var pathParts [1]string
-	pathParts[0] = "/api/llm"
+	pathParts[0] = "/api/llm/roles"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMRolesListResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMRolesUpdate invokes LLM_rolesUpdate operation.
+//
+// PUT /api/llm/roles/{role}
+func (c *Client) LLMRolesUpdate(ctx context.Context, request *LLMRoleUpdateReq, params LLMRolesUpdateParams) (*OkResponse, error) {
+	res, err := c.sendLLMRolesUpdate(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendLLMRolesUpdate(ctx context.Context, request *LLMRoleUpdateReq, params LLMRolesUpdateParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_rolesUpdate"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/api/llm/roles/{role}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMRolesUpdateOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/api/llm/roles/"
+	{
+		// Encode "role" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "role",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Role))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
 	uri.AddPathParts(u, pathParts[:]...)
 
 	stage = "EncodeRequest"
@@ -3120,7 +3023,7 @@ func (c *Client) sendLLMUpdate(ctx context.Context, request jx.Raw) (res jx.Raw,
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeLLMUpdateRequest(request, r); err != nil {
+	if err := encodeLLMRolesUpdateRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -3133,7 +3036,7 @@ func (c *Client) sendLLMUpdate(ctx context.Context, request jx.Raw) (res jx.Raw,
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeLLMUpdateResponse(resp)
+	result, err := decodeLLMRolesUpdateResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

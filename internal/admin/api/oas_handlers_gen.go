@@ -3543,284 +3543,6 @@ func (s *Server) handleIdentityGetRequest(args [0]string, argsEscaped bool, w ht
 	}
 }
 
-// handleLLMAssignmentsListRequest handles LLM_assignmentsList operation.
-//
-// GET /api/llm/assignments
-func (s *Server) handleLLMAssignmentsListRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
-	statusWriter := &codeRecorder{ResponseWriter: w}
-	w = statusWriter
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_assignmentsList"),
-		semconv.HTTPRequestMethodKey.String("GET"),
-		semconv.HTTPRouteKey.String("/api/llm/assignments"),
-	}
-	// Add attributes from config.
-	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
-
-	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMAssignmentsListOperation,
-		trace.WithAttributes(otelAttrs...),
-		serverSpanKind,
-	)
-	defer span.End()
-
-	// Add Labeler to context.
-	labeler := &Labeler{attrs: otelAttrs}
-	ctx = contextWithLabeler(ctx, labeler)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		elapsedDuration := time.Since(startTime)
-
-		attrSet := labeler.AttributeSet()
-		attrs := attrSet.ToSlice()
-		code := statusWriter.status
-		if code != 0 {
-			codeAttr := semconv.HTTPResponseStatusCode(code)
-			attrs = append(attrs, codeAttr)
-			span.SetAttributes(codeAttr)
-		}
-		attrOpt := metric.WithAttributes(attrs...)
-
-		// Increment request counter.
-		s.requests.Add(ctx, 1, attrOpt)
-
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		s.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), attrOpt)
-	}()
-
-	var (
-		recordError = func(stage string, err error) {
-			span.RecordError(err)
-
-			// https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status
-			// Span Status MUST be left unset if HTTP status code was in the 1xx, 2xx or 3xx ranges,
-			// unless there was another error (e.g., network error receiving the response body; or 3xx codes with
-			// max redirects exceeded), in which case status MUST be set to Error.
-			code := statusWriter.status
-			if code < 100 || code >= 500 {
-				span.SetStatus(codes.Error, stage)
-			}
-
-			attrSet := labeler.AttributeSet()
-			attrs := attrSet.ToSlice()
-			if code != 0 {
-				attrs = append(attrs, semconv.HTTPResponseStatusCode(code))
-			}
-
-			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
-		}
-		err error
-	)
-
-	var rawBody []byte
-
-	var response jx.Raw
-	if m := s.cfg.Middleware; m != nil {
-		mreq := middleware.Request{
-			Context:          ctx,
-			OperationName:    LLMAssignmentsListOperation,
-			OperationSummary: "",
-			OperationID:      "LLM_assignmentsList",
-			Body:             nil,
-			RawBody:          rawBody,
-			Params:           middleware.Parameters{},
-			Raw:              r,
-		}
-
-		type (
-			Request  = struct{}
-			Params   = struct{}
-			Response = jx.Raw
-		)
-		response, err = middleware.HookMiddleware[
-			Request,
-			Params,
-			Response,
-		](
-			m,
-			mreq,
-			nil,
-			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMAssignmentsList(ctx)
-				return response, err
-			},
-		)
-	} else {
-		response, err = s.h.LLMAssignmentsList(ctx)
-	}
-	if err != nil {
-		defer recordError("Internal", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	if err := encodeLLMAssignmentsListResponse(response, w, span); err != nil {
-		defer recordError("EncodeResponse", err)
-		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-		}
-		return
-	}
-}
-
-// handleLLMAssignmentsUpdateRequest handles LLM_assignmentsUpdate operation.
-//
-// PUT /api/llm/assignments/{role}
-func (s *Server) handleLLMAssignmentsUpdateRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
-	statusWriter := &codeRecorder{ResponseWriter: w}
-	w = statusWriter
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_assignmentsUpdate"),
-		semconv.HTTPRequestMethodKey.String("PUT"),
-		semconv.HTTPRouteKey.String("/api/llm/assignments/{role}"),
-	}
-	// Add attributes from config.
-	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
-
-	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMAssignmentsUpdateOperation,
-		trace.WithAttributes(otelAttrs...),
-		serverSpanKind,
-	)
-	defer span.End()
-
-	// Add Labeler to context.
-	labeler := &Labeler{attrs: otelAttrs}
-	ctx = contextWithLabeler(ctx, labeler)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		elapsedDuration := time.Since(startTime)
-
-		attrSet := labeler.AttributeSet()
-		attrs := attrSet.ToSlice()
-		code := statusWriter.status
-		if code != 0 {
-			codeAttr := semconv.HTTPResponseStatusCode(code)
-			attrs = append(attrs, codeAttr)
-			span.SetAttributes(codeAttr)
-		}
-		attrOpt := metric.WithAttributes(attrs...)
-
-		// Increment request counter.
-		s.requests.Add(ctx, 1, attrOpt)
-
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		s.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), attrOpt)
-	}()
-
-	var (
-		recordError = func(stage string, err error) {
-			span.RecordError(err)
-
-			// https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status
-			// Span Status MUST be left unset if HTTP status code was in the 1xx, 2xx or 3xx ranges,
-			// unless there was another error (e.g., network error receiving the response body; or 3xx codes with
-			// max redirects exceeded), in which case status MUST be set to Error.
-			code := statusWriter.status
-			if code < 100 || code >= 500 {
-				span.SetStatus(codes.Error, stage)
-			}
-
-			attrSet := labeler.AttributeSet()
-			attrs := attrSet.ToSlice()
-			if code != 0 {
-				attrs = append(attrs, semconv.HTTPResponseStatusCode(code))
-			}
-
-			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
-		}
-		err          error
-		opErrContext = ogenerrors.OperationContext{
-			Name: LLMAssignmentsUpdateOperation,
-			ID:   "LLM_assignmentsUpdate",
-		}
-	)
-	params, err := decodeLLMAssignmentsUpdateParams(args, argsEscaped, r)
-	if err != nil {
-		err = &ogenerrors.DecodeParamsError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeParams", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	var rawBody []byte
-	request, rawBody, close, err := s.decodeLLMAssignmentsUpdateRequest(r)
-	if err != nil {
-		err = &ogenerrors.DecodeRequestError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeRequest", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-	defer func() {
-		if err := close(); err != nil {
-			recordError("CloseRequest", err)
-		}
-	}()
-
-	var response *OkResponse
-	if m := s.cfg.Middleware; m != nil {
-		mreq := middleware.Request{
-			Context:          ctx,
-			OperationName:    LLMAssignmentsUpdateOperation,
-			OperationSummary: "",
-			OperationID:      "LLM_assignmentsUpdate",
-			Body:             request,
-			RawBody:          rawBody,
-			Params: middleware.Parameters{
-				{
-					Name: "role",
-					In:   "path",
-				}: params.Role,
-			},
-			Raw: r,
-		}
-
-		type (
-			Request  = *LLMAssignmentsUpdateReq
-			Params   = LLMAssignmentsUpdateParams
-			Response = *OkResponse
-		)
-		response, err = middleware.HookMiddleware[
-			Request,
-			Params,
-			Response,
-		](
-			m,
-			mreq,
-			unpackLLMAssignmentsUpdateParams,
-			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMAssignmentsUpdate(ctx, request, params)
-				return response, err
-			},
-		)
-	} else {
-		response, err = s.h.LLMAssignmentsUpdate(ctx, request, params)
-	}
-	if err != nil {
-		defer recordError("Internal", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	if err := encodeLLMAssignmentsUpdateResponse(response, w, span); err != nil {
-		defer recordError("EncodeResponse", err)
-		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-		}
-		return
-	}
-}
-
 // handleLLMGetRequest handles LLM_get operation.
 //
 // GET /api/llm
@@ -3943,22 +3665,22 @@ func (s *Server) handleLLMGetRequest(args [0]string, argsEscaped bool, w http.Re
 	}
 }
 
-// handleLLMPresetsCreateRequest handles LLM_presetsCreate operation.
+// handleLLMModelsCreateRequest handles LLM_modelsCreate operation.
 //
-// POST /api/llm/presets
-func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+// POST /api/llm/models
+func (s *Server) handleLLMModelsCreateRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
 	w = statusWriter
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsCreate"),
+		otelogen.OperationID("LLM_modelsCreate"),
 		semconv.HTTPRequestMethodKey.String("POST"),
-		semconv.HTTPRouteKey.String("/api/llm/presets"),
+		semconv.HTTPRouteKey.String("/api/llm/models"),
 	}
 	// Add attributes from config.
 	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
 
 	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMPresetsCreateOperation,
+	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMModelsCreateOperation,
 		trace.WithAttributes(otelAttrs...),
 		serverSpanKind,
 	)
@@ -4013,13 +3735,13 @@ func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool,
 		}
 		err          error
 		opErrContext = ogenerrors.OperationContext{
-			Name: LLMPresetsCreateOperation,
-			ID:   "LLM_presetsCreate",
+			Name: LLMModelsCreateOperation,
+			ID:   "LLM_modelsCreate",
 		}
 	)
 
 	var rawBody []byte
-	request, rawBody, close, err := s.decodeLLMPresetsCreateRequest(r)
+	request, rawBody, close, err := s.decodeLLMModelsCreateRequest(r)
 	if err != nil {
 		err = &ogenerrors.DecodeRequestError{
 			OperationContext: opErrContext,
@@ -4039,9 +3761,9 @@ func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool,
 	if m := s.cfg.Middleware; m != nil {
 		mreq := middleware.Request{
 			Context:          ctx,
-			OperationName:    LLMPresetsCreateOperation,
+			OperationName:    LLMModelsCreateOperation,
 			OperationSummary: "",
-			OperationID:      "LLM_presetsCreate",
+			OperationID:      "LLM_modelsCreate",
 			Body:             request,
 			RawBody:          rawBody,
 			Params:           middleware.Parameters{},
@@ -4049,7 +3771,7 @@ func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool,
 		}
 
 		type (
-			Request  = *LLMPreset
+			Request  = *LLMModel
 			Params   = struct{}
 			Response = *OkResponse
 		)
@@ -4062,12 +3784,12 @@ func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool,
 			mreq,
 			nil,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMPresetsCreate(ctx, request)
+				response, err = s.h.LLMModelsCreate(ctx, request)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.LLMPresetsCreate(ctx, request)
+		response, err = s.h.LLMModelsCreate(ctx, request)
 	}
 	if err != nil {
 		defer recordError("Internal", err)
@@ -4075,7 +3797,7 @@ func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool,
 		return
 	}
 
-	if err := encodeLLMPresetsCreateResponse(response, w, span); err != nil {
+	if err := encodeLLMModelsCreateResponse(response, w, span); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -4084,22 +3806,22 @@ func (s *Server) handleLLMPresetsCreateRequest(args [0]string, argsEscaped bool,
 	}
 }
 
-// handleLLMPresetsDeleteRequest handles LLM_presetsDelete operation.
+// handleLLMModelsListRequest handles LLM_modelsList operation.
 //
-// DELETE /api/llm/presets/{name}
-func (s *Server) handleLLMPresetsDeleteRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+// GET /api/llm/models
+func (s *Server) handleLLMModelsListRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
 	w = statusWriter
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsDelete"),
-		semconv.HTTPRequestMethodKey.String("DELETE"),
-		semconv.HTTPRouteKey.String("/api/llm/presets/{name}"),
+		otelogen.OperationID("LLM_modelsList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.HTTPRouteKey.String("/api/llm/models"),
 	}
 	// Add attributes from config.
 	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
 
 	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMPresetsDeleteOperation,
+	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMModelsListOperation,
 		trace.WithAttributes(otelAttrs...),
 		serverSpanKind,
 	)
@@ -4154,11 +3876,11 @@ func (s *Server) handleLLMPresetsDeleteRequest(args [1]string, argsEscaped bool,
 		}
 		err          error
 		opErrContext = ogenerrors.OperationContext{
-			Name: LLMPresetsDeleteOperation,
-			ID:   "LLM_presetsDelete",
+			Name: LLMModelsListOperation,
+			ID:   "LLM_modelsList",
 		}
 	)
-	params, err := decodeLLMPresetsDeleteParams(args, argsEscaped, r)
+	params, err := decodeLLMModelsListParams(args, argsEscaped, r)
 	if err != nil {
 		err = &ogenerrors.DecodeParamsError{
 			OperationContext: opErrContext,
@@ -4171,28 +3893,28 @@ func (s *Server) handleLLMPresetsDeleteRequest(args [1]string, argsEscaped bool,
 
 	var rawBody []byte
 
-	var response *OkResponse
+	var response []LLMModel
 	if m := s.cfg.Middleware; m != nil {
 		mreq := middleware.Request{
 			Context:          ctx,
-			OperationName:    LLMPresetsDeleteOperation,
+			OperationName:    LLMModelsListOperation,
 			OperationSummary: "",
-			OperationID:      "LLM_presetsDelete",
+			OperationID:      "LLM_modelsList",
 			Body:             nil,
 			RawBody:          rawBody,
 			Params: middleware.Parameters{
 				{
-					Name: "name",
-					In:   "path",
-				}: params.Name,
+					Name: "provider",
+					In:   "query",
+				}: params.Provider,
 			},
 			Raw: r,
 		}
 
 		type (
 			Request  = struct{}
-			Params   = LLMPresetsDeleteParams
-			Response = *OkResponse
+			Params   = LLMModelsListParams
+			Response = []LLMModel
 		)
 		response, err = middleware.HookMiddleware[
 			Request,
@@ -4201,14 +3923,14 @@ func (s *Server) handleLLMPresetsDeleteRequest(args [1]string, argsEscaped bool,
 		](
 			m,
 			mreq,
-			unpackLLMPresetsDeleteParams,
+			unpackLLMModelsListParams,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMPresetsDelete(ctx, params)
+				response, err = s.h.LLMModelsList(ctx, params)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.LLMPresetsDelete(ctx, params)
+		response, err = s.h.LLMModelsList(ctx, params)
 	}
 	if err != nil {
 		defer recordError("Internal", err)
@@ -4216,7 +3938,7 @@ func (s *Server) handleLLMPresetsDeleteRequest(args [1]string, argsEscaped bool,
 		return
 	}
 
-	if err := encodeLLMPresetsDeleteResponse(response, w, span); err != nil {
+	if err := encodeLLMModelsListResponse(response, w, span); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -4225,22 +3947,22 @@ func (s *Server) handleLLMPresetsDeleteRequest(args [1]string, argsEscaped bool,
 	}
 }
 
-// handleLLMPresetsListRequest handles LLM_presetsList operation.
+// handleLLMModelsRefreshRequest handles LLM_modelsRefresh operation.
 //
-// GET /api/llm/presets
-func (s *Server) handleLLMPresetsListRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+// POST /api/llm/models/refresh
+func (s *Server) handleLLMModelsRefreshRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
 	w = statusWriter
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsList"),
-		semconv.HTTPRequestMethodKey.String("GET"),
-		semconv.HTTPRouteKey.String("/api/llm/presets"),
+		otelogen.OperationID("LLM_modelsRefresh"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.HTTPRouteKey.String("/api/llm/models/refresh"),
 	}
 	// Add attributes from config.
 	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
 
 	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMPresetsListOperation,
+	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMModelsRefreshOperation,
 		trace.WithAttributes(otelAttrs...),
 		serverSpanKind,
 	)
@@ -4298,13 +4020,13 @@ func (s *Server) handleLLMPresetsListRequest(args [0]string, argsEscaped bool, w
 
 	var rawBody []byte
 
-	var response []LLMPreset
+	var response jx.Raw
 	if m := s.cfg.Middleware; m != nil {
 		mreq := middleware.Request{
 			Context:          ctx,
-			OperationName:    LLMPresetsListOperation,
+			OperationName:    LLMModelsRefreshOperation,
 			OperationSummary: "",
-			OperationID:      "LLM_presetsList",
+			OperationID:      "LLM_modelsRefresh",
 			Body:             nil,
 			RawBody:          rawBody,
 			Params:           middleware.Parameters{},
@@ -4314,7 +4036,7 @@ func (s *Server) handleLLMPresetsListRequest(args [0]string, argsEscaped bool, w
 		type (
 			Request  = struct{}
 			Params   = struct{}
-			Response = []LLMPreset
+			Response = jx.Raw
 		)
 		response, err = middleware.HookMiddleware[
 			Request,
@@ -4325,12 +4047,12 @@ func (s *Server) handleLLMPresetsListRequest(args [0]string, argsEscaped bool, w
 			mreq,
 			nil,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMPresetsList(ctx)
+				response, err = s.h.LLMModelsRefresh(ctx)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.LLMPresetsList(ctx)
+		response, err = s.h.LLMModelsRefresh(ctx)
 	}
 	if err != nil {
 		defer recordError("Internal", err)
@@ -4338,7 +4060,7 @@ func (s *Server) handleLLMPresetsListRequest(args [0]string, argsEscaped bool, w
 		return
 	}
 
-	if err := encodeLLMPresetsListResponse(response, w, span); err != nil {
+	if err := encodeLLMModelsRefreshResponse(response, w, span); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -4347,22 +4069,266 @@ func (s *Server) handleLLMPresetsListRequest(args [0]string, argsEscaped bool, w
 	}
 }
 
-// handleLLMPresetsUpdateRequest handles LLM_presetsUpdate operation.
+// handleLLMProvidersListRequest handles LLM_providersList operation.
 //
-// PUT /api/llm/presets/{name}
-func (s *Server) handleLLMPresetsUpdateRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+// GET /api/llm/providers
+func (s *Server) handleLLMProvidersListRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
 	w = statusWriter
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_presetsUpdate"),
-		semconv.HTTPRequestMethodKey.String("PUT"),
-		semconv.HTTPRouteKey.String("/api/llm/presets/{name}"),
+		otelogen.OperationID("LLM_providersList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.HTTPRouteKey.String("/api/llm/providers"),
 	}
 	// Add attributes from config.
 	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
 
 	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMPresetsUpdateOperation,
+	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMProvidersListOperation,
+		trace.WithAttributes(otelAttrs...),
+		serverSpanKind,
+	)
+	defer span.End()
+
+	// Add Labeler to context.
+	labeler := &Labeler{attrs: otelAttrs}
+	ctx = contextWithLabeler(ctx, labeler)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		elapsedDuration := time.Since(startTime)
+
+		attrSet := labeler.AttributeSet()
+		attrs := attrSet.ToSlice()
+		code := statusWriter.status
+		if code != 0 {
+			codeAttr := semconv.HTTPResponseStatusCode(code)
+			attrs = append(attrs, codeAttr)
+			span.SetAttributes(codeAttr)
+		}
+		attrOpt := metric.WithAttributes(attrs...)
+
+		// Increment request counter.
+		s.requests.Add(ctx, 1, attrOpt)
+
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		s.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), attrOpt)
+	}()
+
+	var (
+		recordError = func(stage string, err error) {
+			span.RecordError(err)
+
+			// https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status
+			// Span Status MUST be left unset if HTTP status code was in the 1xx, 2xx or 3xx ranges,
+			// unless there was another error (e.g., network error receiving the response body; or 3xx codes with
+			// max redirects exceeded), in which case status MUST be set to Error.
+			code := statusWriter.status
+			if code < 100 || code >= 500 {
+				span.SetStatus(codes.Error, stage)
+			}
+
+			attrSet := labeler.AttributeSet()
+			attrs := attrSet.ToSlice()
+			if code != 0 {
+				attrs = append(attrs, semconv.HTTPResponseStatusCode(code))
+			}
+
+			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
+		}
+		err error
+	)
+
+	var rawBody []byte
+
+	var response []LLMProvider
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    LLMProvidersListOperation,
+			OperationSummary: "",
+			OperationID:      "LLM_providersList",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = []LLMProvider
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.LLMProvidersList(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.LLMProvidersList(ctx)
+	}
+	if err != nil {
+		defer recordError("Internal", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	if err := encodeLLMProvidersListResponse(response, w, span); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleLLMRolesListRequest handles LLM_rolesList operation.
+//
+// GET /api/llm/roles
+func (s *Server) handleLLMRolesListRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_rolesList"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.HTTPRouteKey.String("/api/llm/roles"),
+	}
+	// Add attributes from config.
+	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
+
+	// Start a span for this request.
+	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMRolesListOperation,
+		trace.WithAttributes(otelAttrs...),
+		serverSpanKind,
+	)
+	defer span.End()
+
+	// Add Labeler to context.
+	labeler := &Labeler{attrs: otelAttrs}
+	ctx = contextWithLabeler(ctx, labeler)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		elapsedDuration := time.Since(startTime)
+
+		attrSet := labeler.AttributeSet()
+		attrs := attrSet.ToSlice()
+		code := statusWriter.status
+		if code != 0 {
+			codeAttr := semconv.HTTPResponseStatusCode(code)
+			attrs = append(attrs, codeAttr)
+			span.SetAttributes(codeAttr)
+		}
+		attrOpt := metric.WithAttributes(attrs...)
+
+		// Increment request counter.
+		s.requests.Add(ctx, 1, attrOpt)
+
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		s.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), attrOpt)
+	}()
+
+	var (
+		recordError = func(stage string, err error) {
+			span.RecordError(err)
+
+			// https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status
+			// Span Status MUST be left unset if HTTP status code was in the 1xx, 2xx or 3xx ranges,
+			// unless there was another error (e.g., network error receiving the response body; or 3xx codes with
+			// max redirects exceeded), in which case status MUST be set to Error.
+			code := statusWriter.status
+			if code < 100 || code >= 500 {
+				span.SetStatus(codes.Error, stage)
+			}
+
+			attrSet := labeler.AttributeSet()
+			attrs := attrSet.ToSlice()
+			if code != 0 {
+				attrs = append(attrs, semconv.HTTPResponseStatusCode(code))
+			}
+
+			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
+		}
+		err error
+	)
+
+	var rawBody []byte
+
+	var response []LLMRoleAssignment
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    LLMRolesListOperation,
+			OperationSummary: "",
+			OperationID:      "LLM_rolesList",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = []LLMRoleAssignment
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.LLMRolesList(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.LLMRolesList(ctx)
+	}
+	if err != nil {
+		defer recordError("Internal", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	if err := encodeLLMRolesListResponse(response, w, span); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleLLMRolesUpdateRequest handles LLM_rolesUpdate operation.
+//
+// PUT /api/llm/roles/{role}
+func (s *Server) handleLLMRolesUpdateRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_rolesUpdate"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.HTTPRouteKey.String("/api/llm/roles/{role}"),
+	}
+	// Add attributes from config.
+	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
+
+	// Start a span for this request.
+	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMRolesUpdateOperation,
 		trace.WithAttributes(otelAttrs...),
 		serverSpanKind,
 	)
@@ -4417,11 +4383,11 @@ func (s *Server) handleLLMPresetsUpdateRequest(args [1]string, argsEscaped bool,
 		}
 		err          error
 		opErrContext = ogenerrors.OperationContext{
-			Name: LLMPresetsUpdateOperation,
-			ID:   "LLM_presetsUpdate",
+			Name: LLMRolesUpdateOperation,
+			ID:   "LLM_rolesUpdate",
 		}
 	)
-	params, err := decodeLLMPresetsUpdateParams(args, argsEscaped, r)
+	params, err := decodeLLMRolesUpdateParams(args, argsEscaped, r)
 	if err != nil {
 		err = &ogenerrors.DecodeParamsError{
 			OperationContext: opErrContext,
@@ -4433,7 +4399,7 @@ func (s *Server) handleLLMPresetsUpdateRequest(args [1]string, argsEscaped bool,
 	}
 
 	var rawBody []byte
-	request, rawBody, close, err := s.decodeLLMPresetsUpdateRequest(r)
+	request, rawBody, close, err := s.decodeLLMRolesUpdateRequest(r)
 	if err != nil {
 		err = &ogenerrors.DecodeRequestError{
 			OperationContext: opErrContext,
@@ -4453,23 +4419,23 @@ func (s *Server) handleLLMPresetsUpdateRequest(args [1]string, argsEscaped bool,
 	if m := s.cfg.Middleware; m != nil {
 		mreq := middleware.Request{
 			Context:          ctx,
-			OperationName:    LLMPresetsUpdateOperation,
+			OperationName:    LLMRolesUpdateOperation,
 			OperationSummary: "",
-			OperationID:      "LLM_presetsUpdate",
+			OperationID:      "LLM_rolesUpdate",
 			Body:             request,
 			RawBody:          rawBody,
 			Params: middleware.Parameters{
 				{
-					Name: "name",
+					Name: "role",
 					In:   "path",
-				}: params.Name,
+				}: params.Role,
 			},
 			Raw: r,
 		}
 
 		type (
-			Request  = *LLMPreset
-			Params   = LLMPresetsUpdateParams
+			Request  = *LLMRoleUpdateReq
+			Params   = LLMRolesUpdateParams
 			Response = *OkResponse
 		)
 		response, err = middleware.HookMiddleware[
@@ -4479,14 +4445,14 @@ func (s *Server) handleLLMPresetsUpdateRequest(args [1]string, argsEscaped bool,
 		](
 			m,
 			mreq,
-			unpackLLMPresetsUpdateParams,
+			unpackLLMRolesUpdateParams,
 			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMPresetsUpdate(ctx, request, params)
+				response, err = s.h.LLMRolesUpdate(ctx, request, params)
 				return response, err
 			},
 		)
 	} else {
-		response, err = s.h.LLMPresetsUpdate(ctx, request, params)
+		response, err = s.h.LLMRolesUpdate(ctx, request, params)
 	}
 	if err != nil {
 		defer recordError("Internal", err)
@@ -4494,148 +4460,7 @@ func (s *Server) handleLLMPresetsUpdateRequest(args [1]string, argsEscaped bool,
 		return
 	}
 
-	if err := encodeLLMPresetsUpdateResponse(response, w, span); err != nil {
-		defer recordError("EncodeResponse", err)
-		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-		}
-		return
-	}
-}
-
-// handleLLMUpdateRequest handles LLM_update operation.
-//
-// PUT /api/llm
-func (s *Server) handleLLMUpdateRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
-	statusWriter := &codeRecorder{ResponseWriter: w}
-	w = statusWriter
-	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("LLM_update"),
-		semconv.HTTPRequestMethodKey.String("PUT"),
-		semconv.HTTPRouteKey.String("/api/llm"),
-	}
-	// Add attributes from config.
-	otelAttrs = append(otelAttrs, s.cfg.Attributes...)
-
-	// Start a span for this request.
-	ctx, span := s.cfg.Tracer.Start(r.Context(), LLMUpdateOperation,
-		trace.WithAttributes(otelAttrs...),
-		serverSpanKind,
-	)
-	defer span.End()
-
-	// Add Labeler to context.
-	labeler := &Labeler{attrs: otelAttrs}
-	ctx = contextWithLabeler(ctx, labeler)
-
-	// Run stopwatch.
-	startTime := time.Now()
-	defer func() {
-		elapsedDuration := time.Since(startTime)
-
-		attrSet := labeler.AttributeSet()
-		attrs := attrSet.ToSlice()
-		code := statusWriter.status
-		if code != 0 {
-			codeAttr := semconv.HTTPResponseStatusCode(code)
-			attrs = append(attrs, codeAttr)
-			span.SetAttributes(codeAttr)
-		}
-		attrOpt := metric.WithAttributes(attrs...)
-
-		// Increment request counter.
-		s.requests.Add(ctx, 1, attrOpt)
-
-		// Use floating point division here for higher precision (instead of Millisecond method).
-		s.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), attrOpt)
-	}()
-
-	var (
-		recordError = func(stage string, err error) {
-			span.RecordError(err)
-
-			// https://opentelemetry.io/docs/specs/semconv/http/http-spans/#status
-			// Span Status MUST be left unset if HTTP status code was in the 1xx, 2xx or 3xx ranges,
-			// unless there was another error (e.g., network error receiving the response body; or 3xx codes with
-			// max redirects exceeded), in which case status MUST be set to Error.
-			code := statusWriter.status
-			if code < 100 || code >= 500 {
-				span.SetStatus(codes.Error, stage)
-			}
-
-			attrSet := labeler.AttributeSet()
-			attrs := attrSet.ToSlice()
-			if code != 0 {
-				attrs = append(attrs, semconv.HTTPResponseStatusCode(code))
-			}
-
-			s.errors.Add(ctx, 1, metric.WithAttributes(attrs...))
-		}
-		err          error
-		opErrContext = ogenerrors.OperationContext{
-			Name: LLMUpdateOperation,
-			ID:   "LLM_update",
-		}
-	)
-
-	var rawBody []byte
-	request, rawBody, close, err := s.decodeLLMUpdateRequest(r)
-	if err != nil {
-		err = &ogenerrors.DecodeRequestError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeRequest", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-	defer func() {
-		if err := close(); err != nil {
-			recordError("CloseRequest", err)
-		}
-	}()
-
-	var response jx.Raw
-	if m := s.cfg.Middleware; m != nil {
-		mreq := middleware.Request{
-			Context:          ctx,
-			OperationName:    LLMUpdateOperation,
-			OperationSummary: "",
-			OperationID:      "LLM_update",
-			Body:             request,
-			RawBody:          rawBody,
-			Params:           middleware.Parameters{},
-			Raw:              r,
-		}
-
-		type (
-			Request  = jx.Raw
-			Params   = struct{}
-			Response = jx.Raw
-		)
-		response, err = middleware.HookMiddleware[
-			Request,
-			Params,
-			Response,
-		](
-			m,
-			mreq,
-			nil,
-			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.LLMUpdate(ctx, request)
-				return response, err
-			},
-		)
-	} else {
-		response, err = s.h.LLMUpdate(ctx, request)
-	}
-	if err != nil {
-		defer recordError("Internal", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	if err := encodeLLMUpdateResponse(response, w, span); err != nil {
+	if err := encodeLLMRolesUpdateResponse(response, w, span); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

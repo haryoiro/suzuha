@@ -198,20 +198,6 @@ func (UnimplementedHandler) IdentityGet(ctx context.Context) (r jx.Raw, _ error)
 	return r, ht.ErrNotImplemented
 }
 
-// LLMAssignmentsList implements LLM_assignmentsList operation.
-//
-// GET /api/llm/assignments
-func (UnimplementedHandler) LLMAssignmentsList(ctx context.Context) (r jx.Raw, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// LLMAssignmentsUpdate implements LLM_assignmentsUpdate operation.
-//
-// PUT /api/llm/assignments/{role}
-func (UnimplementedHandler) LLMAssignmentsUpdate(ctx context.Context, req *LLMAssignmentsUpdateReq, params LLMAssignmentsUpdateParams) (r *OkResponse, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // LLMGet implements LLM_get operation.
 //
 // GET /api/llm
@@ -219,38 +205,45 @@ func (UnimplementedHandler) LLMGet(ctx context.Context) (r jx.Raw, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
-// LLMPresetsCreate implements LLM_presetsCreate operation.
+// LLMModelsCreate implements LLM_modelsCreate operation.
 //
-// POST /api/llm/presets
-func (UnimplementedHandler) LLMPresetsCreate(ctx context.Context, req *LLMPreset) (r *OkResponse, _ error) {
+// POST /api/llm/models
+func (UnimplementedHandler) LLMModelsCreate(ctx context.Context, req *LLMModel) (r *OkResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
-// LLMPresetsDelete implements LLM_presetsDelete operation.
+// LLMModelsList implements LLM_modelsList operation.
 //
-// DELETE /api/llm/presets/{name}
-func (UnimplementedHandler) LLMPresetsDelete(ctx context.Context, params LLMPresetsDeleteParams) (r *OkResponse, _ error) {
+// GET /api/llm/models
+func (UnimplementedHandler) LLMModelsList(ctx context.Context, params LLMModelsListParams) (r []LLMModel, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
-// LLMPresetsList implements LLM_presetsList operation.
+// LLMModelsRefresh implements LLM_modelsRefresh operation.
 //
-// GET /api/llm/presets
-func (UnimplementedHandler) LLMPresetsList(ctx context.Context) (r []LLMPreset, _ error) {
+// POST /api/llm/models/refresh
+func (UnimplementedHandler) LLMModelsRefresh(ctx context.Context) (r jx.Raw, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
-// LLMPresetsUpdate implements LLM_presetsUpdate operation.
+// LLMProvidersList implements LLM_providersList operation.
 //
-// PUT /api/llm/presets/{name}
-func (UnimplementedHandler) LLMPresetsUpdate(ctx context.Context, req *LLMPreset, params LLMPresetsUpdateParams) (r *OkResponse, _ error) {
+// GET /api/llm/providers
+func (UnimplementedHandler) LLMProvidersList(ctx context.Context) (r []LLMProvider, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
-// LLMUpdate implements LLM_update operation.
+// LLMRolesList implements LLM_rolesList operation.
 //
-// PUT /api/llm
-func (UnimplementedHandler) LLMUpdate(ctx context.Context, req jx.Raw) (r jx.Raw, _ error) {
+// GET /api/llm/roles
+func (UnimplementedHandler) LLMRolesList(ctx context.Context) (r []LLMRoleAssignment, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMRolesUpdate implements LLM_rolesUpdate operation.
+//
+// PUT /api/llm/roles/{role}
+func (UnimplementedHandler) LLMRolesUpdate(ctx context.Context, req *LLMRoleUpdateReq, params LLMRolesUpdateParams) (r *OkResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

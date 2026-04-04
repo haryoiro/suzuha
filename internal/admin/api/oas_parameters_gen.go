@@ -828,12 +828,76 @@ func decodeGuildsChannelsParams(args [1]string, argsEscaped bool, r *http.Reques
 	return params, nil
 }
 
-// LLMAssignmentsUpdateParams is parameters of LLM_assignmentsUpdate operation.
-type LLMAssignmentsUpdateParams struct {
+// LLMModelsListParams is parameters of LLM_modelsList operation.
+type LLMModelsListParams struct {
+	Provider OptString `json:",omitempty,omitzero"`
+}
+
+func unpackLLMModelsListParams(packed middleware.Parameters) (params LLMModelsListParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "provider",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Provider = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeLLMModelsListParams(args [0]string, argsEscaped bool, r *http.Request) (params LLMModelsListParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: provider.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "provider",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotProviderVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotProviderVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Provider.SetTo(paramsDotProviderVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "provider",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// LLMRolesUpdateParams is parameters of LLM_rolesUpdate operation.
+type LLMRolesUpdateParams struct {
 	Role string
 }
 
-func unpackLLMAssignmentsUpdateParams(packed middleware.Parameters) (params LLMAssignmentsUpdateParams) {
+func unpackLLMRolesUpdateParams(packed middleware.Parameters) (params LLMRolesUpdateParams) {
 	{
 		key := middleware.ParameterKey{
 			Name: "role",
@@ -844,7 +908,7 @@ func unpackLLMAssignmentsUpdateParams(packed middleware.Parameters) (params LLMA
 	return params
 }
 
-func decodeLLMAssignmentsUpdateParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMAssignmentsUpdateParams, _ error) {
+func decodeLLMRolesUpdateParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMRolesUpdateParams, _ error) {
 	// Decode path: role.
 	if err := func() error {
 		param := args[0]
@@ -886,136 +950,6 @@ func decodeLLMAssignmentsUpdateParams(args [1]string, argsEscaped bool, r *http.
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "role",
-			In:   "path",
-			Err:  err,
-		}
-	}
-	return params, nil
-}
-
-// LLMPresetsDeleteParams is parameters of LLM_presetsDelete operation.
-type LLMPresetsDeleteParams struct {
-	Name string
-}
-
-func unpackLLMPresetsDeleteParams(packed middleware.Parameters) (params LLMPresetsDeleteParams) {
-	{
-		key := middleware.ParameterKey{
-			Name: "name",
-			In:   "path",
-		}
-		params.Name = packed[key].(string)
-	}
-	return params
-}
-
-func decodeLLMPresetsDeleteParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMPresetsDeleteParams, _ error) {
-	// Decode path: name.
-	if err := func() error {
-		param := args[0]
-		if argsEscaped {
-			unescaped, err := url.PathUnescape(args[0])
-			if err != nil {
-				return errors.Wrap(err, "unescape path")
-			}
-			param = unescaped
-		}
-		if len(param) > 0 {
-			d := uri.NewPathDecoder(uri.PathDecoderConfig{
-				Param:   "name",
-				Value:   param,
-				Style:   uri.PathStyleSimple,
-				Explode: false,
-			})
-
-			if err := func() error {
-				val, err := d.DecodeValue()
-				if err != nil {
-					return err
-				}
-
-				c, err := conv.ToString(val)
-				if err != nil {
-					return err
-				}
-
-				params.Name = c
-				return nil
-			}(); err != nil {
-				return err
-			}
-		} else {
-			return validate.ErrFieldRequired
-		}
-		return nil
-	}(); err != nil {
-		return params, &ogenerrors.DecodeParamError{
-			Name: "name",
-			In:   "path",
-			Err:  err,
-		}
-	}
-	return params, nil
-}
-
-// LLMPresetsUpdateParams is parameters of LLM_presetsUpdate operation.
-type LLMPresetsUpdateParams struct {
-	Name string
-}
-
-func unpackLLMPresetsUpdateParams(packed middleware.Parameters) (params LLMPresetsUpdateParams) {
-	{
-		key := middleware.ParameterKey{
-			Name: "name",
-			In:   "path",
-		}
-		params.Name = packed[key].(string)
-	}
-	return params
-}
-
-func decodeLLMPresetsUpdateParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMPresetsUpdateParams, _ error) {
-	// Decode path: name.
-	if err := func() error {
-		param := args[0]
-		if argsEscaped {
-			unescaped, err := url.PathUnescape(args[0])
-			if err != nil {
-				return errors.Wrap(err, "unescape path")
-			}
-			param = unescaped
-		}
-		if len(param) > 0 {
-			d := uri.NewPathDecoder(uri.PathDecoderConfig{
-				Param:   "name",
-				Value:   param,
-				Style:   uri.PathStyleSimple,
-				Explode: false,
-			})
-
-			if err := func() error {
-				val, err := d.DecodeValue()
-				if err != nil {
-					return err
-				}
-
-				c, err := conv.ToString(val)
-				if err != nil {
-					return err
-				}
-
-				params.Name = c
-				return nil
-			}(); err != nil {
-				return err
-			}
-		} else {
-			return validate.ErrFieldRequired
-		}
-		return nil
-	}(); err != nil {
-		return params, &ogenerrors.DecodeParamError{
-			Name: "name",
 			In:   "path",
 			Err:  err,
 		}

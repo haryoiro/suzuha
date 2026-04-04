@@ -563,25 +563,48 @@ paths:
               schema: {}
       tags:
         - LLM
-    put:
-      operationId: LLM_update
+  /api/llm/models:
+    get:
+      operationId: LLM_modelsList
+      parameters:
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LLMModel'
+      tags:
+        - LLM
+    post:
+      operationId: LLM_modelsCreate
       parameters: []
       responses:
         '200':
           description: The request has succeeded.
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/OkResponse'
       tags:
         - LLM
       requestBody:
         required: true
         content:
           application/json:
-            schema: {}
-  /api/llm/assignments:
-    get:
-      operationId: LLM_assignmentsList
+            schema:
+              $ref: '#/components/schemas/LLMModel'
+  /api/llm/models/refresh:
+    post:
+      operationId: LLM_modelsRefresh
       parameters: []
       responses:
         '200':
@@ -591,9 +614,39 @@ paths:
               schema: {}
       tags:
         - LLM
-  /api/llm/assignments/{role}:
+  /api/llm/providers:
+    get:
+      operationId: LLM_providersList
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LLMProvider'
+      tags:
+        - LLM
+  /api/llm/roles:
+    get:
+      operationId: LLM_rolesList
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LLMRoleAssignment'
+      tags:
+        - LLM
+  /api/llm/roles/{role}:
     put:
-      operationId: LLM_assignmentsUpdate
+      operationId: LLM_rolesUpdate
       parameters:
         - name: role
           in: path
@@ -614,86 +667,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                preset:
-                  type: string
-              required:
-                - preset
-  /api/llm/presets:
-    get:
-      operationId: LLM_presetsList
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/LLMPreset'
-      tags:
-        - LLM
-    post:
-      operationId: LLM_presetsCreate
-      parameters: []
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-      tags:
-        - LLM
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LLMPreset'
-  /api/llm/presets/{name}:
-    put:
-      operationId: LLM_presetsUpdate
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-      tags:
-        - LLM
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LLMPreset'
-    delete:
-      operationId: LLM_presetsDelete
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-      tags:
-        - LLM
+              $ref: '#/components/schemas/LLMRoleUpdateReq'
   /api/location/devices:
     get:
       operationId: Location_listDevices
@@ -1851,34 +1825,66 @@ components:
           type: string
         last_user_message_at:
           type: string
-    LLMPreset:
+    LLMModel:
+      type: object
+      required:
+        - provider_name
+        - model_id
+        - capabilities
+        - max_context
+      properties:
+        provider_name:
+          type: string
+        model_id:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        max_context:
+          type: integer
+          format: int32
+        source:
+          type: string
+    LLMProvider:
       type: object
       required:
         - name
-        - provider
-        - model
+        - type
         - api_base
-        - max_tokens
-        - capabilities
       properties:
         name:
           type: string
-        provider:
-          type: string
-        model:
+        type:
           type: string
         api_key:
           type: string
         api_base:
           type: string
-        max_tokens:
-          type: integer
-          format: int32
-        capabilities:
-          type: array
-          items:
-            type: string
         source:
+          type: string
+    LLMRoleAssignment:
+      type: object
+      required:
+        - role
+        - provider_name
+        - model_id
+      properties:
+        role:
+          type: string
+        provider_name:
+          type: string
+        model_id:
+          type: string
+    LLMRoleUpdateReq:
+      type: object
+      required:
+        - provider
+        - model
+      properties:
+        provider:
+          type: string
+        model:
           type: string
     Memory:
       type: object

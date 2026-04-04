@@ -513,7 +513,7 @@ func (s *GuildsListOK) Validate() error {
 	return nil
 }
 
-func (s *LLMPreset) Validate() error {
+func (s *LLMModel) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
