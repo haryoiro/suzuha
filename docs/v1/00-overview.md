@@ -109,6 +109,6 @@ suzuha2/
 ├── yolo/                   # YOLO 物体検出サーバー
 ├── api/                    # TypeSpec API 仕様
 ├── .suzuha/                # プロンプトファイル (IDENTITY.md, SOUL.md) [gitignored]
-├── docker-compose.yaml     # Docker 構成
+├── compose.yaml            # Docker 構成
 └── config.yaml             # アプリケーション設定 [gitignored]
 ```

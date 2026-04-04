@@ -32,7 +32,7 @@ unsloth_compiled_cache/
 .suzuha1/
 config.suzuha1.yaml
 werewolf-players/
-docker-compose.werewolf.yaml
+compose.werewolf.yaml
 
 # IDE
 .idea/
