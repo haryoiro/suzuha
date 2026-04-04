@@ -1,104 +1,126 @@
 import { useState, memo, useMemo } from "react";
 import { Table, Typography, Input, Modal, Tag, Descriptions, Card, Select, Switch, Button, Flex, message } from "antd";
-import { PlayCircleOutlined } from "@ant-design/icons";
+import { PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
 import { useTools } from "../hooks/useTools";
-import type { ToolInfo } from "../lib/api";
+import type { ToolInfo, LLMRoleAssignment } from "../lib/api";
 import { llmApi, toolsApi } from "../lib/api";
 
 const { Title, Text } = Typography;
 
-// --- LLM Provider Switcher ---
+// --- LLM Role Manager (3-layer) ---
 
-const PROVIDERS = ["openai", "zhipu", "qwen"] as const;
+const ROLES = ["conversation", "background", "vision"] as const;
 
 const LLMProviderSection = memo(function LLMProviderSection() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["llm-provider"], queryFn: () => llmApi.get() });
-  const mutation = useMutation({
-    mutationFn: llmApi.update,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["llm-provider"] });
-      message.success("Provider switched");
-    },
-    onError: () => message.error("Switch failed"),
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["llm-status"] });
+    qc.invalidateQueries({ queryKey: ["llm-roles"] });
+    qc.invalidateQueries({ queryKey: ["llm-models"] });
+    qc.invalidateQueries({ queryKey: ["llm-providers"] });
+  };
+
+  const { data: status } = useQuery({ queryKey: ["llm-status"], queryFn: () => llmApi.status() });
+  const { data: providers } = useQuery({ queryKey: ["llm-providers"], queryFn: () => llmApi.providers() });
+  const { data: roles } = useQuery({ queryKey: ["llm-roles"], queryFn: () => llmApi.roles() });
+
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const { data: models } = useQuery({
+    queryKey: ["llm-models", selectedProvider],
+    queryFn: () => llmApi.models(selectedProvider || undefined),
   });
 
-  const presets = data?.presets ?? [];
-  const currentPreset = presets.find(
-    (p) => p.provider === data?.provider && p.model === data?.model,
-  );
+  const assignMutation = useMutation({
+    mutationFn: ({ role, provider, model }: { role: string; provider: string; model: string }) =>
+      llmApi.assignRole(role, provider, model),
+    onSuccess: () => { invalidateAll(); message.success("ロールを切り替えました"); },
+    onError: () => message.error("切り替えに失敗"),
+  });
 
-  // Free-form model input state.
-  const [provider, setProvider] = useState<string>("");
-  const [model, setModel] = useState("");
-  const [vision, setVision] = useState(false);
+  const refreshMutation = useMutation({
+    mutationFn: () => llmApi.refreshModels(),
+    onSuccess: (r) => { invalidateAll(); message.success(`${r.models_updated} モデルを更新`); },
+    onError: () => message.error("モデル更新に失敗"),
+  });
 
-  const handlePresetSelect = (name: string) => {
-    mutation.mutate({ preset: name });
+  const roleAssignments = (roles ?? []) as LLMRoleAssignment[];
+  const providerList = providers ?? [];
+  const modelList = models ?? [];
+
+  const findAssignment = (role: string) => roleAssignments.find((a) => a.role === role);
+
+  const handleRoleChange = (role: string, value: string) => {
+    const [prov, ...modelParts] = value.split("/");
+    const model = modelParts.join("/");
+    assignMutation.mutate({ role, provider: prov, model });
   };
 
-  const handleCustomApply = () => {
-    if (!provider || !model) {
-      message.warning("Provider and model are required");
-      return;
+  // Build model options grouped by provider
+  const modelOptions = useMemo(() => {
+    const grouped: Record<string, { value: string; label: string }[]> = {};
+    for (const m of modelList) {
+      if (!grouped[m.provider_name]) grouped[m.provider_name] = [];
+      const caps = m.capabilities.includes("vision") ? " [vision]" : "";
+      grouped[m.provider_name].push({
+        value: `${m.provider_name}/${m.model_id}`,
+        label: `${m.model_id}${caps}`,
+      });
     }
-    mutation.mutate({ provider, model, vision });
-  };
+    return Object.entries(grouped).map(([provider, options]) => ({
+      label: provider,
+      options,
+    }));
+  }, [modelList]);
 
   return (
     <Card size="small" style={{ marginBottom: 16 }}>
-      <Flex vertical gap={8}>
+      <Flex vertical gap={12}>
+        {status && (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            conversation: {status.provider}/{status.model}
+            {status.vision && " [vision]"} ctx={status.max_ctx}
+          </Text>
+        )}
+
+        {ROLES.map((role) => {
+          const assignment = findAssignment(role);
+          const currentValue = assignment ? `${assignment.provider_name}/${assignment.model_id}` : undefined;
+          return (
+            <Flex key={role} align="center" gap={8}>
+              <Text strong style={{ width: 110 }}>{role}:</Text>
+              <Select
+                value={currentValue}
+                onChange={(v) => handleRoleChange(role, v)}
+                loading={assignMutation.isPending}
+                style={{ width: 360 }}
+                placeholder="provider/model"
+                showSearch
+                optionFilterProp="label"
+                options={modelOptions}
+              />
+            </Flex>
+          );
+        })}
+
         <Flex align="center" gap={8}>
-          <Text strong>Preset:</Text>
+          <Text strong style={{ width: 110 }}>Filter:</Text>
           <Select
-            value={currentPreset?.name}
-            loading={isLoading}
-            disabled={mutation.isPending}
-            onChange={handlePresetSelect}
-            style={{ width: 250 }}
-            placeholder="Select preset"
-            options={presets.map((p) => ({
-              value: p.name,
-              label: `${p.name} (${p.model})`,
-            }))}
-          />
-          {data && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {data.provider}/{data.model} {data.vision && "[vision]"} {data.api_base}
-            </Text>
-          )}
-        </Flex>
-        <Flex align="center" gap={8}>
-          <Text strong>Custom:</Text>
-          <Select
-            value={provider || undefined}
-            onChange={setProvider}
-            style={{ width: 120 }}
-            placeholder="Provider"
-            options={PROVIDERS.map((p) => ({ value: p, label: p }))}
-          />
-          <Input
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder="Model name (e.g. gpt-4o)"
-            style={{ width: 220 }}
-          />
-          <Switch
-            checked={vision}
-            onChange={setVision}
-            checkedChildren="Vision"
-            unCheckedChildren="Text"
-            size="small"
+            value={selectedProvider || undefined}
+            onChange={(v) => setSelectedProvider(v ?? "")}
+            allowClear
+            style={{ width: 160 }}
+            placeholder="All providers"
+            options={providerList.map((p) => ({ value: p.name, label: `${p.name} (${p.type})` }))}
           />
           <Button
-            type="primary"
+            icon={<ReloadOutlined />}
             size="small"
-            loading={mutation.isPending}
-            onClick={handleCustomApply}
+            loading={refreshMutation.isPending}
+            onClick={() => refreshMutation.mutate()}
           >
-            Apply
+            Refresh Models
           </Button>
         </Flex>
       </Flex>

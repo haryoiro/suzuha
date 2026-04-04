@@ -521,31 +521,52 @@ export const toolsApi = {
     }),
 };
 
-// LLM Provider API
-export interface LLMPreset {
+// LLM Provider / Model / Role API (3-layer)
+
+export interface LLMProvider {
   name: string;
-  provider: string;
-  model: string;
+  type: string;
   api_base: string;
-  max_tokens: number;
-  vision: boolean;
+  source?: string;
 }
 
-export interface LLMProviderInfo {
+export interface LLMModel {
+  provider_name: string;
+  model_id: string;
+  capabilities: string[];
+  max_context: number;
+  source?: string;
+}
+
+export interface LLMRoleAssignment {
+  role: string;
+  provider_name: string;
+  model_id: string;
+}
+
+export interface LLMStatus {
   provider: string;
   model: string;
   api_base: string;
   max_ctx: number;
   vision: boolean;
-  presets: LLMPreset[];
+  assignments: LLMRoleAssignment[];
 }
 
 export const llmApi = {
-  get: () => fetchJSON<LLMProviderInfo>("/api/llm"),
-  update: (body: { preset?: string; provider?: string; model?: string; api_key?: string; api_base?: string; max_ctx?: number; vision?: boolean }) =>
-    fetchJSON<{ ok: boolean }>("/api/llm", {
+  status: () => fetchJSON<LLMStatus>("/api/llm"),
+  providers: () => fetchJSON<LLMProvider[]>("/api/llm/providers"),
+  models: (provider?: string) =>
+    fetchJSON<LLMModel[]>(provider ? `/api/llm/models?provider=${provider}` : "/api/llm/models"),
+  addModel: (model: LLMModel) =>
+    fetchJSON<{ ok: boolean }>("/api/llm/models", { method: "POST", body: JSON.stringify(model) }),
+  refreshModels: () =>
+    fetchJSON<{ ok: boolean; models_updated: number }>("/api/llm/models/refresh", { method: "POST" }),
+  roles: () => fetchJSON<LLMRoleAssignment[]>("/api/llm/roles"),
+  assignRole: (role: string, provider: string, model: string) =>
+    fetchJSON<{ ok: boolean }>(`/api/llm/roles/${role}`, {
       method: "PUT",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ provider, model }),
     }),
 };
 
