@@ -117,6 +117,19 @@ func IsSilentResponse(text string) bool {
 	return text == "" || strings.Contains(strings.ToUpper(text), "[SKIP]")
 }
 
+// Preset は旧プリセット定義 (後方互換)。
+// Deprecated: 新コードでは RoleSpec + ProviderRegistry を使用する。
+type Preset struct {
+	Name         string   `json:"name"`
+	Provider     string   `json:"provider"`
+	Model        string   `json:"model"`
+	APIKey       string   `json:"api_key,omitempty"`
+	APIBase      string   `json:"api_base"`
+	MaxTokens    int      `json:"max_tokens"`
+	Capabilities []string `json:"capabilities"`
+	Source       string   `json:"source"`
+}
+
 // roleProvider はロールに割り当てられたプロバイダの状態。
 type roleProvider struct {
 	provider     providers.Provider
