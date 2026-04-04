@@ -187,7 +187,7 @@ func (c *Client) SwapProvider(providerName, model, apiKey, apiBase string, maxCt
 	})
 }
 
-// SwapRole はロールのプロバイダを切り替える。
+// SwapRole はロールのプロバイダを切り替える (旧 Preset ベース、後方互換)。
 func (c *Client) SwapRole(role string, preset Preset) error {
 	p, err := newProvider(preset.Provider, preset.APIKey, preset.APIBase)
 	if err != nil {
@@ -209,6 +209,25 @@ func (c *Client) SwapRole(role string, preset Preset) error {
 	c.roles[role] = rp
 	c.logger.Info("LLMロールを切り替えた", "role", role, "provider", preset.Provider, "model", preset.Model, "api_base", preset.APIBase, "max_ctx", preset.MaxTokens)
 	return nil
+}
+
+// SwapRoleSpec はロールのプロバイダを RoleSpec で切り替える (新 3層分離対応)。
+func (c *Client) SwapRoleSpec(role string, spec RoleSpec) {
+	rp := roleProvider{
+		provider:     spec.ProviderInst,
+		providerName: spec.ProviderName,
+		model:        spec.ModelID,
+		apiBase:      spec.APIBase,
+		maxCtx:       spec.MaxContext,
+		capabilities: spec.Capabilities,
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.roles == nil {
+		c.roles = make(map[string]roleProvider)
+	}
+	c.roles[role] = rp
+	c.logger.Info("LLMロールを切り替えた", "role", role, "provider", spec.ProviderName, "model", spec.ModelID, "api_base", spec.APIBase, "max_ctx", spec.MaxContext)
 }
 
 // RoleClient はロールに紐づくプロバイダで補完を実行する。
