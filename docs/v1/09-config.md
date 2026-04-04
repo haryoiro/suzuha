@@ -10,23 +10,18 @@
 timezone: "Asia/Tokyo"  # IANA タイムゾーン
 
 llm:
-  provider: "openai"        # "openai", "zhipu", "qwen" 等
-  model: "gpt-4o"
-  api_key: ""               # 環境変数 LLM_API_KEY で上書き可
-  api_base: ""              # カスタムエンドポイント
-  max_tokens: 8000          # コンテキストウィンドウサイズ
-  presets:                  # ランタイム切り替え用プリセット
-    - name: "local-qwen"
-      provider: "openai"
-      model: "qwen3-5"
+  providers:                # プロバイダ定義 (接続情報)
+    - name: "openai"
+      type: "openai"
+      api_key: ""           # 環境変数 LLM_API_KEY で上書き可
+      api_base: "https://api.openai.com/v1"
+    - name: "local"
+      type: "openai"
       api_base: "http://host.docker.internal:8000/v1"
-      max_tokens: 32768
-      vision: false
-    - name: "cloud-gpt4o"
-      provider: "openai"
-      model: "gpt-4o"
-      max_tokens: 128000
-      vision: true
+    - name: "zhipu"
+      type: "openai"
+      api_key: ""
+      api_base: "https://open.bigmodel.cn/api/paas/v4"
 
 embedding:
   provider: ""              # 未指定時は llm.provider を継承
@@ -34,12 +29,6 @@ embedding:
   api_key: ""               # 環境変数 EMBEDDING_API_KEY
   api_base: ""
   dims: 1024                # ベクトル次元数
-
-vision:
-  provider: ""              # 未指定時は llm.provider を継承
-  model: "glm-4.6v-flash"
-  api_key: ""               # 環境変数 VISION_API_KEY
-  api_base: ""
 
 discord:
   token: ""                 # 環境変数 DISCORD_TOKEN
@@ -152,31 +141,27 @@ location:
 
 ## LLM プロバイダー管理
 
-プリセットは DB (`llm_presets` テーブル) で管理され、config.yaml は初期シードとして使われる。
+ProviderRegistry で 3 レイヤー（Provider / Model Catalog / Role Assignment）を管理する。
+Provider は config.yaml で定義、Model Catalog と Role Assignment は DB で管理。
 詳細は [11-llm.md](./11-llm.md) を参照。
 
 ### ロール割り当て切り替え
 
 ```bash
 # conversation ロールを切り替え
-curl -X PUT http://localhost:9090/internal/llm/assignments/conversation \
+curl -X PUT http://localhost:9090/internal/llm/roles/conversation \
   -H "Content-Type: application/json" \
-  -d '{"preset": "local-qwen"}'
+  -d '{"provider": "local", "model": "qwen3-5"}'
 ```
 
-### プリセット管理
+### プロバイダ・モデル管理
 
 ```bash
-# 一覧
-curl http://localhost:9090/internal/llm/presets
+# プロバイダ一覧
+curl http://localhost:9090/internal/llm/providers
 
-# 追加
-curl -X POST http://localhost:9090/internal/llm/presets \
-  -d '{"name":"new-preset","provider":"openai","model":"gpt-4o","api_key":"sk-...","capabilities":["text","vision"]}'
-
-# モデルだけ変更 (api_key は既存値を保持)
-curl -X PUT http://localhost:9090/internal/llm/presets/zhipu \
-  -d '{"provider":"zhipu","model":"glm-5","api_base":"https://open.bigmodel.cn/api/coding/paas/v4"}'
+# モデルカタログ一覧
+curl http://localhost:9090/internal/llm/models
 ```
 
 ## DI コンテナ
@@ -201,7 +186,7 @@ func allPackages(cfgPath string) []func(do.Injector) {
 }
 ```
 
-各パッケージは `Package` 関数で自身のプロバイダーを登録。循環依存を避けるため、`agentPackages` でブリッジ（例: `memory.EmbedFunc → llm.Client.Embed`）。`PresetStore` は `agentPackages` 側で登録 (shared-db 依存)。
+各パッケージは `Package` 関数で自身のプロバイダーを登録。循環依存を避けるため、`agentPackages` でブリッジ（例: `memory.EmbedFunc → llm.Client.Embed`）。
 
 ## Docker 構成
 

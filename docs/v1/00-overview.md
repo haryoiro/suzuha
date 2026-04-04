@@ -81,29 +81,41 @@ suzuha2 は **自律型 Discord Bot エージェント** である。LLM を頭�
 suzuha2/
 ├── cmd/suzuha-agent/       # エントリーポイント (main.go, providers.go)
 ├── internal/
-│   ├── agent/              # 4段パイプライン (perceive/think/act/reflect/context/hook)
+│   ├── adapter/            # プロトコルアダプタ
+│   │   ├── cli/            # CLI アダプタ (stdin/stdout)
+│   │   ├── device/         # ESP32 WebSocket アダプタ (薄いレイヤー)
+│   │   └── discord/        # Discord アダプタ (discordgo)
 │   ├── admin/              # 管理ダッシュボード HTTP サーバー (ogen + handler)
+│   ├── agent/              # 4段パイプライン (perceive/think/act/reflect/context/hook)
+│   │   └── prompt/         # プロンプト組み立て
 │   ├── channel/            # チャンネル設定・アクティビティ追跡
-│   ├── chat/               # チャットインターフェース (discord/, cli/)
+│   ├── chat/               # チャットインターフェース定義のみ (実装は adapter/ に移動)
 │   ├── config/             # YAML 設定読み込み
-│   ├── consolidator/       # コンテキスト圧縮 (LLM ベース)
-│   ├── device/             # 物理デバイス (ESP32 WebSocket, サーボ, カメラ, YOLO)
-│   ├── action/             # スケジュールアクション (予約投稿)
 │   ├── event/              # イベントバス
-│   ├── explore/            # ウェブ探索 (SearXNG + LLM 評価)
-│   ├── forget/             # 記憶重複削除
-│   ├── jtime/              # タイムゾーン対応時刻ユーティリティ
-│   ├── llm/                # LLM クライアント (OpenAI 互換, 埋め込み, ビジョン)
-│   ├── location/           # GPS 位置追跡 (Overland)
+│   ├── feature/            # 自己完結的な Feature モジュール
+│   │   ├── action/         # スケジュールアクション (予約投稿)
+│   │   ├── diary/          # 日記 (hourly/daily)
+│   │   ├── forget/         # 記憶重複削除
+│   │   ├── location/       # GPS 位置追跡 (Overland)
+│   │   ├── research/       # ウェブ検索 (SearXNG + ページ取得)
+│   │   ├── topics/         # 独り言 (退屈度ベース)
+│   │   ├── video/          # 動画理解 (字幕取得, フレーム VLM)
+│   │   ├── vision/         # ビジョン機能 (tracker, change detection, stream, tools)
+│   │   └── wander/         # 好奇心探索 (SearXNG + LLM 評価)
+│   ├── lib/                # 汎用ユーティリティ
+│   ├── llm/                # LLM クライアント + ProviderRegistry
 │   ├── mcp/                # MCP (Model Context Protocol) ツールサーバー
+│   ├── memento/            # メモリライフサイクル
+│   │   ├── acquirer/       # メモリ獲得
+│   │   └── consolidator/   # メモリ統合
 │   ├── memory/             # 長期記憶ストア (SQLite + ベクトル検索)
-│   ├── notification/       # 通知ミドルウェア (静寂時間, チャンネル設定)
-│   ├── observe/            # メトリクス, ログ, リングバッファ
-│   ├── scheduler/          # cron スケジューラー
-│   ├── tool/               # ツールインターフェース + builtin/ (Discord, fetch, python, user_profile)
-│   ├── topics/             # 独り言 (退屈度ベース)
+│   ├── observe/            # メトリクス, ログ, Langfuse
+│   │   └── langfuse/
+│   ├── scheduler/          # cron スケジューラー + Feature contract
+│   ├── tool/               # ツールインターフェース + builtin/
 │   ├── user/               # ユーザー管理 + 好感度
 │   └── voice/              # 音声パイプライン (VAD, STT, TTS, Session)
+├── external/               # サードパーティサービスアダプタ
 ├── web/admin/              # React SPA (Vite + Ant Design)
 ├── firmware/               # ESP32 ファームウェア (ESP-IDF)
 ├── api/                    # TypeSpec API 仕様

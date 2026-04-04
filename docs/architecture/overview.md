@@ -21,7 +21,7 @@
 +-------------+    |           |    |                 |    +-----------+
                    |           |    |  Perceive       |    |   LLM     |
 +-------------+    |           |    |  Think          |--->| Providers |
-| Web Widget  |--->|           |    |  Act            |    | (PresetStore)
+| Web Widget  |--->|           |    |  Act            |    | (ProviderRegistry)
 |  (:5174)    |    +-----------+    |  Reflect        |    +-----------+
 +-------------+                     +-------+---------+
                                             |
@@ -38,7 +38,7 @@
                     | Consolidate |         |
                     +-------------+    +----+----+----+----+----+----+----+
                                        |    |    |    |    |    |    |
-                                     diary topics action forget wander research video
+                                     diary topics action forget wander research video vision location
 ```
 
 ## Pipeline Detail
@@ -122,15 +122,21 @@ Event (Discord/Device/Web)
 ## LLM Provider System
 
 ```
-config.yaml (seed)
+config.yaml (providers[])
        |
        v
 +-------------------------------+
-|      PresetStore (DB)         |
+|    ProviderRegistry           |
 |  +----------+  +-----------+ |
-|  | llm_     |  | llm_role_ | |
-|  | presets  |  | assignments| |
-|  +----------+  +-----------+ |
+|  | Provider  |  | Model     | |
+|  | (config)  |  | Catalog   | |
+|  +----------+  | (DB)      | |
+|                +-----------+ |
+|  +-----------+               |
+|  | Role      |               |
+|  | Assignment|               |
+|  | (DB)      |               |
+|  +-----------+               |
 +-------------------------------+
        |
        v

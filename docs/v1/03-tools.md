@@ -71,7 +71,7 @@ type ToolResult struct {
 | `voice_join` | VC に参加 |
 | `voice_leave` | VC を退出 |
 
-### Device ツール（物理デバイス、`internal/device/tools.go`）
+### Device ツール（物理デバイス、`internal/feature/vision/tools.go`）
 
 | ツール名 | 説明 |
 |---------|------|
@@ -90,7 +90,7 @@ type ToolResult struct {
 | MCP Apps (`internal/mcp/`) | `mcp_search`, `mcp_install`, `mcp_uninstall`, `mcp_list_apps` | MCP ツールサーバー管理 |
 | Research (`internal/feature/research/`) | `research` | ウェブ検索（SearXNG + ページ取得） |
 | Wander (`internal/feature/wander/`) | `wander` | 好奇心探索（SearXNG + LLM 評価） |
-| Location (`internal/location/`) | ロケーション関連ツール | GPS 位置情報 |
+| Location (`internal/feature/location/`) | ロケーション関連ツール | GPS 位置情報 |
 
 ### MCP ツール（`internal/mcp/`）
 

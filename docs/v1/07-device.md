@@ -23,9 +23,14 @@ ESP32 マイコンボードをカメラ + サーボ付きの物理ボディと�
                                     └──────────────────┘
 ```
 
-## バックエンド（`internal/device/`）
+## バックエンド
 
-### Hub（`device.go`）
+リファクタリングにより、デバイス関連のコードは 2 つのパッケージに分割されている:
+
+- **`internal/adapter/device/`** — WebSocket アダプタ（薄いレイヤー）
+- **`internal/feature/vision/`** — ビジョン機能（tracker, change detection, stream, tools）
+
+### Hub（`internal/adapter/device/`）
 
 デバイスとの WebSocket 接続を管理する中央ハブ。
 
@@ -34,25 +39,23 @@ ESP32 マイコンボードをカメラ + サーボ付きの物理ボディと�
 - JPEG フレームの受信・保存
 - コマンド送信（サーボ、キャプチャ、表情）
 - TTS 音声合成 → WAV データのデバイスへの送信
-- YOLO 物体検出リクエスト
-- 視界変化検出
 
-### FrameStore（`stream.go`）
+### FrameStore（`internal/feature/vision/stream.go`）
 
 最新のカメラフレームを保持。HTTP 経由でフレーム画像を配信。
 
 - `GET /internal/device/frame`: 最新 JPEG フレーム
 - `GET /internal/device/detections`: SSE で物体検出結果をストリーム
 
-### Change Detector（`change.go`）
+### Change Detector（`internal/feature/vision/change.go`）
 
 連続するフレーム間の差分を検出し、大きな変化があった場合に VLM で画像を記述してイベントバスに発行。
 
-### YOLO 検出（`detect.go`）
+### Object Tracker（`internal/feature/vision/`）
 
-YOLO サーバー（`yolo/`）に JPEG フレームを送信し、検出結果（ラベル、信頼度、バウンディングボックス）を取得。
+YOLO サーバーに JPEG フレームを送信し、検出結果（ラベル、信頼度、バウンディングボックス）を取得・追跡。
 
-## デバイスツール
+## デバイスツール（`internal/feature/vision/tools.go`）
 
 | ツール名 | 説明 | パラメータ |
 |---------|------|-----------|

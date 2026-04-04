@@ -47,7 +47,7 @@ for _, f := range features {
 
 ### 1. Topics（独り言）
 
-**パッケージ:** `internal/topics/`
+**パッケージ:** `internal/feature/topics/`
 
 Cron で定期的に実行され、退屈度に基づいて自発的に発言する。
 
@@ -72,9 +72,9 @@ boredom = hours_since_last_interaction × 8.0  (上限 100)
 
 **メンション選択:** 退屈度 ≥ 50（高 interest ユーザーがいる場合は ≥ 30）で確率的にメンション。interest をウェイトとした重み付きランダム。
 
-### 2. Explore（ウェブ探索）
+### 2. Wander（ウェブ探索）
 
-**パッケージ:** `internal/explore/`
+**パッケージ:** `internal/feature/wander/` (旧 `internal/explore/`)
 
 SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内容を評価する。エージェントのツールとしても、cron タスクとしても使える。
 
@@ -88,7 +88,7 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 
 ### 3. Forget（記憶重複削除）
 
-**パッケージ:** `internal/forget/`
+**パッケージ:** `internal/feature/forget/`
 
 類似度の高い記憶を検出し、マージまたは削除する。Union-Find アルゴリズムでグルーピング。
 
@@ -100,7 +100,7 @@ SearXNG メタ検索エンジンを使ってウェブを探索し、LLM で内�
 
 ### 4. Schedule（予約アクション）
 
-**パッケージ:** `internal/action/`
+**パッケージ:** `internal/feature/action/`
 
 特定の日時やcron式で発言を予約する。
 
@@ -122,11 +122,23 @@ MCP (Model Context Protocol) ツールサーバーの管理。
 
 ### 6. Location
 
-**パッケージ:** `internal/location/`
+**パッケージ:** `internal/feature/location/`
 
 Overland アプリからの GPS データ受信。デバイスと場所の管理。
 
 **コンテキスト注入:** Think ステージで `locationStore.BuildContextSnippet()` を呼んで位置情報をエフェメラルメッセージに追加。
+
+### 7. Vision（ビジョン）
+
+**パッケージ:** `internal/feature/vision/`
+
+物理デバイス（ESP32）のカメラからの映像を処理する。旧 `internal/device/` から分離。
+
+**主な機能:**
+- Object Tracker: YOLO による物体検出・追跡
+- Change Detector: フレーム間の変化検出 → VLM で画像記述
+- FrameStore (stream): 最新フレーム保持・HTTP 配信
+- デバイスツール: `body_turn_head`, `body_blink`, `body_expression`, `body_look`
 
 ---
 

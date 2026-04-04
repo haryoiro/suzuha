@@ -74,8 +74,8 @@ type VoiceSpeaker interface {
 
 ### 実装
 
-- **Discord** (`internal/chat/discord/`): discordgo ベース。メッセージ受信 → イベントバス発行、メッセージ送信。OnReady コールバックで Discord 固有ツールを登録
-- **CLI** (`internal/chat/cli/`): stdin/stdout ベース。開発用
+- **Discord** (`internal/adapter/discord/`): discordgo ベース。メッセージ受信 → イベントバス発行、メッセージ送信。OnReady コールバックで Discord 固有ツールを登録
+- **CLI** (`internal/adapter/cli/`): stdin/stdout ベース。開発用
 
 ## イベントの Agent 内での処理
 
