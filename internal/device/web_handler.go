@@ -3,16 +3,17 @@ package device
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/haryoiro/suzuha/internal/voice"
 )
 
-// webAudioState holds per-connection audio buffer for web clients.
+// webAudioState holds per-connection VAD for web clients.
 type webAudioState struct {
-	mu           sync.Mutex
-	audioBuf     []byte
-	silenceCount int // consecutive silent chunks
+	mu  sync.Mutex
+	vad *voice.VAD
 }
 
 // WebHandler returns an http.HandlerFunc that upgrades to WebSocket
@@ -44,7 +45,12 @@ func (h *Hub) WebHandler() http.HandlerFunc {
 
 // webReadLoop reads binary frames from a web client.
 func (h *Hub) webReadLoop(wc *WebConn) {
-	state := &webAudioState{}
+	vad := voice.NewVAD()
+	vad.SpeechThreshold = 100
+	vad.SilenceDuration = time.Second
+	vad.MinSpeechDuration = 2 * time.Second
+	vad.MaxSpeechDuration = 10 * time.Second
+	state := &webAudioState{vad: vad}
 
 	for {
 		msgType, data, err := wc.conn.ReadMessage()
@@ -71,72 +77,20 @@ func (h *Hub) webReadLoop(wc *WebConn) {
 	}
 }
 
-// handleWebAudio processes audio from a web client with per-connection buffer.
-// Requires consecutive silent chunks before triggering transcription to avoid
-// cutting speech at brief pauses.
+// handleWebAudio processes audio from a web client with per-connection VAD.
 func (h *Hub) handleWebAudio(state *webAudioState, pcm []byte) {
 	if h.stt == nil {
 		return
 	}
 
 	state.mu.Lock()
-	state.audioBuf = append(state.audioBuf, pcm...)
+	result := state.vad.Process(pcm, time.Now())
+	state.mu.Unlock()
 
-	const minBytes = deviceSampleRate * 2 * 2  // 2s minimum
-	const maxBytes = deviceSampleRate * 2 * 10 // 10s maximum
-	const silenceThreshold = 100
-	const requiredSilenceChunks = 10 // ~1s of consecutive silence (100ms chunks)
-
-	if len(state.audioBuf) < minBytes {
-		state.mu.Unlock()
+	if !result.SpeechEnded {
 		return
 	}
 
-	// Energy check on the latest chunk
-	energy := int64(0)
-	samples := len(pcm) / 2
-	for i := 0; i < samples; i++ {
-		s := int16(uint16(pcm[i*2]) | uint16(pcm[i*2+1])<<8)
-		if s < 0 {
-			s = -s
-		}
-		energy += int64(s)
-	}
-	avgEnergy := energy / int64(samples+1)
-
-	if avgEnergy < silenceThreshold {
-		state.silenceCount++
-	} else {
-		state.silenceCount = 0
-	}
-
-	// Trigger transcription only after sustained silence or max buffer
-	if state.silenceCount >= requiredSilenceChunks || len(state.audioBuf) >= maxBytes {
-		// Skip if only silence (no speech detected at all)
-		totalEnergy := int64(0)
-		totalSamples := len(state.audioBuf) / 2
-		for i := 0; i < totalSamples; i++ {
-			s := int16(uint16(state.audioBuf[i*2]) | uint16(state.audioBuf[i*2+1])<<8)
-			if s < 0 {
-				s = -s
-			}
-			totalEnergy += int64(s)
-		}
-		if totalEnergy/int64(totalSamples+1) < silenceThreshold {
-			state.audioBuf = nil
-			state.silenceCount = 0
-			state.mu.Unlock()
-			return
-		}
-
-		buf := state.audioBuf
-		state.audioBuf = nil
-		state.silenceCount = 0
-		state.mu.Unlock()
-
-		h.logger.Info("Webクライアントの声が聞こえた、文字起こし開始", "bytes", len(buf))
-		go h.transcribeAndRespond(buf, "web")
-	} else {
-		state.mu.Unlock()
-	}
+	h.logger.Info("Webクライアントの声が聞こえた、文字起こし開始", "bytes", len(result.Audio))
+	go h.transcribeAndRespond(result.Audio, "web")
 }

@@ -7,12 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/detect"
 	"github.com/haryoiro/suzuha/external/stt"
 	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/voice"
-	"golang.org/x/sync/semaphore"
 )
 
 // Frame type constants matching firmware/main/config.h.
@@ -28,8 +26,6 @@ const (
 const deviceSampleRate = 24000
 
 // TTS chunk size: must be < ESP32 WebSocket buffer_size (4096) minus 1 byte frame header.
-// If total frame (1 + chunk) exceeds buffer_size, WebSocket fragments the message
-// and continuation frames (op_code=0x00) are dropped by the ESP32 handler.
 const ttsChunkSize = 4000
 
 // Speaker is the interface that the agent uses to send TTS audio.
@@ -37,23 +33,24 @@ type Speaker interface {
 	SpeakText(ctx context.Context, text string) error
 }
 
+// ImageHandler processes incoming JPEG frames from the device camera.
+// Defined here (consumer-side) so Hub doesn't import vision/detect packages.
+type ImageHandler interface {
+	HandleImage(jpeg []byte)
+}
+
 // Hub manages device and web client connections.
 type Hub struct {
-	mu        sync.RWMutex
-	clients   map[string]Client // all connected clients (ESP + Web)
-	bus       *event.Bus
-	tts       tts.TTS
-	stt       stt.STT
-	yolo      *detect.YOLOClient
-	frames    *FrameStore
-	changes   *ChangeDetector
-	tracker   *ObjectTracker
-	detectSem *semaphore.Weighted // limit concurrent YOLO detections to 1
-	logger    *slog.Logger
+	mu      sync.RWMutex
+	clients map[string]Client // all connected clients (ESP + Web)
+	bus     *event.Bus
+	tts     tts.TTS
+	stt     stt.STT
+	images  ImageHandler
+	logger  *slog.Logger
 
-	// Audio accumulator for ESP device VAD-like chunking
-	audioBuf     []byte
-	silenceCount int // consecutive silent chunks for ESP VAD
+	// VAD for ESP device audio
+	espVAD *voice.VAD
 
 	// Owner info (from DB)
 	ownerID   string
@@ -61,42 +58,29 @@ type Hub struct {
 }
 
 // NewHub creates a new device Hub.
-// defaultChannel is the Discord channel ID for vision change notifications.
-func NewHub(bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, yoloURL, defaultChannel, ownerID, ownerName string, logger *slog.Logger) *Hub {
-	var yolo *detect.YOLOClient
-	if yoloURL != "" {
-		yolo = detect.NewYOLOClient(yoloURL)
-	}
-	h := &Hub{
+// Call SetImageHandler after creation to wire the vision pipeline.
+func NewHub(bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, ownerID, ownerName string, logger *slog.Logger) *Hub {
+	espVAD := voice.NewVAD()
+	espVAD.SpeechThreshold = 100          // match device energy threshold
+	espVAD.SilenceDuration = time.Second  // ~10 chunks of 100ms
+	espVAD.MinSpeechDuration = 2 * time.Second
+	espVAD.MaxSpeechDuration = 10 * time.Second
+
+	return &Hub{
 		clients:   make(map[string]Client),
 		bus:       bus,
 		tts:       ttsClient,
 		stt:       sttClient,
-		yolo:      yolo,
-		frames:    NewFrameStore(),
-		changes:   NewChangeDetector(bus, 30*time.Second, defaultChannel),
-		detectSem: semaphore.NewWeighted(1),
+		espVAD:    espVAD,
 		ownerID:   ownerID,
 		ownerName: ownerName,
 		logger:    logger,
 	}
-	h.tracker = NewObjectTracker(DefaultTrackerConfig(), h.Device, logger)
-	return h
 }
 
-// ChangeDetector returns the change detector for API access.
-func (h *Hub) ChangeDetector() *ChangeDetector {
-	return h.changes
-}
-
-// Frames returns the FrameStore for registering HTTP handlers.
-func (h *Hub) Frames() *FrameStore {
-	return h.frames
-}
-
-// Tracker returns the object tracker for API access.
-func (h *Hub) Tracker() *ObjectTracker {
-	return h.tracker
+// SetImageHandler sets the handler for incoming camera frames.
+func (h *Hub) SetImageHandler(handler ImageHandler) {
+	h.images = handler
 }
 
 // addClient registers a client in the hub.
@@ -176,11 +160,9 @@ func (h *Hub) SpeakText(ctx context.Context, text string) error {
 		return nil
 	}
 
-	// Resample to device sample rate if needed
 	if sampleRate != deviceSampleRate {
 		pcm = voice.ResamplePCM(pcm, sampleRate, deviceSampleRate)
 		h.logger.Debug("音声を変換", "from", sampleRate, "to", deviceSampleRate)
-		// Normalize only after resample (resample can reduce amplitude)
 		pcm = voice.NormalizePCM(pcm, 20000)
 	}
 

@@ -819,7 +819,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 }
 
 // HasVisionCapability returns whether vision is available and whether it's inline.
-// Satisfies device.VisionDescriber interface.
+// Satisfies vision.VisionDescriber interface.
 func (c *Client) HasVisionCapability() (available bool, inline bool) {
 	rc, inl := c.WithCapability("conversation", "vision")
 	return rc != nil, inl

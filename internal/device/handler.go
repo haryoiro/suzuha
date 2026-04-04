@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -84,105 +85,27 @@ func (h *Hub) handleFrame(dev *DeviceConn, frameType byte, payload []byte) {
 	}
 }
 
-// handleImage stores the frame and runs YOLO detection asynchronously.
-// Does NOT publish to agent event bus (V1: admin-only view).
+// handleImage delegates JPEG processing to the configured ImageHandler.
 func (h *Hub) handleImage(jpeg []byte) {
-	if len(jpeg) == 0 {
+	if len(jpeg) == 0 || h.images == nil {
 		return
 	}
-
-	// Store latest frame for admin viewing.
-	h.frames.UpdateFrame(jpeg)
-
-	// Run YOLO detection asynchronously. Skip if previous detection is still running.
-	if h.yolo != nil && h.detectSem != nil && h.detectSem.TryAcquire(1) {
-		go func() {
-			defer h.detectSem.Release(1)
-
-			result, err := h.yolo.Detect(context.Background(), jpeg)
-			if err != nil {
-				h.logger.Debug("物体検出に失敗", "error", err)
-				return
-			}
-			// ESP32-CAM sends 640x480.
-			h.frames.UpdateDetections(result, 640, 480)
-
-			// Notify agent on significant changes.
-			if h.changes.Update(result.Detections) {
-				h.logger.Info("視界に変化があった")
-			}
-
-			// Feed object tracker for LLM-free servo tracking.
-			if h.tracker != nil {
-				h.tracker.Feed(result.Detections)
-			}
-		}()
-	}
+	h.images.HandleImage(jpeg)
 }
 
-// handleAudio accumulates PCM chunks and runs STT when enough audio is buffered.
-// Requires consecutive silent chunks before triggering to avoid cutting speech at pauses.
-// source is the event source string ("device" or "web").
+// handleAudio feeds PCM to the ESP VAD and triggers STT on speech end.
 func (h *Hub) handleAudio(pcm []byte, source string) {
 	if h.stt == nil {
 		return
 	}
 
-	h.audioBuf = append(h.audioBuf, pcm...)
-
-	// Accumulate at least 2s of audio (24kHz, 16-bit mono)
-	const minBytes = deviceSampleRate * 2 * 2  // 2s minimum
-	const maxBytes = deviceSampleRate * 2 * 10 // 10s maximum
-	const silenceThreshold = 100
-	const requiredSilenceChunks = 10 // ~1s of consecutive silence (100ms chunks)
-
-	if len(h.audioBuf) < minBytes {
+	result := h.espVAD.Process(pcm, time.Now())
+	if !result.SpeechEnded {
 		return
 	}
 
-	// Energy check on the latest chunk
-	energy := int64(0)
-	samples := len(pcm) / 2
-	for i := 0; i < samples; i++ {
-		s := int16(uint16(pcm[i*2]) | uint16(pcm[i*2+1])<<8)
-		if s < 0 {
-			s = -s
-		}
-		energy += int64(s)
-	}
-	avgEnergy := energy / int64(samples+1)
-
-	if avgEnergy < silenceThreshold {
-		h.silenceCount++
-	} else {
-		h.silenceCount = 0
-	}
-
-	// Trigger transcription only after sustained silence or max buffer
-	if h.silenceCount >= requiredSilenceChunks || len(h.audioBuf) >= maxBytes {
-		// Skip if only silence (no speech detected at all)
-		totalEnergy := int64(0)
-		totalSamples := len(h.audioBuf) / 2
-		for i := 0; i < totalSamples; i++ {
-			s := int16(uint16(h.audioBuf[i*2]) | uint16(h.audioBuf[i*2+1])<<8)
-			if s < 0 {
-				s = -s
-			}
-			totalEnergy += int64(s)
-		}
-		if totalEnergy/int64(totalSamples+1) < silenceThreshold {
-			h.audioBuf = nil
-			h.silenceCount = 0
-			return
-		}
-
-		buf := h.audioBuf
-		h.audioBuf = nil
-		h.silenceCount = 0
-
-		h.logger.Info("声が聞こえた、文字起こし開始", "bytes", len(buf), "source", source)
-		go h.transcribeAndRespond(buf, source)
-	}
+	h.logger.Info("声が聞こえた、文字起こし開始", "bytes", len(result.Audio), "source", source)
+	go h.transcribeAndRespond(result.Audio, source)
 }
 
 // transcribeAndRespond runs STT, publishes the text as a user message event,
@@ -201,9 +124,9 @@ func (h *Hub) transcribeAndRespond(pcm []byte, source string) {
 
 	h.logger.Info("聞き取れた", "text", text, "source", source)
 
-	// Clear any audio buffer accumulated during STT processing
-	// (prevents echo of the response)
-	h.audioBuf = nil
+	// Reset VAD to discard audio accumulated during STT processing
+	// (prevents echo of the response).
+	h.espVAD.Reset()
 
 	// Publish as message event — agent pipeline will process and respond
 	h.bus.Publish(event.NewMessageEvent(source, event.MessagePayload{
