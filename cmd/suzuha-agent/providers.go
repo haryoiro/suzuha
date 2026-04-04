@@ -102,6 +102,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 			reg := llm.NewProviderRegistry(db, cipher, logger)
 
+			// 旧 llm_presets からの自動マイグレーション
+			if err := reg.MigrateFromPresets(context.Background()); err != nil {
+				logger.Warn("旧プリセットからの移行に失敗", "error", err)
+			}
+
 			// config.yaml のプロバイダ定義をシード
 			if err := reg.SeedProviders(context.Background(), cfg.LLM.Providers); err != nil {
 				logger.Warn("プロバイダのシードに失敗", "error", err)

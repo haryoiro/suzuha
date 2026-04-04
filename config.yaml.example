@@ -7,21 +7,21 @@
 timezone: "Asia/Tokyo"
 
 llm:
-  provider: "openai"           # "openai", "zhipu", "qwen"
-  model: "gpt-4"
-  api_key: ""  # Set in .env as LLM_API_KEY, or fill in directly
-  max_tokens: 8000
-  # Named presets for runtime provider switching via PUT /internal/llm
-  # presets:
-  #   - name: "cloud"
-  #     provider: "openai"
-  #     model: "gpt-4"
-  #     max_tokens: 8000
-  #   - name: "local"
-  #     provider: "openai"
-  #     model: "my-local-model.gguf"
-  #     api_base: "http://host.docker.internal:8000/v1"
-  #     max_tokens: 8192
+  provider: "openai"           # legacy: 起動時のデフォルトプロバイダ
+  model: "gpt-4.1-mini"
+  api_key: ""                  # Set in .env as LLM_API_KEY
+  max_tokens: 100000
+  # プロバイダ接続定義 (API キーは環境変数で管理)
+  providers:
+    - name: openai
+      type: openai
+      api_base: "https://api.openai.com/v1"
+    # - name: zhipu
+    #   type: zhipu
+    #   api_base: "https://open.bigmodel.cn/api/coding/paas/v4"
+    # - name: local
+    #   type: openai
+    #   api_base: "http://host.docker.internal:8000/v1"
 
 discord:
   token: "${DISCORD_TOKEN}"
