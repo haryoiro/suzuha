@@ -47,15 +47,27 @@ type Location struct {
 
 // LLM configures the language model provider.
 type LLM struct {
-	Provider  string      `yaml:"provider"` // "openai", "zhipu", etc.
-	Model     string      `yaml:"model"`
-	APIKey    string      `yaml:"api_key"`
-	APIBase   string      `yaml:"api_base"` // Custom base URL for OpenAI-compatible providers.
-	MaxTokens int         `yaml:"max_tokens"`
-	Presets   []LLMPreset `yaml:"presets"` // Named presets for quick provider switching.
+	Provider  string        `yaml:"provider"` // "openai", "zhipu", etc. (legacy, used as fallback)
+	Model     string        `yaml:"model"`    // (legacy)
+	APIKey    string        `yaml:"api_key"`  // (legacy)
+	APIBase   string        `yaml:"api_base"` // (legacy)
+	MaxTokens int           `yaml:"max_tokens"`
+	Providers []LLMProvider `yaml:"providers"` // Named provider connections.
+	Presets   []LLMPreset   `yaml:"presets"`   // Deprecated: use providers instead.
+}
+
+// LLMProvider is a named connection to an LLM API provider.
+// Defines only the connection info (type, credentials, endpoint).
+// Model selection is done separately via role assignments.
+type LLMProvider struct {
+	Name    string `yaml:"name"`
+	Type    string `yaml:"type"`     // "openai", "zhipu", "gemini", "qwen"
+	APIKey  string `yaml:"api_key"`
+	APIBase string `yaml:"api_base"`
 }
 
 // LLMPreset is a named LLM provider configuration that can be activated at runtime.
+// Deprecated: use LLMProvider + DB role assignments instead.
 type LLMPreset struct {
 	Name      string `yaml:"name"`
 	Provider  string `yaml:"provider"`
@@ -71,6 +83,16 @@ func (l *LLM) FindPreset(name string) *LLMPreset {
 	for i := range l.Presets {
 		if l.Presets[i].Name == name {
 			return &l.Presets[i]
+		}
+	}
+	return nil
+}
+
+// FindProvider returns the provider config with the given name, or nil if not found.
+func (l *LLM) FindProvider(name string) *LLMProvider {
+	for i := range l.Providers {
+		if l.Providers[i].Name == name {
+			return &l.Providers[i]
 		}
 	}
 	return nil
@@ -334,7 +356,16 @@ func (c *Config) setDefaults() {
 			c.Vision.APIBase = c.LLM.APIBase
 		}
 	}
-	// Preset API key defaults: inherit from matching provider.
+	// Provider API key defaults: inherit from LLM top-level key.
+	for i := range c.LLM.Providers {
+		if c.LLM.Providers[i].APIKey == "" {
+			c.LLM.Providers[i].APIKey = c.LLM.APIKey
+		}
+		if c.LLM.Providers[i].Type == "" {
+			c.LLM.Providers[i].Type = c.LLM.Providers[i].Name
+		}
+	}
+	// Legacy preset API key defaults.
 	for i := range c.LLM.Presets {
 		if c.LLM.Presets[i].APIKey == "" {
 			switch c.LLM.Presets[i].Provider {
