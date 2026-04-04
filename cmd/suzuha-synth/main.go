@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -128,7 +129,7 @@ func runGenerate(cfgPath string, count int, outputPath string) error {
 		p := pair{Input: scenario, Output: text}
 		enc.Encode(p)
 		saved++
-		log.Printf("[%d/%d] %s → %s", i+1, len(scenarios), truncate(scenario, 40), truncate(text, 40))
+		log.Printf("[%d/%d] %s → %s", i+1, len(scenarios), textutil.TruncateRunes(scenario, 40), textutil.TruncateRunes(text, 40))
 	}
 
 	log.Printf("Saved %d pairs to %s", saved, outputPath)
@@ -523,10 +524,3 @@ func (c *langfuseClient) createDatasetItemRaw(ctx context.Context, datasetName s
 	return nil
 }
 
-func truncate(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "..."
-}

@@ -20,7 +20,8 @@ import (
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -90,7 +91,7 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 	a.logger.Info("聞こえた",
 		"source", evt.Source, "type", evt.Type,
 		"user", msg.UserName, "user_id", msg.UserID,
-		"channel", msg.Channel, "content", truncate(msg.Content, 100))
+		"channel", msg.Channel, "content", textutil.TruncateRunes(msg.Content, 100))
 
 	// Resolve user identity (auto-create if not exists).
 	if a.users != nil && msg.UserID != "" && msg.UserID != a.botID {

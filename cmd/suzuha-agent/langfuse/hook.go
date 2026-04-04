@@ -2,10 +2,10 @@ package langfuse
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -68,7 +68,7 @@ func (h *Hook) AfterThink(ctx context.Context, p *agent.Perception, t *agent.Tho
 			attribute.Bool("suzuha.listen_mode", t.ListenMode),
 			attribute.Int("suzuha.background_count", len(t.Background)),
 			attribute.Int("suzuha.foreground_count", len(t.Foreground)),
-			attribute.String("suzuha.directive", truncate(t.Directive, 100)),
+			attribute.String("suzuha.directive", textutil.TruncateRunes(t.Directive, 100)),
 		),
 	)
 	span.End()
@@ -87,10 +87,3 @@ func (h *Hook) AfterReflect(ctx context.Context, p *agent.Perception) error {
 	return nil
 }
 
-func truncate(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return fmt.Sprintf("%s...", string(r[:n]))
-}

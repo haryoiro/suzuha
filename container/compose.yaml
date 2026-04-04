@@ -1,3 +1,5 @@
+name: suzuha2
+
 services:
   agent:
     build:

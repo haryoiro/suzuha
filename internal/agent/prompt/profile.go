@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/user"

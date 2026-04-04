@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"go.opentelemetry.io/otel/attribute"
@@ -588,7 +589,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		"tool_calls", len(r.ToolCalls))
 	if reasoning != "" {
 		c.logger.Debug("llm 推論内容", "length", len(reasoning),
-			"content", truncateStr(reasoning, 300))
+			"content", textutil.TruncateRunes(reasoning, 300))
 	}
 
 	return r, nil
@@ -922,13 +923,6 @@ func retryOnRateLimit(ctx context.Context, logger *slog.Logger, fn func() error)
 	return err
 }
 
-func truncateStr(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	return string(runes[:maxLen]) + "..."
-}
 
 // serializeMessagesForTrace converts messages to a JSON array for Langfuse input.
 // Images are excluded to keep the payload manageable.

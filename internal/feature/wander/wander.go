@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/external/search"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
@@ -26,7 +27,7 @@ func evaluateAndPick(
 
 	sb.WriteString("今読んでるもの:\n")
 	fmt.Fprintf(&sb, "タイトル: %s\n", title)
-	fmt.Fprintf(&sb, "内容: %s\n\n", truncateRunes(content, contentMaxRunes))
+	fmt.Fprintf(&sb, "内容: %s\n\n", textutil.TruncateRunes(content, contentMaxRunes))
 
 	if len(path) > 0 {
 		sb.WriteString("ここまでの探索:\n")
@@ -65,7 +66,7 @@ func evaluateAndPick(
 	}
 
 	text := strings.TrimSpace(resp.Text)
-	text = stripCodeFence(text)
+	text = textutil.StripCodeFence(text)
 
 	var eval evaluation
 	if err := json.Unmarshal([]byte(text), &eval); err != nil {

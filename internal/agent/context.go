@@ -3,6 +3,7 @@ package agent
 import (
 	"sync"
 
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -88,10 +89,10 @@ func (c *Context) EstimatedTokens() int {
 	defer c.mu.RUnlock()
 	total := 0
 	if c.systemPrompt != "" {
-		total += estimateStringTokens(c.systemPrompt) + 4
+		total += textutil.EstimateTokens(c.systemPrompt) + 4
 	}
 	for _, m := range c.messages {
-		total += estimateStringTokens(m.Content) + 4 // +4 for role overhead
+		total += textutil.EstimateTokens(m.Content) + 4 // +4 for role overhead
 	}
 	return total
 }
@@ -140,33 +141,6 @@ func (c *Context) TokenCalibration() float64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.tokenCalibration
-}
-
-// estimateStringTokens returns a rough token count using rune-based heuristics
-// with different weights per Unicode character class, for mixed Japanese/English text.
-func estimateStringTokens(s string) int {
-	var total float64
-	for _, r := range s {
-		switch {
-		case r <= 0x007F:
-			total += 0.25
-		case r >= 0x4E00 && r <= 0x9FFF,
-			r >= 0x3400 && r <= 0x4DBF,
-			r >= 0xF900 && r <= 0xFAFF,
-			r >= 0x20000 && r <= 0x2A6DF:
-			total += 1.5
-		case r >= 0x3040 && r <= 0x309F:
-			total += 1.0
-		case r >= 0x30A0 && r <= 0x30FF:
-			total += 1.0
-		case r >= 0x3000 && r <= 0x303F,
-			r >= 0xFF00 && r <= 0xFFEF:
-			total += 1.0
-		default:
-			total += 1.5
-		}
-	}
-	return int(total + 0.5)
 }
 
 // KeepOnly retains only the messages at the given indices.

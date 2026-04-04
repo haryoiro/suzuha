@@ -1,11 +1,11 @@
-package llm
+package crypto
 
 import (
 	"encoding/hex"
 	"testing"
 )
 
-func testCipher(t *testing.T) *aesGCMCipher {
+func testCipher(t *testing.T) *AESGCMCipher {
 	t.Helper()
 	key := make([]byte, 32)
 	for i := range key {

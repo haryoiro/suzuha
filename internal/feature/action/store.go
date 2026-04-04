@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/robfig/cron/v3"
 )
 

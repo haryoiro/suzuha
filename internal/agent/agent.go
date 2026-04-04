@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -524,7 +525,7 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 
 	// 5. Route response through the session.
 	if text != "" {
-		a.logger.Info("話した", "source_key", string(key), "length", len(text), "content", truncate(text, 200))
+		a.logger.Info("話した", "source_key", string(key), "length", len(text), "content", textutil.TruncateRunes(text, 200))
 		if err := sess.Respond(ctx, text); err != nil {
 			a.logger.Error("返事の送信に失敗", "error", err)
 		}
@@ -622,11 +623,3 @@ func (a *Agent) ForceCompact(ctx context.Context) {
 	a.compact(ctx)
 }
 
-// truncate shortens a string to maxLen runes, appending "..." if truncated.
-func truncate(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	return string(runes[:maxLen]) + "..."
-}

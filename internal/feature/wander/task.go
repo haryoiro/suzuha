@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/haryoiro/suzuha/external/search"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
@@ -279,21 +278,3 @@ func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
 	}
 }
 
-func truncateRunes(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
-}
-
-func stripCodeFence(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```json") {
-		s = strings.TrimPrefix(s, "```json")
-	} else if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```")
-	}
-	s = strings.TrimSuffix(s, "```")
-	return strings.TrimSpace(s)
-}

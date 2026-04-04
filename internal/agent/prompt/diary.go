@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/feature/diary"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 

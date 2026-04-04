@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/external/search"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 )
 
 const (
@@ -108,17 +109,10 @@ func formatSources(query string, sources []source) string {
 			fmt.Fprintf(&sb, " | 残り約%d文字省略", remaining)
 		}
 		sb.WriteString("\n")
-		sb.WriteString(truncateRunes(s.Content, pageMaxRunes))
+		sb.WriteString(textutil.TruncateRunes(s.Content, pageMaxRunes))
 		sb.WriteString("\n\n")
 	}
 
 	return sb.String()
 }
 
-func truncateRunes(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
-}

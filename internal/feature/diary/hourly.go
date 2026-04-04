@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -242,7 +243,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 				if name == "" {
 					name = l.Role
 				}
-				content := truncate(l.Content, 200)
+				content := textutil.TruncateRunes(l.Content, 200)
 				fmt.Fprintf(&sb, "- [%s] %s: %s\n", jtime.In(l.TS).Format("15:04"), name, content)
 			}
 			sb.WriteString("\n")
@@ -254,7 +255,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 		sb.WriteString("## メモ\n")
 		for _, m := range memos {
 			ts := jtime.In(m.CreatedAt).Format("15:04")
-			fmt.Fprintf(&sb, "- [%s] %s\n", ts, truncate(m.Content, 200))
+			fmt.Fprintf(&sb, "- [%s] %s\n", ts, textutil.TruncateRunes(m.Content, 200))
 		}
 		sb.WriteString("\n")
 	}
@@ -263,7 +264,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 	if len(mems) > 0 {
 		sb.WriteString("## 新しい記憶\n")
 		for _, m := range mems {
-			fmt.Fprintf(&sb, "- [%s] %s\n", string(m.Type), truncate(m.Content, 200))
+			fmt.Fprintf(&sb, "- [%s] %s\n", string(m.Type), textutil.TruncateRunes(m.Content, 200))
 		}
 		sb.WriteString("\n")
 	}
@@ -281,10 +282,3 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 	return strings.TrimSpace(resp.Text), nil
 }
 
-func truncate(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
-}

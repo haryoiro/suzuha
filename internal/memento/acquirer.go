@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
+
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
@@ -92,7 +94,7 @@ func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Me
 		// レガシーフォールバック: 構造化フィールド（Keywords/Topic/Persons/EventTime）は全て欠落する。
 		// このパスの発動頻度が高い場合はプロンプトの見直しが必要。
 		a.logger.Error("acquire: JSON解析に失敗、レガシーフォールバック発動（構造化フィールド欠落）",
-			"error", err, "response_prefix", truncate(resp.Text, 100))
+			"error", err, "response_prefix", textutil.TruncateRunes(resp.Text, 100))
 		result := parseLegacyCompactResponse(resp.Text)
 		memories = result.Memories
 	}

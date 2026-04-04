@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/lib/crypto"
 )
 
 // Preset は LLM プロバイダのプリセット定義。
@@ -38,12 +39,12 @@ type ResolveResult struct {
 // PresetStore はプリセットの CRUD とロール割り当てを管理する。
 type PresetStore struct {
 	db     *sql.DB
-	cipher *aesGCMCipher
+	cipher *crypto.AESGCMCipher
 	logger *slog.Logger
 }
 
 // NewPresetStore は PresetStore を作成する。
-func NewPresetStore(db *sql.DB, cipher *aesGCMCipher, logger *slog.Logger) *PresetStore {
+func NewPresetStore(db *sql.DB, cipher *crypto.AESGCMCipher, logger *slog.Logger) *PresetStore {
 	return &PresetStore{db: db, cipher: cipher, logger: logger}
 }
 

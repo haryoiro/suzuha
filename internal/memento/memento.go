@@ -2,7 +2,6 @@ package memento
 
 import (
 	"context"
-	"strings"
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -44,24 +43,3 @@ type ConsolidateResult struct {
 	TotalMerged  int
 }
 
-// --- 共有ユーティリティ ---
-
-// stripJSONFence はJSON周囲のMarkdownコードフェンスを除去する。
-func stripJSONFence(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```json") {
-		s = strings.TrimPrefix(s, "```json")
-	} else if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```")
-	}
-	s = strings.TrimSuffix(s, "```")
-	return strings.TrimSpace(s)
-}
-
-func truncate(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
-}

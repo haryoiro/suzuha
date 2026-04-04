@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -47,7 +48,7 @@ func buildJudgePrompt(groups []memoryGroup) string {
 	for gi, g := range groups {
 		fmt.Fprintf(&sb, "=== グループ %d（型: %s, %d件）===\n", gi+1, g.memType, len(g.members))
 		for mi, m := range g.members {
-			content := truncate(m.content, 200)
+			content := textutil.TruncateRunes(m.content, 200)
 			date := m.createdAt.Format("2006-01-02")
 			meta := formatMaintainMetadata(m.metadata)
 			if meta != "" {
@@ -77,11 +78,11 @@ type llmDecision struct {
 }
 
 func parseDecisions(raw string, groups []memoryGroup) ([]decision, error) {
-	raw = stripJSONFence(strings.TrimSpace(raw))
+	raw = textutil.StripCodeFence(strings.TrimSpace(raw))
 
 	var llmDecs []llmDecision
 	if err := json.Unmarshal([]byte(raw), &llmDecs); err != nil {
-		return nil, fmt.Errorf("parse: %w (raw: %s)", err, truncate(raw, 200))
+		return nil, fmt.Errorf("parse: %w (raw: %s)", err, textutil.TruncateRunes(raw, 200))
 	}
 
 	var decisions []decision

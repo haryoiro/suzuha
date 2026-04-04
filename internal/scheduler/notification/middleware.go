@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 // Middleware wraps a Notifier with additional behavior.

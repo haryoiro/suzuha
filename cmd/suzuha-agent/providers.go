@@ -25,7 +25,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/feature/topics"
 	"github.com/haryoiro/suzuha/internal/feature/video"
 	"github.com/haryoiro/suzuha/internal/feature/wander"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/crypto"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/cmd/suzuha-agent/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
@@ -93,7 +94,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			if cfg.EncryptionKey == "" {
 				return nil, fmt.Errorf("SUZUHA_ENCRYPTION_KEY が設定されていません")
 			}
-			cipher, err := llm.NewAESGCMCipher(cfg.EncryptionKey)
+			cipher, err := crypto.NewAESGCMCipher(cfg.EncryptionKey)
 			if err != nil {
 				return nil, fmt.Errorf("暗号化の初期化に失敗: %w", err)
 			}

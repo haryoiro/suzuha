@@ -1,4 +1,4 @@
-package llm
+package crypto
 
 import (
 	"crypto/aes"
@@ -10,13 +10,13 @@ import (
 	"io"
 )
 
-// aesGCMCipher は AES-256-GCM で API キーを暗号化/復号する。
-type aesGCMCipher struct {
+// AESGCMCipher は AES-256-GCM で API キーを暗号化/復号する。
+type AESGCMCipher struct {
 	aead cipher.AEAD
 }
 
 // NewAESGCMCipher は hex エンコードされた 32 バイトのキーから cipher を生成する。
-func NewAESGCMCipher(hexKey string) (*aesGCMCipher, error) {
+func NewAESGCMCipher(hexKey string) (*AESGCMCipher, error) {
 	key, err := hex.DecodeString(hexKey)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: 暗号鍵の hex デコードに失敗: %w", err)
@@ -32,12 +32,12 @@ func NewAESGCMCipher(hexKey string) (*aesGCMCipher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("crypto: GCM の初期化に失敗: %w", err)
 	}
-	return &aesGCMCipher{aead: aead}, nil
+	return &AESGCMCipher{aead: aead}, nil
 }
 
 // Encrypt は平文を暗号化し、base64 エンコードされた文字列を返す。
 // 空文字列はそのまま返す。
-func (c *aesGCMCipher) Encrypt(plaintext string) (string, error) {
+func (c *AESGCMCipher) Encrypt(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
@@ -51,7 +51,7 @@ func (c *aesGCMCipher) Encrypt(plaintext string) (string, error) {
 
 // Decrypt は base64 エンコードされた暗号文を復号する。
 // 空文字列はそのまま返す。
-func (c *aesGCMCipher) Decrypt(ciphertext string) (string, error) {
+func (c *AESGCMCipher) Decrypt(ciphertext string) (string, error) {
 	if ciphertext == "" {
 		return "", nil
 	}

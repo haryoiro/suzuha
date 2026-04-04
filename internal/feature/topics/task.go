@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -309,7 +310,7 @@ func buildSelfPrompt(
 	if len(recentMemories) > 0 {
 		sb.WriteString("最近の記憶の断片:\n")
 		for _, m := range recentMemories {
-			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
+			fmt.Fprintf(&sb, "- %s\n", textutil.TruncateRunes(m.Content, 80))
 		}
 		sb.WriteString("\n")
 	}
@@ -317,7 +318,7 @@ func buildSelfPrompt(
 	if len(pastMutterings) > 0 {
 		sb.WriteString("最近の自分の発言（同じ話題を繰り返さないこと）:\n")
 		for _, m := range pastMutterings {
-			fmt.Fprintf(&sb, "- %s\n", truncateStr(m.Content, 80))
+			fmt.Fprintf(&sb, "- %s\n", textutil.TruncateRunes(m.Content, 80))
 		}
 		sb.WriteString("\n")
 	}
@@ -392,11 +393,3 @@ func findHomeChannel(ctx context.Context, db *sql.DB) string {
 	return channelID
 }
 
-// truncateStr shortens a string to maxRunes runes.
-func truncateStr(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
-}

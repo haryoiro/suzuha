@@ -11,7 +11,8 @@ import (
 
 	"github.com/agnivade/levenshtein"
 
-	"github.com/haryoiro/suzuha/internal/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -92,7 +93,7 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 		return "", nil
 	case llm.IsSilentResponse(text):
 		a.logger.Info("黙った (サイレント)",
-			"raw_text", truncate(resp.Text, 100))
+			"raw_text", textutil.TruncateRunes(resp.Text, 100))
 		return "", nil
 	default:
 		return text, nil
@@ -171,7 +172,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			"tool_calls", len(resp.ToolCalls),
 			"tokens_in", resp.Usage.PromptTokens,
 			"tokens_out", resp.Usage.CompletionTokens,
-			"content", truncate(resp.Text, 200))
+			"content", textutil.TruncateRunes(resp.Text, 200))
 
 		// Calibrate token estimator using actual prompt tokens from the provider.
 		if iter == 0 && resp.Usage.PromptTokens > 0 {
@@ -266,7 +267,7 @@ func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []l
 	toolTokens := 0
 	for _, t := range tools {
 		// name + description + JSON schema + overhead
-		toolTokens += estimateStringTokens(t.Name()) + estimateStringTokens(t.Description()) + estimateStringTokens(string(t.InputSchema())) + 20
+		toolTokens += textutil.EstimateTokens(t.Name()) + textutil.EstimateTokens(t.Description()) + textutil.EstimateTokens(string(t.InputSchema())) + 20
 	}
 	// Reserve tokens for generation output.
 	generationBudget := 512
@@ -278,7 +279,7 @@ func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []l
 	// Calculate total tokens.
 	total := 0
 	for _, m := range msgs {
-		total += estimateStringTokens(m.Content) + 4
+		total += textutil.EstimateTokens(m.Content) + 4
 	}
 
 	if total <= budget {
@@ -293,7 +294,7 @@ func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []l
 
 	// Drop oldest conversation messages until we fit.
 	for total > budget && trimStart < len(msgs)-1 {
-		total -= estimateStringTokens(msgs[trimStart].Content) + 4
+		total -= textutil.EstimateTokens(msgs[trimStart].Content) + 4
 		trimStart++
 	}
 
@@ -470,7 +471,7 @@ func (a *Agent) executeToolSingle(ctx context.Context, r *toolCallResult, iter i
 		"iteration", iter,
 		"tool", r.tc.Function.Name,
 		"call_id", r.tc.ID,
-		"args", truncate(r.tc.Function.Arguments, 200))
+		"args", textutil.TruncateRunes(r.tc.Function.Arguments, 200))
 
 	if r.tool == nil {
 		a.logger.Warn("知らないツールを呼ばれた", "tool", r.tc.Function.Name)
@@ -484,7 +485,7 @@ func (a *Agent) executeToolSingle(ctx context.Context, r *toolCallResult, iter i
 			trace.WithAttributes(
 				attribute.String("tool.name", r.tc.Function.Name),
 				attribute.String("tool.call_id", r.tc.ID),
-				attribute.String("tool.input", truncate(r.tc.Function.Arguments, 2000)),
+				attribute.String("tool.input", textutil.TruncateRunes(r.tc.Function.Arguments, 2000)),
 			),
 		)
 	}
@@ -504,7 +505,7 @@ func (a *Agent) executeToolSingle(ctx context.Context, r *toolCallResult, iter i
 				resultText += c.Text
 			}
 			toolSpan.SetAttributes(
-				attribute.String("tool.output", truncate(resultText, 2000)),
+				attribute.String("tool.output", textutil.TruncateRunes(resultText, 2000)),
 				attribute.Bool("tool.is_error", r.result.IsError),
 			)
 		}
@@ -588,7 +589,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 		"tool", r.tc.Function.Name,
 		"elapsed_ms", r.elapsed.Milliseconds(),
 		"is_error", r.result.IsError,
-		"result", truncate(content, 200))
+		"result", textutil.TruncateRunes(content, 200))
 
 	agentCtx.Add(llm.Message{
 		Role:       "tool",

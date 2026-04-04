@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -23,11 +24,11 @@ type extractedMemory struct {
 
 // parseExtractedMemories はLLMのJSON出力をMemoryオブジェクトにパースする。
 func parseExtractedMemories(raw string) ([]memory.Memory, error) {
-	raw = stripJSONFence(raw)
+	raw = textutil.StripCodeFence(raw)
 
 	var items []extractedMemory
 	if err := json.Unmarshal([]byte(raw), &items); err != nil {
-		return nil, fmt.Errorf("acquire: JSON解析に失敗: %w (raw: %s)", err, truncate(raw, 200))
+		return nil, fmt.Errorf("acquire: JSON解析に失敗: %w (raw: %s)", err, textutil.TruncateRunes(raw, 200))
 	}
 
 	var memories []memory.Memory
