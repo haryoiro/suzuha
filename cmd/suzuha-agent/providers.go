@@ -130,6 +130,29 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return store, nil
 		})
 
+		// Provider Registry (new 3-layer model).
+		do.Provide(i, func(i do.Injector) (*llm.ProviderRegistry, error) {
+			cfg := do.MustInvoke[*config.Config](i)
+			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+			logger := do.MustInvoke[*slog.Logger](i)
+
+			if cfg.EncryptionKey == "" {
+				return nil, fmt.Errorf("SUZUHA_ENCRYPTION_KEY が設定されていません")
+			}
+			cipher, err := crypto.NewAESGCMCipher(cfg.EncryptionKey)
+			if err != nil {
+				return nil, fmt.Errorf("暗号化の初期化に失敗: %w", err)
+			}
+			reg := llm.NewProviderRegistry(db, cipher, logger)
+
+			// config.yaml のプロバイダ定義をシード
+			if err := reg.SeedProviders(context.Background(), cfg.LLM.Providers); err != nil {
+				logger.Warn("プロバイダのシードに失敗", "error", err)
+			}
+
+			return reg, nil
+		})
+
 		// Location store (nil when location tracking is not configured).
 		do.Provide(i, func(i do.Injector) (*location.Store, error) {
 			cfg := do.MustInvoke[*config.Config](i)
