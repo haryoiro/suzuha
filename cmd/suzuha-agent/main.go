@@ -27,14 +27,13 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/device"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/langfuse"
+	"github.com/haryoiro/suzuha/cmd/suzuha-agent/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
-	"github.com/haryoiro/suzuha/internal/mcp"
+	"github.com/haryoiro/suzuha/cmd/suzuha-agent/mcp"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/observe"
+	"github.com/haryoiro/suzuha/cmd/suzuha-agent/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/selfimprove"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -155,12 +154,6 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 		}
 		logger.Info("discord tools registered")
 
-		// Self-improvement tools.
-		if cfg.SelfImprove.ChannelID != "" {
-			registry.Register(selfimprove.NewImproveTool(s, cfg.SelfImprove.ChannelID))
-			registry.Register(selfimprove.NewStatusTool("/app"))
-			logger.Info("self-improve tools registered", "channel_id", cfg.SelfImprove.ChannelID)
-		}
 
 		// Voice chat setup.
 		if cfg.Voice.Enabled {

@@ -26,7 +26,6 @@ type Config struct {
 	Observe      Observe      `yaml:"observe"`
 	Admin        Admin        `yaml:"admin"`
 	Location      Location     `yaml:"location"`
-	SelfImprove   SelfImprove  `yaml:"self_improve"`
 	Langfuse      Langfuse     `yaml:"langfuse"`
 	EncryptionKey string       `yaml:"-"` // SUZUHA_ENCRYPTION_KEY 環境変数から設定 (hex 64文字 = 32byte)
 }
@@ -39,10 +38,6 @@ type Langfuse struct {
 	SecretKey string `yaml:"secret_key"` // Langfuse project secret key
 }
 
-// SelfImprove configures the self-improvement channel for Claude Code collaboration.
-type SelfImprove struct {
-	ChannelID string `yaml:"channel_id"` // Discord channel ID for improvement requests.
-}
 
 // Location configures the Overland GPS tracking integration.
 type Location struct {
