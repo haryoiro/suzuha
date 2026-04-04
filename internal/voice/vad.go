@@ -14,6 +14,9 @@ type VAD struct {
 	SilenceDuration time.Duration
 	// MinSpeechDuration filters out segments shorter than this.
 	MinSpeechDuration time.Duration
+	// MaxSpeechDuration forces a speech segment to end after this duration.
+	// Zero means no limit.
+	MaxSpeechDuration time.Duration
 
 	speaking     bool
 	silenceStart time.Time
@@ -51,6 +54,11 @@ func (v *VAD) Process(pcm []byte, now time.Time) VADResult {
 		}
 		v.silenceStart = time.Time{} // reset silence timer
 		v.buffer = append(v.buffer, pcm...)
+
+		// Force-end if max duration exceeded.
+		if v.MaxSpeechDuration > 0 && now.Sub(v.speechStart) >= v.MaxSpeechDuration {
+			return v.endSpeech(now)
+		}
 		return VADResult{}
 	}
 
@@ -65,11 +73,20 @@ func (v *VAD) Process(pcm []byte, now time.Time) VADResult {
 	}
 	v.buffer = append(v.buffer, pcm...)
 
+	// Force-end if max duration exceeded.
+	if v.MaxSpeechDuration > 0 && now.Sub(v.speechStart) >= v.MaxSpeechDuration {
+		return v.endSpeech(now)
+	}
+
 	if now.Sub(v.silenceStart) < v.SilenceDuration {
 		return VADResult{}
 	}
 
-	// Silence long enough — speech segment ended.
+	return v.endSpeech(now)
+}
+
+// endSpeech finalizes the current speech segment and returns the result.
+func (v *VAD) endSpeech(now time.Time) VADResult {
 	v.speaking = false
 	duration := now.Sub(v.speechStart)
 

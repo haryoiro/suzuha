@@ -91,6 +91,26 @@ func TestVAD_Reset(t *testing.T) {
 	}
 }
 
+func TestVAD_MaxSpeechDuration(t *testing.T) {
+	vad := NewVAD()
+	vad.MaxSpeechDuration = 500 * time.Millisecond
+	vad.MinSpeechDuration = 100 * time.Millisecond
+	now := time.Now()
+
+	loud := generateTone(960, 10000) // 20ms frame
+	// Feed 40 frames of loud audio (800ms > MaxSpeechDuration=500ms).
+	for i := 0; i < 40; i++ {
+		result := vad.Process(loud, now.Add(time.Duration(i)*20*time.Millisecond))
+		if result.SpeechEnded {
+			if len(result.Audio) == 0 {
+				t.Fatal("speech ended but audio is empty")
+			}
+			return // success — forced end
+		}
+	}
+	t.Fatal("max speech duration should have forced speech end")
+}
+
 func TestRmsEnergy(t *testing.T) {
 	silent := generateSilence(100)
 	if e := rmsEnergy(silent); e != 0 {
