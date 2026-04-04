@@ -57,7 +57,7 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 // and returns the response text. It does NOT route the response to any output;
 // the caller is responsible for sending the response via Session.Respond().
 func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p *Perception, t *Thought) (string, error) {
-	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t.Directive, p.Channel, t.Ephemeral)
+	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel)
 	if err != nil {
 		return "", fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
@@ -99,17 +99,12 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 	}
 }
 
-// completeWithTools is the backward-compatible wrapper.
-func (a *Agent) completeWithTools(ctx context.Context, directive, channel string, ephemeral []llm.Message) (*llm.Response, string, error) {
-	return a.completeWithToolsUsing(ctx, a.contexts[SourceKeyDiscord], a.sessions[SourceKeyDiscord], directive, channel, ephemeral)
-}
-
 // completeWithToolsUsing runs the LLM and executes tool calls in a loop,
 // using the given agent context and session for typing/intermediate responses.
-func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, directive, channel string, ephemeral []llm.Message) (*llm.Response, string, error) {
+func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel string) (*llm.Response, string, error) {
+	directive := t.Directive
 	allTools := a.tools.AllEnabled()
 
-	// Include skip_response tool when the directive allows skipping (not [RESPOND]).
 	if !strings.HasPrefix(directive, "[RESPOND]") {
 		allTools = append(allTools, skipResponseTool{})
 	}
@@ -135,27 +130,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 
 		var msgs []llm.Message
 		if iter == 0 {
-			// Order: system prompt (with time) → ephemeral (profiles, memories) → conversation → directive
-			// Ephemeral context before conversation lets the LLM read messages
-			// with knowledge of who the users are and what it remembers.
-			// Directive last for maximum recency effect.
-			// Time is embedded in the system prompt so the LLM knows the time
-			// without being tempted to report it.
-			now := jtime.Now()
-			sp := agentCtx.SystemPrompt()
-			if sp != "" {
-				sp += fmt.Sprintf("\n\n[現在時刻: %s]", now.Format("2006-01-02 15:04:05 (Mon)"))
-				msgs = append(msgs, llm.Message{Role: "system", Content: sp})
-			}
-			msgs = append(msgs, ephemeral...)
-			msgs = append(msgs, agentCtx.Messages()...)
-			if directive != "" {
-				msgs = append(msgs, llm.Message{
-					Role:      "system",
-					Content:   directive,
-					Timestamp: now,
-				})
-			}
+			msgs = t.BuildMessages(agentCtx.SystemPrompt(), agentCtx.Messages())
 		} else {
 			msgs = agentCtx.MessagesWithSystem()
 		}

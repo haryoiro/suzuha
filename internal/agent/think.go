@@ -2,97 +2,44 @@ package agent
 
 import (
 	"context"
-	"encoding/base64"
-	"fmt"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/embedding"
+	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/feature/diary"
-	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
 )
 
-func base64encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-// modalityFromMime returns the embedding Modality for a MIME type.
-func modalityFromMime(mime string) embedding.Modality {
-	switch {
-	case strings.HasPrefix(mime, "image/"):
-		return embedding.ModalityImage
-	case strings.HasPrefix(mime, "audio/"):
-		return embedding.ModalityAudio
-	default:
-		return embedding.ModalityText
-	}
-}
-
-// parseDataURI extracts binary data and MIME type from a data URI.
-// Returns (nil, "") if the URI is not a valid data URI.
-func parseDataURI(uri string) ([]byte, string) {
-	// data:image/png;base64,iVBOR...
-	if !strings.HasPrefix(uri, "data:") {
-		return nil, ""
-	}
-	commaIdx := strings.Index(uri, ",")
-	if commaIdx < 0 {
-		return nil, ""
-	}
-	header := uri[5:commaIdx] // "image/png;base64"
-	mime := strings.TrimSuffix(header, ";base64")
-	data, err := base64.StdEncoding.DecodeString(uri[commaIdx+1:])
-	if err != nil {
-		return nil, ""
-	}
-	return data, mime
-}
-
-// Conversation-state thresholds — tunables for directive priority 2 & 3.
 const (
-	convActiveWindow  = 2 * time.Minute // priority 2: bot spoke within this window
-	convActiveMaxMsgs = 3               // priority 2: max user messages since bot spoke
-	convRecentWindow  = 5 * time.Minute // priority 3: bot spoke within this window
-	convRecentMaxMsgs = 6               // priority 3: max user messages since bot spoke
-	convScanLimit     = 50              // max messages to scan backwards
+	convActiveWindow  = 2 * time.Minute
+	convActiveMaxMsgs = 3
+	convRecentWindow  = 5 * time.Minute
+	convRecentMaxMsgs = 6
+	convScanLimit     = 50
 
-	// noTimeReport is appended to all directives.
 	noTimeReport = "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
 )
 
-// convState captures dynamic conversation signals derived from the message history.
 type convState struct {
-	botLastSpokeAgo       time.Duration // time since bot's last message in this channel
-	messagesSinceBotSpoke int           // user messages after the bot's last message
-	recentDistinctUsers   int           // distinct non-bot users in recent messages
+	botLastSpokeAgo       time.Duration
+	messagesSinceBotSpoke int
+	recentDistinctUsers   int
 }
 
-// conversationState scans the given messages backwards to compute
-// conversation-state signals for the given channel.
 func (a *Agent) conversationState(channel string) convState {
 	return conversationStateFrom(a.contexts[SourceKeyDiscord].Messages(), channel, a.botID)
 }
 
-// conversationStateFrom computes conversation-state signals from a given
-// message slice and channel.
 func conversationStateFrom(msgs []llm.Message, channel, botID string) convState {
 	now := time.Now()
-	cs := convState{
-		botLastSpokeAgo: -1, // sentinel: bot never spoke
-	}
+	cs := convState{botLastSpokeAgo: -1}
 
 	userSet := make(map[string]struct{})
 	scanned := 0
 
 	for i := len(msgs) - 1; i >= 0 && scanned < convScanLimit; i-- {
 		m := msgs[i]
-		// Only consider messages in the same channel.
 		if m.Channel != channel {
 			continue
 		}
@@ -100,14 +47,12 @@ func conversationStateFrom(msgs []llm.Message, channel, botID string) convState 
 
 		if m.Role == "assistant" && m.UserID == botID {
 			if cs.botLastSpokeAgo < 0 {
-				// First (most recent) bot message found.
 				cs.botLastSpokeAgo = now.Sub(m.Timestamp)
 			}
 			continue
 		}
 
 		if m.Role == "user" && m.UserID != "" && m.UserID != botID {
-			// Count messages before we've found the bot's last message.
 			if cs.botLastSpokeAgo < 0 {
 				cs.messagesSinceBotSpoke++
 			}
@@ -117,440 +62,17 @@ func conversationStateFrom(msgs []llm.Message, channel, botID string) convState 
 
 	cs.recentDistinctUsers = len(userSet)
 	if cs.botLastSpokeAgo < 0 {
-		cs.botLastSpokeAgo = 0                   // normalize: never spoke → 0 (handled by large messagesSince)
-		cs.messagesSinceBotSpoke = convScanLimit // ensure no active-conversation match
+		cs.botLastSpokeAgo = 0
+		cs.messagesSinceBotSpoke = convScanLimit
 	}
 	return cs
 }
 
-// Think is the backward-compatible wrapper that calls ThinkWith
-// with the discord context and a zero DirectiveConfig.
-func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
-	return a.ThinkWith(ctx, a.contexts[SourceKeyDiscord], p, DirectiveConfig{})
-}
-
-// ThinkWith builds ephemeral context (memories, profiles) and determines
-// the response directive. Returns a Thought describing what to do.
-func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception, dc DirectiveConfig) *Thought {
-	// Build ephemeral context in parallel.
-	var (
-		memMsgs        []llm.Message
-		locMsg         string
-		profiles       []llm.Message
-		diaryMsg       string
-		channelSummary string
-		wg             sync.WaitGroup
-	)
-	if a.memory != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			memMsgs = a.buildMemoryContext(ctx, p.LastMessage.Content, p.LastMessage.ImageURLs, agentCtx)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			diaryMsg = a.buildDiaryContext(ctx)
-		}()
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		profiles = a.buildUserProfilesWith(ctx, agentCtx)
-	}()
-	if a.locationStore != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			locMsg = a.locationStore.BuildContextSnippet()
-		}()
-	}
-	wg.Wait()
-
-	// Build other-channel awareness for Discord (no goroutine needed).
-	if p.LastEvent.Source == "discord" && p.Channel != "" {
-		channelSummary = a.buildOtherChannels(agentCtx, p.Channel)
-	}
-
-	var ephemeral []llm.Message
-	if diaryMsg != "" {
-		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: diaryMsg, Timestamp: jtime.Now(),
-		})
-	}
-	if len(memMsgs) > 0 {
-		ephemeral = append(ephemeral, memMsgs...)
-	}
-	if locMsg != "" {
-		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: locMsg, Timestamp: jtime.Now(),
-		})
-	}
-	if len(profiles) > 0 {
-		ephemeral = append(ephemeral, profiles...)
-	}
-	if channelSummary != "" {
-		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: channelSummary, Timestamp: jtime.Now(),
-		})
-	}
-
-	// Check listen mode (unless ForceRespond is set).
-	if !dc.ForceRespond && a.channelSettings != nil && p.Channel != "" && !p.IsDM {
-		mode := a.channelSettings.GetMode(p.Channel)
-		if mode == channelpkg.ModeListen {
-			a.logger.Info("聞いてるだけ", "channel", p.Channel)
-			return &Thought{ListenMode: true}
-		}
-		if a.channelSettings.Get(p.Channel).Home {
-			ephemeral = append(ephemeral, llm.Message{
-				Role:      "system",
-				Content:   "ここは自分の住処チャンネルです。リラックスして自由に話して。",
-				Timestamp: jtime.Now(),
-			})
-		}
-	}
-
-	// Determine response directive.
-	var directive string
-	if dc.DirectiveTemplate != "" {
-		// Use the source-specific directive template.
-		directive = dc.DirectiveTemplate
-	} else if p.LastEvent.Source == "device" {
-		// Physical device: always respond, spoken conversation style.
-		directive = "[RESPOND] 物理デバイス経由の音声対話です。必ず返答してください。" +
-			"話し言葉で自然に返して。1〜2文で短く。" +
-			"skip_response は使わないで。" +
-			"※テキストに絵文字・顔文字は入れない。音声で読まれるので句読点や記号は控えめに。"
-	} else if p.LastEvent.Type == event.TypeSelfPrompt {
-		// Self-prompt content is ephemeral — not persisted in main context.
-		ephemeral = append(ephemeral, llm.Message{
-			Role: "system", Content: p.LastMessage.Content, Timestamp: jtime.Now(),
-		})
-		directive = "[SELF_PROMPT] 自分の内なる思考。\n" +
-			"気になったことを調べたり、誰かに声をかけたり、音楽を変えたり、自由にやっていい。\n" +
-			"使えるツールは全部使っていい。目的のない行動はしない。\n" +
-			"※時刻や雰囲気の報告はしない（「静かな午後だ」「X時だ」等）。"
-	} else if p.DirectlyAddressed {
-		directive = "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + "※時報禁止（「静かな午後だ」「X時だ」等、時刻・雰囲気の報告をテキストに含めない）。"
-	} else {
-		cs := conversationStateFrom(agentCtx.Messages(), p.Channel, a.botID)
-		es := a.episodeSignal(ctx, p.LastMessage.Source, p.LastMessage.UserID)
-		directive = responseDirective(p.LastEvent, a.botID, cs, es)
-	}
-
-	// When ForceRespond is set, ensure ListenMode is never true.
-	// (Already handled above by skipping listen mode check, but this is a safety net.)
-
-	a.logger.Info("考え中", "message_count", len(agentCtx.Messages()),
-		"ephemeral_count", len(ephemeral), "directive", directive)
-
-	// Cache ephemeral messages for admin visibility.
-	a.lastEphemeralMu.Lock()
-	a.lastEphemeral = make([]llm.Message, len(ephemeral))
-	copy(a.lastEphemeral, ephemeral)
-	a.lastEphemeralMu.Unlock()
-
-	return &Thought{
-		Ephemeral: ephemeral,
-		Directive: directive,
-	}
-}
-
-// buildMemoryContext searches long-term memory and returns relevant results
-// as LLM messages. If imageURLs are provided (data URIs from Discord),
-// also performs multimodal vector search. Attachments (images) are loaded
-// from MediaStore and included as data URIs for vision-capable LLMs.
-func (a *Agent) buildMemoryContext(ctx context.Context, query string, imageURLs []string, agentCtx *Context) []llm.Message {
-	// 会話コンテキストから参加者IDを抽出し、Symbolic 検索フィルタに使う。
-	filter := memory.SymbolicFilter{}
-	if agentCtx != nil {
-		seen := make(map[string]bool)
-		msgs := agentCtx.Messages()
-		count := 0
-		for i := len(msgs) - 1; i >= 0 && count < 10; i-- {
-			m := msgs[i]
-			if m.UserID == "" || m.UserID == a.botID || m.Role != "user" {
-				continue
-			}
-			count++
-			if !seen[m.UserID] {
-				seen[m.UserID] = true
-				filter.PersonIDs = append(filter.PersonIDs, m.UserID)
-			}
-		}
-	}
-
-	memories, err := a.memory.SearchWithContext(ctx, query, 5, filter)
-	if err != nil {
-		a.logger.Debug("思い出せなかった", "error", err)
-	}
-
-	// If media (images/audio) are present, also search by media embedding.
-	if len(imageURLs) > 0 {
-		for _, dataURI := range imageURLs {
-			data, mime := parseDataURI(dataURI)
-			if data == nil {
-				continue
-			}
-			modality := modalityFromMime(mime)
-			parts := []embedding.Part{{
-				Modality: modality,
-				Data:     data,
-				MimeType: mime,
-			}}
-			mediaResults, err := a.memory.SearchByParts(ctx, parts, 5)
-			if err != nil {
-				a.logger.Debug("画像の記憶を探せなかった", "error", err)
-				continue
-			}
-			// Deduplicate with text results.
-			seen := make(map[string]bool, len(memories))
-			for _, m := range memories {
-				seen[m.ID] = true
-			}
-			for _, m := range mediaResults {
-				if !seen[m.ID] {
-					memories = append(memories, m)
-					seen[m.ID] = true
-				}
-			}
-		}
-	}
-
-	if len(memories) == 0 {
-		return nil
-	}
-
-	// Build text summary of all memories with attribution.
-	var textParts []string
-	for _, m := range memories {
-		label := string(m.Type)
-		// 構造化フィールドからラベルを構築。
-		if len(m.Persons) > 0 {
-			label += " persons=" + strings.Join(m.Persons, ",")
-		}
-		if m.Topic != "" {
-			label += " topic=" + m.Topic
-		}
-		if m.Metadata != nil {
-			if tone, ok := m.Metadata["emotional_tone"].(string); ok && tone != "" {
-				label += " tone=" + tone
-			}
-		}
-		// 日付: EventTime があればそちらを優先、なければ CreatedAt。
-		date := m.CreatedAt.Format("2006-01-02")
-		if m.EventTime != nil {
-			date = m.EventTime.Format("2006-01-02")
-		}
-		textParts = append(textParts, fmt.Sprintf("- [%s] %s (%s)", label, m.Content, date))
-	}
-	textContent := "Relevant memories:\n" + strings.Join(textParts, "\n")
-
-	// Collect image data URIs from attachments.
-	var attachedImages []string
-	if a.mediaStore != nil {
-		for _, m := range memories {
-			for _, att := range m.Attachments {
-				if att.Modality != "image" {
-					continue
-				}
-				data, err := a.mediaStore.Get(ctx, att.Key)
-				if err != nil {
-					a.logger.Debug("記憶の画像を読めなかった", "key", att.Key, "error", err)
-					continue
-				}
-				dataURI := fmt.Sprintf("data:%s;base64,%s",
-					att.MimeType, base64encode(data))
-				attachedImages = append(attachedImages, dataURI)
-			}
-		}
-	}
-
-	if len(attachedImages) > 0 {
-		// Use "user" role so vision-capable LLMs process the images.
-		return []llm.Message{{
-			Role:      "user",
-			Content:   "[Memory context with images]\n" + textContent,
-			ImageURLs: attachedImages,
-			Timestamp: jtime.Now(),
-		}}
-	}
-
-	return []llm.Message{{
-		Role:      "system",
-		Content:   textContent,
-		Timestamp: jtime.Now(),
-	}}
-}
-
-// buildUserProfiles is the backward-compatible wrapper.
-func (a *Agent) buildUserProfiles(ctx context.Context) []llm.Message {
-	return a.buildUserProfilesWith(ctx, a.contexts[SourceKeyDiscord])
-}
-
-// buildUserProfilesWith collects ephemeral profile messages for all users
-// seen in the given context who haven't been profiled yet.
-// recentUserLimit controls how many recent user messages to scan backwards
-// to determine which users get profile injection.
-const recentUserLimit = 10
-
-func (a *Agent) buildUserProfilesWith(ctx context.Context, agentCtx *Context) []llm.Message {
-	if a.users == nil {
-		return nil
-	}
-
-	type userKey struct{ platform, userID string }
-
-	// Only collect users from the last N user messages.
-	msgs := agentCtx.Messages()
-	seen := make(map[userKey]bool)
-	var keys []userKey
-	count := 0
-	for i := len(msgs) - 1; i >= 0 && count < recentUserLimit; i-- {
-		m := msgs[i]
-		if m.UserID == "" || m.UserID == a.botID || m.Role != "user" {
-			continue
-		}
-		count++
-		k := userKey{m.Source, m.UserID}
-		if !seen[k] {
-			seen[k] = true
-			keys = append(keys, k)
-		}
-	}
-
-	type indexedMsg struct {
-		index   int
-		content string
-	}
-	results := make([]indexedMsg, 0, len(keys)+1)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	for i, k := range keys {
-		wg.Add(1)
-		go func(idx int, platform, userID string) {
-			defer wg.Done()
-			content := a.buildUserProfile(ctx, platform, userID)
-			if content != "" {
-				mu.Lock()
-				results = append(results, indexedMsg{idx, content})
-				mu.Unlock()
-			}
-		}(i, k.platform, k.userID)
-	}
-
-	if a.memory != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			selfMems, err := a.memory.ListByType(ctx, memory.MemoryTypeSelf, 3)
-			if err == nil && len(selfMems) > 0 {
-				var sb strings.Builder
-				sb.WriteString("Self-awareness:\n")
-				for _, m := range selfMems {
-					fmt.Fprintf(&sb, "  - %s\n", m.Content)
-				}
-				mu.Lock()
-				results = append(results, indexedMsg{len(keys), sb.String()})
-				mu.Unlock()
-			}
-		}()
-	}
-	wg.Wait()
-
-	slices.SortFunc(results, func(a, b indexedMsg) int { return a.index - b.index })
-
-	out := make([]llm.Message, 0, len(results))
-	for _, r := range results {
-		out = append(out, llm.Message{
-			Role: "system", Content: r.content, Timestamp: jtime.Now(),
-		})
-	}
-	return out
-}
-
-// buildUserProfile builds a profile summary string for a single user.
-func (a *Agent) buildUserProfile(ctx context.Context, platform, platformUserID string) string {
-	u, err := a.users.Resolve(ctx, platform, platformUserID, "")
-	if err != nil {
-		a.logger.Debug("相手のことを思い出せなかった", "error", err)
-		return ""
-	}
-
-	content := fmt.Sprintf("[User profile: %s (ID=%s) role=%s]\n",
-		u.DisplayName, u.ID, u.Role)
-
-	if a.memory != nil {
-		memories, err := a.memory.ListByUser(ctx, u.ID, 5)
-		if err != nil {
-			a.logger.Debug("相手との記憶を探せなかった", "error", err)
-		}
-		if len(memories) > 0 {
-			content += "Known facts:\n"
-			for _, m := range memories {
-				content += fmt.Sprintf("  - %s\n", m.Content)
-			}
-		}
-
-		episodes, err := a.memory.ListEpisodesByParticipant(ctx, platformUserID, 3)
-		if err != nil {
-			a.logger.Debug("エピソードの記憶を探せなかった", "error", err)
-		}
-		if len(episodes) > 0 {
-			content += "Shared episodes:\n"
-			for _, e := range episodes {
-				content += fmt.Sprintf("  - %s (%s)\n", e.Content, e.CreatedAt.Format("2006-01-02"))
-			}
-		}
-	}
-
-	guilds, err := a.users.GetUserGuilds(ctx, u.ID)
-	if err != nil {
-		a.logger.Debug("サーバー情報の取得に失敗", "error", err)
-	}
-	if len(guilds) > 0 {
-		type guildInfo struct {
-			name     string
-			channels []string
-		}
-		guildMap := make(map[string]*guildInfo)
-		var guildOrder []string
-		for _, g := range guilds {
-			gi, ok := guildMap[g.GuildID]
-			if !ok {
-				gi = &guildInfo{name: g.GuildName}
-				guildMap[g.GuildID] = gi
-				guildOrder = append(guildOrder, g.GuildID)
-			}
-			chLabel := g.ChannelName
-			if chLabel == "" {
-				chLabel = g.ChannelID
-			}
-			gi.channels = append(gi.channels, chLabel)
-		}
-		content += "Servers:\n"
-		for _, gid := range guildOrder {
-			gi := guildMap[gid]
-			label := gi.name
-			if label == "" {
-				label = gid
-			}
-			content += fmt.Sprintf("  %s: %s\n", label, strings.Join(gi.channels, ", "))
-		}
-	}
-
-	return content
-}
-
-// episodeSig summarises the episode-based relationship with a user.
 type episodeSig struct {
-	count     int  // total shared episodes
-	hasRecent bool // at least one episode within the last 7 days
+	count     int
+	hasRecent bool
 }
 
-// episodeSignal queries shared episodes for a user and returns a summary.
 func (a *Agent) episodeSignal(ctx context.Context, platform, platformUserID string) episodeSig {
 	if a.memory == nil || platformUserID == "" || platformUserID == a.botID {
 		return episodeSig{}
@@ -566,32 +88,142 @@ func (a *Agent) episodeSignal(ctx context.Context, platform, platformUserID stri
 	return sig
 }
 
-// responseDirective returns a system instruction telling the LLM whether
-// it must respond or may stay silent.
+func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
+	return a.ThinkWith(ctx, a.contexts[SourceKeyDiscord], p, DirectiveConfig{})
+}
+
+func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception, dc DirectiveConfig) *Thought {
+	msgs := agentCtx.Messages()
+
+	// Perception/Context → prompt.Request に変換
+	req := prompt.Request{
+		Query:        p.LastMessage.Content,
+		ImageURLs:    p.LastMessage.ImageURLs,
+		Source:       p.LastEvent.Source,
+		EventType:    string(p.LastEvent.Type),
+		Channel:      p.Channel,
+		BotID:        a.botID,
+		Messages:     msgs,
+		Participants: extractParticipants(msgs, a.botID),
+		EventContent: p.LastMessage.Content,
+	}
+	if a.channelSettings != nil && p.Channel != "" {
+		req.IsHome = a.channelSettings.Get(p.Channel).Home
+	}
+
+	blocks := a.collectContext(ctx, req)
+
+	var bg, fg []llm.Message
+	for _, b := range blocks {
+		bg = append(bg, b.Background...)
+		fg = append(fg, b.Foreground...)
+	}
+
+	if !dc.ForceRespond && a.channelSettings != nil && p.Channel != "" && !p.IsDM {
+		if a.channelSettings.GetMode(p.Channel) == channelpkg.ModeListen {
+			a.logger.Info("聞いてるだけ", "channel", p.Channel)
+			return &Thought{ListenMode: true}
+		}
+	}
+
+	directive := a.resolveDirective(agentCtx, p, dc)
+
+	a.logger.Info("考え中",
+		"message_count", len(agentCtx.Messages()),
+		"background_count", len(bg),
+		"foreground_count", len(fg),
+		"directive", directive)
+
+	// admin 表示用キャッシュ
+	allEphemeral := make([]llm.Message, 0, len(bg)+len(fg))
+	allEphemeral = append(allEphemeral, bg...)
+	allEphemeral = append(allEphemeral, fg...)
+	a.lastEphemeralMu.Lock()
+	a.lastEphemeral = allEphemeral
+	a.lastEphemeralMu.Unlock()
+
+	return &Thought{
+		Background: bg,
+		Foreground: fg,
+		Directive:  directive,
+	}
+}
+
+func (a *Agent) collectContext(ctx context.Context, req prompt.Request) []prompt.Block {
+	blocks := make([]prompt.Block, len(a.contextProviders))
+	var wg sync.WaitGroup
+	for i, p := range a.contextProviders {
+		wg.Add(1)
+		go func(i int, p prompt.Provider) {
+			defer wg.Done()
+			blocks[i] = p.ProvideContext(ctx, req)
+		}(i, p)
+	}
+	wg.Wait()
+	return blocks
+}
+
+func extractParticipants(msgs []llm.Message, botID string) []prompt.Participant {
+	seen := make(map[string]bool)
+	var out []prompt.Participant
+	count := 0
+	for i := len(msgs) - 1; i >= 0 && count < 10; i-- {
+		m := msgs[i]
+		if m.UserID == "" || m.UserID == botID || m.Role != "user" {
+			continue
+		}
+		count++
+		if !seen[m.UserID] {
+			seen[m.UserID] = true
+			out = append(out, prompt.Participant{Platform: m.Source, UserID: m.UserID})
+		}
+	}
+	return out
+}
+
+func (a *Agent) resolveDirective(agentCtx *Context, p *Perception, dc DirectiveConfig) string {
+	if dc.DirectiveTemplate != "" {
+		return dc.DirectiveTemplate
+	}
+	if p.LastEvent.Source == "device" {
+		return "[RESPOND] 物理デバイス経由の音声対話です。必ず返答してください。" +
+			"話し言葉で自然に返して。1〜2文で短く。" +
+			"skip_response は使わないで。" +
+			"※テキストに絵文字・顔文字は入れない。音声で読まれるので句読点や記号は控えめに。"
+	}
+	if p.LastEvent.Type == event.TypeSelfPrompt {
+		return "[SELF_PROMPT] 自分の内なる思考。\n" +
+			"気になったことを調べたり、誰かに声をかけたり、音楽を変えたり、自由にやっていい。\n" +
+			"使えるツールは全部使っていい。目的のない行動はしない。\n" +
+			"※時刻や雰囲気の報告はしない（「静かな午後だ」「X時だ」等）。"
+	}
+	if p.DirectlyAddressed {
+		return "[RESPOND] あなた宛のメッ���ージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + noTimeReport
+	}
+
+	cs := conversationStateFrom(agentCtx.Messages(), p.Channel, a.botID)
+	es := a.episodeSignal(context.Background(), p.LastMessage.Source, p.LastMessage.UserID)
+	return responseDirective(p.LastEvent, a.botID, cs, es)
+}
+
 func responseDirective(evt event.Event, botID string, cs convState, es episodeSig) string {
 	if isDirectlyAddressed(evt, botID) {
 		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + noTimeReport
 	}
 	const noEmoji = "※テキストに絵文字・顔文字は絶対に入れないで。"
-
 	const brevity = "※返答は1〜2行に収めて。長文禁止。"
-
 	const reactHint = "リアクションは本当に心が動いたときだけ discord_react で付けてよい。ほとんどの場合はリアクションなしで skip_response だけ呼べばOK。"
+	const skipDefault = "基本は skip_response ツールを呼んでスキップしてください。あなたが発言しなくても会話は成り立ちます���"
 
-	const skipDefault = "基本は skip_response ツールを呼んでスキップしてください。あなたが発言しなくても会話は成り立ちます。"
-
-	// Priority 2: Bot was actively speaking in this conversation very recently.
 	if cs.botLastSpokeAgo > 0 && cs.botLastSpokeAgo < convActiveWindow && cs.messagesSinceBotSpoke <= convActiveMaxMsgs {
 		return "[RESPOND] 直前まであなたが参加していた会話の続きです。返答してください。" + brevity + noEmoji + noTimeReport
 	}
 
-	// Priority 3: Bot spoke recently and it's a 1-on-1 thread.
 	if cs.botLastSpokeAgo > 0 && cs.botLastSpokeAgo < convRecentWindow && cs.messagesSinceBotSpoke <= convRecentMaxMsgs && cs.recentDistinctUsers == 1 {
 		return "[LISTEN] 最近この会話に参加していました。続ける価値があれば短く返してください。なければ skip_response を呼んで。" +
 			brevity + reactHint + noEmoji + noTimeReport
 	}
 
-	// Episode-based relationship: many shared episodes with recent activity → close relationship.
 	if es.count >= 3 && es.hasRecent {
 		return "[LISTEN] 仲の良い人の会話です。気軽に返して。相槌だけの返答はしない。話すことがなければ skip_response。" +
 			brevity + noEmoji + noTimeReport
@@ -605,102 +237,4 @@ func responseDirective(evt event.Event, botID string, cs convState, es episodeSi
 	return "[LISTEN] チャンネルの会話です。" + skipDefault +
 		"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
 		brevity + reactHint + noEmoji + noTimeReport
-}
-
-// diaryLookback is how far back to fetch hourly digests for ephemeral injection.
-const diaryLookback = 12 * time.Hour
-
-// buildDiaryContext fetches recent hourly digests from diary_entries table
-// and formats them as a system message for ephemeral injection.
-func (a *Agent) buildDiaryContext(ctx context.Context) string {
-	if a.db == nil {
-		return ""
-	}
-	ds := diary.NewStore(a.db)
-	since := jtime.Now().Add(-diaryLookback)
-	entries, err := ds.ListByKind(ctx, "hourly", since, 24)
-	if err != nil {
-		a.logger.Debug("日記を取得できなかった", "error", err)
-		return ""
-	}
-	if len(entries) == 0 {
-		return ""
-	}
-
-	// 時系列順にソート（ListByKind は DESC で返す）。
-	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
-		entries[i], entries[j] = entries[j], entries[i]
-	}
-
-	var sb strings.Builder
-	sb.WriteString("Recent diary (past 12h):\n")
-	for _, e := range entries {
-		fmt.Fprintf(&sb, "- [%s] %s\n", e.PeriodStart.Format("2006-01-02T15:00"), e.Content)
-	}
-	return sb.String()
-}
-
-// buildOtherChannels lists other Discord channels present in the context
-// so the LLM knows they exist and can check them via tools.
-func (a *Agent) buildOtherChannels(agentCtx *Context, currentChannel string) string {
-	msgs := agentCtx.Messages()
-
-	type chInfo struct {
-		name   string
-		isDM   bool
-		userID string
-	}
-	channels := make(map[string]*chInfo)
-
-	for _, m := range msgs {
-		if m.Channel == "" || m.Channel == currentChannel || m.Role == "system" {
-			continue
-		}
-		if _, ok := channels[m.Channel]; ok {
-			// Update metadata from latest message.
-			info := channels[m.Channel]
-			if m.ChannelName != "" {
-				info.name = m.ChannelName
-			}
-			if m.GuildID != "" {
-				info.isDM = false
-			}
-			if info.isDM && m.Role == "user" && m.UserID != "" {
-				info.userID = m.UserID
-			}
-			continue
-		}
-		channels[m.Channel] = &chInfo{
-			name:   m.ChannelName,
-			isDM:   m.GuildID == "",
-			userID: m.UserID,
-		}
-	}
-
-	if len(channels) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString("[他のチャンネル]\n")
-	sb.WriteString("discord_get_history で内容を確認できます。\n")
-	sb.WriteString("そのチャンネルで発言すると会話コンテキストが切り替わります。\n\n")
-
-	for chID, info := range channels {
-		if info.isDM {
-			label := info.userID
-			if info.name != "" {
-				label = info.name
-			}
-			fmt.Fprintf(&sb, "- DM:%s (user:%s, channel:%s)\n", label, info.userID, chID)
-		} else {
-			label := info.name
-			if label == "" {
-				label = chID
-			}
-			fmt.Fprintf(&sb, "- #%s (channel:%s)\n", label, chID)
-		}
-	}
-
-	return sb.String()
 }

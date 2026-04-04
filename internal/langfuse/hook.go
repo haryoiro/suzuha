@@ -66,7 +66,8 @@ func (h *Hook) AfterThink(ctx context.Context, p *agent.Perception, t *agent.Tho
 	_, span := h.tracer.Start(ctx, "pipeline.think",
 		trace.WithAttributes(
 			attribute.Bool("suzuha.listen_mode", t.ListenMode),
-			attribute.Int("suzuha.ephemeral_count", len(t.Ephemeral)),
+			attribute.Int("suzuha.background_count", len(t.Background)),
+			attribute.Int("suzuha.foreground_count", len(t.Foreground)),
 			attribute.String("suzuha.directive", truncate(t.Directive, 100)),
 		),
 	)

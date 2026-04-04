@@ -13,6 +13,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/agent/prompt"
+	"github.com/haryoiro/suzuha/internal/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -49,8 +51,9 @@ type Agent struct {
 	mediaStore      memory.MediaStore
 	videoMeta       transcript.MetadataFetcher // nil if video feature not configured
 	logger          *slog.Logger
-	hooks  []PipelineHook
-	tracer trace.Tracer // nil when tracing is disabled
+	contextProviders []prompt.Provider
+	hooks            []PipelineHook
+	tracer           trace.Tracer
 
 	systemPrompt     string
 	botID            string
@@ -92,11 +95,29 @@ type Perception struct {
 	TurnStartIdx      int
 }
 
-// Thought is the output of the Think stage.
 type Thought struct {
-	Ephemeral  []llm.Message
+	Background []llm.Message // 会話の前に置く前提知識（記憶・プロフ・日記）
+	Foreground []llm.Message // 会話の後に置く状況・指示（self-prompt, home旗）
 	Directive  string
 	ListenMode bool
+}
+
+func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message) []llm.Message {
+	now := jtime.Now()
+	var msgs []llm.Message
+	if systemPrompt != "" {
+		msgs = append(msgs, llm.Message{
+			Role:    "system",
+			Content: systemPrompt + fmt.Sprintf("\n\n[現在時刻: %s]", now.Format("2006-01-02 15:04:05 (Mon)")),
+		})
+	}
+	msgs = append(msgs, t.Background...)
+	msgs = append(msgs, conversation...)
+	msgs = append(msgs, t.Foreground...)
+	if t.Directive != "" {
+		msgs = append(msgs, llm.Message{Role: "system", Content: t.Directive, Timestamp: now})
+	}
+	return msgs
 }
 
 // New creates an Agent.
@@ -161,11 +182,12 @@ func New(
 		acquirer:         acq,
 		db:               db,
 		channelSettings:  channelSettings,
-		logger:       logger,
-		systemPrompt: cfg.SystemPrompt,
+		logger:           logger,
+		systemPrompt:     cfg.SystemPrompt,
 		botID:            cfg.BotID,
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
+		contextProviders: buildProviders(memStore, db, userStore, cfg.BotID, logger),
 	}
 
 	// Create default sessions. These can be replaced via SetSession().
@@ -231,24 +253,47 @@ func (a *Agent) GetSession(key SourceKey) Session {
 	return a.sessions[key]
 }
 
-// SetLocationStore sets the location store for GPS context injection.
 func (a *Agent) SetLocationStore(s *location.Store) {
 	a.locationStore = s
+	for _, p := range a.contextProviders {
+		if lp, ok := p.(*prompt.LocationProvider); ok {
+			lp.Store = s
+		}
+	}
 }
 
-// SetVideoMeta sets the video metadata fetcher for URL annotation in Perceive.
 func (a *Agent) SetVideoMeta(m transcript.MetadataFetcher) {
 	a.videoMeta = m
 }
 
-// SetMediaStore sets the media store for loading memory attachments.
 func (a *Agent) SetMediaStore(s memory.MediaStore) {
 	a.mediaStore = s
+	for _, p := range a.contextProviders {
+		if mp, ok := p.(*prompt.MemoryProvider); ok {
+			mp.Media = s
+		}
+	}
 }
 
-// SetTracer sets the OpenTelemetry tracer for pipeline and tool call tracing.
 func (a *Agent) SetTracer(t trace.Tracer) {
 	a.tracer = t
+}
+
+func buildProviders(
+	memStore memory.Store,
+	db *sql.DB,
+	userStore user.Store,
+	botID string,
+	logger *slog.Logger,
+) []prompt.Provider {
+	return []prompt.Provider{
+		&prompt.DiaryProvider{DB: db, Logger: logger},
+		&prompt.MemoryProvider{Memory: memStore, Logger: logger},
+		&prompt.LocationProvider{},
+		&prompt.ProfileProvider{Users: userStore, Memory: memStore, BotID: botID, Logger: logger},
+		&prompt.ChannelProvider{},
+		prompt.SelfPromptProvider{},
+	}
 }
 
 // LastEphemeral returns the most recently injected ephemeral messages.
