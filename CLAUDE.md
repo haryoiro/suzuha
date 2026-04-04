@@ -10,18 +10,18 @@
 
 ```bash
 # ビルド確認
-docker compose exec agent go build ./...
+docker compose -f container/compose.yaml exec agent go build ./...
 
 # テスト
-docker compose exec agent go test ./...
+docker compose -f container/compose.yaml exec agent go test ./...
 
 # sqlite3
-docker compose exec agent sqlite3 /data/memory.db
+docker compose -f container/compose.yaml exec agent sqlite3 /data/memory.db
 ```
 
 ## Docker構成
 
-- `docker compose up` で agent, admin, searxng, admin-frontend が起動
+- `docker compose -f container/compose.yaml up` で agent, admin, searxng, admin-frontend が起動
 - agent は Air によるホットリロード対応
 - llama.cpp server は別途 `docker run` で起動 (コンテナ名: `llama-qwen3-5`, ポート: 8000)
 
@@ -51,7 +51,7 @@ Claude Code (Discord plugin 経由) がリクエストを受け取り、コー�
    ```bash
    cd /tmp/suzuha-wt-<name>
    # コード編集...
-   docker compose exec agent go build -buildvcs=false -tags fts5 ./...
+   docker compose -f container/compose.yaml exec agent go build -buildvcs=false -tags fts5 ./...
    ```
 4. 変更をコミット:
    ```bash
@@ -74,4 +74,4 @@ Claude Code (Discord plugin 経由) がリクエストを受け取り、コー�
 ### 重要
 - Air は `cmd/suzuha-agent/` と `internal/` の `.go` / `.yaml` を監視している
 - worktree (`/tmp/`) での変更は再起動を引き起こさない
-- `docker compose exec agent go build` でビルド確認すること (ホストではCGOが使えない)
+- `docker compose -f container/compose.yaml exec agent go build` でビルド確認すること (ホストではCGOが使えない)

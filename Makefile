@@ -15,7 +15,7 @@ proto:
 # Admin API コード生成: TypeSpec → OpenAPI → ogen
 api:
 	cd api && pnpm exec tsp compile .
-	docker compose exec agent ogen --target /app/internal/admin/api --package api --clean /app/generated/openapi.yaml
+	docker compose -f container/compose.yaml exec agent ogen --target /app/internal/admin/api --package api --clean /app/generated/openapi.yaml
 	@echo "Admin API generated: internal/admin/api/"
 
 # 管理画面: Go API + Vite HMR を同時起動
@@ -36,10 +36,10 @@ dev-admin-web:
 
 # ファームウェアビルド
 firmware-p4:
-	docker compose build firmware-p4
+	docker compose -f container/compose.yaml build firmware-p4
 
 firmware-esp32:
-	docker compose build firmware-esp32
+	docker compose -f container/compose.yaml build firmware-esp32
 
 firmware-all: firmware-p4 firmware-esp32
 

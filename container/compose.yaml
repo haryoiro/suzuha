@@ -1,24 +1,24 @@
 services:
   agent:
     build:
-      context: .
-      dockerfile: Dockerfile.dev
-    command: ["-c", ".air.agent.toml"]
+      context: ..
+      dockerfile: container/Dockerfile.dev
+    command: ["-c", "container/air.agent.toml"]
     ports:
       - "9090:9090"
       - "8080:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - .:/app
+      - ..:/app
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
-      - ./data:/data
-      - ./.suzuha:/app/.suzuha
+      - ../data:/data
+      - ../.suzuha:/app/.suzuha
       - npm-cache:/root/.npm
       - ~/.claude:/root/.claude
     env_file:
-      - .env
+      - ../.env
     environment:
       - SUZUHA_CONFIG=/app/config.yaml
     stdin_open: true
@@ -37,7 +37,7 @@ services:
   #   entrypoint: ["/app/build/bin/whisper-server"]
   #   command: ["--model", "/models/ggml-large-v3.bin", "--port", "8001", "--host", "0.0.0.0", "--language", "ja"]
   #   volumes:
-  #     - ./models/whisper:/models
+  #     - ../models/whisper:/models
   #   environment:
   #     - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
   #   deploy:
@@ -75,7 +75,7 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - .:/app
+      - ..:/app
       - node-modules:/app/web/admin/node_modules
     environment:
       - API_URL=http://agent:8080
@@ -89,7 +89,7 @@ services:
     ports:
       - "5174:5174"
     volumes:
-      - .:/app
+      - ..:/app
       - widget-node-modules:/app/web/widget/node_modules
     environment:
       - API_URL=http://agent:9090
@@ -104,7 +104,7 @@ services:
 
   firmware-p4:
     build:
-      context: ./firmware
+      context: ../firmware
       args:
         TARGET: esp32p4
     profiles:
@@ -112,7 +112,7 @@ services:
 
   firmware-esp32:
     build:
-      context: ./firmware
+      context: ../firmware
       args:
         TARGET: esp32
     profiles:

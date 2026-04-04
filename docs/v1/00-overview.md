@@ -106,9 +106,8 @@ suzuha2/
 │   └── voice/              # 音声パイプライン (VAD, STT, TTS, Session)
 ├── web/admin/              # React SPA (Vite + Ant Design)
 ├── firmware/               # ESP32 ファームウェア (ESP-IDF)
-├── yolo/                   # YOLO 物体検出サーバー
 ├── api/                    # TypeSpec API 仕様
 ├── .suzuha/                # プロンプトファイル (IDENTITY.md, SOUL.md) [gitignored]
-├── compose.yaml            # Docker 構成
+├── container/              # Docker 構成 (compose.yaml, Dockerfile 等)
 └── config.yaml             # アプリケーション設定 [gitignored]
 ```
