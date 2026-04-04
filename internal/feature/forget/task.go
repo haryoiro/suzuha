@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/memento"
+	consol "github.com/haryoiro/suzuha/internal/memento/consolidator"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
 
@@ -26,7 +26,7 @@ func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error {
 
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	// ConsolidateOpts を直接 unmarshal する（json タグ付き）。
-	opts := memento.ConsolidateOpts{
+	opts := consol.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,

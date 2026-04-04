@@ -1,4 +1,4 @@
-package memento
+package acquirer
 
 import (
 	"fmt"

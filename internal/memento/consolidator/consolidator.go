@@ -1,4 +1,4 @@
-package memento
+package consolidator
 
 import (
 	"context"
@@ -6,21 +6,20 @@ import (
 	"log/slog"
 	"time"
 
+
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
 // Consolidator は既存メモリの重複排除・マージを実行する。
 type Consolidator struct {
-	llm    completer
+	llm    Completer
 	admin  memory.AdminStore
 	store  memory.Store
 	logger *slog.Logger
 }
 
 // NewConsolidator は Consolidator を作成する。
-// NewConsolidator は Consolidator を作成する。
-// llm には *llm.RoleClient (e.g. client.For("background")) を渡す。
-func NewConsolidator(llm completer, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
+func NewConsolidator(llm Completer, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
 	return &Consolidator{llm: llm, admin: admin, store: store, logger: logger}
 }
 
@@ -34,7 +33,6 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 		"similarity_threshold", opts.SimilarityThreshold,
 		"dry_run", opts.DryRun)
 
-	// フェーズ1: 埋め込みを持つ全メモリを読み込む。
 	memories, err := c.admin.ListEmbeddedMemories(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("consolidate: エントリの読み込みに失敗: %w", err)
@@ -46,13 +44,11 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 	}
 	c.logger.Info("consolidate: 記憶を読み込み完了", "count", len(entries))
 
-	// フェーズ2: 埋め込みベクトルを読み込む。
 	embeddings, err := c.admin.ListAllEmbeddings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("consolidate: 埋め込みの読み込みに失敗: %w", err)
 	}
 
-	// フェーズ3: Union-Find でクラスタリング。
 	groups := buildSimilarityGroups(entries, embeddings, opts.SimilarityThreshold, opts.MaxGroupSize)
 	if len(groups) == 0 {
 		c.logger.Info("consolidate: 重複グループは見つかりませんでした")
@@ -60,7 +56,6 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 	}
 	c.logger.Info("consolidate: 重複グループを検出", "groups", len(groups))
 
-	// フェーズ4: バッチLLM呼び出しで各グループを判定する。
 	var totalDeleted, totalMerged int
 	batchSize := opts.MaxGroupsPerLLMCall
 	if batchSize <= 0 {
@@ -120,7 +115,6 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 	}, nil
 }
 
-// executeMerge はグループの全メンバーを削除し、新しい統合メモリを保存する。
 func (c *Consolidator) executeMerge(ctx context.Context, d decision) error {
 	if _, err := c.admin.DeleteBatch(ctx, d.deleteIDs); err != nil {
 		c.logger.Warn("consolidate: 統合時の削除に失敗", "error", err, "ids", d.deleteIDs)
@@ -131,7 +125,6 @@ func (c *Consolidator) executeMerge(ctx context.Context, d decision) error {
 
 // --- 内部型 ---
 
-// memEntry はメンテナンス中に使用する軽量なメモリレコード。
 type memEntry struct {
 	id        string
 	memType   memory.MemoryType
@@ -143,15 +136,13 @@ type memEntry struct {
 	createdAt time.Time
 }
 
-// memoryGroup は類似メモリのクラスタ。
 type memoryGroup struct {
 	memType memory.MemoryType
 	members []memEntry
 }
 
-// decision はグループに対するLLM判定の結果。
 type decision struct {
-	action        string // "keep" または "merge"
+	action        string
 	keepID        string
 	deleteIDs     []string
 	mergedContent string
@@ -160,7 +151,6 @@ type decision struct {
 	sourceEntries []memEntry
 }
 
-// memoriesToEntries は []memory.Memory をメンテナンス用の軽量 []memEntry に変換する。
 func memoriesToEntries(mems []memory.Memory) []memEntry {
 	entries := make([]memEntry, len(mems))
 	for i, m := range mems {

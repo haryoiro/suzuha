@@ -32,7 +32,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
 	"github.com/haryoiro/suzuha/cmd/suzuha-agent/mcp"
-	"github.com/haryoiro/suzuha/internal/memento"
+	"github.com/haryoiro/suzuha/internal/memento/acquirer"
+	"github.com/haryoiro/suzuha/internal/memento/consolidator"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/cmd/suzuha-agent/observe"
@@ -54,7 +55,7 @@ func allPackages(cfgPath string) []func(do.Injector) {
 		memory.Package,
 		llm.Package,
 		mcp.Package,
-		memento.Package,
+		mementoPackage,
 		user.Package,
 		channel.Package,
 	}
@@ -184,7 +185,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvoke[*user.SQLiteStore](i),
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[chat.Interface](i),
-				do.MustInvoke[*memento.Acquirer](i),
+				do.MustInvoke[*acquirer.Acquirer](i),
 				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
 				do.MustInvoke[*channel.Store](i),
 				do.MustInvoke[*slog.Logger](i),
@@ -250,7 +251,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				topics.New(),
 				research.New(searxURL, 5),
 				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
-				forget.New(do.MustInvoke[*memento.Consolidator](i)),
+				forget.New(do.MustInvoke[*consolidator.Consolidator](i)),
 				diary.New(),
 				video.New(videoFetcher, videoExtractor, llmClient, logger),
 			}
@@ -417,4 +418,21 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	}
 
 	return sched, nil
+}
+
+// mementoPackage registers memento sub-package providers into the DI injector.
+func mementoPackage(i do.Injector) {
+	do.Provide(i, func(i do.Injector) (*acquirer.Acquirer, error) {
+		llmClient := do.MustInvoke[*llm.Client](i)
+		store := do.MustInvoke[*memory.SQLiteStore](i)
+		logger := do.MustInvoke[*slog.Logger](i)
+		return acquirer.NewAcquirer(llmClient.For("background"), store, acquirer.DefaultConfig(), logger), nil
+	})
+
+	do.Provide(i, func(i do.Injector) (*consolidator.Consolidator, error) {
+		llmClient := do.MustInvoke[*llm.Client](i)
+		store := do.MustInvoke[*memory.SQLiteStore](i)
+		logger := do.MustInvoke[*slog.Logger](i)
+		return consolidator.NewConsolidator(llmClient.For("background"), store, store, logger), nil
+	})
 }

@@ -1,4 +1,4 @@
-package memento
+package acquirer
 
 // disambiguationRule は自己完結的で曖昧さのないメモリ内容を強制するルール。
 // SimpleMemの「Force Disambiguation」手法に着想を得ている。

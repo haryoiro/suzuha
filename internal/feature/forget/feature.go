@@ -4,14 +4,14 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/haryoiro/suzuha/internal/memento"
+	consol "github.com/haryoiro/suzuha/internal/memento/consolidator"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
 // consolidator は forget が必要とする統合機能を定義する (consumer-side interface)。
 type consolidator interface {
-	Consolidate(ctx context.Context, opts *memento.ConsolidateOpts) (*memento.ConsolidateResult, error)
+	Consolidate(ctx context.Context, opts *consol.ConsolidateOpts) (*consol.ConsolidateResult, error)
 }
 
 // Feature は定期的なメモリ重複排除用のスケジューラタスクを提供する。

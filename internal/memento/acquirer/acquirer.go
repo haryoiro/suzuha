@@ -1,4 +1,4 @@
-package memento
+package acquirer
 
 import (
 	"context"
@@ -9,22 +9,21 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-
 	"github.com/haryoiro/suzuha/internal/llm"
+
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
 // Acquirer は会話コンテキストから長期メモリを抽出する。
 type Acquirer struct {
-	llm    completer
+	llm    Completer
 	store  memory.Store
-	config AcquireConfig
+	config Config
 	logger *slog.Logger
 }
 
 // NewAcquirer は Acquirer を作成する。
-// llm には *llm.RoleClient (e.g. client.For("background")) を渡す。
-func NewAcquirer(llm completer, store memory.Store, cfg AcquireConfig, logger *slog.Logger) *Acquirer {
+func NewAcquirer(llm Completer, store memory.Store, cfg Config, logger *slog.Logger) *Acquirer {
 	return &Acquirer{llm: llm, store: store, config: cfg, logger: logger}
 }
 
@@ -34,13 +33,11 @@ func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireRe
 		return &AcquireResult{}, nil
 	}
 
-	// 抽出パイプラインを実行: コンテキスト取得 → LLM → パース → メディア添付。
 	memories, err := a.extract(ctx, req.Messages)
 	if err != nil {
 		return nil, fmt.Errorf("acquire: 抽出に失敗: %w", err)
 	}
 
-	// バッチ重複チェック — 全候補に対して1回の埋め込みAPI呼び出し。
 	candidates := make([]memory.DupCandidate, len(memories))
 	for i, mem := range memories {
 		candidates[i] = memory.DupCandidate{Content: mem.Content, Type: mem.Type}
@@ -50,7 +47,6 @@ func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireRe
 		a.logger.Warn("acquire: バッチ重複チェックに失敗", "error", dupErr)
 	}
 
-	// 重複でないメモリを保存し、重複チェックで得た埋め込みを再利用する。
 	result := &AcquireResult{}
 	for i := range memories {
 		mem := &memories[i]
@@ -70,16 +66,11 @@ func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireRe
 	return result, nil
 }
 
-// extract は完全な抽出パイプラインを実行する: コンテキスト取得 → プロンプト → LLM → パース → メディア添付。
 func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memory, error) {
-	// 重複排除コンテキスト用に最近の既存メモリを取得する。
 	existing := a.fetchRecentMemories(ctx)
-
-	// プロンプトを構築する。
 	systemPrompt := buildSystemPrompt(a.config.Rules)
 	userPrompt := buildCompactPrompt(msgs, existing)
 
-	// LLMを呼び出す。
 	resp, err := a.llm.CompleteRaw(ctx, []llm.RawMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
@@ -88,18 +79,14 @@ func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Me
 		return nil, fmt.Errorf("acquire: LLM呼び出しに失敗: %w", err)
 	}
 
-	// JSON出力をパースする。
 	memories, err := parseExtractedMemories(resp.Text)
 	if err != nil {
-		// レガシーフォールバック: 構造化フィールド（Keywords/Topic/Persons/EventTime）は全て欠落する。
-		// このパスの発動頻度が高い場合はプロンプトの見直しが必要。
 		a.logger.Error("acquire: JSON解析に失敗、レガシーフォールバック発動（構造化フィールド欠落）",
 			"error", err, "response_prefix", textutil.TruncateRunes(resp.Text, 100))
 		result := parseLegacyCompactResponse(resp.Text)
 		memories = result.Memories
 	}
 
-	// インデックスに基づいてメディアを添付する。
 	mediaByIndex := collectMediaKeysByIndex(msgs)
 	for i := range memories {
 		attachMediaByIndices(&memories[i], mediaByIndex)
@@ -108,13 +95,11 @@ func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Me
 	return memories, nil
 }
 
-// fetchRecentMemories は重複排除コンテキスト用にストアから最近のメモリを取得する。
 func (a *Acquirer) fetchRecentMemories(ctx context.Context) []memory.Memory {
 	cfg := a.config
 	if cfg.RecentMemoryLimit <= 0 {
 		return nil
 	}
-
 	since := time.Now().Add(-cfg.RecentMemoryWindow)
 	mems, err := a.store.ListRecent(ctx, since, cfg.RecentMemoryLimit)
 	if err != nil {
@@ -124,7 +109,6 @@ func (a *Acquirer) fetchRecentMemories(ctx context.Context) []memory.Memory {
 	return mems
 }
 
-// collectMediaKeysByIndex はメッセージインデックスをメディアキーにマッピングする。
 func collectMediaKeysByIndex(msgs []llm.Message) map[int][]string {
 	result := make(map[int][]string)
 	for i, m := range msgs {
@@ -135,17 +119,14 @@ func collectMediaKeysByIndex(msgs []llm.Message) map[int][]string {
 	return result
 }
 
-// attachMediaByIndices はLLM出力の image_indices を使ってメディアキーをメモリに紐付ける。
 func attachMediaByIndices(mem *memory.Memory, mediaByIndex map[int][]string) {
 	if mem.Metadata == nil || len(mediaByIndex) == 0 {
 		return
 	}
-
 	indices, ok := mem.Metadata["image_indices"]
 	if !ok {
 		return
 	}
-
 	var idxList []int
 	switch v := indices.(type) {
 	case []int:
@@ -160,9 +141,7 @@ func attachMediaByIndices(mem *memory.Memory, mediaByIndex map[int][]string) {
 			}
 		}
 	}
-
 	delete(mem.Metadata, "image_indices")
-
 	seen := make(map[string]bool)
 	for _, idx := range idxList {
 		for _, key := range mediaByIndex[idx] {
@@ -210,21 +189,16 @@ func mimeFromKey(key string) string {
 	}
 }
 
-// parseLegacyCompactResponse はフォールバックとして旧テキスト形式をパースする。
 func parseLegacyCompactResponse(text string) *AcquireResult {
 	result := &AcquireResult{}
-
 	lines := strings.Split(text, "\n")
 	inMemories := false
-
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-
 		if strings.HasPrefix(strings.ToUpper(line), "MEMORIES:") {
 			inMemories = true
 			continue
 		}
-
 		if !inMemories || !strings.HasPrefix(line, "- ") {
 			continue
 		}
@@ -233,7 +207,6 @@ func parseLegacyCompactResponse(text string) *AcquireResult {
 			result.Memories = append(result.Memories, mem)
 		}
 	}
-
 	return result
 }
 

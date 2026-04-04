@@ -862,7 +862,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		})
 
 		// Start periodic capture loop (333ms = ~3fps).
-		captureCtx, _ := context.WithCancel(context.Background())
+		captureCtx, captureCancel := context.WithCancel(context.Background())
+		defer captureCancel()
 		hub.StartCaptureLoop(captureCtx, 333)
 		logger.Info("デバイス接続口を開いた")
 	}

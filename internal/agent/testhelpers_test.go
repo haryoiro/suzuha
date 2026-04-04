@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/memento"
+	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -103,14 +103,14 @@ func (m *mockChat) Send(_ context.Context, _, text string) error {
 // --- Mock acquirer ---
 
 type mockAcquirer struct {
-	acquireResult *memento.AcquireResult
+	acquireResult *acq.AcquireResult
 }
 
-func (m *mockAcquirer) Acquire(_ context.Context, _ *memento.AcquireRequest) (*memento.AcquireResult, error) {
+func (m *mockAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.AcquireResult, error) {
 	if m.acquireResult != nil {
 		return m.acquireResult, nil
 	}
-	return &memento.AcquireResult{}, nil
+	return &acq.AcquireResult{}, nil
 }
 
 // --- Test Agent builder ---

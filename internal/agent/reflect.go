@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memento"
+	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 )
 
 // filterOutInjectedHistory は Compact に渡すメッセージから
@@ -86,7 +86,7 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 	// 注入されたチャンネル履歴は除外する（再注入で重複抽出されるのを防ぐ）。
 	if a.acquirer != nil {
 		filtered := filterOutInjectedHistory(msgs)
-		_, err := a.acquirer.Acquire(ctx, &memento.AcquireRequest{
+		_, err := a.acquirer.Acquire(ctx, &acq.AcquireRequest{
 			Messages: filtered,
 		})
 		if err != nil {

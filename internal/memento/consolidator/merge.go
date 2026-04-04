@@ -1,4 +1,4 @@
-package memento
+package consolidator
 
 import (
 	"sort"

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memento"
+	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -103,10 +103,10 @@ type trackingAcquirer struct {
 	messages []llm.Message
 }
 
-func (c *trackingAcquirer) Acquire(_ context.Context, req *memento.AcquireRequest) (*memento.AcquireResult, error) {
+func (c *trackingAcquirer) Acquire(_ context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error) {
 	c.called = true
 	c.messages = req.Messages
-	return &memento.AcquireResult{
+	return &acq.AcquireResult{
 		Memories: []memory.Memory{
 			{Type: memory.MemoryTypeWorld, Content: "extracted"},
 		},
@@ -190,8 +190,8 @@ type slowAcquirer struct {
 	callCount int
 }
 
-func (c *slowAcquirer) Acquire(_ context.Context, _ *memento.AcquireRequest) (*memento.AcquireResult, error) {
+func (c *slowAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.AcquireResult, error) {
 	c.callCount++
 	time.Sleep(c.delay)
-	return &memento.AcquireResult{}, nil
+	return &acq.AcquireResult{}, nil
 }

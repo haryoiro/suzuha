@@ -12,7 +12,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
-	"github.com/haryoiro/suzuha/internal/memento"
+	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
@@ -31,7 +31,7 @@ const DefaultDrainWindow = 3 * time.Second
 
 // acquirer は agent が必要とするメモリ獲得機能を定義する (consumer-side interface)。
 type acquirer interface {
-	Acquire(ctx context.Context, req *memento.AcquireRequest) (*memento.AcquireResult, error)
+	Acquire(ctx context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error)
 }
 
 // Agent is the main event loop that processes events, calls the LLM,
