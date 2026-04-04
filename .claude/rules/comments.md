@@ -26,16 +26,6 @@ func (r *ProviderRegistry) ResolveRole(ctx context.Context, role string) (*RoleS
 - 変更を追わないコメント (嘘になるコメント)
 - 自分が変更していないコードへのコメント追加
 
-## セクション区切り
-
-ファイル内の論理ブロックは `// --- セクション名 ---` で区切る:
-
-```go
-// --- Provider CRUD ---
-
-// --- Role Assignments ---
-```
-
 ## TODO
 
 `// TODO(user): 内容` 形式。担当者なしの TODO は禁止。
