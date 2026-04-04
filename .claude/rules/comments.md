@@ -25,6 +25,7 @@ func (r *ProviderRegistry) ResolveRole(ctx context.Context, role string) (*RoleS
 - コードを読めばわかること (`// i をインクリメント`)
 - 変更を追わないコメント (嘘になるコメント)
 - 自分が変更していないコードへのコメント追加
+- `// --- セクション名 ---` 等のセクション区切り → ファイル分割で解決する
 
 ## TODO
 
