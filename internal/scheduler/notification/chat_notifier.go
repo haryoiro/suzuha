@@ -8,16 +8,15 @@ import (
 )
 
 // ChatNotifier implements Notifier by routing messages directly through
-// a chat.Interface. This replaces the gRPC-based notification path
-// used when consolidator ran as a separate process.
+// a chat.Sender.
 type ChatNotifier struct {
-	chat   chat.Interface
+	chat   chat.Sender
 	logger *slog.Logger
 }
 
-// NewChatNotifier creates a Notifier backed by a chat.Interface.
-func NewChatNotifier(chatIface chat.Interface, logger *slog.Logger) *ChatNotifier {
-	return &ChatNotifier{chat: chatIface, logger: logger}
+// NewChatNotifier creates a Notifier backed by a chat.Sender.
+func NewChatNotifier(chatSender chat.Sender, logger *slog.Logger) *ChatNotifier {
+	return &ChatNotifier{chat: chatSender, logger: logger}
 }
 
 func (n *ChatNotifier) Send(ctx context.Context, channelID, content, source string) (SendResult, error) {

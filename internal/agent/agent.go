@@ -11,7 +11,6 @@ import (
 	"github.com/haryoiro/suzuha/external/transcript"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/chat"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
@@ -59,6 +58,7 @@ type Agent struct {
 	systemPrompt     string
 	botID            string
 	contextWindowPct float64
+	maxContextTokens int
 	drainWindow      time.Duration
 
 	// ExpressionBroadcaster is called to broadcast expression changes to device/web clients.
@@ -124,12 +124,12 @@ func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message)
 // New creates an Agent.
 func New(
 	cfg Config,
+	registrations []SourceRegistration,
 	llmClient *llm.Client,
 	tools *tool.Registry,
 	memStore memory.Store,
 	userStore user.Store,
 	bus *event.Bus,
-	chatIface chat.Interface,
 	acq acquirer,
 	db *sql.DB,
 	channelSettings *channelpkg.Store,
@@ -140,41 +140,37 @@ func New(
 		dw = DefaultDrainWindow
 	}
 
-	// Create contexts for each source key.
-	contexts := map[SourceKey]*Context{
-		SourceKeyDiscord: NewContext(cfg.MaxContextTokens),
-		SourceKeyDevice:  NewContext(cfg.MaxContextTokens),
-		SourceKeyWeb:     NewContext(cfg.MaxContextTokens),
-	}
+	contexts := make(map[SourceKey]*Context, len(registrations))
+	compactMu := make(map[SourceKey]*sync.Mutex, len(registrations))
+	sessions := make(map[SourceKey]Session, len(registrations))
 
-	// System prompt is stored separately — immune to compaction/truncation.
-	for _, agentCtx := range contexts {
+	for _, reg := range registrations {
+		agentCtx := NewContext(cfg.MaxContextTokens)
 		agentCtx.SetSystemPrompt(cfg.SystemPrompt)
-	}
 
-	// Try to restore contexts from previous session.
-	for key, agentCtx := range contexts {
-		if saved := loadContextWith(db, logger, string(key)); len(saved) > 0 {
-			// Backward compat: strip system prompt from messages if present.
+		persistKey := reg.PersistKey
+		if persistKey == "" {
+			persistKey = string(reg.Key)
+		}
+
+		// Try to restore context from previous session.
+		if saved := loadContextWith(db, logger, persistKey); len(saved) > 0 {
 			if saved[0].Role == "system" {
 				saved = saved[1:]
 			}
 			agentCtx.ReplaceAll(saved)
-			logger.Info("前の記憶を思い出した", "source_key", string(key), "messages", len(saved))
+			logger.Info("前の記憶を思い出した", "source_key", string(reg.Key), "messages", len(saved))
 		}
+
+		contexts[reg.Key] = agentCtx
+		compactMu[reg.Key] = &sync.Mutex{}
+		sessions[reg.Key] = reg.NewSession(agentCtx)
 	}
 
-	// Create per-source compact mutexes.
-	compactMu := map[SourceKey]*sync.Mutex{
-		SourceKeyDiscord: {},
-		SourceKeyDevice:  {},
-		SourceKeyWeb:     {},
-	}
-
-	ag := &Agent{
+	return &Agent{
 		contexts:         contexts,
 		compactMu:        compactMu,
-		sessions:         make(map[SourceKey]Session),
+		sessions:         sessions,
 		llm:              llmClient,
 		tools:            tools,
 		memory:           memStore,
@@ -188,30 +184,9 @@ func New(
 		botID:            cfg.BotID,
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
+		maxContextTokens: cfg.MaxContextTokens,
 		contextProviders: buildProviders(memStore, db, userStore, cfg.BotID, logger),
 	}
-
-	// Create default sessions. These can be replaced via SetSession().
-	ag.sessions[SourceKeyDiscord] = NewDiscordSession(
-		contexts[SourceKeyDiscord],
-		chatIface,
-		nil, // voiceSpeaker set later
-		channelSettings,
-		dw,
-		logger,
-	)
-	ag.sessions[SourceKeyDevice] = NewDeviceSession(
-		contexts[SourceKeyDevice],
-		nil, // deviceSpeaker set later
-		logger,
-	)
-	ag.sessions[SourceKeyWeb] = NewWebSession(
-		contexts[SourceKeyWeb],
-		nil, // webSpeaker set later
-		logger,
-	)
-
-	return ag
 }
 
 // AgentContext returns the agent's discord context for external use (e.g. tool callbacks).
@@ -220,8 +195,15 @@ func (a *Agent) AgentContext() *Context {
 }
 
 // AgentContextFor returns the context for the given source key.
+// If no context exists yet, a new one is created and stored.
 func (a *Agent) AgentContextFor(key SourceKey) *Context {
-	return a.contexts[key]
+	if ctx, ok := a.contexts[key]; ok {
+		return ctx
+	}
+	ctx := NewContext(a.maxContextTokens)
+	ctx.SetSystemPrompt(a.systemPrompt)
+	a.contexts[key] = ctx
+	return ctx
 }
 
 // SetBotID updates the bot's platform user ID at runtime.
@@ -242,10 +224,12 @@ type DeviceSpeaker interface {
 // SetSession registers a Session for the given source key.
 func (a *Agent) SetSession(key SourceKey, sess Session) {
 	a.sessions[key] = sess
-	// Keep contexts map in sync: if the session provides a context,
-	// use it as the canonical context for this source key.
 	if sess.Context() != nil {
 		a.contexts[key] = sess.Context()
+	}
+	// Ensure compactMu exists for dynamically added sources.
+	if _, ok := a.compactMu[key]; !ok {
+		a.compactMu[key] = &sync.Mutex{}
 	}
 }
 
@@ -312,11 +296,10 @@ func (a *Agent) LastEphemeral() []llm.Message {
 func (a *Agent) Run(ctx context.Context) error {
 	events := a.bus.Subscribe()
 
-	// Create per-source channels.
-	channels := map[SourceKey]chan event.Event{
-		SourceKeyDiscord: make(chan event.Event, 16),
-		SourceKeyDevice:  make(chan event.Event, 16),
-		SourceKeyWeb:     make(chan event.Event, 16),
+	// Create per-source channels from registered sessions.
+	channels := make(map[SourceKey]chan event.Event, len(a.sessions))
+	for key := range a.sessions {
+		channels[key] = make(chan event.Event, 16)
 	}
 
 	// Launch one worker per source key.

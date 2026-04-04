@@ -12,6 +12,7 @@ const (
 	SourceKeyDiscord SourceKey = "discord"
 	SourceKeyDevice  SourceKey = "device"
 	SourceKeyWeb     SourceKey = "web"
+	SourceKeyCLI     SourceKey = "cli"
 )
 
 // DirectiveConfig holds source-specific pipeline settings.
@@ -87,6 +88,8 @@ func sourceKeyForEvent(source string) SourceKey {
 		return SourceKeyDevice
 	case "web":
 		return SourceKeyWeb
+	case "cli":
+		return SourceKeyCLI
 	default:
 		return SourceKeyDiscord
 	}

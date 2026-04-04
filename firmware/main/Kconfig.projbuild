@@ -13,10 +13,10 @@ menu "Suzuha Physical Agent"
             WiFi password.
 
     config SERVER_URI
-        string "suzuha2 Server WebSocket URI"
+        string "suzuha Server WebSocket URI"
         default "ws://192.168.1.100:9090/ws/device"
         help
-            WebSocket endpoint on the suzuha2 server.
+            WebSocket endpoint on the suzuha server.
 
     config SERVO_PAN_GPIO
         int "Servo Pan GPIO"

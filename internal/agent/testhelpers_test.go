@@ -117,6 +117,30 @@ func (m *mockAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.A
 
 func newTestAgent(opts ...func(*Agent)) *Agent {
 	bus := event.NewBus(16)
+	mc := &mockChat{}
+	regs := []SourceRegistration{
+		{
+			Key: SourceKeyDiscord,
+			NewSession: func(agentCtx *Context) Session {
+				return NewDiscordSession(agentCtx, mc, nil, nil, DefaultDrainWindow, slog.Default())
+			},
+			PersistKey: "discord",
+		},
+		{
+			Key: SourceKeyDevice,
+			NewSession: func(agentCtx *Context) Session {
+				return NewDeviceSession(agentCtx, nil, slog.Default())
+			},
+			PersistKey: "device",
+		},
+		{
+			Key: SourceKeyWeb,
+			NewSession: func(agentCtx *Context) Session {
+				return NewWebSession(agentCtx, nil, slog.Default())
+			},
+			PersistKey: "web",
+		},
+	}
 	ag := New(
 		Config{
 			SystemPrompt:     "You are a test bot.",
@@ -124,12 +148,12 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 			ContextWindowPct: 0.8,
 			MaxContextTokens: 10000,
 		},
+		regs,
 		nil, // llm.Client — nil is OK when we don't call Act
 		tool.NewRegistry(),
 		&mockMemory{},
 		&mockUsers{},
 		bus,
-		&mockChat{},
 		&mockAcquirer{},
 		nil, // db — nil is OK for tests that don't track channel activity
 		nil, // channelSettings — nil skips channel filtering

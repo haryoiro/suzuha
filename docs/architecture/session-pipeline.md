@@ -2,7 +2,7 @@
 
 ## 背景と動機
 
-suzuha2 は複数のインタラクションソースを持つ:
+suzuha は複数のインタラクションソースを持つ:
 - Discord テキストチャット
 - Discord ボイスチャンネル
 - 物理デバイス (ESP32-P4-NANO) の音声対話
@@ -189,39 +189,28 @@ func (a *Agent) runWorker(ctx context.Context, sess Session, ch <-chan event.Eve
 }
 ```
 
-## 移行計画
+## 移行履歴
 
-### Phase 1: Session 導入 + コンテキスト分離 (現在)
+### Phase 1: Session 導入 + コンテキスト分離 (完了)
 
-**ゴール**: 物理デバイスの応答速度改善
+- `Session` interface 定義 + DiscordSession / DeviceSession / WebSession 実装
+- per-source Context 分離 + DB 永続化
+- パイプラインからソース依存の応答ルーティングを Session.Respond() に移動
 
-- `Session` interface を定義
-- `DiscordSession` 実装: 既存の動作を維持 (drain window, conversationState)
-- `DeviceSession` 実装: 即時処理, TTS 出力, 専用 directive
-- `Pipeline` に既存パイプラインロジックを移動
-- `Agent` をセッション管理 + ディスパッチャーに変更
-- DB: `context_snapshot` テーブルの `CHECK(id=1)` 制約を外してソース別永続化
+### Phase 2: ソース固有ロジックの Session への移動 (完了)
 
-**変更しないもの**:
-- Perceive/Think/Act/Reflect の内部ロジック (引数に Context を渡すだけ)
-- Memory, Tool, LLM の API
-- Discord チャット / Voice の既存動作
+- `DirectiveConfig` で drain window, directive template をソース固有に制御
+- チャンネルフィルタ、キャッチアップの Session 側スキップ設定
 
-### Phase 2: ソース固有ロジックの Session への移動 (後日)
+### Phase 3: Hub-and-Spoke Gateway 導入 (完了)
 
-**ゴール**: パイプラインからソース依存コードを除去
-
-- `Act()` 内の Discord/Device/Voice 分岐 → `Session.Send()` に移動
-- `Think()` 内の `conversationState()` → `DiscordSession.DirectiveConfig()` に移動
-- `Perceive()` 内のチャンネル履歴注入 → `DiscordSession` のフック or 前処理に移動
-
-### Phase 3: 完全分離 (後日)
-
-**ゴール**: テスタビリティ向上、新ソース追加の容易さ
-
-- Pipeline が `chat.Interface` や `device.Speaker` を知らなくなる
-- Session 実装がテスト用モックに差し替え可能
-- ソース追加 = Session 実装 + config 追加のみ
+- `internal/gateway/` パッケージ追加: Gateway が全 Source のライフサイクルを管理
+- `gateway.Source` interface (Name + Run): 各アダプタが実装
+- `Agent.New()` が `[]SourceRegistration` を受け取り、動的にワーカーを生成
+- `chat.Sender` interface: `chat.Interface` から Send のみを分離
+- `CLISession` + `SourceKeyCLI` 追加: CLI が正しい SourceKey でルーティング
+- `GET /internal/gateway/status` ヘルスエンドポイント追加
+- 新プラットフォーム追加 = Source 実装 + Session 実装 + SourceRegistration 追加のみ
 
 ## 物理アクション (サーボ, 表情, カメラ)
 

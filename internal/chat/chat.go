@@ -2,15 +2,17 @@ package chat
 
 import "context"
 
-// Interface is the abstraction for chat platforms (Discord, CLI, etc.).
-// Each implementation runs its own event loop, converts platform messages
-// to events, and sends responses back.
-type Interface interface {
-	// Run starts the chat platform event loop. It blocks until ctx is canceled.
-	Run(ctx context.Context) error
-
-	// Send sends a message to the specified channel.
+// Sender はテキストメッセージ送信の基本インターフェース。
+// Session や Notifier など、送信機能だけが必要な consumer はこちらを使う。
+type Sender interface {
 	Send(ctx context.Context, channel string, text string) error
+}
+
+// Interface はチャットプラットフォームのライフサイクル + 送信の複合インターフェース。
+// 新規コードでは gateway.Source (ライフサイクル) と chat.Sender (送信) を個別に使うこと。
+type Interface interface {
+	Sender
+	Run(ctx context.Context) error
 }
 
 // Replier is an optional interface for platforms that support message replies.

@@ -9,7 +9,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 )
 
-// Chat implements chat.Interface for stdin/stdout.
+// Chat は stdin/stdout を使う CLI チャットアダプタ。
+// chat.Interface と gateway.Source を満たす。
 type Chat struct {
 	in  io.Reader
 	out io.Writer
@@ -20,6 +21,9 @@ type Chat struct {
 func New(in io.Reader, out io.Writer, bus *event.Bus) *Chat {
 	return &Chat{in: in, out: out, bus: bus}
 }
+
+// Name は gateway.Source を満たす。
+func (c *Chat) Name() string { return "cli" }
 
 // Run reads lines from stdin and publishes them as events.
 func (c *Chat) Run(ctx context.Context) error {

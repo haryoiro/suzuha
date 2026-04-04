@@ -157,23 +157,51 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Agent.
 		do.Provide(i, func(i do.Injector) (*agent.Agent, error) {
 			cfg := do.MustInvoke[*config.Config](i)
+			chatIface := do.MustInvoke[chat.Interface](i)
+			channelSettings := do.MustInvoke[*channel.Store](i)
+			logger := do.MustInvoke[*slog.Logger](i)
+
+			regs := []agent.SourceRegistration{
+				{
+					Key: agent.SourceKeyDiscord,
+					NewSession: func(agentCtx *agent.Context) agent.Session {
+						return agent.NewDiscordSession(agentCtx, chatIface, nil, channelSettings, agent.DefaultDrainWindow, logger)
+					},
+					PersistKey: "discord",
+				},
+				{
+					Key: agent.SourceKeyDevice,
+					NewSession: func(agentCtx *agent.Context) agent.Session {
+						return agent.NewDeviceSession(agentCtx, nil, logger)
+					},
+					PersistKey: "device",
+				},
+				{
+					Key: agent.SourceKeyWeb,
+					NewSession: func(agentCtx *agent.Context) agent.Session {
+						return agent.NewWebSession(agentCtx, nil, logger)
+					},
+					PersistKey: "web",
+				},
+			}
+
 			return agent.New(
 				agent.Config{
 					SystemPrompt:     cfg.Agent.SystemPrompt,
 					BotID:            cfg.Discord.BotID,
 					ContextWindowPct: cfg.Agent.ContextWindowPct,
 					MaxContextTokens: cfg.LLM.MaxTokens,
-				},
+					},
+				regs,
 				do.MustInvoke[*llm.Client](i),
 				do.MustInvoke[*tool.Registry](i),
 				do.MustInvoke[*memory.SQLiteStore](i),
 				do.MustInvoke[*user.SQLiteStore](i),
 				do.MustInvoke[*event.Bus](i),
-				do.MustInvoke[chat.Interface](i),
 				do.MustInvoke[*acquirer.Acquirer](i),
 				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
-				do.MustInvoke[*channel.Store](i),
-				do.MustInvoke[*slog.Logger](i),
+				channelSettings,
+				logger,
 			), nil
 		})
 

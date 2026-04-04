@@ -12,7 +12,7 @@ import (
 // DiscordSession is the Session implementation for Discord text and voice interactions.
 type DiscordSession struct {
 	agentCtx     *Context
-	chat         chat.Interface
+	chat         chat.Sender
 	voice        chat.VoiceSpeaker
 	chanSettings *channelpkg.Store
 	drainWindow  time.Duration
@@ -28,7 +28,7 @@ type DiscordSession struct {
 // NewDiscordSession creates a new DiscordSession.
 func NewDiscordSession(
 	agentCtx *Context,
-	chatIface chat.Interface,
+	chatSender chat.Sender,
 	voice chat.VoiceSpeaker,
 	chanSettings *channelpkg.Store,
 	drainWindow time.Duration,
@@ -36,7 +36,7 @@ func NewDiscordSession(
 ) *DiscordSession {
 	return &DiscordSession{
 		agentCtx:     agentCtx,
-		chat:         chatIface,
+		chat:         chatSender,
 		voice:        voice,
 		chanSettings: chanSettings,
 		drainWindow:  drainWindow,

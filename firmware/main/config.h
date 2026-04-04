@@ -4,7 +4,7 @@
 #define WIFI_SSID       CONFIG_WIFI_SSID
 #define WIFI_PASS       CONFIG_WIFI_PASSWORD
 
-// ---- suzuha2 Server ----
+// ---- suzuha Server ----
 #define SERVER_URI      CONFIG_SERVER_URI
 
 // ---- Audio Input (I2S mic) ----

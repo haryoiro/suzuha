@@ -60,10 +60,20 @@ type MessagePayload struct {
 
 **パッケージ:** `internal/chat/`
 
+ライフサイクル (Run) と送信 (Send) が分離されている:
+
 ```go
-type Interface interface {
-    Run(ctx context.Context) error
+// Sender はテキスト送信の基本インターフェース。
+// Session や Notifier が使う。
+type Sender interface {
     Send(ctx context.Context, channel, text string) error
+}
+
+// Interface はライフサイクル + 送信の複合インターフェース (レガシー)。
+// 新規コードでは gateway.Source (ライフサイクル) と chat.Sender (送信) を個別に使う。
+type Interface interface {
+    Sender
+    Run(ctx context.Context) error
 }
 
 type VoiceSpeaker interface {
@@ -72,10 +82,27 @@ type VoiceSpeaker interface {
 }
 ```
 
+## Gateway
+
+**パッケージ:** `internal/gateway/`
+
+全アダプタのライフサイクルを管理する Hub。各アダプタは `gateway.Source` を実装する:
+
+```go
+type Source interface {
+    Name() string
+    Run(ctx context.Context) error
+}
+```
+
+Gateway は errgroup で全 Source を起動し、ヘルス状態を追跡する。
+`GET /internal/gateway/status` で全ソースの状態を JSON で取得可能。
+
 ### 実装
 
-- **Discord** (`internal/adapter/discord/`): discordgo ベース。メッセージ受信 → イベントバス発行、メッセージ送信。OnReady コールバックで Discord 固有ツールを登録
-- **CLI** (`internal/adapter/cli/`): stdin/stdout ベース。開発用
+- **Discord** (`internal/adapter/discord/`): discordgo ベース。`gateway.Source` + `chat.Sender` を実装
+- **CLI** (`internal/adapter/cli/`): stdin/stdout ベース。`gateway.Source` を実装。開発用
+- **Device** (`internal/adapter/device/`): ESP32 WebSocket Hub。`device.Source` でラップ
 
 ## イベントの Agent 内での処理
 
@@ -84,25 +111,34 @@ Event Bus
     │
     │ Subscribe()
     ▼
-Agent.Run() → ドレイン → batch
+Agent.Run() → sourceKeyForEvent() で振り分け
     │
-    ▼
-handleBatch(batch)
-    │
-    ├─ Perceive: Event → llm.Message 変換
-    │     source="internal" → role="system"
-    │     source="discord" → role="user"
-    │     type="self_prompt" → エフェメラル注入
-    │
-    ├─ Think: ディレクティブ決定
-    │     DirectlyAddressed (mention/DM/CLI/voice/self_prompt) → [RESPOND]
-    │     会話状態分析 → [RESPOND] or [LISTEN]
-    │
-    ├─ Act: LLM 呼び出し + ツール実行
-    │     応答ルーティング:
-    │       source="device" → deviceSpeaker.SpeakText()
-    │       VC 接続中 → voiceSpeaker.SpeakText()
-    │       それ以外 → chat.Send()
-    │
-    └─ Reflect: ログ + 永続化
+    ├─ Discord Worker ─── ドレイン (3s) → batch
+    ├─ Device Worker ──── ドレイン (2s) → batch
+    ├─ Web Worker ─────── ドレイン (2s) → batch
+    └─ CLI Worker ─────── ドレイン (1s) → batch
+         │
+         ▼ (各 Worker が独立に処理)
+    handleBatchWith(sourceKey, batch)
+         │
+         ├─ Perceive: Event → llm.Message 変換
+         │     source="internal" → role="system"
+         │     source="discord" → role="user"
+         │     type="self_prompt" → エフェメラル注入
+         │
+         ├─ Think: ディレクティブ決定
+         │     DirectlyAddressed (mention/DM/CLI/voice/self_prompt) → [RESPOND]
+         │     会話状態分析 → [RESPOND] or [LISTEN]
+         │
+         ├─ Act: LLM 呼び出し + ツール実行
+         │
+         ├─ Respond: Session がルーティング
+         │     DiscordSession → chat.Send() or voice.SpeakText()
+         │     DeviceSession  → hub.SpeakText() (TTS → ESP32)
+         │     WebSession     → hub.SpeakTextTo("web")
+         │     CLISession     → stdout
+         │
+         └─ Reflect: ログ + コンテキスト永続化
 ```
+
+Worker の数は動的。登録された `SourceRegistration` の数だけ Worker が起動する。

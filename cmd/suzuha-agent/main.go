@@ -28,6 +28,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/device"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/feature/vision"
+	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/feature/location"
@@ -86,15 +87,26 @@ func run() error {
 		}()
 	}
 
+	// Create Gateway early so startInternalHTTP can register Device source.
+	gw := gateway.New(logger)
+
 	// Register Discord OnReady callback.
 	dc := do.MustInvoke[*discord.Chat](injector)
 	if dc != nil {
 		registerDiscordOnReady(injector, dc)
+		gw.Register(dc)
+	} else {
+		gw.Register(chatIface.(gateway.Source))
+		ag.SetSession(agent.SourceKeyCLI, agent.NewCLISession(
+			ag.AgentContextFor(agent.SourceKeyCLI),
+			os.Stdout,
+			logger,
+		))
 	}
 
 	// Start internal HTTP server.
 	if cfg.Observe.InternalAddr != "" {
-		go startInternalHTTP(injector, cfgPath)
+		go startInternalHTTP(injector, cfgPath, gw)
 	}
 
 	// Start admin HTTP server.
@@ -129,10 +141,10 @@ func run() error {
 		}
 	}()
 
-	// Start chat interface in background.
+	// Start Gateway (manages all source lifecycles).
 	go func() {
-		if err := chatIface.Run(ctx); err != nil {
-			logger.Error("chat interface stopped", "error", err)
+		if err := gw.Run(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("gateway stopped", "error", err)
 			cancel()
 		}
 	}()
@@ -221,7 +233,7 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 	})
 }
 
-func startInternalHTTP(injector do.Injector, cfgPath string) {
+func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway) {
 	cfg := do.MustInvoke[*config.Config](injector)
 	logger := do.MustInvoke[*slog.Logger](injector)
 	logRing := do.MustInvoke[*observe.RingBuffer](injector)
@@ -231,6 +243,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/internal/logs", observe.LogHandler(logRing))
+	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
 	mux.HandleFunc("POST /internal/compact", func(w http.ResponseWriter, r *http.Request) {
 		compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
@@ -713,7 +726,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
 			ag.AgentContextFor(agent.SourceKeyDevice), hub, logger,
 		))
-		// Tools are registered via Feature.Tools() in providers.go.
+		gw.Register(device.NewSource(hub))
 
 		mux.HandleFunc("GET /internal/device/vision", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# suzuha2 ローカル開発環境セットアップスクリプト (Docker不要)
+# suzuha ローカル開発環境セットアップスクリプト (Docker不要)
 #
 # 使い方:
 #   chmod +x scripts/setup.sh

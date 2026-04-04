@@ -40,6 +40,9 @@ func (c *Chat) OnReady(fn func(*discordgo.Session)) {
 	c.onReady = fn
 }
 
+// Name は gateway.Source を満たす。
+func (c *Chat) Name() string { return "discord" }
+
 // New creates a Discord chat instance.
 func New(token, botID string, bus *event.Bus, log *slog.Logger) *Chat {
 	return &Chat{token: token, botID: botID, bus: bus, log: log}

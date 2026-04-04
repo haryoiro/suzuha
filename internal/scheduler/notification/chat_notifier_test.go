@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// mockChat implements chat.Interface for testing.
+// mockChat implements chat.Sender for testing.
 type mockChat struct {
 	sentMessages []mockSend
 }
@@ -16,14 +16,12 @@ type mockSend struct {
 	Text    string
 }
 
-func (m *mockChat) Run(_ context.Context) error { return nil }
-
 func (m *mockChat) Send(_ context.Context, channel, text string) error {
 	m.sentMessages = append(m.sentMessages, mockSend{Channel: channel, Text: text})
 	return nil
 }
 
-// mockChatWithReply implements chat.Interface + chat.Replier + chat.IDSender.
+// mockChatWithReply implements chat.Sender + chat.Replier + chat.IDSender.
 type mockChatWithReply struct {
 	mockChat
 	sentReplies []mockReply

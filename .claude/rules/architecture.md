@@ -21,6 +21,7 @@ lib/         → 標準ライブラリのみ
 | 種類 | 配置先 |
 |---|---|
 | プロトコルアダプタ | `internal/adapter/{name}/` |
+| ゲートウェイ (ライフサイクル管理) | `internal/gateway/` |
 | 機能 (Tools + Tasks) | `internal/feature/{name}/` |
 | ドメイン | `internal/agent/` or `internal/memento/` |
 | インフラ | `internal/{name}/` |

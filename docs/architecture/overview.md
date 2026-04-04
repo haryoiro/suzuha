@@ -1,4 +1,4 @@
-# suzuha2 Architecture
+# suzuha Architecture
 
 ## System Overview
 
@@ -10,20 +10,25 @@
                                              |
                                      REST /api/*
                                              |
-+-------------+    +-----------+    +--------v--------+    +-----------+
-|   Discord   |--->|           |    |  Admin Server   |    |  SearXNG  |
-| (discordgo) |    |           |    |  (ogen, :8080)  |    | (search)  |
-+-------------+    |           |    +-----------------+    +-----+-----+
-                   |  Event    |                                 |
-+-------------+    |   Bus     |    +-----------------+          |
-|   ESP32     |--->|           |--->|     Agent       |<---------+
-|  (WebSocket)|    |           |    |  (pipeline)     |
-+-------------+    |           |    |                 |    +-----------+
-                   |           |    |  Perceive       |    |   LLM     |
-+-------------+    |           |    |  Think          |--->| Providers |
-| Web Widget  |--->|           |    |  Act            |    | (ProviderRegistry)
-|  (:5174)    |    +-----------+    |  Reflect        |    +-----------+
-+-------------+                     +-------+---------+
++-------------+                     +--------v--------+    +-----------+
+|   Discord   |--+                  |  Admin Server   |    |  SearXNG  |
+| (discordgo) |  |                  |  (ogen, :8080)  |    | (search)  |
++-------------+  |                  +-----------------+    +-----+-----+
+                 |  +-----------+                                |
++-------------+  +->|           |   +-----------------+          |
+|   ESP32     |--+  |  Gateway  |   |     Agent       |<---------+
+|  (WebSocket)|  |  | (Source   |-->|  (pipeline)     |
++-------------+  |  |  lifecycle|   |                 |    +-----------+
+                 |  |  + health)|   |  Perceive       |    |   LLM     |
++-------------+  |  |           |   |  Think          |--->| Providers |
+| Web Widget  |--+  |  Event    |   |  Act            |    | (ProviderRegistry)
+|  (:5174)    |  |  |   Bus     |   |  Reflect        |    +-----------+
++-------------+  |  +-----------+   +-------+---------+
+                 |       ^
++-------------+  |       |
+|    CLI      |--+       |
+| (stdin/out) |  Sources register
++-------------+  via Gateway
                                             |
                            +----------------+----------------+
                            |                |                |
@@ -98,25 +103,40 @@ Event (Discord/Device/Web)
 +--------------------------------------------------+
 ```
 
-## Source Isolation
+## Source Isolation (Hub-and-Spoke)
 
 ```
-+------------------+  +------------------+  +------------------+
-| Discord Worker   |  | Device Worker    |  | Web Worker       |
-|                  |  |                  |  |                  |
-| Context (own)    |  | Context (own)    |  | Context (own)    |
-| DrainWindow: 3s  |  | DrainWindow: 2s  |  | DrainWindow: 2s  |
-| CompactMu (own)  |  | CompactMu (own)  |  | CompactMu (own)  |
-| Session:         |  | Session:         |  | Session:         |
-|  DiscordSession  |  |  DeviceSession   |  |  WebSession      |
-+------------------+  +------------------+  +------------------+
-       |                      |                      |
-       +----------+-----------+----------+-----------+
-                  |                      |
-           +------v------+       +------v------+
-           |  Event Bus  |       | Shared LLM  |
-           | (fan-in)    |       | (role-based) |
-           +-------------+       +-------------+
+                      Gateway (Hub)
+                    +-----------------+
+                    | Register(Source) |
+                    | Run(ctx)        |
+                    | Status()        |
+                    +--------+--------+
+                             |
+              +--------------+--------------+--------------+
+              |              |              |              |
+        +-----v------+ +----v-------+ +---v--------+ +---v------+
+        | Discord    | | Device     | | Web        | | CLI      |
+        | Source     | | Source     | | (sub of    | | Source   |
+        | (Run loop) | | (Hub wrap) | |  Device)   | | (stdin)  |
+        +-----+------+ +----+-------+ +---+--------+ +---+------+
+              |              |              |              |
+              +------+-------+------+-------+------+------+
+                     |              |              |
+                     v              v              v
+              +------+------+ +----+-------+ +---+--------+  Workers
+              | Discord     | | Device     | | CLI        |  (dynamic)
+              | Worker      | | Worker     | | Worker     |
+              | Context     | | Context    | | Context    |
+              | DrainWin:3s | | DrainWin:2s| | DrainWin:1s|
+              | Session:    | | Session:   | | Session:   |
+              | Discord     | | Device     | | CLI        |
+              +-------------+ +------------+ +------------+
+                     |              |              |
+              +------v--------------v--------------v------+
+              |              Event Bus (fan-in)            |
+              |           Shared LLM (role-based)          |
+              +-------------------------------------------+
 ```
 
 ## LLM Provider System
