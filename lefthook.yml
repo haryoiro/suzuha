@@ -2,6 +2,8 @@ commit-msg:
   commands:
     commitlint:
       run: commitlint lint --message {1}
+    japanese-description:
+      run: head -1 {1} | sed 's/^[^:]*:\ //' | grep -qP '[\p{Hiragana}\p{Katakana}\p{Han}]' || { echo "❌ description は日本語で書いてください"; exit 1; }
 
 pre-commit:
   parallel: true
