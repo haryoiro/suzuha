@@ -87,50 +87,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return do.MustInvoke[*memory.SQLiteStore](i).DB(), nil
 		})
 
-		// LLM Preset Store (requires shared-db + encryption key).
-		do.Provide(i, func(i do.Injector) (*llm.PresetStore, error) {
-			cfg := do.MustInvoke[*config.Config](i)
-			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
-			logger := do.MustInvoke[*slog.Logger](i)
-
-			if cfg.EncryptionKey == "" {
-				return nil, fmt.Errorf("SUZUHA_ENCRYPTION_KEY が設定されていません")
-			}
-			cipher, err := crypto.NewAESGCMCipher(cfg.EncryptionKey)
-			if err != nil {
-				return nil, fmt.Errorf("暗号化の初期化に失敗: %w", err)
-			}
-			store := llm.NewPresetStore(db, cipher, logger)
-
-			// config.yaml からプリセットをシード
-			defaultPresetName := ""
-			if len(cfg.LLM.Presets) > 0 {
-				defaultPresetName = cfg.LLM.Presets[0].Name
-			}
-			visionPreset := ""
-			if cfg.Vision.Model != "" {
-				// Vision 用プリセットを config から生成
-				visionPreset = "vision-" + cfg.Vision.Provider
-				store.Save(context.Background(), &llm.Preset{
-					Name:         visionPreset,
-					Provider:     cfg.Vision.Provider,
-					Model:        cfg.Vision.Model,
-					APIKey:       cfg.Vision.APIKey,
-					APIBase:      cfg.Vision.APIBase,
-					Capabilities: []string{"text", "vision"},
-					Source:       "seed",
-				})
-			}
-			if err := store.Seed(context.Background(), cfg.LLM.Presets, llm.SeedDefaults{
-				Conversation: defaultPresetName,
-				Vision:       visionPreset,
-			}); err != nil {
-				logger.Warn("プリセットのシードに失敗", "error", err)
-			}
-			return store, nil
-		})
-
-		// Provider Registry (new 3-layer model).
+		// Provider Registry (3-layer model: providers / models / roles).
 		do.Provide(i, func(i do.Injector) (*llm.ProviderRegistry, error) {
 			cfg := do.MustInvoke[*config.Config](i)
 			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")

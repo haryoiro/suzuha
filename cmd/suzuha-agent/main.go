@@ -340,162 +340,34 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 		json.NewEncoder(w).Encode(map[string]any{"ok": true})
 	})
 
-	// LLM provider / preset management.
+	// LLM provider / model / role management (3層分離).
 	llmClient := do.MustInvoke[*llm.Client](injector)
 	llmDB := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
-	presetStore := do.MustInvoke[*llm.PresetStore](injector)
+	providerRegistry := do.MustInvoke[*llm.ProviderRegistry](injector)
 
 	// Restore role assignments from DB on startup.
 	{
-		assignments, err := presetStore.Assignments(context.Background())
+		assignments, err := providerRegistry.Assignments(context.Background())
 		if err == nil {
-			for role, presetName := range assignments {
-				p, err := presetStore.Get(context.Background(), presetName)
+			for _, a := range assignments {
+				spec, err := providerRegistry.BuildRoleSpec(context.Background(), a.ProviderName, a.ModelID)
 				if err != nil {
-					logger.Warn("プリセットの取得に失敗", "role", role, "preset", presetName, "error", err)
+					logger.Warn("ロール復元: RoleSpec 構築失敗", "role", a.Role, "provider", a.ProviderName, "model", a.ModelID, "error", err)
 					continue
 				}
-				if err := llmClient.SwapRole(role, *p); err != nil {
-					logger.Warn("ロールの復元に失敗", "role", role, "error", err)
-				} else {
-					if role == "conversation" && p.MaxTokens > 0 {
-						ag.AgentContext().SetMaxTokens(p.MaxTokens)
-					}
-					logger.Info("LLMロールを復元", "role", role, "preset", presetName)
+				llmClient.SwapRoleSpec(a.Role, *spec)
+				if a.Role == "conversation" && spec.MaxContext > 0 {
+					ag.AgentContext().SetMaxTokens(spec.MaxContext)
 				}
+				logger.Info("LLMロールを復元", "role", a.Role, "provider", a.ProviderName, "model", a.ModelID)
 			}
 		}
 	}
 
-	// --- Preset CRUD ---
-
-	mux.HandleFunc("GET /internal/llm/presets", func(w http.ResponseWriter, r *http.Request) {
-		presets, err := presetStore.List(r.Context())
-		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(presets)
-	})
-
-	mux.HandleFunc("POST /internal/llm/presets", func(w http.ResponseWriter, r *http.Request) {
-		var p llm.Preset
-		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
-			return
-		}
-		if p.Name == "" || p.Provider == "" || p.Model == "" {
-			http.Error(w, `{"error":"name, provider, model required"}`, http.StatusBadRequest)
-			return
-		}
-		if len(p.Capabilities) == 0 {
-			p.Capabilities = []string{"text"}
-		}
-		if p.Source == "" {
-			p.Source = "user"
-		}
-		if err := presetStore.Save(r.Context(), &p); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok":true}`)
-	})
-
-	mux.HandleFunc("PUT /internal/llm/presets/{name}", func(w http.ResponseWriter, r *http.Request) {
-		name := r.PathValue("name")
-		var p llm.Preset
-		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
-			return
-		}
-		p.Name = name
-		if p.Provider == "" || p.Model == "" {
-			http.Error(w, `{"error":"provider and model required"}`, http.StatusBadRequest)
-			return
-		}
-		if len(p.Capabilities) == 0 {
-			p.Capabilities = []string{"text"}
-		}
-		if err := presetStore.Save(r.Context(), &p); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok":true}`)
-	})
-
-	mux.HandleFunc("DELETE /internal/llm/presets/{name}", func(w http.ResponseWriter, r *http.Request) {
-		name := r.PathValue("name")
-		if err := presetStore.Delete(r.Context(), name); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok":true}`)
-	})
-
-	// --- Role assignments ---
-
-	mux.HandleFunc("GET /internal/llm/assignments", func(w http.ResponseWriter, r *http.Request) {
-		assignments, err := presetStore.Assignments(r.Context())
-		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(assignments)
-	})
-
-	mux.HandleFunc("PUT /internal/llm/assignments/{role}", func(w http.ResponseWriter, r *http.Request) {
-		role := r.PathValue("role")
-		var body struct {
-			Preset string `json:"preset"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Preset == "" {
-			http.Error(w, `{"error":"preset required"}`, http.StatusBadRequest)
-			return
-		}
-
-		// プリセットを取得して割り当て
-		p, err := presetStore.Get(r.Context(), body.Preset)
-		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusBadRequest)
-			return
-		}
-		if err := presetStore.Assign(r.Context(), role, body.Preset); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-
-		// Client のロールを切り替え
-		if err := llmClient.SwapRole(role, *p); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-
-		// conversation ロールの場合はコンテキスト調整
-		if role == "conversation" && p.MaxTokens > 0 {
-			ag.AgentContext().SetMaxTokens(p.MaxTokens)
-			if ag.AgentContext().UsageRatio() > 0.5 {
-				compactCtx, compactCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-				ag.ForceCompact(compactCtx)
-				compactCancel()
-				logger.Info("context compacted after role switch", "role", role, "max_ctx", p.MaxTokens)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok":true}`)
-	})
-
-	// --- 後方互換: GET/PUT /internal/llm ---
-
+	// GET /internal/llm — ステータス概要
 	mux.HandleFunc("GET /internal/llm", func(w http.ResponseWriter, r *http.Request) {
 		prov, model, apiBase, vision := llmClient.ProviderInfo()
-		presets, _ := presetStore.List(r.Context())
-		assignments, _ := presetStore.Assignments(r.Context())
+		assignments, _ := providerRegistry.Assignments(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"provider":    prov,
@@ -503,46 +375,9 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			"api_base":    apiBase,
 			"max_ctx":     llmClient.MaxContextTokens(),
 			"vision":      vision,
-			"presets":     presets,
 			"assignments": assignments,
 		})
 	})
-
-	mux.HandleFunc("PUT /internal/llm", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Preset string `json:"preset"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Preset == "" {
-			http.Error(w, `{"error":"preset required"}`, http.StatusBadRequest)
-			return
-		}
-
-		p, err := presetStore.Get(r.Context(), body.Preset)
-		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"preset %q not found"}`, body.Preset), http.StatusBadRequest)
-			return
-		}
-
-		if err := presetStore.Assign(r.Context(), "conversation", body.Preset); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-		if err := llmClient.SwapRole("conversation", *p); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusBadRequest)
-			return
-		}
-
-		if p.MaxTokens > 0 {
-			ag.AgentContext().SetMaxTokens(p.MaxTokens)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok":true}`)
-	})
-
-	// --- 新 API: providers / models / roles (3層分離) ---
-
-	providerRegistry := do.MustInvoke[*llm.ProviderRegistry](injector)
 
 	mux.HandleFunc("GET /internal/llm/providers", func(w http.ResponseWriter, r *http.Request) {
 		providers, err := providerRegistry.ListProviders(r.Context())
