@@ -78,16 +78,6 @@ type LLMPreset struct {
 	Vision    bool   `yaml:"vision"`
 }
 
-// FindPreset returns the preset with the given name, or nil if not found.
-func (l *LLM) FindPreset(name string) *LLMPreset {
-	for i := range l.Presets {
-		if l.Presets[i].Name == name {
-			return &l.Presets[i]
-		}
-	}
-	return nil
-}
-
 // FindProvider returns the provider config with the given name, or nil if not found.
 func (l *LLM) FindProvider(name string) *LLMProvider {
 	for i := range l.Providers {

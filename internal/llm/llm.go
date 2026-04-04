@@ -117,19 +117,6 @@ func IsSilentResponse(text string) bool {
 	return text == "" || strings.Contains(strings.ToUpper(text), "[SKIP]")
 }
 
-// Preset は旧プリセット定義 (後方互換)。
-// Deprecated: 新コードでは RoleSpec + ProviderRegistry を使用する。
-type Preset struct {
-	Name         string   `json:"name"`
-	Provider     string   `json:"provider"`
-	Model        string   `json:"model"`
-	APIKey       string   `json:"api_key,omitempty"`
-	APIBase      string   `json:"api_base"`
-	MaxTokens    int      `json:"max_tokens"`
-	Capabilities []string `json:"capabilities"`
-	Source       string   `json:"source"`
-}
-
 // roleProvider はロールに割り当てられたプロバイダの状態。
 type roleProvider struct {
 	provider     providers.Provider
@@ -183,48 +170,7 @@ func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapa
 	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
 }
 
-// SwapProvider atomically replaces the conversation provider.
-// 後方互換シム: SwapRole("conversation", ...) に委譲する。
-func (c *Client) SwapProvider(providerName, model, apiKey, apiBase string, maxCtx int, visionCapable bool) error {
-	caps := []string{"text"}
-	if visionCapable {
-		caps = append(caps, "vision")
-	}
-	return c.SwapRole("conversation", Preset{
-		Provider:     providerName,
-		Model:        model,
-		APIKey:       apiKey,
-		APIBase:      apiBase,
-		MaxTokens:    maxCtx,
-		Capabilities: caps,
-	})
-}
-
-// SwapRole はロールのプロバイダを切り替える (旧 Preset ベース、後方互換)。
-func (c *Client) SwapRole(role string, preset Preset) error {
-	p, err := newProvider(preset.Provider, preset.APIKey, preset.APIBase)
-	if err != nil {
-		return err
-	}
-	rp := roleProvider{
-		provider:     p,
-		providerName: preset.Provider,
-		model:        preset.Model,
-		apiBase:      preset.APIBase,
-		maxCtx:       preset.MaxTokens,
-		capabilities: preset.Capabilities,
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.roles == nil {
-		c.roles = make(map[string]roleProvider)
-	}
-	c.roles[role] = rp
-	c.logger.Info("LLMロールを切り替えた", "role", role, "provider", preset.Provider, "model", preset.Model, "api_base", preset.APIBase, "max_ctx", preset.MaxTokens)
-	return nil
-}
-
-// SwapRoleSpec はロールのプロバイダを RoleSpec で切り替える (新 3層分離対応)。
+// SwapRoleSpec はロールのプロバイダを RoleSpec で切り替える。
 func (c *Client) SwapRoleSpec(role string, spec RoleSpec) {
 	rp := roleProvider{
 		provider:     spec.ProviderInst,
@@ -432,46 +378,6 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		}
 		c.roles["vision"] = visRP
 		logger.Info("ビジョンモデルを有効にした", "model", vis.Model)
-	}
-
-	return c, nil
-}
-
-// NewClientFromRoles はロールマップから Client を構築する。
-func NewClientFromRoles(roles map[string]Preset, emb EmbeddingConfig, logger *slog.Logger) (*Client, error) {
-	c := &Client{
-		roles:          make(map[string]roleProvider),
-		embeddingModel: emb.Model,
-		embeddingDims:  emb.Dims,
-		logger:         logger,
-	}
-
-	for role, preset := range roles {
-		p, err := newProvider(preset.Provider, preset.APIKey, preset.APIBase)
-		if err != nil {
-			return nil, fmt.Errorf("llm: role %q のプロバイダ初期化に失敗: %w", role, err)
-		}
-		c.roles[role] = roleProvider{
-			provider:     p,
-			providerName: preset.Provider,
-			model:        preset.Model,
-			apiBase:      preset.APIBase,
-			maxCtx:       preset.MaxTokens,
-			capabilities: preset.Capabilities,
-		}
-	}
-
-	// Embedding provider: use "embedding" role's provider or conversation fallback.
-	if emb.Model != "" {
-		if emb.Provider != "" {
-			ep, err := newProvider(emb.Provider, emb.APIKey, emb.APIBase)
-			if err != nil {
-				return nil, fmt.Errorf("llm: 埋め込みプロバイダの初期化に失敗: %w", err)
-			}
-			c.embeddingProv = ep
-		} else if rp, ok := c.roles["conversation"]; ok {
-			c.embeddingProv = rp.provider
-		}
 	}
 
 	return c, nil

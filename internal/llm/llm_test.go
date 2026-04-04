@@ -120,21 +120,17 @@ func TestFor_FallbackToConversation(t *testing.T) {
 	}
 }
 
-func TestSwapRole(t *testing.T) {
+func TestSwapRoleSpec(t *testing.T) {
 	c := buildTestClient(t, map[string]roleProvider{
 		"conversation": {model: "old-model"},
 	})
-	err := c.SwapRole("conversation", Preset{
-		Provider:     "openai",
-		Model:        "new-model",
-		APIKey:       "test-key",
+	c.SwapRoleSpec("conversation", RoleSpec{
+		ProviderName: "openai",
+		ModelID:      "new-model",
 		APIBase:      "https://api.openai.com/v1",
-		MaxTokens:    100000,
+		MaxContext:   100000,
 		Capabilities: []string{"text", "vision"},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	rp := c.roles["conversation"]
 	if rp.model != "new-model" {
 		t.Errorf("model = %q, want new-model", rp.model)
@@ -144,48 +140,40 @@ func TestSwapRole(t *testing.T) {
 	}
 }
 
-func TestSwapRole_NewRole(t *testing.T) {
+func TestSwapRoleSpec_NewRole(t *testing.T) {
 	c := buildTestClient(t, map[string]roleProvider{
 		"conversation": {model: "conv"},
 	})
-	err := c.SwapRole("vision", Preset{
-		Provider:     "openai",
-		Model:        "vision-model",
-		APIKey:       "test-key",
+	c.SwapRoleSpec("vision", RoleSpec{
+		ProviderName: "openai",
+		ModelID:      "vision-model",
 		APIBase:      "https://api.openai.com/v1",
 		Capabilities: []string{"text", "vision"},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	if _, ok := c.roles["vision"]; !ok {
 		t.Error("vision ロールが追加されるべき")
 	}
 }
 
-func TestRoleClient_ReflectsSwapRole(t *testing.T) {
+func TestRoleClient_ReflectsSwapRoleSpec(t *testing.T) {
 	c := buildTestClient(t, map[string]roleProvider{
 		"background": {model: "old-bg"},
 	})
 
-	// RoleClient を先に取得
 	rc := c.For("background")
 	if rc.resolve().model != "old-bg" {
 		t.Fatalf("初期状態: got %q, want old-bg", rc.resolve().model)
 	}
 
-	// SwapRole で切り替え
-	c.SwapRole("background", Preset{
-		Provider:     "openai",
-		Model:        "new-bg",
-		APIKey:       "key",
+	c.SwapRoleSpec("background", RoleSpec{
+		ProviderName: "openai",
+		ModelID:      "new-bg",
 		APIBase:      "https://api.openai.com/v1",
 		Capabilities: []string{"text"},
 	})
 
-	// 既存の RoleClient が新しいモデルを参照する
 	if rc.resolve().model != "new-bg" {
-		t.Errorf("SwapRole 後: got %q, want new-bg", rc.resolve().model)
+		t.Errorf("SwapRoleSpec 後: got %q, want new-bg", rc.resolve().model)
 	}
 }
 
