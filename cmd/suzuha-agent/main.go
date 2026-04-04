@@ -27,6 +27,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/device"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/feature/vision"
 	"github.com/haryoiro/suzuha/cmd/suzuha-agent/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/location"
@@ -741,21 +742,24 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			ownerID = "owner"
 			ownerName = "オーナー"
 		}
-		hub := device.NewHub(bus, ttsClient, sttClient, yoloURL, deviceChannel, ownerID, ownerName, logger)
+		hub := device.NewHub(bus, ttsClient, sttClient, ownerID, ownerName, logger)
+		devAdapter := device.NewDeviceAdapter(hub)
+		visionFeature := vision.New(bus, yoloURL, deviceChannel, devAdapter, devAdapter,
+			do.MustInvoke[*llm.Client](injector), logger)
+		hub.SetImageHandler(visionFeature.Pipeline())
+		do.ProvideValue(injector, visionFeature)
 		mux.HandleFunc("GET /ws/device", hub.Handler())
 		mux.HandleFunc("GET /ws/web", hub.WebHandler())
-		mux.HandleFunc("GET /internal/device/frame", hub.Frames().FrameHandler())
-		mux.HandleFunc("GET /internal/device/detections", hub.Frames().DetectionStreamHandler())
+		mux.HandleFunc("GET /internal/device/frame", visionFeature.Frames().FrameHandler())
+		mux.HandleFunc("GET /internal/device/detections", visionFeature.Frames().DetectionStreamHandler())
 		ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
 			ag.AgentContextFor(agent.SourceKeyDevice), hub, logger,
 		))
-		registry.Register(device.NewServoTool(hub))
-		registry.Register(device.NewCaptureTool(hub))
-		registry.Register(device.NewFaceTool(hub))
-		registry.Register(device.NewLookTool(hub, do.MustInvoke[*llm.Client](injector)))
+		// Tools are registered via Feature.Tools() in providers.go.
+
 		mux.HandleFunc("GET /internal/device/vision", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"enabled": hub.ChangeDetector().Enabled()})
+			json.NewEncoder(w).Encode(map[string]any{"enabled": visionFeature.ChangeDetector().Enabled()})
 		})
 		mux.HandleFunc("PUT /internal/device/vision", func(w http.ResponseWriter, r *http.Request) {
 			var body struct {
@@ -765,7 +769,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 				return
 			}
-			hub.ChangeDetector().SetEnabled(body.Enabled)
+			visionFeature.ChangeDetector().SetEnabled(body.Enabled)
 			logger.Info("device: 視界変化検出の切り替え", "enabled", body.Enabled)
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"ok":true}`)
@@ -815,7 +819,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 
 		// Object tracker API
 		mux.HandleFunc("GET /internal/device/tracker", func(w http.ResponseWriter, r *http.Request) {
-			tr := hub.Tracker()
+			tr := visionFeature.Tracker()
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]any{
 				"enabled": tr.Enabled(),
@@ -837,7 +841,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 				return
 			}
-			tr := hub.Tracker()
+			tr := visionFeature.Tracker()
 			if body.Enabled != nil {
 				tr.SetEnabled(*body.Enabled)
 				logger.Info("device: トラッカー切り替え", "enabled", *body.Enabled)
@@ -845,7 +849,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string) {
 			if body.TargetLabel != nil {
 				tr.SetTargetLabel(*body.TargetLabel)
 			}
-			tr.ApplyPartial(device.TrackerPatch{
+			tr.ApplyPartial(vision.TrackerPatch{
 				DeadZone:         body.DeadZone,
 				SmoothingAlpha:   body.SmoothingAlpha,
 				ProportionalGain: body.ProportionalGain,

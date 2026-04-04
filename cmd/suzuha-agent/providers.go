@@ -24,6 +24,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/feature/research"
 	"github.com/haryoiro/suzuha/internal/feature/topics"
 	"github.com/haryoiro/suzuha/internal/feature/video"
+	"github.com/haryoiro/suzuha/internal/feature/vision"
 	"github.com/haryoiro/suzuha/internal/feature/wander"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
@@ -252,6 +253,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				forget.New(do.MustInvoke[*memento.Consolidator](i)),
 				diary.New(),
 				video.New(videoFetcher, videoExtractor, llmClient, logger),
+			}
+
+			// Add vision feature if device block created it.
+			if vf, err := do.Invoke[*vision.Feature](i); err == nil {
+				features = append(features, vf)
 			}
 
 			// Add location feature if enabled.
