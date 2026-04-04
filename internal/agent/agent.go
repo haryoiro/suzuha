@@ -17,7 +17,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/location"
+	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"

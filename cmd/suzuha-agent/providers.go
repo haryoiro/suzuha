@@ -30,7 +30,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/cmd/suzuha-agent/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/location"
+	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/cmd/suzuha-agent/mcp"
 	"github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memento/consolidator"

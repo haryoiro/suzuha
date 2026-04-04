@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
-	"github.com/haryoiro/suzuha/internal/location"
+	"github.com/haryoiro/suzuha/internal/feature/location"
 )
 
 func (h *AdminHandler) locStore() *location.Store {
