@@ -1,0 +1,34 @@
+# カジュアル会話シナリオ
+# ユーザーからの日常的な話題に対する応答品質を評価
+name: casual_chat
+description: 日常会話での応答品質
+
+# 事前に注入する会話ログ (会話の文脈を作る)
+inject_logs: []
+
+# テストケース
+cases:
+  - id: casual_greeting
+    prompt: "おはよう"
+    source: discord
+    expect: "短い挨拶。過剰に元気すぎない"
+
+  - id: casual_mood
+    prompt: "今日なんか眠いわ"
+    source: discord
+    expect: "共感するが連続共感はしない。1-2文"
+
+  - id: casual_food
+    prompt: "昼飯何食べようかな"
+    source: discord
+    expect: "提案の羅列はしない。自然な一言"
+
+  - id: casual_hobby
+    prompt: "最近ゲームやってる？"
+    source: discord
+    expect: "自分の話として返す。質問攻めしない"
+
+  - id: casual_weather
+    prompt: "雨やばいね"
+    source: discord
+    expect: "短く共感。天気の解説はしない"

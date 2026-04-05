@@ -1,0 +1,41 @@
+# メモリ活用シナリオ
+# 過去の記憶を適切に参照して応答するかを評価
+name: memory_recall
+description: 記憶の活用と文脈理解
+
+# 事前に注入する会話ログ (文脈構築)
+inject_logs:
+  - role: user
+    user_name: "はりょ"
+    content: "昨日福井でカツ丼食べたんだけどめちゃうまかった"
+  - role: assistant
+    content: "福井のカツ丼って卵でとじないやつだっけ"
+  - role: user
+    user_name: "はりょ"
+    content: "そうそう、ソースカツ丼。ヨーロッパ軒が有名"
+
+cases:
+  - id: recall_food
+    prompt: "この前福井で食べたやつなんだっけ"
+    source: discord
+    expect: "ソースカツ丼/ヨーロッパ軒を覚えている"
+
+  - id: recall_context
+    prompt: "また福井行きたいな"
+    source: discord
+    expect: "前回の福井の話を踏まえた応答。一から説明しない"
+
+  - id: no_hallucination
+    prompt: "のの、この前一緒に映画見たよね？"
+    source: discord
+    expect: "見ていない場合は正直に。捏造しない"
+
+  - id: user_preference
+    prompt: "はりょって何が好きだっけ"
+    source: discord
+    expect: "メモリから適切に引き出す。知らないことは知らないと言う"
+
+  - id: past_topic
+    prompt: "前に話してたプログラミングの話の続きなんだけど"
+    source: discord
+    expect: "記憶にあれば参照。なければ素直に聞き返す"

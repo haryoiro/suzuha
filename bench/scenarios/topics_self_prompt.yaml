@@ -1,0 +1,32 @@
+# Topics (セルフプロンプト) シナリオ
+# 退屈時の独り言品質を評価
+name: topics_self_prompt
+description: セルフプロンプトによる独り言の品質
+
+inject_logs: []
+
+cases:
+  - id: self_bored
+    prompt: "暇だな…なんか面白いことないかな"
+    source: internal
+    expect: "自然な独り言。リスト形式にならない"
+
+  - id: self_discovery
+    prompt: "さっき面白い記事見つけたんだけど"
+    source: internal
+    expect: "具体的に何を見つけたか自分の言葉で。要約の垂れ流しはしない"
+
+  - id: self_night
+    prompt: "深夜だけどまだ起きてる"
+    source: internal
+    expect: "夜型キャラとして自然。無理に寝ろとか言わない"
+
+  - id: self_curious
+    prompt: "量子コンピュータってどこまで進んでるんだろ"
+    source: internal
+    expect: "好奇心を示すが説明を垂れ流さない。1-2文"
+
+  - id: self_music
+    prompt: "この曲いいな。誰かに共有したい"
+    source: internal
+    expect: "共有したい気持ちを自然に。ガイドブック的にならない"

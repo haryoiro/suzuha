@@ -460,6 +460,16 @@ func (a *Agent) handleBatch(ctx context.Context, batch []event.Event) error {
 	return a.handleBatchWith(ctx, SourceKeyDiscord, batch)
 }
 
+// HandleBatch はイベントバッチを指定ソースのパイプラインで処理する。
+// ベンチマークやテストで外部から呼び出すための public メソッド。
+func (a *Agent) HandleBatch(ctx context.Context, batch []event.Event) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	key := sourceKeyForEvent(batch[0].Source)
+	return a.handleBatchWith(ctx, key, batch)
+}
+
 // handleBatchWith orchestrates the 4-stage pipeline for a specific source:
 // Perceive -> (compact check) -> Think -> Act -> Reflect.
 // PipelineHooks are called after each stage for observability.
