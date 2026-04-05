@@ -627,8 +627,6 @@ func convertMessages(msgs []Message, visionCapable bool) []providers.Message {
 			seenSystem = true
 		}
 		// Embed message metadata so the LLM can identify channel context.
-		// Only tag user messages — tagging assistant messages causes the LLM
-		// to mimic the format and include channel IDs in its responses.
 		if m.Role == "user" && m.MessageID != "" {
 			ts := ""
 			if !m.Timestamp.IsZero() {
@@ -636,6 +634,11 @@ func convertMessages(msgs []Message, visionCapable bool) []providers.Message {
 			}
 			content = fmt.Sprintf("[time=%s server=%s channel=#%s channel_id=%s guild_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
 				ts, m.GuildName, m.ChannelName, m.Channel, m.GuildID, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
+		}
+		// assistant メッセージには channel 名だけを最小限付与。
+		// フルメタデータを付けると LLM がフォーマットを真似るため、チャンネル名のみ。
+		if m.Role == "assistant" && m.Channel != "" && m.ChannelName != "" {
+			content = fmt.Sprintf("[channel=#%s]\n%s", m.ChannelName, content)
 		}
 
 		// Strip tool_calls from assistant messages if any response is missing.

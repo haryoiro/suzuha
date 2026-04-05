@@ -58,7 +58,7 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 // and returns the response text. It does NOT route the response to any output;
 // the caller is responsible for sending the response via Session.Respond().
 func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p *Perception, t *Thought) (string, error) {
-	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel)
+	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel, p.LastMessage.ChannelName)
 	if err != nil {
 		return "", fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
@@ -68,10 +68,11 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 	// inside completeWithToolsUsing (before executing the tools).
 	if !resp.HasToolCalls() {
 		agentCtx.Add(llm.Message{
-			Role:      "assistant",
-			Content:   resp.Text,
-			Channel:   p.Channel,
-			Timestamp: jtime.Now(),
+			Role:        "assistant",
+			Content:     resp.Text,
+			Channel:     p.Channel,
+			ChannelName: p.LastMessage.ChannelName,
+			Timestamp:   jtime.Now(),
 		})
 	}
 
@@ -102,7 +103,7 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 
 // completeWithToolsUsing runs the LLM and executes tool calls in a loop,
 // using the given agent context and session for typing/intermediate responses.
-func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel string) (*llm.Response, string, error) {
+func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName string) (*llm.Response, string, error) {
 	directive := t.Directive
 	allTools := a.tools.AllEnabled()
 
@@ -201,11 +202,12 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 		}
 
 		agentCtx.Add(llm.Message{
-			Role:      "assistant",
-			Content:   resp.Text,
-			Channel:   channel,
-			Timestamp: jtime.Now(),
-			ToolCalls: resp.ToolCalls,
+			Role:        "assistant",
+			Content:     resp.Text,
+			Channel:     channel,
+			ChannelName: channelName,
+			Timestamp:   jtime.Now(),
+			ToolCalls:   resp.ToolCalls,
 		})
 
 		// Send intermediate text if the LLM returned text alongside tool calls.

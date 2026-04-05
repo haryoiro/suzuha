@@ -62,13 +62,17 @@ func NewRunner(cfg RunnerConfig, ag *agent.Agent, logger *slog.Logger) (*Runner,
 }
 
 // RunScenario はシナリオの全テストケースを実行する。
+// 各ケースはシナリオの inject_logs をベースに独立したコンテキストで実行される。
 func (r *Runner) RunScenario(ctx context.Context, s *Scenario) []Result {
 	var results []Result
 
-	// 会話ログをコンテキストに注入
-	r.injectLogs(s.InjectLogs)
-
 	for _, tc := range s.Cases {
+		// ケースごとにコンテキストをリセットして inject_logs から再構築
+		agentCtx := r.ag.AgentContextFor(agent.SourceKeyDiscord)
+		agentCtx.ReplaceAll(nil)
+
+		r.injectLogs(s.InjectLogs)
+
 		result := r.runCase(ctx, s.Name, tc)
 		results = append(results, result)
 		r.logger.Info("ケース完了",
