@@ -128,6 +128,11 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 
 	directive := a.resolveDirective(agentCtx, p, dc)
 
+	// 記憶検索結果が空の場合、捏造防止の注意を directive に追加
+	if len(bg) == 0 && !dc.SkipChannelHistory {
+		directive += "\n※この話題に関連する記憶が見つかっていません。覚えていないことは正直に「覚えてない」「知らない」と答えてください。知ったかぶりや捏造は禁止。"
+	}
+
 	a.logger.Info("考え中",
 		"message_count", len(agentCtx.Messages()),
 		"background_count", len(bg),
