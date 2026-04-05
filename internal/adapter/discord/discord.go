@@ -71,6 +71,22 @@ func (c *Chat) Run(ctx context.Context) error {
 				break
 			}
 		}
+		// ロールメンション: ボットのロールがメンションされたか確認
+		if !isMention && len(m.MentionRoles) > 0 {
+			if member, err := s.GuildMember(m.GuildID, s.State.User.ID); err == nil {
+				for _, mentionedRole := range m.MentionRoles {
+					for _, botRole := range member.Roles {
+						if mentionedRole == botRole {
+							isMention = true
+							break
+						}
+					}
+					if isMention {
+						break
+					}
+				}
+			}
+		}
 
 		// Resolve mention tags to readable names.
 		// Bot's own mention is stripped entirely; other users become @DisplayName.
