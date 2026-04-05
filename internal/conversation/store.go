@@ -49,7 +49,7 @@ func NewStore(db *sql.DB) *Store {
 func (s *Store) LogTurn(ctx context.Context, entry TurnEntry) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO conversation_logs (turn_id, channel_id, role, content, user_id, user_name, message_id, tool_calls, tool_call_id, timestamp, source_key)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		entry.TurnID, entry.ChannelID, entry.Role, entry.Content,
 		nullIfEmpty(entry.UserID), nullIfEmpty(entry.UserName), nullIfEmpty(entry.MessageID),
 		nullIfEmpty(entry.ToolCalls), nullIfEmpty(entry.ToolCallID),
@@ -63,7 +63,7 @@ func (s *Store) ListLogs(ctx context.Context, from, to time.Time) ([]LogRow, err
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT source_key, channel_id, role, COALESCE(user_name, ''), content, timestamp
 		 FROM conversation_logs
-		 WHERE timestamp >= ? AND timestamp < ?
+		 WHERE timestamp >= $1 AND timestamp < $2
 		   AND role IN ('user', 'assistant')
 		 ORDER BY timestamp ASC`,
 		from, to,
@@ -76,11 +76,9 @@ func (s *Store) ListLogs(ctx context.Context, from, to time.Time) ([]LogRow, err
 	var result []LogRow
 	for rows.Next() {
 		var r LogRow
-		var ts string
-		if err := rows.Scan(&r.SourceKey, &r.ChannelID, &r.Role, &r.UserName, &r.Content, &ts); err != nil {
+		if err := rows.Scan(&r.SourceKey, &r.ChannelID, &r.Role, &r.UserName, &r.Content, &r.Timestamp); err != nil {
 			continue
 		}
-		r.Timestamp, _ = time.Parse("2006-01-02 15:04:05", ts)
 		result = append(result, r)
 	}
 	return result, rows.Err()
@@ -91,7 +89,7 @@ func (s *Store) RecentAssistantMessages(ctx context.Context, limit int) ([]strin
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT content FROM conversation_logs
 		 WHERE role = 'assistant' AND content != ''
-		 ORDER BY timestamp DESC LIMIT ?`, limit)
+		 ORDER BY timestamp DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("conversation: assistant メッセージ取得に失敗: %w", err)
 	}
@@ -111,8 +109,8 @@ func (s *Store) RecentAssistantMessages(ctx context.Context, limit int) ([]strin
 // TrackActivity はチャンネルの最終ユーザーメッセージ時刻を記録する。
 func (s *Store) TrackActivity(ctx context.Context, channelID string, at time.Time) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES (?, ?)
-		 ON CONFLICT(channel_id) DO UPDATE SET last_user_message_at = excluded.last_user_message_at`,
+		`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES ($1, $2)
+		 ON CONFLICT(channel_id) DO UPDATE SET last_user_message_at = EXCLUDED.last_user_message_at`,
 		channelID, at)
 	return err
 }
@@ -124,7 +122,8 @@ func (s *Store) SaveSnapshot(ctx context.Context, sourceKey string, messages []l
 		return fmt.Errorf("conversation: snapshot marshal に失敗: %w", err)
 	}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT OR REPLACE INTO context_snapshot (source_key, messages, updated_at) VALUES (?, ?, datetime('now'))`,
+		`INSERT INTO context_snapshot (source_key, messages, updated_at) VALUES ($1, $2, now())
+		 ON CONFLICT (source_key) DO UPDATE SET messages = EXCLUDED.messages, updated_at = now()`,
 		sourceKey, string(data))
 	return err
 }
@@ -133,7 +132,7 @@ func (s *Store) SaveSnapshot(ctx context.Context, sourceKey string, messages []l
 func (s *Store) LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error) {
 	var data string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT messages FROM context_snapshot WHERE source_key = ?`, sourceKey,
+		`SELECT messages FROM context_snapshot WHERE source_key = $1`, sourceKey,
 	).Scan(&data)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -153,7 +152,7 @@ func (s *Store) DeleteChannel(ctx context.Context, channelID string) error {
 	tables := []string{"channel_settings", "channel_activity", "conversation_logs", "user_guild_channels"}
 	for _, table := range tables {
 		if _, err := s.db.ExecContext(ctx,
-			fmt.Sprintf("DELETE FROM %s WHERE channel_id = ?", table), channelID,
+			fmt.Sprintf("DELETE FROM %s WHERE channel_id = $1", table), channelID,
 		); err != nil {
 			return fmt.Errorf("conversation: %s 削除に失敗: %w", table, err)
 		}
