@@ -54,3 +54,4 @@ current_frame.jpg
 /build/
 backups/
 bench/snapshots/
+bench/results.json
