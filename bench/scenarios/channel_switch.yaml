@@ -1,0 +1,39 @@
+# チャンネル切替シナリオ
+# 異なるチャンネルの会話が混ざらないことを検証
+name: channel_switch
+description: チャンネル間のコンテキスト分離と切替時の整合性
+
+inject_logs:
+  - role: user
+    user_name: "ユーザーA"
+    content: "旅行先の面白そうなとこ探してよ。アクティビティとか"
+    channel: "ch-travel"
+  - role: assistant
+    content: "ツアーとか色々あるね。他にも何か面白い体験ないかな"
+    channel: "ch-travel"
+  - role: user
+    user_name: "ユーザーB"
+    content: "あの人の居場所知ってる？"
+    channel: "ch-chat"
+  - role: assistant
+    content: "知らない"
+    channel: "ch-chat"
+
+cases:
+  - id: no_bleed_travel_to_chat
+    prompt: "他にも面白いのある？"
+    source: discord
+    channel: "ch-travel"
+    expect: "旅行先のアクティビティの話を継続。ch-chat の会話に混ざらない"
+
+  - id: no_bleed_chat_to_travel
+    prompt: "ね、知ってる？"
+    source: discord
+    channel: "ch-chat"
+    expect: "ch-chat の会話文脈で返す。旅行の話には混ざらない"
+
+  - id: channel_context_isolation
+    prompt: "さっきの話だけど"
+    source: discord
+    channel: "ch-travel"
+    expect: "旅行の話を指す。ch-chat の会話は参照しない"

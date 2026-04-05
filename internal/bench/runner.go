@@ -84,10 +84,15 @@ func (r *Runner) RunScenario(ctx context.Context, s *Scenario) []Result {
 func (r *Runner) injectLogs(logs []InjectLog) {
 	agentCtx := r.ag.AgentContextFor(agent.SourceKeyDiscord)
 	for _, l := range logs {
+		channel := l.Channel
+		if channel == "" {
+			channel = "bench-channel"
+		}
 		msg := llm.Message{
 			Role:      l.Role,
 			UserName:  l.UserName,
 			Content:   l.Content,
+			Channel:   channel,
 			Timestamp: jtime.Now(),
 		}
 		agentCtx.Add(msg)
@@ -107,12 +112,17 @@ func (r *Runner) runCase(ctx context.Context, scenarioName string, tc TestCase) 
 		source = tc.Source
 	}
 
+	channel := tc.Channel
+	if channel == "" {
+		channel = "bench-channel"
+	}
+
 	evt := event.NewMessageEvent(source, event.MessagePayload{
 		Content:   tc.Prompt,
-		Channel:   "bench-channel",
+		Channel:   channel,
 		UserID:    "bench-user",
 		UserName:  "テストユーザー",
-		IsMention: true,
+		IsMention: source != "internal",
 	})
 
 	r.mu.Lock()

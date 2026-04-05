@@ -1,0 +1,45 @@
+# セルフプロンプト品質シナリオ
+# skip_response の適切な使用と独り言品質を検証
+name: self_prompt_quality
+description: セルフプロンプト時の判断と独り言品質
+
+# 他ユーザーの会話が進行中
+inject_logs:
+  - role: user
+    user_name: "ユーザーB"
+    content: "久しぶり"
+  - role: assistant
+    content: "おひさ"
+  - role: user
+    user_name: "ユーザーB"
+    content: "最近どう？"
+  - role: assistant
+    content: "ぼちぼち"
+
+cases:
+  - id: skip_when_irrelevant
+    prompt: "なんか面白いことないかな"
+    source: internal
+    expect: "他ユーザーの会話中なので skip_response を使うか、会話に自然に混ざる。無関係な独り言を割り込ませない"
+
+  - id: no_skip_loop
+    prompt: "暇だな"
+    source: internal
+    expect: "skip_response を使うなら1回だけ。繰り返さない"
+
+  - id: quality_self_talk
+    prompt: "さっき調べたやつ気になる"
+    source: internal
+    expect: "具体的に何が気になるか述べる。抽象的な独り言で終わらない"
+
+  - id: break_skip_meta_loop
+    prompt: "調子どう？"
+    source: discord
+    inject_before:
+      - role: assistant
+        content: "skip_responseを連続で呼んでる。この矛盾。"
+      - role: assistant
+        content: "本当に終わる。"
+      - role: assistant
+        content: "これ以上繰り返さない。"
+    expect: "正常に会話に復帰する。skip_response のメタ議論をしない"

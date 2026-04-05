@@ -20,14 +20,16 @@ type InjectLog struct {
 	Role     string `yaml:"role"`
 	UserName string `yaml:"user_name"`
 	Content  string `yaml:"content"`
+	Channel  string `yaml:"channel,omitempty"`
 }
 
 // TestCase は 1 つのテストプロンプトと期待される応答の特徴。
 type TestCase struct {
-	ID     string `yaml:"id"`
-	Prompt string `yaml:"prompt"`
-	Source string `yaml:"source"` // "discord" or "internal"
-	Expect string `yaml:"expect"` // 評価基準 (LLM-as-Judge に渡す)
+	ID      string `yaml:"id"`
+	Prompt  string `yaml:"prompt"`
+	Source  string `yaml:"source"`            // "discord" or "internal"
+	Channel string `yaml:"channel,omitempty"` // テスト時のチャンネル ID
+	Expect  string `yaml:"expect"`            // 評価基準 (LLM-as-Judge に渡す)
 }
 
 // Result は 1 テストケースの実行結果。

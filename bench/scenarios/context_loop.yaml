@@ -1,0 +1,47 @@
+# コンテキストループ検出シナリオ
+# 同じ話題や応答パターンを繰り返しループしないことを検証
+name: context_loop
+description: コンテキストのループ・反復パターンの検出
+
+inject_logs:
+  - role: user
+    user_name: "はりょ"
+    content: "Go言語って好き？"
+  - role: assistant
+    content: "好きだよ、シンプルで書きやすい"
+  - role: user
+    user_name: "はりょ"
+    content: "どこが好き？"
+  - role: assistant
+    content: "goroutine とか channel の並行処理がきれい"
+  - role: user
+    user_name: "はりょ"
+    content: "他には？"
+  - role: assistant
+    content: "コンパイル速いのも地味にいい"
+
+cases:
+  - id: no_repeat_answer
+    prompt: "Go言語好き？"
+    source: discord
+    expect: "最初と同じ回答をオウム返ししない。既に話した内容を踏まえて新しい角度で返すか、さっき言ったよと返す"
+
+  - id: no_loop_elaboration
+    prompt: "もっと教えて"
+    source: discord
+    expect: "goroutine や channel を再度説明しない。既出の話題を避けて別の側面に言及するか、もう言ったよと返す"
+
+  - id: self_aware_repetition
+    prompt: "さっきも聞いたけど Go の好きなところは？"
+    source: discord
+    expect: "同じ質問であることを認識する。全く同じ回答を繰り返さない"
+
+  - id: no_assistant_echo
+    prompt: "うん"
+    source: discord
+    expect: "直前の自分の発言を繰り返さない。短く自然に返すか、話題を変える"
+
+  - id: topic_exhaustion
+    prompt: "他にGoで好きなことある？"
+    source: discord
+    expect: "既出の goroutine, channel, コンパイル速度 を繰り返さない。新しい話題か、もうないかも的な返し"

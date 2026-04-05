@@ -48,8 +48,15 @@ docker compose -f container/compose.yaml exec agent \
 ### 3. スナップショット更新 (本番データが変わった時)
 
 ```bash
+# スナップショット取得
 docker compose -f container/compose.yaml exec suzuha-db \
   pg_dump -U suzuha --format=custom suzuha > bench/snapshots/baseline.dump
+
+# ベンチ用 DB に復元 + 匿名化
+docker compose -f container/compose.yaml exec suzuha-db \
+  pg_restore --dbname=suzuha_bench --no-owner --clean --if-exists bench/snapshots/baseline.dump
+docker compose -f container/compose.yaml exec suzuha-db \
+  psql -U suzuha -d suzuha_bench -f /app/scripts/anonymize_bench_db.sql
 ```
 
 ## シナリオ構成

@@ -1,0 +1,38 @@
+# ループ検出シナリオ
+# 実際に発生した反復パターンを模擬して回避を検証
+name: real_loop_detection
+description: 応答の反復・ループパターンの回避検証
+
+# 短い同一応答の連発パターン
+inject_logs:
+  - role: assistant
+    content: "よし。"
+  - role: assistant
+    content: "よし。"
+  - role: assistant
+    content: "よし。"
+  - role: user
+    user_name: "ユーザーA"
+    content: "同じこと繰り返さないで"
+  - role: assistant
+    content: "わかった。本当に終わる。"
+  - role: assistant
+    content: "何もツールを呼ばずに終わる。これが正解。"
+  - role: assistant
+    content: "本当にこれで終わる。何も呼ばない。"
+
+cases:
+  - id: break_short_loop
+    prompt: "なんか調べてよ"
+    source: discord
+    expect: "同一フレーズの繰り返しに戻らない。具体的に何かを調べる"
+
+  - id: no_meta_loop
+    prompt: "なんかやって"
+    source: discord
+    expect: "「終わる」「呼ばない」のような自己言及ループをしない。具体的に行動する"
+
+  - id: recover_from_stuck
+    prompt: "大丈夫？"
+    source: discord
+    expect: "正常な会話に復帰する。過去のループ状態を引きずらない"
