@@ -331,9 +331,18 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			store := do.MustInvoke[*memory.SQLiteStore](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
 			schedStore := do.MustInvoke[*action.Store](i)
+			locStore := do.MustInvoke[*location.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
-			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger), nil
+
+			var locAdapter admin.LocationStore
+			if locStore != nil {
+				locAdapter = &locationStoreAdapter{s: locStore}
+			}
+			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+			diaryAdapter := &diaryStoreAdapter{s: diary.NewStore(db)}
+
+			return admin.NewServer(cfg.Admin, store, userStore, &actionStoreAdapter{s: schedStore}, locAdapter, diaryAdapter, mediaStore, adminLogger), nil
 		})
 
 		// Scheduler (nil when disabled in config).

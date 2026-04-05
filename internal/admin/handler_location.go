@@ -7,15 +7,10 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 )
 
-func (h *AdminHandler) locStore() *location.Store {
-	return location.NewStore(h.db)
-}
-
 func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.LocationUserLocationParams) (*api.LocationUserLocationOK, error) {
-	locs, err := h.locStore().QueryLatestByUserID(ctx, params.UserId)
+	locs, err := h.locStore.QueryLatestByUserID(ctx, params.UserId)
 	if err != nil {
 		h.logger.Error("ユーザー位置情報の取得に失敗", "user_id", params.UserId, "error", err.Error())
 		return nil, fmt.Errorf("internal error")
@@ -24,22 +19,20 @@ func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.Loca
 	data := make([]api.UserLocation, len(locs))
 	for i, l := range locs {
 		ul := api.UserLocation{
-			Timestamp: l.Location.Timestamp.Format(time.RFC3339),
-			Latitude:  l.Location.Latitude,
-			Longitude: l.Location.Longitude,
+			DeviceID:  l.DeviceID,
+			UserID:    l.UserID,
+			Timestamp: l.Timestamp.Format(time.RFC3339),
+			Latitude:  l.Latitude,
+			Longitude: l.Longitude,
 		}
-		if l.Device != nil {
-			ul.DeviceID = l.Device.DeviceID
-			ul.UserID = l.Device.UserID
+		if l.Altitude != 0 {
+			ul.Altitude = api.NewOptFloat64(l.Altitude)
 		}
-		if l.Location.Altitude != 0 {
-			ul.Altitude = api.NewOptFloat64(l.Location.Altitude)
+		if l.Speed != 0 {
+			ul.Speed = api.NewOptFloat64(l.Speed)
 		}
-		if l.Location.Speed != 0 {
-			ul.Speed = api.NewOptFloat64(l.Location.Speed)
-		}
-		if l.Location.HorizontalAccuracy != 0 {
-			ul.Accuracy = api.NewOptFloat64(l.Location.HorizontalAccuracy)
+		if l.HorizontalAccuracy != 0 {
+			ul.Accuracy = api.NewOptFloat64(l.HorizontalAccuracy)
 		}
 		if l.PlaceName != "" {
 			ul.PlaceName = api.NewOptString(l.PlaceName)
@@ -50,7 +43,7 @@ func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.Loca
 }
 
 func (h *AdminHandler) LocationListDevices(ctx context.Context) (*api.LocationListDevicesOK, error) {
-	devices, err := h.locStore().ListDevices(ctx)
+	devices, err := h.locStore.ListDevices(ctx)
 	if err != nil {
 		h.logger.Error("位置情報デバイス一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
@@ -74,7 +67,7 @@ func (h *AdminHandler) LocationUpdateDevice(ctx context.Context, req *api.Update
 	ownerName := req.OwnerName.Or("")
 	userID := req.UserID.Or("")
 
-	if err := h.locStore().UpsertDevice(ctx, deviceID, ownerName, userID); err != nil {
+	if err := h.locStore.UpsertDevice(ctx, deviceID, ownerName, userID); err != nil {
 		h.logger.Error("位置情報デバイスの登録・更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
@@ -85,7 +78,7 @@ func (h *AdminHandler) LocationUpdateDevice(ctx context.Context, req *api.Update
 
 func (h *AdminHandler) LocationDeleteDevice(ctx context.Context, params api.LocationDeleteDeviceParams) error {
 	deviceID := fmt.Sprintf("%d", params.ID)
-	if err := h.locStore().DeleteDevice(ctx, deviceID); err != nil {
+	if err := h.locStore.DeleteDevice(ctx, deviceID); err != nil {
 		h.logger.Error("位置情報デバイスの削除に失敗", "error", err.Error())
 		return fmt.Errorf("internal error")
 	}
@@ -94,7 +87,7 @@ func (h *AdminHandler) LocationDeleteDevice(ctx context.Context, params api.Loca
 }
 
 func (h *AdminHandler) LocationListPlaces(ctx context.Context) (*api.LocationListPlacesOK, error) {
-	places, err := h.locStore().ListPlaces(ctx)
+	places, err := h.locStore.ListPlaces(ctx)
 	if err != nil {
 		h.logger.Error("場所一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
@@ -117,13 +110,13 @@ func (h *AdminHandler) LocationListPlaces(ctx context.Context) (*api.LocationLis
 
 func (h *AdminHandler) LocationCreatePlace(ctx context.Context, req *api.CreatePlaceRequest) (*api.OkResponse, error) {
 	radiusM := req.RadiusM.Or(50)
-	p := location.Place{
+	p := Place{
 		Name:      req.Name,
 		Latitude:  req.Latitude,
 		Longitude: req.Longitude,
 		RadiusM:   radiusM,
 	}
-	if err := h.locStore().CreatePlace(ctx, p); err != nil {
+	if err := h.locStore.CreatePlace(ctx, p); err != nil {
 		h.logger.Error("場所の作成に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
@@ -132,14 +125,14 @@ func (h *AdminHandler) LocationCreatePlace(ctx context.Context, req *api.CreateP
 }
 
 func (h *AdminHandler) LocationUpdatePlace(ctx context.Context, req *api.UpdatePlaceRequest, params api.LocationUpdatePlaceParams) (*api.OkResponse, error) {
-	p := location.Place{
+	p := Place{
 		ID:        fmt.Sprintf("%d", params.ID),
 		Name:      req.Name.Or(""),
 		Latitude:  req.Latitude.Or(0),
 		Longitude: req.Longitude.Or(0),
 		RadiusM:   req.RadiusM.Or(0),
 	}
-	if err := h.locStore().UpdatePlace(ctx, p); err != nil {
+	if err := h.locStore.UpdatePlace(ctx, p); err != nil {
 		h.logger.Error("場所の更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
@@ -148,7 +141,7 @@ func (h *AdminHandler) LocationUpdatePlace(ctx context.Context, req *api.UpdateP
 }
 
 func (h *AdminHandler) LocationDeletePlace(ctx context.Context, params api.LocationDeletePlaceParams) error {
-	if err := h.locStore().DeletePlace(ctx, fmt.Sprintf("%d", params.ID)); err != nil {
+	if err := h.locStore.DeletePlace(ctx, fmt.Sprintf("%d", params.ID)); err != nil {
 		h.logger.Error("場所の削除に失敗", "error", err.Error())
 		return fmt.Errorf("internal error")
 	}

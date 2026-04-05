@@ -12,7 +12,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
@@ -24,11 +23,11 @@ type Server struct {
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) *Server {
+func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore ActionStore, locStore LocationStore, diaryStore DiaryStore, mediaStore memory.MediaStore, logger *slog.Logger) *Server {
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 
 	// Create the ogen handler implementation.
-	adminHandler := NewAdminHandler(store, userStore, schedStore, mediaStore, agentBase, cfg.PromptDir, logger)
+	adminHandler := NewAdminHandler(store, userStore, schedStore, locStore, diaryStore, mediaStore, agentBase, cfg.PromptDir, logger)
 
 	// Create the ogen server (handles all typed API routes).
 	ogenServer, err := api.NewServer(adminHandler)
