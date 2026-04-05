@@ -30,17 +30,33 @@ type TestCase struct {
 	Source  string `yaml:"source"`            // "discord" or "internal"
 	Channel string `yaml:"channel,omitempty"` // テスト時のチャンネル ID
 	Expect  string `yaml:"expect"`            // 評価基準 (LLM-as-Judge に渡す)
+	Turns   []Turn `yaml:"turns,omitempty"`   // マルチターン (設定時は Prompt を無視)
+}
+
+// Turn はマルチターン会話の 1 ターン。
+type Turn struct {
+	Prompt string `yaml:"prompt"`            // 固定プロンプト (空の場合は claude -p で生成)
+	Goal   string `yaml:"goal"`              // このターンの目標/評価基準
 }
 
 // Result は 1 テストケースの実行結果。
 type Result struct {
-	ScenarioName string  `json:"scenario"`
-	CaseID       string  `json:"case_id"`
-	Prompt       string  `json:"prompt"`
-	Response     string  `json:"response"`
-	Expect       string  `json:"expect"`
-	Scores       *Scores `json:"scores,omitempty"`
-	Error        string  `json:"error,omitempty"`
+	ScenarioName string       `json:"scenario"`
+	CaseID       string       `json:"case_id"`
+	Prompt       string       `json:"prompt"`
+	Response     string       `json:"response"`
+	Expect       string       `json:"expect"`
+	Scores       *Scores      `json:"scores,omitempty"`
+	Error        string       `json:"error,omitempty"`
+	TurnResults  []TurnResult `json:"turn_results,omitempty"` // マルチターン時
+}
+
+// TurnResult はマルチターン会話の 1 ターンの結果。
+type TurnResult struct {
+	TurnIndex int    `json:"turn"`
+	Prompt    string `json:"prompt"`
+	Response  string `json:"response"`
+	Goal      string `json:"goal"`
 }
 
 // Scores は LLM-as-Judge の評価スコア。

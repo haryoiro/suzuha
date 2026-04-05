@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/haryoiro/suzuha/internal/agent"
@@ -111,22 +112,73 @@ func (r *Runner) runCase(ctx context.Context, scenarioName string, tc TestCase) 
 		Expect:       tc.Expect,
 	}
 
-	source := "discord"
-	if tc.Source != "" {
-		source = tc.Source
+	// マルチターンの場合
+	if len(tc.Turns) > 0 {
+		return r.runMultiTurn(ctx, scenarioName, tc)
 	}
 
-	channel := tc.Channel
+	r.sendAndCapture(ctx, tc.ID, tc.Prompt, tc.Source, tc.Channel)
+
+	r.mu.Lock()
+	result.Response = r.responses[tc.ID]
+	r.mu.Unlock()
+
+	return result
+}
+
+func (r *Runner) runMultiTurn(ctx context.Context, scenarioName string, tc TestCase) Result {
+	result := Result{
+		ScenarioName: scenarioName,
+		CaseID:       tc.ID,
+		Expect:       tc.Expect,
+	}
+
+	for i, turn := range tc.Turns {
+		prompt := turn.Prompt
+		if prompt == "" {
+			// claude -p で次のプロンプトを生成
+			prompt = r.generateNextPrompt(tc, result.TurnResults, turn.Goal)
+		}
+
+		turnID := fmt.Sprintf("%s_turn%d", tc.ID, i)
+		r.sendAndCapture(ctx, turnID, prompt, tc.Source, tc.Channel)
+
+		r.mu.Lock()
+		resp := r.responses[turnID]
+		r.mu.Unlock()
+
+		result.TurnResults = append(result.TurnResults, TurnResult{
+			TurnIndex: i,
+			Prompt:    prompt,
+			Response:  resp,
+			Goal:      turn.Goal,
+		})
+	}
+
+	// 最後のターンの応答を result.Response にも入れる
+	if len(result.TurnResults) > 0 {
+		last := result.TurnResults[len(result.TurnResults)-1]
+		result.Prompt = last.Prompt
+		result.Response = last.Response
+	}
+
+	return result
+}
+
+func (r *Runner) sendAndCapture(ctx context.Context, caseID, prompt, source, channel string) {
+	if source == "" {
+		source = "discord"
+	}
 	if channel == "" {
 		channel = "bench-channel"
 	}
 
 	var evt event.Event
 	if source == "internal" {
-		evt = event.NewSelfPromptEvent(channel, tc.Prompt)
+		evt = event.NewSelfPromptEvent(channel, prompt)
 	} else {
 		evt = event.NewMessageEvent(source, event.MessagePayload{
-			Content:   tc.Prompt,
+			Content:   prompt,
 			Channel:   channel,
 			UserID:    "bench-user",
 			UserName:  "テストユーザー",
@@ -135,20 +187,31 @@ func (r *Runner) runCase(ctx context.Context, scenarioName string, tc TestCase) 
 	}
 
 	r.mu.Lock()
-	r.currentCaseID = tc.ID
+	r.currentCaseID = caseID
 	r.mu.Unlock()
 
-	err := r.ag.HandleBatch(ctx, []event.Event{evt})
-	if err != nil {
-		result.Error = err.Error()
-		return result
+	r.ag.HandleBatch(ctx, []event.Event{evt})
+}
+
+// generateNextPrompt は claude -p で会話の流れから次のプロンプトを生成する。
+func (r *Runner) generateNextPrompt(tc TestCase, history []TurnResult, goal string) string {
+	var sb strings.Builder
+	sb.WriteString("以下の会話の続きとして、次のユーザー発言を1文で生成してください。発言のみ返してください。\n\n")
+	sb.WriteString("目標: " + goal + "\n\n")
+	sb.WriteString("会話履歴:\n")
+	for _, tr := range history {
+		fmt.Fprintf(&sb, "ユーザー: %s\n", tr.Prompt)
+		fmt.Fprintf(&sb, "AI: %s\n", tr.Response)
 	}
 
-	r.mu.Lock()
-	result.Response = r.responses[tc.ID]
-	r.mu.Unlock()
-
-	return result
+	cmd := exec.Command("claude", "-p", "--output-format", "text")
+	cmd.Stdin = strings.NewReader(sb.String())
+	out, err := cmd.Output()
+	if err != nil {
+		r.logger.Warn("claude -p でプロンプト生成に失敗", "error", err)
+		return goal // フォールバック: goal をそのままプロンプトに
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // restoreSnapshot は pg_restore でスナップショットをベンチ用 DB に復元する。

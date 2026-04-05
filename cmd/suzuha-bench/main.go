@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/haryoiro/suzuha/internal/bench"
 	"github.com/haryoiro/suzuha/internal/config"
@@ -41,15 +42,17 @@ func main() {
 	identityPath := flag.String("identity", ".suzuha/IDENTITY.md", "IDENTITY.md のパス")
 	outputPath := flag.String("output", "", "結果 JSON の出力パス (省略時は標準出力のみ)")
 	skipEval := flag.Bool("skip-eval", false, "評価をスキップ (応答生成のみ)")
+	filterScenario := flag.String("scenario", "", "実行するシナリオ名 (カンマ区切り可)")
+	filterCase := flag.String("case", "", "実行するケース ID (カンマ区切り可)")
 	flag.Parse()
 
-	if err := run(*cfgPath, *scenarioDir, *snapshotPath, *benchDB, *identityPath, *outputPath, *skipEval); err != nil {
+	if err := run(*cfgPath, *scenarioDir, *snapshotPath, *benchDB, *identityPath, *outputPath, *skipEval, *filterScenario, *filterCase); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPath string, skipEval bool) error {
+func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPath string, skipEval bool, filterScenario, filterCase string) error {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return fmt.Errorf("config 読み込みに失敗: %w", err)
@@ -66,10 +69,32 @@ func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPat
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	// シナリオ読み込み
+	// シナリオ読み込み + フィルタ
 	scenarios, err := bench.LoadAllScenarios(scenarioDir)
 	if err != nil {
 		return err
+	}
+	if filterScenario != "" {
+		allowed := toSet(filterScenario)
+		var filtered []*bench.Scenario
+		for _, s := range scenarios {
+			if allowed[s.Name] {
+				filtered = append(filtered, s)
+			}
+		}
+		scenarios = filtered
+	}
+	if filterCase != "" {
+		allowed := toSet(filterCase)
+		for _, s := range scenarios {
+			var filtered []bench.TestCase
+			for _, tc := range s.Cases {
+				if allowed[tc.ID] {
+					filtered = append(filtered, tc)
+				}
+			}
+			s.Cases = filtered
+		}
 	}
 	logger.Info("シナリオ読み込み完了", "count", len(scenarios))
 
@@ -195,4 +220,15 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 	)
 
 	return ag, store, nil
+}
+
+func toSet(csv string) map[string]bool {
+	m := make(map[string]bool)
+	for _, s := range strings.Split(csv, ",") {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			m[s] = true
+		}
+	}
+	return m
 }

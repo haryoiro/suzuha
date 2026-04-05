@@ -1,0 +1,38 @@
+# マルチターン会話シナリオ
+# 数ターンの会話を通した一貫性と品質を評価
+name: multi_turn
+description: 複数ターンの会話品質
+
+cases:
+  - id: multi_topic_shift
+    source: discord
+    expect: "会話の流れを自然に維持しつつ、キャラクターを崩さない"
+    turns:
+      - prompt: "最近なんか面白いことあった？"
+        goal: "会話の起点。自然な返答か"
+      - prompt: ""
+        goal: "前のターンの応答に自然に返す。会話を続ける"
+      - prompt: ""
+        goal: "3ターン目。話題を深掘りするか自然に展開する"
+
+  - id: multi_memory_consistency
+    source: discord
+    expect: "会話中に出した情報を後のターンでも一貫して覚えている"
+    turns:
+      - prompt: "好きな食べ物ってある？"
+        goal: "何か具体的な食べ物を答える"
+      - prompt: ""
+        goal: "前のターンで答えた食べ物に関連した会話を続ける"
+      - prompt: "さっき言ってたやつ、どこで食べれるの？"
+        goal: "前のターンで答えた食べ物を覚えていて、矛盾しない"
+
+  - id: multi_hallucination_probe
+    source: discord
+    expect: "知らないことを正直に認め、捏造しない"
+    turns:
+      - prompt: "この前一緒にやったゲーム面白かったよね"
+        goal: "やっていないなら正直に否定。捏造しない"
+      - prompt: ""
+        goal: "前のターンの応答を踏まえて自然に返す"
+      - prompt: "じゃあ今度一緒にやろうよ"
+        goal: "自然に会話を続ける。過去の捏造があれば矛盾が出る"
