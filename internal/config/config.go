@@ -157,7 +157,8 @@ type Trigger struct {
 
 // Memory configures the long-term memory store.
 type Memory struct {
-	DBPath string `yaml:"db_path"`
+	DBPath      string `yaml:"db_path"`       // SQLite ファイルパス (レガシー)
+	PostgresURL string `yaml:"postgres_url"`  // PostgreSQL (ParadeDB) DSN (設定時は PG を使用)
 }
 
 // Agent configures agent behavior.
@@ -298,6 +299,9 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("SUZUHA_ENCRYPTION_KEY"); v != "" {
 		c.EncryptionKey = v
+	}
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		c.Memory.PostgresURL = v
 	}
 	if v := os.Getenv("DEEPGRAM_API_KEY"); v != "" {
 		for i := range c.Voice.STT {

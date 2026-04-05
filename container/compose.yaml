@@ -26,6 +26,18 @@ services:
     stdin_open: true
     tty: true
 
+  suzuha-db:
+    image: paradedb/paradedb:latest
+    environment:
+      POSTGRES_DB: suzuha
+      POSTGRES_USER: suzuha
+      POSTGRES_PASSWORD: suzuha
+    ports:
+      - "5432:5432"
+    volumes:
+      - suzuha-db:/var/lib/postgresql
+    restart: unless-stopped
+
   searxng:
     image: searxng/searxng:latest
     volumes:
@@ -240,6 +252,7 @@ volumes:
   npm-cache:
   sbv2-models:
   sbv2-cache:
+  suzuha-db:
   langfuse-db:
   langfuse-clickhouse:
   langfuse-minio:
