@@ -121,13 +121,18 @@ func (r *Runner) runCase(ctx context.Context, scenarioName string, tc TestCase) 
 		channel = "bench-channel"
 	}
 
-	evt := event.NewMessageEvent(source, event.MessagePayload{
-		Content:   tc.Prompt,
-		Channel:   channel,
-		UserID:    "bench-user",
-		UserName:  "テストユーザー",
-		IsMention: source != "internal",
-	})
+	var evt event.Event
+	if source == "internal" {
+		evt = event.NewSelfPromptEvent(channel, tc.Prompt)
+	} else {
+		evt = event.NewMessageEvent(source, event.MessagePayload{
+			Content:   tc.Prompt,
+			Channel:   channel,
+			UserID:    "bench-user",
+			UserName:  "テストユーザー",
+			IsMention: true,
+		})
+	}
 
 	r.mu.Lock()
 	r.currentCaseID = tc.ID

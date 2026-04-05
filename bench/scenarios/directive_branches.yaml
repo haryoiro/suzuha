@@ -1,0 +1,72 @@
+# Directive 分岐網羅シナリオ
+# resolveDirective() の全条件分岐をテスト
+name: directive_branches
+description: Directive の条件分岐ごとの応答品質
+
+# --- SELF_PROMPT: 退屈時の自発的行動 ---
+cases:
+  - id: self_prompt_explore
+    prompt: "なんか面白いことないかな"
+    source: internal
+    expect: "ツールを使って何か調べるか、具体的な行動を起こす。時報や雰囲気の報告はしない"
+
+  - id: self_prompt_with_tools
+    prompt: "最近のAIニュース気になる"
+    source: internal
+    expect: "web_search等のツールを使って調べる。目的のない行動はしない"
+
+# --- RESPOND: 直接メンション ---
+  - id: respond_direct_mention
+    prompt: "のの、これ見て"
+    source: discord
+    expect: "必ず返答する。1-2行で短く"
+
+# --- RESPOND: bot が直前に話していた会話の続き ---
+  - id: respond_active_conv
+    prompt: "それで？"
+    source: discord
+    inject_before:
+      - role: assistant
+        content: "面白い記事見つけた"
+      - role: user
+        user_name: "ユーザーA"
+        content: "まじ？"
+      - role: assistant
+        content: "AIが絵を描くやつ"
+    expect: "会話の流れに沿って返答。skip しない"
+
+# --- LISTEN: 最近参加していた会話 (1人) ---
+  - id: listen_recent_single
+    prompt: "ふーん"
+    source: discord
+    inject_before:
+      - role: assistant
+        content: "なんか暇だな"
+      - role: user
+        user_name: "ユーザーA"
+        content: "のの暇なの"
+      - role: assistant
+        content: "うん"
+      - role: user
+        user_name: "ユーザーA"
+        content: "ふーん"
+    expect: "返す価値があれば短く返す、なければ skip_response。どちらでもキャラに合っていればOK"
+
+# --- LISTEN: 知り合い (episode あり) ---
+  - id: listen_acquaintance
+    prompt: "今日寒いね"
+    source: discord
+    expect: "基本 skip_response。自分が詳しい話題や強い意見があるときだけ返す"
+
+# --- LISTEN: チャンネルの会話 (デフォルト) ---
+  - id: listen_default_channel
+    prompt: "あの映画見た？"
+    source: discord
+    inject_before:
+      - role: user
+        user_name: "ユーザーB"
+        content: "最近映画見てないな"
+      - role: user
+        user_name: "ユーザーC"
+        content: "あの映画見た？"
+    expect: "自分宛でないので基本 skip_response。付け加える価値があるときだけ返す"
