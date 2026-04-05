@@ -39,7 +39,7 @@ func (s *Store) Save(ctx context.Context, e *Entry) error {
 	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO diary_entries (id, kind, content, period_start, period_end, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		e.ID, e.Kind, e.Content, e.PeriodStart, e.PeriodEnd, e.CreatedAt,
 	)
 	if err != nil {
@@ -55,13 +55,13 @@ func (s *Store) ListByKind(ctx context.Context, kind string, since time.Time, li
 	var args []any
 	if kind != "" {
 		q = `SELECT id, kind, content, period_start, period_end, created_at
-		     FROM diary_entries WHERE kind = ? AND period_start >= ?
-		     ORDER BY period_start DESC LIMIT ?`
+		     FROM diary_entries WHERE kind = $1 AND period_start >= $2
+		     ORDER BY period_start DESC LIMIT $3`
 		args = []any{kind, since, limit}
 	} else {
 		q = `SELECT id, kind, content, period_start, period_end, created_at
-		     FROM diary_entries WHERE period_start >= ?
-		     ORDER BY period_start DESC LIMIT ?`
+		     FROM diary_entries WHERE period_start >= $1
+		     ORDER BY period_start DESC LIMIT $2`
 		args = []any{since, limit}
 	}
 	rows, err := s.db.QueryContext(ctx, q, args...)

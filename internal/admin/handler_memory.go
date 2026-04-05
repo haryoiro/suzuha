@@ -210,7 +210,7 @@ func (h *AdminHandler) MemoriesDuplicates(ctx context.Context, params api.Memori
 			`SELECT v2.id, v2.distance
 			 FROM memories_vec v1
 			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = 10
-			 WHERE v1.id = ?`, all[i].ID)
+			 WHERE v1.id = $1`, all[i].ID)
 		if err != nil {
 			continue
 		}

@@ -42,7 +42,7 @@ func insertLog(t *testing.T, db *sql.DB, role, userName, content string, ts time
 	t.Helper()
 	_, err := db.Exec(
 		`INSERT INTO conversation_logs (source_key, channel_id, role, user_name, content, timestamp)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		"discord", "ch1", role, userName, content, ts,
 	)
 	if err != nil {

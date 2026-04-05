@@ -45,13 +45,13 @@ func (s *Store) Setup(ctx context.Context) error {
 			id             TEXT PRIMARY KEY,
 			channel_id     TEXT NOT NULL,
 			content        TEXT NOT NULL,
-			scheduled_at   DATETIME NOT NULL,
+			scheduled_at   TIMESTAMPTZ NOT NULL,
 			cron_expr      TEXT,
 			random_minutes INTEGER NOT NULL DEFAULT 0,
 			created_by     TEXT,
 			status         TEXT NOT NULL DEFAULT 'pending',
-			executed_at    DATETIME,
-			created_at     DATETIME NOT NULL DEFAULT (datetime('now'))
+			executed_at    TIMESTAMPTZ,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`)
 	if err == nil {
 		// Add columns if upgrading from older schema (idempotent).
@@ -80,7 +80,7 @@ func (s *Store) Create(ctx context.Context, a *Action) error {
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO scheduled_actions (id, channel_id, content, scheduled_at, cron_expr, random_minutes, created_by, mode)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		a.ID, a.ChannelID, a.Content, a.ScheduledAt.UTC().Format(time.RFC3339), nullString(a.CronExpr), a.RandomMinutes, nullString(a.CreatedBy), mode,
 	)
 	return err
@@ -105,7 +105,7 @@ func (s *Store) ListPendingByCreator(ctx context.Context, createdBy string) ([]A
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, retry_count, executed_at, created_at
 		FROM scheduled_actions
-		WHERE status = 'pending' AND created_by = ?
+		WHERE status = 'pending' AND created_by = $1
 		ORDER BY scheduled_at ASC`, createdBy)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (s *Store) ListPendingByCreator(ctx context.Context, createdBy string) ([]A
 func (s *Store) Cancel(ctx context.Context, id string) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE scheduled_actions SET status = 'cancelled'
-		WHERE id = ? AND status = 'pending'`, id)
+		WHERE id = $1 AND status = 'pending'`, id)
 	if err != nil {
 		return false, err
 	}
@@ -127,13 +127,11 @@ func (s *Store) Cancel(ctx context.Context, id string) (bool, error) {
 }
 
 // FetchDue returns pending actions whose scheduled_at <= now.
-// Uses strftime to normalize both sides, avoiding format mismatch
-// (e.g. ISO "T" separator vs Go space separator) in lexicographic comparison.
 func (s *Store) FetchDue(ctx context.Context, now time.Time) ([]Action, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, retry_count, executed_at, created_at
 		FROM scheduled_actions
-		WHERE status = 'pending' AND strftime('%s', scheduled_at) <= strftime('%s', ?)
+		WHERE status = 'pending' AND scheduled_at <= $1
 		ORDER BY scheduled_at ASC`, now.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, err
@@ -150,7 +148,7 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 	var randomMinutes int
 	var scheduledAt time.Time
 	err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(cron_expr,''), random_minutes, scheduled_at FROM scheduled_actions WHERE id = ?`, id,
+		SELECT COALESCE(cron_expr,''), random_minutes, scheduled_at FROM scheduled_actions WHERE id = $1`, id,
 	).Scan(&cronExpr, &randomMinutes, &scheduledAt)
 	if err != nil {
 		return fmt.Errorf("アクション %s の取得に失敗: %w", id, err)
@@ -169,8 +167,8 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 			next = next.Add(offset)
 		}
 		_, err = s.db.ExecContext(ctx, `
-			UPDATE scheduled_actions SET scheduled_at = ?, executed_at = ?
-			WHERE id = ?`, next.UTC().Format(time.RFC3339), now.UTC().Format(time.RFC3339), id)
+			UPDATE scheduled_actions SET scheduled_at = $1, executed_at = $2
+			WHERE id = $3`, next.UTC().Format(time.RFC3339), now.UTC().Format(time.RFC3339), id)
 		return err
 	}
 
@@ -179,8 +177,8 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 
 func (s *Store) markDone(ctx context.Context, id string, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE scheduled_actions SET status = 'executed', executed_at = ?
-		WHERE id = ?`, now.UTC().Format(time.RFC3339), id)
+		UPDATE scheduled_actions SET status = 'executed', executed_at = $1
+		WHERE id = $2`, now.UTC().Format(time.RFC3339), id)
 	return err
 }
 
@@ -231,11 +229,13 @@ func (s *Store) List(ctx context.Context, opts ActionListOpts) ([]Action, error)
 	query := `SELECT id, channel_id, content, COALESCE(mode,'direct'), scheduled_at, COALESCE(cron_expr,''), random_minutes, COALESCE(created_by,''), status, retry_count, executed_at, created_at
 	          FROM scheduled_actions`
 	var args []any
+	n := 1
 	if opts.Status != "" {
-		query += ` WHERE status = ?`
+		query += fmt.Sprintf(` WHERE status = $%d`, n)
 		args = append(args, opts.Status)
+		n++
 	}
-	query += ` ORDER BY scheduled_at DESC LIMIT ?`
+	query += fmt.Sprintf(` ORDER BY scheduled_at DESC LIMIT $%d`, n)
 	args = append(args, opts.Limit)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -250,29 +250,36 @@ func (s *Store) List(ctx context.Context, opts ActionListOpts) ([]Action, error)
 func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields) error {
 	var sets []string
 	var args []any
+	n := 1
 	if fields.ChannelID != nil {
-		sets = append(sets, "channel_id = ?")
+		sets = append(sets, fmt.Sprintf("channel_id = $%d", n))
 		args = append(args, *fields.ChannelID)
+		n++
 	}
 	if fields.Content != nil {
-		sets = append(sets, "content = ?")
+		sets = append(sets, fmt.Sprintf("content = $%d", n))
 		args = append(args, *fields.Content)
+		n++
 	}
 	if fields.Mode != nil {
-		sets = append(sets, "mode = ?")
+		sets = append(sets, fmt.Sprintf("mode = $%d", n))
 		args = append(args, *fields.Mode)
+		n++
 	}
 	if fields.ScheduledAt != nil {
-		sets = append(sets, "scheduled_at = ?")
+		sets = append(sets, fmt.Sprintf("scheduled_at = $%d", n))
 		args = append(args, *fields.ScheduledAt)
+		n++
 	}
 	if fields.CronExpr != nil {
-		sets = append(sets, "cron_expr = ?")
+		sets = append(sets, fmt.Sprintf("cron_expr = $%d", n))
 		args = append(args, *fields.CronExpr)
+		n++
 	}
 	if fields.Status != nil {
-		sets = append(sets, "status = ?")
+		sets = append(sets, fmt.Sprintf("status = $%d", n))
 		args = append(args, *fields.Status)
+		n++
 	}
 	if len(sets) == 0 {
 		return fmt.Errorf("schedule: 更新するフィールドがありません")
@@ -286,14 +293,14 @@ func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields
 		}
 		query += s
 	}
-	query += " WHERE id = ?"
+	query += fmt.Sprintf(" WHERE id = $%d", n)
 
 	res, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("schedule: 更新に失敗: %w", err)
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
 		return fmt.Errorf("schedule: 見つかりません: %s", id)
 	}
 	return nil
@@ -301,7 +308,7 @@ func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields
 
 // Delete removes a scheduled action by ID.
 func (s *Store) Delete(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM scheduled_actions WHERE id = ?`, id)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM scheduled_actions WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("schedule: 削除に失敗: %w", err)
 	}
@@ -315,14 +322,14 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 // IncrRetry increments the retry count for a pending action.
 func (s *Store) IncrRetry(ctx context.Context, id string, count int) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE scheduled_actions SET retry_count = ? WHERE id = ?`, count, id)
+		UPDATE scheduled_actions SET retry_count = $1 WHERE id = $2`, count, id)
 	return err
 }
 
 // MarkFailed marks an action as failed after exceeding retry limit.
 func (s *Store) MarkFailed(ctx context.Context, id string, count int) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE scheduled_actions SET status = 'failed', retry_count = ? WHERE id = ?`, count, id)
+		UPDATE scheduled_actions SET status = 'failed', retry_count = $1 WHERE id = $2`, count, id)
 	return err
 }
 

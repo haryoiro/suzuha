@@ -12,7 +12,7 @@ import (
 func LoadState(ctx context.Context, db *sql.DB, taskName string, dest any) error {
 	var raw string
 	err := db.QueryRowContext(ctx,
-		`SELECT state FROM task_state WHERE task_name = ?`, taskName,
+		`SELECT state FROM task_state WHERE task_name = $1`, taskName,
 	).Scan(&raw)
 	if err == sql.ErrNoRows {
 		return nil
@@ -24,7 +24,7 @@ func LoadState(ctx context.Context, db *sql.DB, taskName string, dest any) error
 }
 
 // SaveState persists the state for the given task name.
-// It uses INSERT OR REPLACE to upsert.
+// It uses INSERT ... ON CONFLICT to upsert.
 func SaveState(ctx context.Context, db *sql.DB, taskName string, src any) error {
 	data, err := json.Marshal(src)
 	if err != nil {
@@ -32,8 +32,8 @@ func SaveState(ctx context.Context, db *sql.DB, taskName string, src any) error 
 	}
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO task_state (task_name, state, updated_at)
-		 VALUES (?, ?, datetime('now'))
-		 ON CONFLICT(task_name) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at`,
+		 VALUES ($1, $2, now())
+		 ON CONFLICT(task_name) DO UPDATE SET state = excluded.state, updated_at = now()`,
 		taskName, string(data),
 	)
 	if err != nil {

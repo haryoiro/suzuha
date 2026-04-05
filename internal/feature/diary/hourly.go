@@ -100,7 +100,7 @@ func fetchConversationLogs(ctx context.Context, cc *scheduler.CronContext, from,
 	rows, err := cc.DB.QueryContext(ctx,
 		`SELECT source_key, channel_id, role, COALESCE(user_name, ''), content, timestamp
 		 FROM conversation_logs
-		 WHERE timestamp >= ? AND timestamp < ?
+		 WHERE timestamp >= $1 AND timestamp < $2
 		   AND role IN ('user', 'assistant')
 		 ORDER BY timestamp ASC`,
 		from, to,

@@ -58,11 +58,11 @@ func (s *AppStore) Setup(ctx context.Context) error {
 			registry_type TEXT NOT NULL,
 			identifier   TEXT NOT NULL,
 			command      TEXT NOT NULL,
-			args         TEXT NOT NULL DEFAULT '[]',
-			env          TEXT NOT NULL DEFAULT '{}',
+			args         JSONB NOT NULL DEFAULT '[]',
+			env          JSONB NOT NULL DEFAULT '{}',
 			transport    TEXT NOT NULL DEFAULT 'stdio',
-			installed_at DATETIME NOT NULL DEFAULT (datetime('now')),
-			enabled      INTEGER NOT NULL DEFAULT 1
+			installed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			enabled      BOOLEAN NOT NULL DEFAULT true
 		)`)
 	return err
 }
@@ -74,7 +74,7 @@ func (s *AppStore) Add(ctx context.Context, app *App) error {
 
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO mcp_apps (name, title, description, version, registry_type, identifier, command, args, env, transport)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		app.Name, app.Title, app.Description, app.Version,
 		app.RegistryType, app.Identifier, app.Command,
 		string(argsJSON), string(envJSON), app.Transport,
@@ -84,7 +84,7 @@ func (s *AppStore) Add(ctx context.Context, app *App) error {
 
 // Remove deletes an installed app by name.
 func (s *AppStore) Remove(ctx context.Context, name string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM mcp_apps WHERE name = ?`, name)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM mcp_apps WHERE name = $1`, name)
 	return err
 }
 
@@ -95,7 +95,7 @@ func (s *AppStore) List(ctx context.Context) ([]App, error) {
 
 // ListEnabled returns all enabled apps.
 func (s *AppStore) ListEnabled(ctx context.Context) ([]App, error) {
-	return s.query(ctx, `SELECT name, title, description, version, registry_type, identifier, command, args, env, transport, installed_at, enabled FROM mcp_apps WHERE enabled = 1 ORDER BY installed_at DESC`)
+	return s.query(ctx, `SELECT name, title, description, version, registry_type, identifier, command, args, env, transport, installed_at, enabled FROM mcp_apps WHERE enabled = true ORDER BY installed_at DESC`)
 }
 
 func (s *AppStore) query(ctx context.Context, q string, args ...any) ([]App, error) {
@@ -109,12 +109,11 @@ func (s *AppStore) query(ctx context.Context, q string, args ...any) ([]App, err
 	for rows.Next() {
 		var app App
 		var argsStr, envStr string
-		var enabled int
 
 		if err := rows.Scan(
 			&app.Name, &app.Title, &app.Description, &app.Version,
 			&app.RegistryType, &app.Identifier, &app.Command,
-			&argsStr, &envStr, &app.Transport, &app.InstalledAt, &enabled,
+			&argsStr, &envStr, &app.Transport, &app.InstalledAt, &app.Enabled,
 		); err != nil {
 			return nil, err
 		}
@@ -127,7 +126,6 @@ func (s *AppStore) query(ctx context.Context, q string, args ...any) ([]App, err
 		if app.Env == nil {
 			app.Env = make(map[string]string)
 		}
-		app.Enabled = enabled == 1
 
 		apps = append(apps, app)
 	}

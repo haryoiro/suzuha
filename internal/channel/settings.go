@@ -65,7 +65,7 @@ func (s *Store) Set(ctx context.Context, cs *Settings) error {
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO channel_settings (channel_id, guild_id, mode, home, updated_at)
-		 VALUES (?, ?, ?, ?, ?)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT(channel_id) DO UPDATE SET
 		   guild_id = excluded.guild_id,
 		   mode = excluded.mode,
@@ -86,7 +86,7 @@ func (s *Store) Set(ctx context.Context, cs *Settings) error {
 // Delete removes channel settings, reverting the channel to default behavior.
 func (s *Store) Delete(ctx context.Context, channelID string) error {
 	_, err := s.db.ExecContext(ctx,
-		`DELETE FROM channel_settings WHERE channel_id = ?`, channelID)
+		`DELETE FROM channel_settings WHERE channel_id = $1`, channelID)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (s *Store) List(ctx context.Context, guildID string) ([]Settings, error) {
 	if guildID != "" {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT channel_id, guild_id, mode, home, updated_at
-			 FROM channel_settings WHERE guild_id = ? ORDER BY updated_at DESC`, guildID)
+			 FROM channel_settings WHERE guild_id = $1 ORDER BY updated_at DESC`, guildID)
 	} else {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT channel_id, guild_id, mode, home, updated_at

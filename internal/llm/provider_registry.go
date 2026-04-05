@@ -111,7 +111,7 @@ func (r *ProviderRegistry) GetProvider(ctx context.Context, name string) (*Provi
 	var e ProviderEntry
 	var encKey string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT name, type, api_key, api_base, source FROM llm_providers WHERE name = ?`, name).
+		`SELECT name, type, api_key, api_base, source FROM llm_providers WHERE name = $1`, name).
 		Scan(&e.Name, &e.Type, &encKey, &e.APIBase, &e.Source)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("provider: %q が見つかりません", name)
@@ -140,13 +140,13 @@ func (r *ProviderRegistry) SaveProvider(ctx context.Context, e *ProviderEntry) e
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO llm_providers (name, type, api_key, api_base, source, updated_at)
-		 VALUES (?, ?, ?, ?, ?, datetime('now'))
+		 VALUES ($1, $2, $3, $4, $5, now())
 		 ON CONFLICT(name) DO UPDATE SET
 		   type = excluded.type,
 		   api_key = CASE WHEN excluded.api_key = '' THEN llm_providers.api_key ELSE excluded.api_key END,
 		   api_base = excluded.api_base,
 		   source = excluded.source,
-		   updated_at = datetime('now')`,
+		   updated_at = now()`,
 		e.Name, e.Type, encKey, e.APIBase, source)
 	if err != nil {
 		return fmt.Errorf("provider: save: %w", err)
@@ -168,7 +168,7 @@ func (r *ProviderRegistry) ListModels(ctx context.Context, providerName string) 
 	if providerName != "" {
 		rows, err = r.db.QueryContext(ctx,
 			`SELECT provider_name, model_id, capabilities, max_context, source
-			 FROM llm_model_catalog WHERE provider_name = ? ORDER BY model_id`, providerName)
+			 FROM llm_model_catalog WHERE provider_name = $1 ORDER BY model_id`, providerName)
 	} else {
 		rows, err = r.db.QueryContext(ctx,
 			`SELECT provider_name, model_id, capabilities, max_context, source
@@ -196,7 +196,7 @@ func (r *ProviderRegistry) GetModel(ctx context.Context, providerName, modelID s
 	var capsJSON string
 	err := r.db.QueryRowContext(ctx,
 		`SELECT provider_name, model_id, capabilities, max_context, source
-		 FROM llm_model_catalog WHERE provider_name = ? AND model_id = ?`,
+		 FROM llm_model_catalog WHERE provider_name = $1 AND model_id = $2`,
 		providerName, modelID).Scan(&m.ProviderName, &m.ModelID, &capsJSON, &m.MaxContext, &m.Source)
 	if err == sql.ErrNoRows {
 		return nil, nil // カタログにないモデルは nil を返す (エラーではない)
@@ -217,7 +217,7 @@ func (r *ProviderRegistry) SaveModel(ctx context.Context, m *ModelInfo) error {
 	}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO llm_model_catalog (provider_name, model_id, capabilities, max_context, source)
-		 VALUES (?, ?, ?, ?, ?)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT(provider_name, model_id) DO UPDATE SET
 		   capabilities = excluded.capabilities,
 		   max_context = excluded.max_context,
@@ -235,7 +235,7 @@ func (r *ProviderRegistry) SaveModel(ctx context.Context, m *ModelInfo) error {
 func (r *ProviderRegistry) AssignRole(ctx context.Context, role, providerName, modelID string) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO llm_role_assignments (role, preset, provider_name, model_id)
-		 VALUES (?, '', ?, ?)
+		 VALUES ($1, '', $2, $3)
 		 ON CONFLICT(role) DO UPDATE SET
 		   provider_name = excluded.provider_name,
 		   model_id = excluded.model_id`,
@@ -459,7 +459,7 @@ func (r *ProviderRegistry) MigrateFromPresets(ctx context.Context) error {
 
 	// 旧テーブルが存在するか確認
 	var tableExists int
-	r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='llm_presets'`).Scan(&tableExists)
+	r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.tables WHERE table_name='llm_presets'`).Scan(&tableExists)
 	if tableExists == 0 {
 		return nil
 	}
@@ -508,8 +508,9 @@ func (r *ProviderRegistry) MigrateFromPresets(ctx context.Context) error {
 
 		// API キーは旧テーブルから暗号化済みのままコピー
 		_, err := r.db.ExecContext(ctx,
-			`INSERT OR IGNORE INTO llm_providers (name, type, api_key, api_base, source)
-			 VALUES (?, ?, ?, ?, 'seed')`,
+			`INSERT INTO llm_providers (name, type, api_key, api_base, source)
+			 VALUES ($1, $2, $3, $4, 'seed')
+			 ON CONFLICT(name) DO NOTHING`,
 			provName, p.provider, p.encKey, p.apiBase)
 		if err != nil {
 			r.logger.Warn("migrate: プロバイダ挿入失敗", "name", provName, "error", err)
@@ -530,14 +531,15 @@ func (r *ProviderRegistry) MigrateFromPresets(ctx context.Context) error {
 		// プロバイダ名を解決
 		provName := p.provider
 		var exists int
-		r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM llm_providers WHERE name = ?`, provName).Scan(&exists)
+		r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM llm_providers WHERE name = $1`, provName).Scan(&exists)
 		if exists == 0 {
 			provName = p.name
 		}
 
 		_, err := r.db.ExecContext(ctx,
-			`INSERT OR IGNORE INTO llm_model_catalog (provider_name, model_id, capabilities, max_context, source)
-			 VALUES (?, ?, ?, ?, 'static')`,
+			`INSERT INTO llm_model_catalog (provider_name, model_id, capabilities, max_context, source)
+			 VALUES ($1, $2, $3, $4, 'static')
+			 ON CONFLICT(provider_name, model_id) DO NOTHING`,
 			provName, p.model, string(capsBytes), p.maxTokens)
 		if err != nil {
 			r.logger.Warn("migrate: モデル挿入失敗", "model", p.model, "error", err)
@@ -558,12 +560,12 @@ func (r *ProviderRegistry) MigrateFromPresets(ctx context.Context) error {
 				if p.name == presetName {
 					provName := p.provider
 					var exists int
-					r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM llm_providers WHERE name = ?`, provName).Scan(&exists)
+					r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM llm_providers WHERE name = $1`, provName).Scan(&exists)
 					if exists == 0 {
 						provName = p.name
 					}
 					r.db.ExecContext(ctx,
-						`UPDATE llm_role_assignments SET provider_name = ?, model_id = ? WHERE role = ?`,
+						`UPDATE llm_role_assignments SET provider_name = $1, model_id = $2 WHERE role = $3`,
 						provName, p.model, role)
 					r.logger.Info("migrate: ロール移行", "role", role, "provider", provName, "model", p.model)
 					break

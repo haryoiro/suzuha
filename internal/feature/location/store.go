@@ -165,7 +165,7 @@ func (s *Store) SaveBatch(ctx context.Context, locs []Location) error {
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO locations (id, device_id, latitude, longitude, altitude, speed,
 			horizontal_accuracy, battery_level, battery_state, motion, wifi, address, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`)
 	if err != nil {
 		return fmt.Errorf("location: ステートメント準備に失敗: %w", err)
@@ -292,7 +292,7 @@ func (s *Store) QueryLatestByUserID(ctx context.Context, userID string) ([]UserL
 		INNER JOIN (
 			SELECT device_id, MAX(timestamp) AS max_ts
 			FROM locations
-			WHERE device_id IN (SELECT device_id FROM location_devices WHERE user_id = ?)
+			WHERE device_id IN (SELECT device_id FROM location_devices WHERE user_id = $1)
 			GROUP BY device_id
 		) latest ON l.device_id = latest.device_id AND l.timestamp = latest.max_ts
 		INNER JOIN location_devices d ON l.device_id = d.device_id
@@ -380,9 +380,9 @@ func (s *Store) History(ctx context.Context, deviceID string, since, until time.
 		SELECT id, device_id, latitude, longitude, altitude, speed,
 			horizontal_accuracy, battery_level, battery_state, motion, wifi, address, timestamp, created_at
 		FROM locations
-		WHERE device_id = ? AND timestamp >= ? AND timestamp <= ?
+		WHERE device_id = $1 AND timestamp >= $2 AND timestamp <= $3
 		ORDER BY timestamp DESC
-		LIMIT ?
+		LIMIT $4
 	`
 	rows, err := s.db.QueryContext(ctx, query, deviceID, since, until, limit)
 	if err != nil {
@@ -422,9 +422,9 @@ func (s *Store) HistoryAll(ctx context.Context, since, until time.Time, limit in
 		SELECT id, device_id, latitude, longitude, altitude, speed,
 			horizontal_accuracy, battery_level, battery_state, motion, wifi, address, timestamp, created_at
 		FROM locations
-		WHERE timestamp >= ? AND timestamp <= ?
+		WHERE timestamp >= $1 AND timestamp <= $2
 		ORDER BY timestamp DESC
-		LIMIT ?
+		LIMIT $3
 	`
 	rows, err := s.db.QueryContext(ctx, query, since, until, limit)
 	if err != nil {
@@ -550,7 +550,7 @@ func (s *Store) UpsertDevice(ctx context.Context, deviceID, ownerName, userID st
 		uid = userID
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO location_devices (device_id, owner_name, user_id) VALUES (?, ?, ?)
+		`INSERT INTO location_devices (device_id, owner_name, user_id) VALUES ($1, $2, $3)
 		 ON CONFLICT(device_id) DO UPDATE SET owner_name = excluded.owner_name, user_id = excluded.user_id`,
 		deviceID, ownerName, uid)
 	return err
@@ -558,7 +558,7 @@ func (s *Store) UpsertDevice(ctx context.Context, deviceID, ownerName, userID st
 
 // DeleteDevice removes a device mapping.
 func (s *Store) DeleteDevice(ctx context.Context, deviceID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM location_devices WHERE device_id = ?`, deviceID)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM location_devices WHERE device_id = $1`, deviceID)
 	return err
 }
 
@@ -588,7 +588,7 @@ func (s *Store) CreatePlace(ctx context.Context, p Place) error {
 		p.ID = uuid.NewString()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO location_places (id, name, latitude, longitude, radius_m) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO location_places (id, name, latitude, longitude, radius_m) VALUES ($1, $2, $3, $4, $5)`,
 		p.ID, p.Name, p.Latitude, p.Longitude, p.RadiusM)
 	return err
 }
@@ -596,14 +596,14 @@ func (s *Store) CreatePlace(ctx context.Context, p Place) error {
 // UpdatePlace updates an existing place.
 func (s *Store) UpdatePlace(ctx context.Context, p Place) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE location_places SET name = ?, latitude = ?, longitude = ?, radius_m = ? WHERE id = ?`,
+		`UPDATE location_places SET name = $1, latitude = $2, longitude = $3, radius_m = $4 WHERE id = $5`,
 		p.Name, p.Latitude, p.Longitude, p.RadiusM, p.ID)
 	return err
 }
 
 // DeletePlace removes a place.
 func (s *Store) DeletePlace(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM location_places WHERE id = ?`, id)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM location_places WHERE id = $1`, id)
 	return err
 }
 

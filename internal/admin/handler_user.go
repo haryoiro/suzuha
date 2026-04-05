@@ -101,8 +101,8 @@ func (h *AdminHandler) UsersMemories(ctx context.Context, params api.UsersMemori
 	limit := int(params.Limit.Or(20))
 	rows, err := h.db.QueryContext(ctx,
 		`SELECT id, content, created_at, updated_at FROM memories
-		 WHERE type = 'user' AND json_extract(metadata, '$.user_id') = ?
-		 ORDER BY updated_at DESC LIMIT ?`, params.ID, limit)
+		 WHERE type = 'user' AND metadata->>'user_id' = $1
+		 ORDER BY updated_at DESC LIMIT $2`, params.ID, limit)
 	if err != nil {
 		h.logger.Error("ユーザーのメモリ取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")

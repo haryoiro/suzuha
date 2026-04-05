@@ -55,3 +55,5 @@ current_frame.jpg
 backups/
 bench/snapshots/
 bench/results.json
+migrate_sqlite_to_pg
+suzuha-bench

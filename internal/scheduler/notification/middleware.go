@@ -152,7 +152,7 @@ func (n *channelSettingsNotifier) Reply(ctx context.Context, channelID, content,
 func (n *channelSettingsNotifier) suppressed(ctx context.Context, channelID, source string) bool {
 	var mode string
 	err := n.db.QueryRowContext(ctx,
-		`SELECT mode FROM channel_settings WHERE channel_id = ?`, channelID,
+		`SELECT mode FROM channel_settings WHERE channel_id = $1`, channelID,
 	).Scan(&mode)
 	if err != nil {
 		// No row means default (active) — allow.

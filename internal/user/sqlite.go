@@ -47,7 +47,7 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 	// Look up existing platform link.
 	var userID string
 	err = tx.QueryRowContext(ctx,
-		`SELECT user_id FROM platform_links WHERE platform = ? AND platform_user_id = ?`,
+		`SELECT user_id FROM platform_links WHERE platform = $1 AND platform_user_id = $2`,
 		platform, platformUserID,
 	).Scan(&userID)
 
@@ -58,7 +58,7 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 			// Orphaned platform_link: link exists but user row is missing.
 			// Delete the stale link and fall through to create a new user.
 			if _, delErr := tx.ExecContext(ctx,
-				`DELETE FROM platform_links WHERE platform = ? AND platform_user_id = ?`,
+				`DELETE FROM platform_links WHERE platform = $1 AND platform_user_id = $2`,
 				platform, platformUserID,
 			); delErr != nil {
 				return nil, fmt.Errorf("user: 孤立リンクの削除に失敗: %w", delErr)
@@ -68,7 +68,7 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 		// If this is a known bot ID but the user wasn't marked yet, fix it.
 		if s.botUserIDs[platformUserID] && !u.IsBot {
 			if _, err := tx.ExecContext(ctx,
-				`UPDATE users SET is_bot = 1, updated_at = ? WHERE id = ?`,
+				`UPDATE users SET is_bot = true, updated_at = $1 WHERE id = $2`,
 				time.Now(), userID,
 			); err != nil {
 				return nil, fmt.Errorf("user: ボットフラグの設定に失敗: %w", err)
@@ -106,7 +106,7 @@ createUser:
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO users (id, display_name, role, is_bot, created_at, updated_at)
-		 VALUES (?, '', ?, ?, ?, ?)`,
+		 VALUES ($1, '', $2, $3, $4, $5)`,
 		u.ID, string(u.Role), u.IsBot, u.CreatedAt, u.UpdatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("user: ユーザーの挿入に失敗: %w", err)
@@ -115,7 +115,7 @@ createUser:
 	linkID := uuid.NewString()
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO platform_links (id, user_id, platform, platform_user_id, platform_name, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		linkID, u.ID, platform, platformUserID, platformName, now,
 	); err != nil {
 		return nil, fmt.Errorf("user: プラットフォームリンクの挿入に失敗: %w", err)
@@ -146,7 +146,7 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 
 	err := q.QueryRowContext(ctx,
 		`SELECT id, display_name, role, is_bot, metadata, created_at, updated_at
-		 FROM users WHERE id = ?`, id,
+		 FROM users WHERE id = $1`, id,
 	).Scan(&u.ID, &u.DisplayName, &roleStr, &u.IsBot,
 		&metaJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
@@ -161,7 +161,7 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 
 func (s *SQLiteStore) UpdateDisplayName(ctx context.Context, userID, displayName string) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?`,
+		`UPDATE users SET display_name = $1, updated_at = $2 WHERE id = $3`,
 		displayName, time.Now(), userID,
 	)
 	if err != nil {
@@ -182,7 +182,7 @@ func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, gu
 
 	// Upsert guild name.
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO guilds (id, name, updated_at) VALUES (?, ?, ?)
+		`INSERT INTO guilds (id, name, updated_at) VALUES ($1, $2, $3)
 		 ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
 		guildID, guildName, now,
 	); err != nil {
@@ -192,7 +192,7 @@ func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, gu
 	// Upsert user-guild-channel association.
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO user_guild_channels (user_id, guild_id, channel_id, channel_name, last_seen_at)
-		 VALUES (?, ?, ?, ?, ?)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT(user_id, guild_id, channel_id) DO UPDATE SET
 		   channel_name = excluded.channel_name, last_seen_at = excluded.last_seen_at`,
 		userID, guildID, channelID, channelName, now,
@@ -207,7 +207,7 @@ func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserG
 		`SELECT ugc.guild_id, g.name, ugc.channel_id, ugc.channel_name, ugc.last_seen_at
 		 FROM user_guild_channels ugc
 		 JOIN guilds g ON g.id = ugc.guild_id
-		 WHERE ugc.user_id = ?
+		 WHERE ugc.user_id = $1
 		 ORDER BY ugc.last_seen_at DESC`,
 		userID,
 	)
@@ -230,7 +230,7 @@ func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserG
 func (s *SQLiteStore) ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error) {
 	var userID string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT user_id FROM platform_links WHERE platform = ? AND platform_user_id = ?`,
+		`SELECT user_id FROM platform_links WHERE platform = $1 AND platform_user_id = $2`,
 		platform, platformUserID,
 	).Scan(&userID)
 	if err != nil {
@@ -244,7 +244,7 @@ func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, e
 		SELECT u.display_name, pl.platform_user_id
 		FROM users u
 		JOIN platform_links pl ON pl.user_id = u.id AND pl.platform = 'discord'
-		WHERE u.is_bot = 0
+		WHERE u.is_bot = false
 		ORDER BY u.display_name`)
 	if err != nil {
 		return nil, fmt.Errorf("user: メンション可能ユーザーの一覧取得に失敗: %w", err)
@@ -275,7 +275,7 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, display_name, role, is_bot, metadata, created_at, updated_at
-		 FROM users ORDER BY updated_at DESC LIMIT ? OFFSET ?`, limit, offset)
+		 FROM users ORDER BY updated_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("user: 一覧取得に失敗: %w", err)
 	}
@@ -302,23 +302,28 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields) error {
 	var sets []string
 	var args []any
+	n := 1
 	if fields.DisplayName != nil {
-		sets = append(sets, "display_name = ?")
+		sets = append(sets, fmt.Sprintf("display_name = $%d", n))
 		args = append(args, *fields.DisplayName)
+		n++
 	}
 	if fields.Role != nil {
-		sets = append(sets, "role = ?")
+		sets = append(sets, fmt.Sprintf("role = $%d", n))
 		args = append(args, string(*fields.Role))
+		n++
 	}
 	if fields.IsBot != nil {
-		sets = append(sets, "is_bot = ?")
+		sets = append(sets, fmt.Sprintf("is_bot = $%d", n))
 		args = append(args, *fields.IsBot)
+		n++
 	}
 	if len(sets) == 0 {
 		return fmt.Errorf("user: 更新するフィールドがありません")
 	}
-	sets = append(sets, "updated_at = ?")
+	sets = append(sets, fmt.Sprintf("updated_at = $%d", n))
 	args = append(args, time.Now())
+	n++
 	args = append(args, id)
 
 	query := "UPDATE users SET "
@@ -328,14 +333,14 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields
 		}
 		query += s
 	}
-	query += " WHERE id = ?"
+	query += fmt.Sprintf(" WHERE id = $%d", n)
 
 	res, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("user: 更新に失敗: %w", err)
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
 		return fmt.Errorf("user: 見つかりません: %s", id)
 	}
 	return nil
@@ -344,7 +349,7 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields
 func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]PlatformLink, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, user_id, platform, platform_user_id, platform_name, created_at
-		 FROM platform_links WHERE user_id = ?`, userID)
+		 FROM platform_links WHERE user_id = $1`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("user: プラットフォームリンク一覧の取得に失敗: %w", err)
 	}
@@ -417,7 +422,7 @@ func (s *SQLiteStore) GetGuildChannels(ctx context.Context, guildID string) ([]G
 		       ca.last_user_message_at
 		FROM user_guild_channels ugc
 		LEFT JOIN channel_activity ca ON ca.channel_id = ugc.channel_id
-		WHERE ugc.guild_id = ?
+		WHERE ugc.guild_id = $1
 		GROUP BY ugc.channel_id
 		ORDER BY last_seen_at DESC`, guildID)
 	if err != nil {

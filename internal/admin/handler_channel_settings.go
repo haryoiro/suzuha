@@ -17,7 +17,7 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 		       COALESCE(g.name, '') AS guild_name,
 		       COUNT(DISTINCT ugc.user_id) AS user_count,
 		       COALESCE(cs.mode, 'active') AS mode,
-		       COALESCE(cs.home, 0) AS home,
+		       COALESCE(cs.home, false) AS home,
 		       ca.last_user_message_at,
 		       cs.updated_at AS settings_updated_at
 		FROM user_guild_channels ugc
@@ -28,7 +28,7 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 	var rows *sql.Rows
 	var err error
 	if guildID != "" {
-		query += ` WHERE ugc.guild_id = ?`
+		query += ` WHERE ugc.guild_id = $1`
 		query += ` GROUP BY ugc.channel_id ORDER BY guild_name, ugc.channel_name`
 		rows, err = h.db.QueryContext(ctx, query, guildID)
 	} else {
@@ -74,7 +74,7 @@ func (h *AdminHandler) ChannelSettingsUpdate(ctx context.Context, req *api.Updat
 	now := time.Now()
 	_, err := h.db.ExecContext(ctx,
 		`INSERT INTO channel_settings (channel_id, guild_id, mode, home, updated_at)
-		 VALUES (?, ?, ?, ?, ?)
+		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT(channel_id) DO UPDATE SET
 		   guild_id = excluded.guild_id,
 		   mode = excluded.mode,
@@ -93,16 +93,16 @@ func (h *AdminHandler) ChannelSettingsUpdate(ctx context.Context, req *api.Updat
 // deleteChannel removes all DB records for a channel and notifies the agent.
 // deleteChannelByID はチャンネルに関連する全データを DB から削除する。
 func (h *AdminHandler) deleteChannelByID(ctx context.Context, channelID string) {
-	h.db.ExecContext(ctx, `DELETE FROM channel_settings WHERE channel_id = ?`, channelID)
-	h.db.ExecContext(ctx, `DELETE FROM channel_activity WHERE channel_id = ?`, channelID)
-	h.db.ExecContext(ctx, `DELETE FROM conversation_logs WHERE channel_id = ?`, channelID)
-	h.db.ExecContext(ctx, `DELETE FROM user_guild_channels WHERE channel_id = ?`, channelID)
+	h.db.ExecContext(ctx, `DELETE FROM channel_settings WHERE channel_id = $1`, channelID)
+	h.db.ExecContext(ctx, `DELETE FROM channel_activity WHERE channel_id = $1`, channelID)
+	h.db.ExecContext(ctx, `DELETE FROM conversation_logs WHERE channel_id = $1`, channelID)
+	h.db.ExecContext(ctx, `DELETE FROM user_guild_channels WHERE channel_id = $1`, channelID)
 	h.notifyAgentReload(ctx, "/internal/reload-channel-settings")
 }
 
 func (h *AdminHandler) ChannelSettingsDelete(ctx context.Context, params api.ChannelSettingsDeleteParams) error {
 	_, err := h.db.ExecContext(ctx,
-		`DELETE FROM channel_settings WHERE channel_id = ?`, params.ChannelId)
+		`DELETE FROM channel_settings WHERE channel_id = $1`, params.ChannelId)
 	if err != nil {
 		h.logger.Error("チャンネル設定の削除に失敗", "error", err.Error())
 		return fmt.Errorf("internal error")

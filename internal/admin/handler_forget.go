@@ -91,7 +91,7 @@ func (h *AdminHandler) ForgetGroups(ctx context.Context, params api.ForgetGroups
 			`SELECT v2.id, v2.distance
 			 FROM memories_vec v1
 			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = 10
-			 WHERE v1.id = ?`, e.id)
+			 WHERE v1.id = $1`, e.id)
 		if err != nil {
 			continue
 		}
