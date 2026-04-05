@@ -13,6 +13,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
+	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/adapter/cli"
 	"github.com/haryoiro/suzuha/internal/adapter/discord"
@@ -199,6 +200,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvoke[*user.SQLiteStore](i),
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[*acquirer.Acquirer](i),
+				conversation.NewStore(do.MustInvokeNamed[*sql.DB](i, "shared-db")),
 				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
 				channelSettings,
 				logger,

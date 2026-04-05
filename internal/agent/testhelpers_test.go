@@ -155,6 +155,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		&mockUsers{},
 		bus,
 		&mockAcquirer{},
+		nil, // convStore — nil is OK for tests
 		nil, // db — nil is OK for tests that don't track channel activity
 		nil, // channelSettings — nil skips channel filtering
 		slog.Default(),

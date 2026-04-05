@@ -2,12 +2,11 @@ package agent
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"log/slog"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 )
@@ -39,7 +38,7 @@ func (a *Agent) ReflectWith(ctx context.Context, agentCtx *Context, p *Perceptio
 	if p.Channel != "" {
 		a.logConversationTurn(ctx, agentCtx, p.TurnStartIdx, p.Channel, sourceKey)
 	}
-	persistContextWith(ctx, a.db, agentCtx, a.logger, string(sourceKey))
+	a.persistContext(ctx, agentCtx, sourceKey)
 }
 
 // compactAsync is the backward-compatible wrapper.
@@ -108,7 +107,7 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 func (a *Agent) resetAndPersistWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
 	agentCtx.ResetInjectedUsers()
 	agentCtx.ResetSeenChannels()
-	persistContextWith(ctx, a.db, agentCtx, a.logger, string(sourceKey))
+	a.persistContext(ctx, agentCtx, sourceKey)
 }
 
 // resetAndPersist is the backward-compatible wrapper.
@@ -121,23 +120,22 @@ func (a *Agent) resetAndPersist(ctx context.Context) {
 func (a *Agent) DeleteChannel(ctx context.Context, key SourceKey, channelID string) int {
 	actx := a.contexts[key]
 	removed := actx.RemoveByChannel(channelID)
-	if a.db != nil {
-		a.db.ExecContext(ctx, `DELETE FROM channel_settings WHERE channel_id = ?`, channelID)
-		a.db.ExecContext(ctx, `DELETE FROM channel_activity WHERE channel_id = ?`, channelID)
-		a.db.ExecContext(ctx, `DELETE FROM conversation_logs WHERE channel_id = ?`, channelID)
-		a.db.ExecContext(ctx, `DELETE FROM user_guild_channels WHERE channel_id = ?`, channelID)
+	if a.convStore != nil {
+		if err := a.convStore.DeleteChannel(ctx, channelID); err != nil {
+			a.logger.Warn("チャンネルデータの削除に失敗", "error", err)
+		}
 	}
 	if a.channelSettings != nil {
 		a.channelSettings.Reload(ctx)
 	}
-	persistContextWith(ctx, a.db, actx, a.logger, string(key))
+	a.persistContext(ctx, actx, key)
 	return removed
 }
 
 // logConversationTurn logs all messages added during the current turn
 // to the conversation_logs table for fine-tuning data collection.
 func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, startIdx int, channel string, sourceKey SourceKey) {
-	if a.db == nil {
+	if a.convStore == nil {
 		return
 	}
 
@@ -153,88 +151,38 @@ func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, star
 			continue
 		}
 
-		var toolCallsJSON *string
+		var toolCallsStr string
 		if len(msg.ToolCalls) > 0 {
-			b, err := json.Marshal(msg.ToolCalls)
-			if err == nil {
-				s := string(b)
-				toolCallsJSON = &s
+			if b, err := json.Marshal(msg.ToolCalls); err == nil {
+				toolCallsStr = string(b)
 			}
 		}
 
-		var toolCallID *string
-		if msg.ToolCallID != "" {
-			toolCallID = &msg.ToolCallID
-		}
-
-		_, err := a.db.ExecContext(ctx,
-			`INSERT INTO conversation_logs (turn_id, channel_id, role, content, user_id, user_name, message_id, tool_calls, tool_call_id, timestamp, source_key)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			turnID, channel, msg.Role, msg.Content,
-			nullIfEmpty(msg.UserID), nullIfEmpty(msg.UserName), nullIfEmpty(msg.MessageID),
-			toolCallsJSON, toolCallID,
-			msg.Timestamp, string(sourceKey),
-		)
+		err := a.convStore.LogTurn(ctx, conversation.TurnEntry{
+			TurnID:     turnID,
+			ChannelID:  channel,
+			Role:       msg.Role,
+			Content:    msg.Content,
+			UserID:     msg.UserID,
+			UserName:   msg.UserName,
+			MessageID:  msg.MessageID,
+			ToolCalls:  toolCallsStr,
+			ToolCallID: msg.ToolCallID,
+			SourceKey:  string(sourceKey),
+			Timestamp:  msg.Timestamp,
+		})
 		if err != nil {
 			a.logger.Warn("会話の記録に失敗", "error", err, "role", msg.Role)
 		}
 	}
 }
 
-func nullIfEmpty(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// persistContext is the backward-compatible wrapper that uses source_key "discord".
-func persistContext(ctx context.Context, db *sql.DB, agentCtx *Context, logger *slog.Logger) {
-	persistContextWith(ctx, db, agentCtx, logger, string(SourceKeyDiscord))
-}
-
-// persistContextWith saves the current context messages to the database
-// using the given source key.
-func persistContextWith(ctx context.Context, db *sql.DB, agentCtx *Context, logger *slog.Logger, sourceKey string) {
-	if db == nil {
+// persistContext は convStore 経由でコンテキストを保存する。
+func (a *Agent) persistContext(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
+	if a.convStore == nil {
 		return
 	}
-	msgs := agentCtx.Messages()
-	data, err := json.Marshal(msgs)
-	if err != nil {
-		logger.Warn("記憶の保存に失敗 (変換)", "error", err)
-		return
+	if err := a.convStore.SaveSnapshot(ctx, string(sourceKey), agentCtx.Messages()); err != nil {
+		a.logger.Warn("記憶の保存に失敗", "error", err)
 	}
-	_, err = db.ExecContext(ctx,
-		`INSERT OR REPLACE INTO context_snapshot (source_key, messages, updated_at) VALUES (?, ?, datetime('now'))`,
-		sourceKey, string(data))
-	if err != nil {
-		logger.Warn("記憶の保存に失敗 (書き込み)", "error", err)
-	}
-}
-
-// loadContext is the backward-compatible wrapper that loads the discord context.
-func loadContext(db *sql.DB, logger *slog.Logger) []llm.Message {
-	return loadContextWith(db, logger, string(SourceKeyDiscord))
-}
-
-// loadContextWith loads saved context messages from the database for the given source key.
-func loadContextWith(db *sql.DB, logger *slog.Logger, sourceKey string) []llm.Message {
-	if db == nil {
-		return nil
-	}
-	var data string
-	err := db.QueryRow(`SELECT messages FROM context_snapshot WHERE source_key = ?`, sourceKey).Scan(&data)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			logger.Warn("記憶の読み込みに失敗 (DB)", "error", err)
-		}
-		return nil
-	}
-	var msgs []llm.Message
-	if err := json.Unmarshal([]byte(data), &msgs); err != nil {
-		logger.Warn("記憶の読み込みに失敗 (解析)", "error", err)
-		return nil
-	}
-	return msgs
 }

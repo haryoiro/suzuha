@@ -115,11 +115,8 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 	}
 
 	// Track channel activity for topic backoff (non-bot, non-internal messages only).
-	if msg.Channel != "" && a.db != nil && msg.UserID != a.botID && evt.Source != event.SourceInternal {
-		_, _ = a.db.ExecContext(ctx,
-			`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES (?, ?)
-			 ON CONFLICT(channel_id) DO UPDATE SET last_user_message_at = excluded.last_user_message_at`,
-			msg.Channel, time.Now())
+	if msg.Channel != "" && a.convStore != nil && msg.UserID != a.botID && evt.Source != event.SourceInternal {
+		_ = a.convStore.TrackActivity(ctx, msg.Channel, time.Now())
 	}
 
 	// Handle attached images.

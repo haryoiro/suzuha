@@ -11,6 +11,7 @@ import (
 	"github.com/haryoiro/suzuha/external/transcript"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	"github.com/haryoiro/suzuha/internal/conversation"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
@@ -33,6 +34,15 @@ type acquirer interface {
 	Acquire(ctx context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error)
 }
 
+// conversationStore は会話ログとコンテキストスナップショットの永続化を担う (consumer-side interface)。
+type conversationStore interface {
+	LogTurn(ctx context.Context, entry conversation.TurnEntry) error
+	TrackActivity(ctx context.Context, channelID string, at time.Time) error
+	SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error
+	LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error)
+	DeleteChannel(ctx context.Context, channelID string) error
+}
+
 // Agent is the main event loop that processes events, calls the LLM,
 // executes tools, and sends responses.
 type Agent struct {
@@ -45,7 +55,8 @@ type Agent struct {
 	users     user.Store
 	bus       *event.Bus
 	acquirer  acquirer
-	db              *sql.DB // shared DB for channel activity tracking
+	convStore       conversationStore
+	db              *sql.DB // shared DB for DiaryProvider 等 (段階的に除去予定)
 	channelSettings *channelpkg.Store
 	locationStore   *location.Store
 	mediaStore      memory.MediaStore
@@ -131,6 +142,7 @@ func New(
 	userStore user.Store,
 	bus *event.Bus,
 	acq acquirer,
+	convStore conversationStore,
 	db *sql.DB,
 	channelSettings *channelpkg.Store,
 	logger *slog.Logger,
@@ -154,12 +166,14 @@ func New(
 		}
 
 		// Try to restore context from previous session.
-		if saved := loadContextWith(db, logger, persistKey); len(saved) > 0 {
-			if saved[0].Role == "system" {
-				saved = saved[1:]
+		if convStore != nil {
+			if saved, err := convStore.LoadSnapshot(context.Background(), persistKey); err == nil && len(saved) > 0 {
+				if saved[0].Role == "system" {
+					saved = saved[1:]
+				}
+				agentCtx.ReplaceAll(saved)
+				logger.Info("前の記憶を思い出した", "source_key", string(reg.Key), "messages", len(saved))
 			}
-			agentCtx.ReplaceAll(saved)
-			logger.Info("前の記憶を思い出した", "source_key", string(reg.Key), "messages", len(saved))
 		}
 
 		contexts[reg.Key] = agentCtx
@@ -177,6 +191,7 @@ func New(
 		users:            userStore,
 		bus:              bus,
 		acquirer:         acq,
+		convStore:        convStore,
 		db:               db,
 		channelSettings:  channelSettings,
 		logger:           logger,
@@ -490,7 +505,7 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	t := a.ThinkWith(ctx, agentCtx, p, dc)
 	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterThink(c, p, t) })
 	if t.ListenMode {
-		persistContextWith(ctx, a.db, agentCtx, a.logger, string(key))
+		a.persistContext(ctx, agentCtx, key)
 		return nil
 	}
 
