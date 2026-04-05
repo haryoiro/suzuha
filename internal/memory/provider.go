@@ -10,10 +10,15 @@ import (
 
 // Package registers memory store providers into the DI injector.
 func Package(i do.Injector) {
-	do.Provide(i, func(i do.Injector) (*SQLiteStore, error) {
+	// Backend は SQLiteStore か PostgresStore のいずれかを提供する。
+	do.Provide(i, func(i do.Injector) (Backend, error) {
 		cfg := do.MustInvoke[*config.Config](i)
 		logger := do.MustInvoke[*slog.Logger](i)
 		embedder := do.MustInvokeNamed[embedding.Embedder](i, "embedder")
+
+		if cfg.Memory.PostgresURL != "" {
+			return NewPostgresStore(cfg.Memory.PostgresURL, embedder, true, logger)
+		}
 		return NewSQLiteStore(cfg.Memory.DBPath, embedder, true, logger)
 	})
 }

@@ -61,7 +61,7 @@ func run() error {
 	// Eager resolve: fail fast on misconfiguration.
 	cfg := do.MustInvoke[*config.Config](injector)
 	logger := do.MustInvoke[*slog.Logger](injector)
-	store := do.MustInvoke[*memory.SQLiteStore](injector)
+	store := do.MustInvoke[memory.Backend](injector)
 	defer store.Close()
 
 	mcpMgr := do.MustInvoke[*mcp.Manager](injector)

@@ -186,6 +186,16 @@ type AdminStore interface {
 	DB() *sql.DB
 }
 
+// Backend は AdminStore + ライフサイクル管理を統合したインターフェース。
+// DI で SQLiteStore / PostgresStore を統一的に扱う。
+type Backend interface {
+	AdminStore
+	SetMediaStore(ms MediaStore)
+	SetOnSave(fn func())
+	RunEmbeddingWorker(ctx context.Context)
+	BackfillEmbeddings(ctx context.Context, batchSize int) (int, error)
+}
+
 // ListOpts controls pagination and filtering for List.
 type ListOpts struct {
 	Offset   int

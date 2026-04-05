@@ -85,7 +85,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Shared DB extracted from memory store.
 		do.ProvideNamed(i, "shared-db", func(i do.Injector) (*sql.DB, error) {
-			return do.MustInvoke[*memory.SQLiteStore](i).DB(), nil
+			cfg := do.MustInvoke[*config.Config](i)
+			if cfg.Memory.PostgresURL != "" {
+				return do.MustInvoke[*memory.PostgresStore](i).DB(), nil
+			}
+			return do.MustInvoke[memory.Backend](i).DB(), nil
 		})
 
 		// Provider Registry (3-layer model: providers / models / roles).
@@ -196,7 +200,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				regs,
 				do.MustInvoke[*llm.Client](i),
 				do.MustInvoke[*tool.Registry](i),
-				do.MustInvoke[*memory.SQLiteStore](i),
+				do.MustInvoke[memory.Backend](i),
 				do.MustInvoke[*user.SQLiteStore](i),
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[*acquirer.Acquirer](i),
@@ -230,7 +234,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Features: setup + tool/hook registration.
 		do.Provide(i, func(i do.Injector) ([]scheduler.Feature, error) {
 			cfg := do.MustInvoke[*config.Config](i)
-			store := do.MustInvoke[*memory.SQLiteStore](i)
+			store := do.MustInvoke[memory.Backend](i)
 			registry := do.MustInvoke[*tool.Registry](i)
 			logger := do.MustInvoke[*slog.Logger](i)
 			mcpMgr := do.MustInvoke[*mcp.Manager](i)
@@ -311,7 +315,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Schedule store (used by admin server).
 		do.Provide(i, func(i do.Injector) (*action.Store, error) {
-			store := do.MustInvoke[*memory.SQLiteStore](i)
+			store := do.MustInvoke[memory.Backend](i)
 			return action.NewStore(store.DB()), nil
 		})
 
@@ -322,7 +326,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				return nil, err
 			}
 			// Wire media store into memory store for embedding with attachments.
-			do.MustInvoke[*memory.SQLiteStore](i).SetMediaStore(ms)
+			do.MustInvoke[memory.Backend](i).SetMediaStore(ms)
 			return ms, nil
 		})
 
@@ -330,7 +334,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// flooding the agent log stream with HTTP access logs).
 		do.Provide(i, func(i do.Injector) (*admin.Server, error) {
 			cfg := do.MustInvoke[*config.Config](i)
-			store := do.MustInvoke[*memory.SQLiteStore](i)
+			store := do.MustInvoke[memory.Backend](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
 			schedStore := do.MustInvoke[*action.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
@@ -350,7 +354,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	}
 
 	llmClient := do.MustInvoke[*llm.Client](i)
-	store := do.MustInvoke[*memory.SQLiteStore](i)
+	store := do.MustInvoke[memory.Backend](i)
 	ring := do.MustInvoke[*observe.RingBuffer](i)
 	logger := observe.NewLoggerWithRing(do.MustInvoke[*config.Config](i).Observe.LogLevel, ring)
 	chatIface := do.MustInvoke[chat.Interface](i)
@@ -439,14 +443,14 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 func mementoPackage(i do.Injector) {
 	do.Provide(i, func(i do.Injector) (*acquirer.Acquirer, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
-		store := do.MustInvoke[*memory.SQLiteStore](i)
+		store := do.MustInvoke[memory.Backend](i)
 		logger := do.MustInvoke[*slog.Logger](i)
 		return acquirer.NewAcquirer(llmClient.For("background"), store, acquirer.DefaultConfig(), logger), nil
 	})
 
 	do.Provide(i, func(i do.Injector) (*consolidator.Consolidator, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
-		store := do.MustInvoke[*memory.SQLiteStore](i)
+		store := do.MustInvoke[memory.Backend](i)
 		logger := do.MustInvoke[*slog.Logger](i)
 		return consolidator.NewConsolidator(llmClient.For("background"), store, store, logger), nil
 	})
