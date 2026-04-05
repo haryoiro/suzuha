@@ -21,7 +21,6 @@ func (h *AdminHandler) proxyGet(ctx context.Context, path string) (jx.Raw, error
 	}
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("プロキシに失敗", "path", path, "error", err.Error())
 		return nil, fmt.Errorf("agent unreachable")
 	}
 	defer resp.Body.Close()
@@ -41,7 +40,6 @@ func (h *AdminHandler) proxyPostRaw(ctx context.Context, path string, reqBody io
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.longClient.Do(req)
 	if err != nil {
-		h.logger.Error("プロキシに失敗", "path", path, "error", err.Error())
 		return nil, fmt.Errorf("agent unreachable")
 	}
 	defer resp.Body.Close()
@@ -61,7 +59,6 @@ func (h *AdminHandler) proxyPutRaw(ctx context.Context, path string, reqBody io.
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("プロキシに失敗", "path", path, "error", err.Error())
 		return nil, fmt.Errorf("agent unreachable")
 	}
 	defer resp.Body.Close()
@@ -80,7 +77,6 @@ func (h *AdminHandler) proxyDeleteRaw(ctx context.Context, path string) (jx.Raw,
 	}
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("プロキシに失敗", "path", path, "error", err.Error())
 		return nil, fmt.Errorf("agent unreachable")
 	}
 	defer resp.Body.Close()

@@ -26,7 +26,6 @@ func (h *AdminHandler) ForgetGroups(ctx context.Context, params api.ForgetGroups
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
 		 ORDER BY m.type, m.created_at`)
 	if err != nil {
-		h.logger.Error("忘却: メモリ一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	defer rows.Close()
@@ -161,7 +160,6 @@ func (h *AdminHandler) ForgetGroups(ctx context.Context, params api.ForgetGroups
 func (h *AdminHandler) ForgetDelete(ctx context.Context, req *api.ForgetDeleteRequest) (*api.ForgetDeleteOK, error) {
 	deleted, err := h.memStore.DeleteBatch(ctx, req.DeleteIds)
 	if err != nil {
-		h.logger.Error("忘却: 削除に失敗", "error", err.Error())
 		return nil, fmt.Errorf("delete failed")
 	}
 	h.logger.Info("忘却: 手動削除を実行", "requested", len(req.DeleteIds), "deleted", deleted)
@@ -182,7 +180,6 @@ func (h *AdminHandler) ForgetMerge(ctx context.Context, req *api.ForgetMergeRequ
 		},
 	}
 	if saveErr := h.memStore.SaveRaw(ctx, mem); saveErr != nil {
-		h.logger.Error("忘却: マージ後の挿入に失敗", "error", saveErr.Error())
 		return nil, fmt.Errorf("merge insert failed")
 	}
 

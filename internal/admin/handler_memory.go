@@ -66,7 +66,6 @@ func (h *AdminHandler) MemoriesList(ctx context.Context, params api.MemoriesList
 
 	memories, total, err := h.memStore.List(ctx, opts)
 	if err != nil {
-		h.logger.Error("メモリ一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -89,7 +88,6 @@ func (h *AdminHandler) MemoriesCreate(ctx context.Context, req *api.CreateMemory
 		Metadata: metadata,
 	}
 	if err := h.memStore.Save(ctx, mem); err != nil {
-		h.logger.Error("メモリの作成に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.MemoriesCreateCreated{Data: memToAPI(*mem)}, nil
@@ -116,7 +114,6 @@ func (h *AdminHandler) MemoriesUpdate(ctx context.Context, req *api.UpdateMemory
 	}
 
 	if err := h.memStore.Update(ctx, mem); err != nil {
-		h.logger.Error("メモリの更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.MemoriesUpdateOK{Data: memToAPI(*mem)}, nil
@@ -124,7 +121,6 @@ func (h *AdminHandler) MemoriesUpdate(ctx context.Context, req *api.UpdateMemory
 
 func (h *AdminHandler) MemoriesDelete(ctx context.Context, params api.MemoriesDeleteParams) error {
 	if err := h.memStore.Delete(ctx, params.ID); err != nil {
-		h.logger.Error("メモリの削除に失敗", "error", err.Error())
 		return fmt.Errorf("not found")
 	}
 	return nil
@@ -133,7 +129,6 @@ func (h *AdminHandler) MemoriesDelete(ctx context.Context, params api.MemoriesDe
 func (h *AdminHandler) MemoriesVecStats(ctx context.Context) (*api.VecStats, error) {
 	total, embedded, err := h.memStore.VecStats(ctx)
 	if err != nil {
-		h.logger.Error("ベクトル統計の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.VecStats{
@@ -159,7 +154,6 @@ func (h *AdminHandler) MemoriesListWithVec(ctx context.Context, params api.Memor
 
 	memories, total, err := h.memStore.List(ctx, opts)
 	if err != nil {
-		h.logger.Error("ベクトル付きメモリ一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -179,7 +173,6 @@ func (h *AdminHandler) MemoriesDuplicates(ctx context.Context, params api.Memori
 		 FROM memories_vec v JOIN memories m ON m.id = v.id
 		 ORDER BY m.type, m.updated_at DESC`)
 	if err != nil {
-		h.logger.Error("重複メモリ一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	defer rows.Close()

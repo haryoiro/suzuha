@@ -75,7 +75,6 @@ func (h *AdminHandler) PromptsUpdate(ctx context.Context, req *api.UpdatePromptR
 
 	path := filepath.Join(h.promptDir, params.Name)
 	if err := os.WriteFile(path, []byte(req.Content), 0644); err != nil {
-		h.logger.Error("プロンプトファイルの書き込みに失敗", "name", params.Name, "error", err.Error())
 		return nil, fmt.Errorf("write failed")
 	}
 

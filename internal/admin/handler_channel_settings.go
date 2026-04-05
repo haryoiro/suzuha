@@ -36,7 +36,6 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 		rows, err = h.db.QueryContext(ctx, query)
 	}
 	if err != nil {
-		h.logger.Error("チャンネル設定一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	defer rows.Close()
@@ -82,7 +81,6 @@ func (h *AdminHandler) ChannelSettingsUpdate(ctx context.Context, req *api.Updat
 		   updated_at = excluded.updated_at`,
 		params.ChannelId, guildID, mode, home, now)
 	if err != nil {
-		h.logger.Error("チャンネル設定の登録・更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -104,7 +102,6 @@ func (h *AdminHandler) ChannelSettingsDelete(ctx context.Context, params api.Cha
 	_, err := h.db.ExecContext(ctx,
 		`DELETE FROM channel_settings WHERE channel_id = $1`, params.ChannelId)
 	if err != nil {
-		h.logger.Error("チャンネル設定の削除に失敗", "error", err.Error())
 		return fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-channel-settings")

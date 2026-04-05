@@ -17,7 +17,6 @@ func (h *AdminHandler) locStore() *location.Store {
 func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.LocationUserLocationParams) (*api.LocationUserLocationOK, error) {
 	locs, err := h.locStore().QueryLatestByUserID(ctx, params.UserId)
 	if err != nil {
-		h.logger.Error("ユーザー位置情報の取得に失敗", "user_id", params.UserId, "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -52,7 +51,6 @@ func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.Loca
 func (h *AdminHandler) LocationListDevices(ctx context.Context) (*api.LocationListDevicesOK, error) {
 	devices, err := h.locStore().ListDevices(ctx)
 	if err != nil {
-		h.logger.Error("位置情報デバイス一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -75,7 +73,6 @@ func (h *AdminHandler) LocationUpdateDevice(ctx context.Context, req *api.Update
 	userID := req.UserID.Or("")
 
 	if err := h.locStore().UpsertDevice(ctx, deviceID, ownerName, userID); err != nil {
-		h.logger.Error("位置情報デバイスの登録・更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -86,7 +83,6 @@ func (h *AdminHandler) LocationUpdateDevice(ctx context.Context, req *api.Update
 func (h *AdminHandler) LocationDeleteDevice(ctx context.Context, params api.LocationDeleteDeviceParams) error {
 	deviceID := fmt.Sprintf("%d", params.ID)
 	if err := h.locStore().DeleteDevice(ctx, deviceID); err != nil {
-		h.logger.Error("位置情報デバイスの削除に失敗", "error", err.Error())
 		return fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
@@ -96,7 +92,6 @@ func (h *AdminHandler) LocationDeleteDevice(ctx context.Context, params api.Loca
 func (h *AdminHandler) LocationListPlaces(ctx context.Context) (*api.LocationListPlacesOK, error) {
 	places, err := h.locStore().ListPlaces(ctx)
 	if err != nil {
-		h.logger.Error("場所一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -124,7 +119,6 @@ func (h *AdminHandler) LocationCreatePlace(ctx context.Context, req *api.CreateP
 		RadiusM:   radiusM,
 	}
 	if err := h.locStore().CreatePlace(ctx, p); err != nil {
-		h.logger.Error("場所の作成に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
@@ -140,7 +134,6 @@ func (h *AdminHandler) LocationUpdatePlace(ctx context.Context, req *api.UpdateP
 		RadiusM:   req.RadiusM.Or(0),
 	}
 	if err := h.locStore().UpdatePlace(ctx, p); err != nil {
-		h.logger.Error("場所の更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
@@ -149,7 +142,6 @@ func (h *AdminHandler) LocationUpdatePlace(ctx context.Context, req *api.UpdateP
 
 func (h *AdminHandler) LocationDeletePlace(ctx context.Context, params api.LocationDeletePlaceParams) error {
 	if err := h.locStore().DeletePlace(ctx, fmt.Sprintf("%d", params.ID)); err != nil {
-		h.logger.Error("場所の削除に失敗", "error", err.Error())
 		return fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")

@@ -10,7 +10,6 @@ import (
 func (h *AdminHandler) GuildsList(ctx context.Context) (*api.GuildsListOK, error) {
 	guilds, err := h.userStore.ListGuilds(ctx)
 	if err != nil {
-		h.logger.Error("ギルド一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -30,7 +29,6 @@ func (h *AdminHandler) GuildsList(ctx context.Context) (*api.GuildsListOK, error
 func (h *AdminHandler) ChannelsList(ctx context.Context) (*api.ChannelsListOK, error) {
 	channels, err := h.userStore.ListAllChannels(ctx)
 	if err != nil {
-		h.logger.Error("全チャンネル一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -49,7 +47,6 @@ func (h *AdminHandler) ChannelsList(ctx context.Context) (*api.ChannelsListOK, e
 func (h *AdminHandler) GuildsChannels(ctx context.Context, params api.GuildsChannelsParams) (*api.GuildsChannelsOK, error) {
 	channels, err := h.userStore.GetGuildChannels(ctx, params.ID)
 	if err != nil {
-		h.logger.Error("ギルドのチャンネル取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 

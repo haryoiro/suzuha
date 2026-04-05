@@ -42,7 +42,6 @@ func (h *AdminHandler) ScheduledActionsList(ctx context.Context, params api.Sche
 		Limit:  limit,
 	})
 	if err != nil {
-		h.logger.Error("アクション一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -85,7 +84,6 @@ func (h *AdminHandler) ScheduledActionsCreate(ctx context.Context, req *api.Crea
 		CreatedBy:   "admin",
 	}
 	if err := h.schedStore.Create(ctx, a); err != nil {
-		h.logger.Error("アクションの作成に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.ScheduledActionsCreateCreated{
@@ -117,7 +115,6 @@ func (h *AdminHandler) ScheduledActionsUpdate(ctx context.Context, req *api.Upda
 	}
 
 	if err := h.schedStore.Update(ctx, params.ID, fields); err != nil {
-		h.logger.Error("アクションの更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.OkResponse{Ok: true}, nil
@@ -125,7 +122,6 @@ func (h *AdminHandler) ScheduledActionsUpdate(ctx context.Context, req *api.Upda
 
 func (h *AdminHandler) ScheduledActionsDelete(ctx context.Context, params api.ScheduledActionsDeleteParams) (*api.OkResponse, error) {
 	if err := h.schedStore.Delete(ctx, params.ID); err != nil {
-		h.logger.Error("アクションの削除に失敗", "error", err.Error())
 		return nil, fmt.Errorf("not found")
 	}
 	return &api.OkResponse{Ok: true}, nil

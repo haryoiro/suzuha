@@ -19,7 +19,6 @@ func (h *AdminHandler) DiaryList(ctx context.Context, params api.DiaryListParams
 	var since time.Time // ゼロ値 = 全期間
 	entries, err := ds.ListByKind(ctx, kind, since, limit+offset)
 	if err != nil {
-		h.logger.Error("diary: 一覧取得に失敗", "error", err.Error())
 		return nil, err
 	}
 

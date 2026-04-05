@@ -339,7 +339,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			schedStore := do.MustInvoke[*action.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
-			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger), nil
+			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger)
 		})
 
 		// Scheduler (nil when disabled in config).

@@ -35,7 +35,6 @@ func (h *AdminHandler) UsersList(ctx context.Context, params api.UsersListParams
 
 	users, total, err := h.userStore.List(ctx, offset, limit)
 	if err != nil {
-		h.logger.Error("ユーザー一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -71,7 +70,6 @@ func (h *AdminHandler) UsersUpdate(ctx context.Context, req *api.UpdateUserReque
 	}
 
 	if err := h.userStore.Update(ctx, params.ID, fields); err != nil {
-		h.logger.Error("ユーザーの更新に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	return &api.OkResponse{Ok: true}, nil
@@ -80,7 +78,6 @@ func (h *AdminHandler) UsersUpdate(ctx context.Context, req *api.UpdateUserReque
 func (h *AdminHandler) UsersGuilds(ctx context.Context, params api.UsersGuildsParams) (*api.UsersGuildsOK, error) {
 	guilds, err := h.userStore.GetUserGuilds(ctx, params.ID)
 	if err != nil {
-		h.logger.Error("ユーザーのギルド取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -104,7 +101,6 @@ func (h *AdminHandler) UsersMemories(ctx context.Context, params api.UsersMemori
 		 WHERE type = 'user' AND metadata->>'user_id' = $1
 		 ORDER BY updated_at DESC LIMIT $2`, params.ID, limit)
 	if err != nil {
-		h.logger.Error("ユーザーのメモリ取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	defer rows.Close()

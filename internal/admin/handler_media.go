@@ -91,7 +91,6 @@ func (h *AdminHandler) uploadMedia(w http.ResponseWriter, r *http.Request) {
 
 	// Store the file.
 	if err := h.mediaStore.Put(r.Context(), key, data); err != nil {
-		h.logger.Error("メディアの保存に失敗", "error", err)
 		http.Error(w, `{"error":"failed to save media"}`, http.StatusInternalServerError)
 		return
 	}
@@ -104,7 +103,6 @@ func (h *AdminHandler) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	mem.Attachments = append(mem.Attachments, att)
 	if err := h.memStore.Update(r.Context(), mem); err != nil {
-		h.logger.Error("メモリの更新に失敗", "error", err)
 		http.Error(w, `{"error":"failed to update memory"}`, http.StatusInternalServerError)
 		return
 	}
@@ -162,7 +160,6 @@ func (h *AdminHandler) searchByImage(w http.ResponseWriter, r *http.Request) {
 
 	memories, err := h.memStore.SearchByParts(r.Context(), parts, 10)
 	if err != nil {
-		h.logger.Error("画像検索に失敗", "error", err)
 		http.Error(w, `{"error":"search failed"}`, http.StatusInternalServerError)
 		return
 	}

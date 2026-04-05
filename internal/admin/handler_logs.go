@@ -17,7 +17,6 @@ func (h *AdminHandler) ConversationLogsList(ctx context.Context) (*api.Conversat
 		 GROUP BY channel_id
 		 ORDER BY last DESC`)
 	if err != nil {
-		h.logger.Error("会話ログ一覧の取得に失敗", "error", err.Error())
 		return nil, fmt.Errorf("internal error")
 	}
 	defer rows.Close()
@@ -61,7 +60,6 @@ func (h *AdminHandler) ConversationLogsExport(ctx context.Context, params api.Co
 
 	rows, err := h.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		h.logger.Error("会話ログのエクスポートに失敗", "error", err.Error())
 		return api.ConversationLogsExportOK{}, fmt.Errorf("internal error")
 	}
 	defer rows.Close()

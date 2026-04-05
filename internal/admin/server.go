@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,17 +25,14 @@ type Server struct {
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) *Server {
+func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 
-	// Create the ogen handler implementation.
 	adminHandler := NewAdminHandler(store, userStore, schedStore, mediaStore, agentBase, cfg.PromptDir, logger)
 
-	// Create the ogen server (handles all typed API routes).
 	ogenServer, err := api.NewServer(adminHandler)
 	if err != nil {
-		logger.Error("ogen サーバーの作成に失敗", "error", err.Error())
-		panic(err)
+		return nil, fmt.Errorf("admin: ogen サーバーの作成に失敗: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -85,7 +83,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	h = middleware.CORS(h)
 	h = middleware.BasicAuth(cfg.Auth.Username, cfg.Auth.Password, h)
 
-	return &Server{handler: h, cfg: cfg, logger: logger}
+	return &Server{handler: h, cfg: cfg, logger: logger}, nil
 }
 
 // ListenAndServe starts the admin HTTP server.
