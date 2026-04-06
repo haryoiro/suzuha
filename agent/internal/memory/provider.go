@@ -19,6 +19,6 @@ func Package(i do.Injector) {
 		if cfg.Memory.PostgresURL != "" {
 			return NewPostgresStore(cfg.Memory.PostgresURL, embedder, true, logger)
 		}
-		return NewSQLiteStore(cfg.Memory.DBPath, embedder, true, logger)
+		return newSQLiteBackend(cfg.Memory.DBPath, embedder, logger)
 	})
 }

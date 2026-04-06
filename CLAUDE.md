@@ -12,12 +12,14 @@ Go workspace (`go.work`) を使用したモノレポ:
 
 ## ビルド・テスト
 
-CGO依存あり。**ホストで直接実行しない** — 必ず Docker 経由:
+**ホストで直接実行しない** — 必ず Docker 経由:
 
 ```bash
-docker compose -f container/compose.yaml exec agent go build -buildvcs=false -tags fts5 ./agent/...
-docker compose -f container/compose.yaml exec agent go test -tags fts5 ./agent/...
+docker compose -f container/compose.yaml exec agent go build -buildvcs=false ./agent/...
+docker compose -f container/compose.yaml exec agent go test ./agent/...
 ```
+
+SQLite バックエンドを含める場合は `-tags 'fts5,sqlite'` を追加（CGO 必須）。
 
 ## コミット
 
