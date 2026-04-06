@@ -532,7 +532,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		names := registry.DisabledNames()
 		data, _ := json.Marshal(names)
 		_, _ = llmDB.Exec(
-			`INSERT INTO app_settings (key, value) VALUES ('disabled_tools', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+			`INSERT INTO app_settings (key, value) VALUES ('disabled_tools', $1) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
 			string(data),
 		)
 	}
@@ -696,7 +696,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		// Look up home channel from DB.
 		var deviceChannel string
 		db := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
-		_ = db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = 1 LIMIT 1").Scan(&deviceChannel)
+		_ = db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = true LIMIT 1").Scan(&deviceChannel)
 		var sttClient stt.STT
 		if cfg.Voice.Enabled && len(cfg.Voice.STT) > 0 {
 			sttClient, _ = stt.NewSTT(stt.STTProviderConfig{

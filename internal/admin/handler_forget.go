@@ -22,9 +22,10 @@ func (h *AdminHandler) ForgetGroups(ctx context.Context, params api.ForgetGroups
 		updatedAt string
 	}
 	rows, err := h.db.QueryContext(ctx,
-		`SELECT v.id, m.type, m.content, m.metadata, m.created_at, m.updated_at
-		 FROM memories_vec v JOIN memories m ON m.id = v.id
-		 ORDER BY m.type, m.created_at`)
+		`SELECT id, type, content, metadata, created_at, updated_at
+		 FROM memories
+		 WHERE embedding IS NOT NULL
+		 ORDER BY type, created_at`)
 	if err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
@@ -87,10 +88,11 @@ func (h *AdminHandler) ForgetGroups(ctx context.Context, params api.ForgetGroups
 
 	for i, e := range all {
 		neighRows, err := h.db.QueryContext(ctx,
-			`SELECT v2.id, v2.distance
-			 FROM memories_vec v1
-			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = 10
-			 WHERE v1.id = $1`, e.id)
+			`SELECT m2.id, m1.embedding <=> m2.embedding AS dist
+			 FROM memories m1
+			 JOIN memories m2 ON m1.id != m2.id AND m2.embedding IS NOT NULL
+			 WHERE m1.id = $1
+			 ORDER BY dist LIMIT 10`, e.id)
 		if err != nil {
 			continue
 		}

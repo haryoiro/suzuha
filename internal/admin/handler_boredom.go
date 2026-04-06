@@ -33,7 +33,7 @@ func (h *AdminHandler) BoredomGet(ctx context.Context) (*api.BoredomStatus, erro
 
 		var name string
 		if h.db.QueryRowContext(ctx,
-			`SELECT name FROM channels WHERE id = $1`, channelID,
+			`SELECT channel_name FROM user_guild_channels WHERE channel_id = $1 LIMIT 1`, channelID,
 		).Scan(&name) == nil && name != "" {
 			resp.LastChannel = "#" + name
 		} else {

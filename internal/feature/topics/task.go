@@ -237,7 +237,7 @@ func fetchPastMutterings(ctx context.Context, cc *scheduler.CronContext, limit i
 	rows, err := cc.DB.QueryContext(ctx,
 		`SELECT content, timestamp FROM conversation_logs
 		 WHERE role = 'assistant' AND content != ''
-		 ORDER BY timestamp DESC LIMIT ?`, limit)
+		 ORDER BY timestamp DESC LIMIT $1`, limit)
 	if err != nil {
 		cc.Logger.Debug("topics: fetch past mutterings", "error", err)
 		return nil
@@ -385,7 +385,7 @@ func findRandomActiveChannel(ctx context.Context, db *sql.DB) string {
 func findHomeChannel(ctx context.Context, db *sql.DB) string {
 	var channelID string
 	err := db.QueryRowContext(ctx,
-		`SELECT channel_id FROM channel_settings WHERE home = 1 AND (mode = 'active' OR mode = '') LIMIT 1`,
+		`SELECT channel_id FROM channel_settings WHERE home = true AND (mode = 'active' OR mode = '') LIMIT 1`,
 	).Scan(&channelID)
 	if err != nil {
 		return ""

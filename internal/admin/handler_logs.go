@@ -43,18 +43,22 @@ func (h *AdminHandler) ConversationLogsExport(ctx context.Context, params api.Co
 	query := `SELECT turn_id, role, content, tool_calls, tool_call_id
 		FROM conversation_logs WHERE 1=1`
 	var args []any
+	argIdx := 1
 
 	if channelID != "" {
-		query += ` AND channel_id = ?`
+		query += fmt.Sprintf(` AND channel_id = $%d`, argIdx)
 		args = append(args, channelID)
+		argIdx++
 	}
 	if since != "" {
-		query += ` AND timestamp >= ?`
+		query += fmt.Sprintf(` AND timestamp >= $%d`, argIdx)
 		args = append(args, since)
+		argIdx++
 	}
 	if until != "" {
-		query += ` AND timestamp <= ?`
+		query += fmt.Sprintf(` AND timestamp <= $%d`, argIdx)
 		args = append(args, until)
+		argIdx++
 	}
 	query += ` ORDER BY id ASC`
 
