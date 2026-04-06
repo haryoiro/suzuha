@@ -3,5 +3,40 @@ go = "1.26.0"
 "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "latest"
 "go:github.com/evilmartians/lefthook" = "latest"
 pnpm = "latest"
-protoc = "29.6"
 node = "22"
+
+[tasks.spec]
+description = "TypeSpec → OpenAPI → ogen コード生成"
+run = """
+cd spec && pnpm exec tsp compile .
+docker compose -f container/compose.yaml exec agent ogen --target /app/agent/internal/admin/api --package api --clean /app/spec/generated/openapi.yaml
+"""
+
+[tasks."dev:admin"]
+description = "管理画面: Go API + Vite HMR を同時起動"
+run = """
+trap 'kill 0' EXIT
+air -c .air.admin.toml &
+cd web/admin && pnpm run dev &
+wait
+"""
+
+[tasks."dev:admin:api"]
+description = "Go API のみ起動"
+run = "air -c .air.admin.toml"
+
+[tasks."dev:admin:web"]
+description = "Vite dev server のみ起動"
+run = "cd web/admin && pnpm run dev"
+
+[tasks."firmware:p4"]
+description = "ESP32-P4 ファームウェアビルド"
+run = "docker compose -f container/compose.yaml build firmware-p4"
+
+[tasks."firmware:esp32"]
+description = "ESP32 ファームウェアビルド"
+run = "docker compose -f container/compose.yaml build firmware-esp32"
+
+[tasks."firmware:all"]
+description = "全ファームウェアビルド"
+depends = ["firmware:p4", "firmware:esp32"]

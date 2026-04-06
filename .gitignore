@@ -4,10 +4,6 @@ tmp/
 *.dll
 *.so
 *.dylib
-/suzuha-agent
-/suzuha-consolidator
-/suzuha-admin
-/suzuha-synth
 
 # Environment
 .env
@@ -20,7 +16,7 @@ data/
 # Dependencies
 .pnpm-store/
 .venv*/
-api/node_modules/
+spec/node_modules/
 web/widget/node_modules/
 
 # ML / fine-tuning
@@ -31,8 +27,6 @@ unsloth_compiled_cache/
 .suzuha/
 .suzuha1/
 config.suzuha1.yaml
-werewolf-players/
-container/compose.werewolf.yaml
 
 # IDE
 .idea/
@@ -55,5 +49,3 @@ current_frame.jpg
 backups/
 bench/snapshots/
 bench/results.json
-migrate_sqlite_to_pg
-suzuha-bench

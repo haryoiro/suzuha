@@ -3,12 +3,12 @@ tmp_dir = "tmp"
 
 [build]
   bin = "./tmp/suzuha-agent"
-  cmd = "CGO_ENABLED=1 go build -buildvcs=false -tags fts5 -o ./tmp/suzuha-agent ./cmd/suzuha-agent"
+  cmd = "CGO_ENABLED=1 go build -buildvcs=false -tags fts5 -o ./tmp/suzuha-agent ./agent/cmd/suzuha-agent"
   delay = 1000
   exclude_dir = ["tmp", "docs", "vendor", ".git"]
   exclude_regex = ["_test\\.go$"]
   include_ext = ["go", "yaml"]
-  include_dir = ["cmd/suzuha-agent", "internal"]
+  include_dir = ["agent/cmd/suzuha-agent", "agent/internal"]
   kill_delay = "1s"
   send_interrupt = true
   stop_on_error = true

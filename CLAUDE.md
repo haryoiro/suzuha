@@ -1,13 +1,22 @@
 # suzuha 開発ガイド
 
+## リポジトリ構成
+
+Go workspace (`go.work`) を使用したモノレポ:
+
+- `agent/` — Go モジュール (`cmd/`, `internal/`, `external/`)
+- `spec/` — TypeSpec API 定義 + 生成 OpenAPI
+- `web/` — フロントエンド (admin, widget)
+- `firmware/` — ESP32 ファームウェア
+- `container/` — Docker 設定
+
 ## ビルド・テスト
 
 CGO依存あり。**ホストで直接実行しない** — 必ず Docker 経由:
 
 ```bash
-docker compose -f container/compose.yaml exec agent go build -buildvcs=false -tags fts5 ./...
-docker compose -f container/compose.yaml exec agent go test -tags fts5 ./...
-docker compose -f container/compose.yaml exec agent sqlite3 /data/memory.db
+docker compose -f container/compose.yaml exec agent go build -buildvcs=false -tags fts5 ./agent/...
+docker compose -f container/compose.yaml exec agent go test -tags fts5 ./agent/...
 ```
 
 ## コミット

@@ -18,15 +18,17 @@ lib/         → 標準ライブラリのみ
 
 ## パッケージ配置
 
+Go コードは `agent/` ディレクトリ配下:
+
 | 種類 | 配置先 |
 |---|---|
-| プロトコルアダプタ | `internal/adapter/{name}/` |
-| ゲートウェイ (ライフサイクル管理) | `internal/gateway/` |
-| 機能 (Tools + Tasks) | `internal/feature/{name}/` |
-| ドメイン | `internal/agent/` or `internal/memento/` |
-| インフラ | `internal/{name}/` |
-| 外部サービス SDK | `external/{name}/` |
-| ユーティリティ | `internal/lib/{name}/` |
+| プロトコルアダプタ | `agent/internal/adapter/{name}/` |
+| ゲートウェイ (ライフサイクル管理) | `agent/internal/gateway/` |
+| 機能 (Tools + Tasks) | `agent/internal/feature/{name}/` |
+| ドメイン | `agent/internal/agent/` or `agent/internal/memento/` |
+| インフラ | `agent/internal/{name}/` |
+| 外部サービス SDK | `agent/external/{name}/` |
+| ユーティリティ | `agent/internal/lib/{name}/` |
 
 ## Feature パターン
 

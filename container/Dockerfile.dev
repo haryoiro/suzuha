@@ -45,8 +45,9 @@ RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
 WORKDIR /app
 
 # Pre-download dependencies (cached layer)
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.work ./
+COPY agent/go.mod agent/go.sum ./agent/
+RUN cd agent && go mod download
 
 # Source code is bind-mounted at runtime
 ENTRYPOINT ["air"]
