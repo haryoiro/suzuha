@@ -54,7 +54,9 @@ type researchInput struct {
 func (t *ResearchTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in researchInput
 	if len(input) > 0 {
-		_ = json.Unmarshal(input, &in)
+		if err := json.Unmarshal(input, &in); err != nil {
+			return tool.ErrorResult("無効な入力: " + err.Error()), nil
+		}
 	}
 	if in.Query == "" {
 		return tool.ErrorResult("query は必須です"), nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/llm"
@@ -66,7 +67,9 @@ type wanderToolInput struct {
 func (t *WanderTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in wanderToolInput
 	if len(input) > 0 {
-		_ = json.Unmarshal(input, &in)
+		if err := json.Unmarshal(input, &in); err != nil {
+			return tool.ErrorResult("無効な入力: " + err.Error()), nil
+		}
 	}
 
 	maxDepth := t.maxDepth
@@ -116,7 +119,11 @@ func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth i
 		// Pre-search so LLM can evaluate + pick in one call.
 		var searchResults []search.SearchResult
 		if depth < maxDepth-1 {
-			searchResults, _ = t.searx.Search(ctx, title, searchResultsMax)
+			var searchErr error
+			searchResults, searchErr = t.searx.Search(ctx, title, searchResultsMax)
+			if searchErr != nil {
+				slog.Warn("wander: tool search failed", "title", title, "error", searchErr)
+			}
 		}
 
 		eval, err := evaluateAndPick(ctx, t.llm, t.systemPrompt, title, content, path, searchResults)
@@ -173,7 +180,9 @@ func (t *WanderTool) doWander(ctx context.Context, startQuery string, maxDepth i
 				"type":   "reflection",
 			},
 		}
-		_ = t.mem.Save(ctx, mem)
+		if saveErr := t.mem.Save(ctx, mem); saveErr != nil {
+			slog.Warn("wander: memory save failed", "error", saveErr)
+		}
 	}
 
 	return summary, nil

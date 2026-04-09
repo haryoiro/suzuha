@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -178,7 +179,9 @@ func (t *lookTool) Execute(ctx context.Context, _ json.RawMessage) (*tool.ToolRe
 		return tool.ErrorResult("カメラフレームなし（デバイス未接続）"), nil
 	}
 
-	_ = t.dev.SendDeviceCommand(map[string]any{"cmd": "capture"})
+	if err := t.dev.SendDeviceCommand(map[string]any{"cmd": "capture"}); err != nil {
+		slog.Warn("body_look: capture command failed", "error", err)
+	}
 	frame := t.frames.WaitForNewFrame(2 * time.Second)
 	if frame == nil {
 		frame = t.frames.LatestFrame()
