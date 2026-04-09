@@ -23,9 +23,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/bench"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
@@ -118,10 +118,20 @@ func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPat
 	for _, s := range scenarios {
 		logger.Info("シナリオ実行中", "name", s.Name, "cases", len(s.Cases))
 
+		// SessionSetup: cmd 層で agent 具象型を使ってセッションを差し替える
+		setup := func(runner *bench.Runner) (bench.BenchContext, error) {
+			agentCtx := ag.AgentContextFor(agent.SourceKeyDiscord)
+			ag.SetSession(agent.SourceKeyDiscord, &captureSession{
+				agentCtx: agentCtx,
+				runner:   runner,
+			})
+			return agentCtx, nil
+		}
+
 		runner, err := bench.NewRunner(bench.RunnerConfig{
 			SnapshotPath: snapshotPath,
 			BenchDBURL:   dbURL,
-		}, ag, logger)
+		}, ag, setup, logger)
 		if err != nil {
 			return fmt.Errorf("Runner 構築に失敗: %w", err)
 		}
@@ -220,6 +230,34 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 	)
 
 	return ag, store, nil
+}
+
+// captureSession は応答テキストをキャプチャする Session 実装。
+// agent パッケージの具象型を使うため cmd 層に配置する。
+type captureSession struct {
+	agentCtx *agent.Context
+	runner   *bench.Runner
+}
+
+var _ agent.Session = (*captureSession)(nil)
+
+func (s *captureSession) Source() agent.SourceKey       { return agent.SourceKeyDiscord }
+func (s *captureSession) Context() *agent.Context       { return s.agentCtx }
+func (s *captureSession) PersistKey() string            { return "bench_discord" }
+func (s *captureSession) BeginTurn(_ *agent.Perception) {}
+func (s *captureSession) DirectiveConfig() agent.DirectiveConfig {
+	return agent.DirectiveConfig{
+		ForceRespond:       true,
+		DrainWindow:        0,
+		SkipChannelFilter:  true,
+		SkipCatchUpStale:   true,
+		SkipChannelHistory: false, // 会話履歴の注入は有効にする
+	}
+}
+
+func (s *captureSession) Respond(_ context.Context, text string) error {
+	s.runner.CaptureResponse(s.runner.CurrentCaseID(), text)
+	return nil
 }
 
 func toSet(csv string) map[string]bool {
