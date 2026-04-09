@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"sort"
+	"sync"
 	"strings"
 	"time"
 
@@ -20,9 +21,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" // register sqlite3 driver
 )
 
-func init() {
-	sqlite_vec.Auto()
-}
+var sqliteVecInit sync.Once
 
 // memColumns は memories テーブルの SELECT クエリ用の正規カラムリスト。
 const memColumns = "id, type, content, metadata, keywords, topic, persons, event_time, created_at, updated_at"
@@ -117,6 +116,7 @@ func (s *SQLiteStore) SetMediaStore(ms MediaStore) { s.mediaStore = ms }
 // If runMigrations is true, pending schema migrations are applied.
 // Typically only the agent process should run migrations to avoid race conditions.
 func NewSQLiteStore(dbPath string, embedder embedding.Embedder, runMigrations bool, logger *slog.Logger) (*SQLiteStore, error) {
+	sqliteVecInit.Do(sqlite_vec.Auto)
 	if logger == nil {
 		logger = slog.Default()
 	}
