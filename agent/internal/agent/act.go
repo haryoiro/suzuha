@@ -170,13 +170,13 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 					attribute.Int("gen_ai.request.tool_count", len(allTools)),
 				),
 			)
-			defer span.End()
 		}
 
 		resp, err := rc.CompleteWithTools(ctx, provMsgs, provTools)
 		if err != nil {
 			if span != nil {
 				span.RecordError(err)
+				span.End()
 			}
 			return nil, intermediateText, err
 		}
@@ -188,6 +188,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				attribute.String("gen_ai.response.finish_reason", resp.FinishReason),
 				attribute.Int("gen_ai.response.tool_call_count", len(resp.ToolCalls)),
 			)
+			span.End()
 		}
 
 		a.logger.Info("考えた",
