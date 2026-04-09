@@ -2,17 +2,14 @@ package agent
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/transcript"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
@@ -30,6 +27,30 @@ const DefaultDrainWindow = 3 * time.Second
 // acquirer は agent が必要とするメモリ獲得機能を定義する (consumer-side interface)。
 type acquirer interface {
 	Acquire(ctx context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error)
+}
+
+// VideoInfo は動画のメタデータを保持する。
+type VideoInfo struct {
+	Title    string
+	Duration float64
+}
+
+// VideoMetadataFetcher は動画 URL のメタデータを取得する (consumer-side interface)。
+type VideoMetadataFetcher interface {
+	Supports(url string) bool
+	FetchMetadata(ctx context.Context, url string) (VideoInfo, error)
+}
+
+// TweetPreview はツイートのプレビュー情報を保持する。
+type TweetPreview struct {
+	AuthorID string
+	Text     string
+}
+
+// TweetFetcher はツイートを取得する (consumer-side interface)。
+type TweetFetcher interface {
+	Supports(url string) bool
+	Fetch(ctx context.Context, url string) (*TweetPreview, error)
 }
 
 // conversationStore は会話ログとコンテキストスナップショットの永続化を担う (consumer-side interface)。
@@ -54,11 +75,13 @@ type Agent struct {
 	bus       *event.Bus
 	acquirer  acquirer
 	convStore       conversationStore
-	db              *sql.DB // shared DB for DiaryProvider 等 (段階的に除去予定)
 	channelSettings *channelpkg.Store
-	locationStore   *location.Store
+	locationStore   prompt.LocationSnippetBuilder
 	mediaStore      memory.MediaStore
-	videoMeta       transcript.MetadataFetcher // nil if video feature not configured
+	videoMeta       VideoMetadataFetcher
+	tweetFetcher    TweetFetcher
+	videoURLExtract func(string) []string
+	tweetURLExtract func(string) []string
 	logger          *slog.Logger
 	contextProviders []prompt.Provider
 	hooks            []PipelineHook
@@ -143,7 +166,7 @@ func New(
 	bus *event.Bus,
 	acq acquirer,
 	convStore conversationStore,
-	db *sql.DB,
+	diaryReader prompt.DiaryReader,
 	channelSettings *channelpkg.Store,
 	logger *slog.Logger,
 ) *Agent {
@@ -192,7 +215,6 @@ func New(
 		bus:              bus,
 		acquirer:         acq,
 		convStore:        convStore,
-		db:               db,
 		channelSettings:  channelSettings,
 		logger:           logger,
 		systemPrompt:     cfg.SystemPrompt,
@@ -200,7 +222,7 @@ func New(
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
 		maxContextTokens: cfg.MaxContextTokens,
-		contextProviders: buildProviders(memStore, db, userStore, cfg.BotID, logger),
+		contextProviders: buildProviders(memStore, diaryReader, userStore, cfg.BotID, logger),
 	}
 }
 
@@ -253,7 +275,8 @@ func (a *Agent) GetSession(key SourceKey) Session {
 	return a.sessions[key]
 }
 
-func (a *Agent) SetLocationStore(s *location.Store) {
+// SetLocationStore は位置情報ストアを設定する。
+func (a *Agent) SetLocationStore(s prompt.LocationSnippetBuilder) {
 	a.locationStore = s
 	for _, p := range a.contextProviders {
 		if lp, ok := p.(*prompt.LocationProvider); ok {
@@ -262,8 +285,16 @@ func (a *Agent) SetLocationStore(s *location.Store) {
 	}
 }
 
-func (a *Agent) SetVideoMeta(m transcript.MetadataFetcher) {
+// SetVideoMeta は動画メタデータフェッチャーと URL 抽出関数を設定する。
+func (a *Agent) SetVideoMeta(m VideoMetadataFetcher, extractURLs func(string) []string) {
 	a.videoMeta = m
+	a.videoURLExtract = extractURLs
+}
+
+// SetTweetFetcher はツイートフェッチャーと URL 抽出関数を設定する。
+func (a *Agent) SetTweetFetcher(f TweetFetcher, extractURLs func(string) []string) {
+	a.tweetFetcher = f
+	a.tweetURLExtract = extractURLs
 }
 
 func (a *Agent) SetMediaStore(s memory.MediaStore) {
@@ -281,13 +312,13 @@ func (a *Agent) SetTracer(t trace.Tracer) {
 
 func buildProviders(
 	memStore memory.Store,
-	db *sql.DB,
+	diaryReader prompt.DiaryReader,
 	userStore user.Store,
 	botID string,
 	logger *slog.Logger,
 ) []prompt.Provider {
 	return []prompt.Provider{
-		&prompt.DiaryProvider{DB: db, Logger: logger},
+		&prompt.DiaryProvider{Reader: diaryReader, Logger: logger},
 		&prompt.MemoryProvider{Memory: memStore, Logger: logger},
 		&prompt.LocationProvider{},
 		&prompt.ProfileProvider{Users: userStore, Memory: memStore, BotID: botID, Logger: logger},

@@ -224,7 +224,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 		bus,
 		nil, // acquirer
 		convStore,
-		db,
+		nil, // diaryReader
 		nil, // channelSettings
 		logger,
 	)

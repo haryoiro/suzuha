@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -30,14 +29,14 @@ func parseDataURI(uri string) ([]byte, string) {
 	return data, mime
 }
 
-func modalityFromMime(mime string) embedding.Modality {
+func modalityFromMime(mime string) memory.Modality {
 	switch {
 	case strings.HasPrefix(mime, "image/"):
-		return embedding.ModalityImage
+		return memory.ModalityImage
 	case strings.HasPrefix(mime, "audio/"):
-		return embedding.ModalityAudio
+		return memory.ModalityAudio
 	default:
-		return embedding.ModalityText
+		return memory.ModalityText
 	}
 }
 
@@ -67,7 +66,7 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 		if data == nil {
 			continue
 		}
-		parts := []embedding.Part{{
+		parts := []memory.Part{{
 			Modality: modalityFromMime(mime),
 			Data:     data,
 			MimeType: mime,
