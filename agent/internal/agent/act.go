@@ -153,9 +153,39 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			msgs = groupByChannel(msgs, channel)
 		}
 
-		resp, err := a.llm.Complete(ctx, msgs, allTools)
+		rc := a.llm.For("conversation")
+		provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
+		provTools := llm.ConvertTools(allTools)
+
+		var span trace.Span
+		if a.tracer != nil {
+			ctx, span = a.tracer.Start(ctx, "llm.complete",
+				trace.WithSpanKind(trace.SpanKindClient),
+				trace.WithAttributes(
+					attribute.String("gen_ai.system", rc.ProviderName()),
+					attribute.String("gen_ai.request.model", rc.Model()),
+					attribute.Int("gen_ai.prompt.message_count", len(msgs)),
+					attribute.Int("gen_ai.request.tool_count", len(allTools)),
+				),
+			)
+			defer span.End()
+		}
+
+		resp, err := rc.CompleteWithTools(ctx, provMsgs, provTools)
 		if err != nil {
+			if span != nil {
+				span.RecordError(err)
+			}
 			return nil, intermediateText, err
+		}
+
+		if span != nil {
+			span.SetAttributes(
+				attribute.Int("gen_ai.usage.prompt_tokens", resp.Usage.PromptTokens),
+				attribute.Int("gen_ai.usage.completion_tokens", resp.Usage.CompletionTokens),
+				attribute.String("gen_ai.response.finish_reason", resp.FinishReason),
+				attribute.Int("gen_ai.response.tool_call_count", len(resp.ToolCalls)),
+			)
 		}
 
 		a.logger.Info("考えた",
