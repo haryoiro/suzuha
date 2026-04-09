@@ -4,10 +4,7 @@ package memory
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
-	"math"
-	"sort"
 	"strings"
 	"time"
 
@@ -333,6 +330,3 @@ func (s *SQLiteStore) searchVecByEmbedding(ctx context.Context, emb []float32, m
 
 	return results, nil
 }
-
-// applyModalityBoost adjusts vec distances for multimodal memories.
-// Memories with image/audio attachments get their distance divided by a boost factor,

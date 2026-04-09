@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 func (s *SQLiteStore) applyModalityBoost(ctx context.Context, results []scoredID) []scoredID {
