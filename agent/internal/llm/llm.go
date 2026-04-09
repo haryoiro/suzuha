@@ -243,6 +243,65 @@ func (rc *RoleClient) CompleteRaw(ctx context.Context, messages []providers.Mess
 	return r, nil
 }
 
+// CompleteWithTools はツール定義付きで completion を実行する。
+// メッセージとツールは事前に providers 形式に変換済みであること。
+func (rc *RoleClient) CompleteWithTools(ctx context.Context, messages []providers.Message, tools []providers.Tool) (*Response, error) {
+	rp := rc.resolve()
+	if rp.provider == nil {
+		return nil, fmt.Errorf("llm: ロール %q にプロバイダが設定されていません", rc.role)
+	}
+	params := providers.CompletionParams{
+		Model:    rp.model,
+		Messages: messages,
+		Tools:    tools,
+	}
+
+	var resp *providers.ChatCompletion
+	err := retryOnRateLimit(ctx, rc.client.logger, func() error {
+		var callErr error
+		resp, callErr = rp.provider.Completion(ctx, params)
+		return callErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("llm: 空のレスポンス")
+	}
+	choice := resp.Choices[0]
+	reasoning, cleaned := parseThinkTags(choice.Message.ContentString())
+	r := &Response{
+		Text:         cleaned,
+		Reasoning:    reasoning,
+		ToolCalls:    choice.Message.ToolCalls,
+		FinishReason: choice.FinishReason,
+	}
+	if resp.Usage != nil {
+		r.Usage = *resp.Usage
+	}
+	return r, nil
+}
+
+// HasCapability はこのロールが指定されたケイパビリティを持つかを返す。
+func (rc *RoleClient) HasCapability(cap string) bool {
+	rc.client.mu.RLock()
+	defer rc.client.mu.RUnlock()
+	if rp, ok := rc.client.roles[rc.role]; ok {
+		return rp.hasCapability(cap)
+	}
+	return false
+}
+
+// Model はこのロールに割り当てられたモデル名を返す。
+func (rc *RoleClient) Model() string {
+	return rc.resolve().model
+}
+
+// ProviderName はこのロールに割り当てられたプロバイダ名を返す。
+func (rc *RoleClient) ProviderName() string {
+	return rc.resolve().providerName
+}
+
 // MaxContextTokens はこのロールの最大コンテキストトークン数を返す。
 func (rc *RoleClient) MaxContextTokens() int {
 	return rc.resolve().maxCtx
@@ -430,6 +489,8 @@ func (c *Client) SetMaxContextTokens(maxCtx int) {
 
 // Complete sends a completion request with optional tools.
 // 後方互換シム: conversation ロールを使用する。
+// Deprecated: Complete はメッセージ/ツール変換と tracing を内包している。
+// 新規コードは ConvertMessages/ConvertTools + RoleClient.CompleteWithTools を使用すること。
 func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.Tool) (*Response, error) {
 	c.mu.RLock()
 	rp := c.roles["conversation"]
@@ -461,8 +522,8 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 
 	params := providers.CompletionParams{
 		Model:    model,
-		Messages: convertMessages(messages, vision),
-		Tools:    convertTools(tools),
+		Messages: ConvertMessages(messages, vision),
+		Tools:    ConvertTools(tools),
 	}
 
 	c.logger.Debug("LLMにリクエスト",
@@ -587,12 +648,12 @@ func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model
 	return r, nil
 }
 
-// convertMessages transforms suzuha Messages to any-llm-go Messages.
+// ConvertMessages transforms suzuha Messages to any-llm-go Messages.
 // System messages after the first one are converted to user messages,
 // because some models (e.g. Qwen3.5) only allow a single system message at the start.
 // Orphaned tool messages and unmatched tool_calls are sanitized to satisfy
 // strict providers like OpenAI.
-func convertMessages(msgs []Message, visionCapable bool) []providers.Message {
+func ConvertMessages(msgs []Message, visionCapable bool) []providers.Message {
 	// Collect tool_call IDs that have assistant requests and tool responses.
 	assistantToolCalls := make(map[string]bool)
 	toolResponses := make(map[string]bool)
@@ -684,8 +745,8 @@ func convertMessages(msgs []Message, visionCapable bool) []providers.Message {
 	return out
 }
 
-// convertTools transforms suzuha Tool interfaces to any-llm-go Tool structs.
-func convertTools(tools []tool.Tool) []providers.Tool {
+// ConvertTools transforms suzuha Tool interfaces to any-llm-go Tool structs.
+func ConvertTools(tools []tool.Tool) []providers.Tool {
 	if len(tools) == 0 {
 		return nil
 	}
