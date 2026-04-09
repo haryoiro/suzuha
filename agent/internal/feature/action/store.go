@@ -122,7 +122,10 @@ func (s *Store) Cancel(ctx context.Context, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("schedule: cancel rows affected: %w", err)
+	}
 	return n > 0, nil
 }
 
@@ -299,7 +302,10 @@ func (s *Store) Update(ctx context.Context, id string, fields ActionUpdateFields
 	if err != nil {
 		return fmt.Errorf("schedule: 更新に失敗: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("schedule: update rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("schedule: 見つかりません: %s", id)
 	}
@@ -312,7 +318,10 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("schedule: 削除に失敗: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("schedule: delete rows affected: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("schedule: 見つかりません: %s", id)
 	}

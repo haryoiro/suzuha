@@ -65,7 +65,12 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 					slog.String("error", sendErr.Error()),
 					slog.Int("retries", newCount),
 				)
-				_ = store.MarkFailed(ctx, a.ID, newCount)
+				if markErr := store.MarkFailed(ctx, a.ID, newCount); markErr != nil {
+					cc.Logger.Error("schedule: failed状態への更新に失敗",
+						slog.String("id", a.ID),
+						slog.Any("error", markErr),
+					)
+				}
 			} else {
 				cc.Logger.Warn("schedule: 送信に失敗、リトライします",
 					slog.String("id", a.ID),
@@ -74,7 +79,12 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 					slog.Int("retry", newCount),
 					slog.Int("max", maxRetries),
 				)
-				_ = store.IncrRetry(ctx, a.ID, newCount)
+				if retryErr := store.IncrRetry(ctx, a.ID, newCount); retryErr != nil {
+					cc.Logger.Error("schedule: リトライカウント更新に失敗",
+						slog.String("id", a.ID),
+						slog.Any("error", retryErr),
+					)
+				}
 			}
 			continue
 		}

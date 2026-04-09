@@ -118,7 +118,11 @@ func fetchConversationLogs(ctx context.Context, cc *scheduler.CronContext, from,
 		if err := rows.Scan(&r.SourceKey, &r.ChannelID, &r.Role, &r.UserName, &r.Content, &ts); err != nil {
 			continue
 		}
-		r.TS, _ = time.Parse(time.RFC3339, ts)
+		var parseErr error
+		r.TS, parseErr = time.Parse(time.RFC3339, ts)
+		if parseErr != nil {
+			cc.Logger.Debug("diary_hourly: timestamp parse failed", "ts", ts, "error", parseErr)
+		}
 		result = append(result, r)
 	}
 	return result

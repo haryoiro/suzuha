@@ -57,7 +57,9 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	var tc taskConfig
 	if len(cfg) > 0 {
-		_ = json.Unmarshal(cfg, &tc)
+		if err := json.Unmarshal(cfg, &tc); err != nil {
+			cc.Logger.Warn("research: config parse failed, using defaults", "error", err)
+		}
 	}
 	if tc.SearXNGURL == "" {
 		cc.Logger.Warn("research: no searxng_url configured, skipping")

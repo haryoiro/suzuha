@@ -91,7 +91,9 @@ type mutteringConfig struct {
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	var mc mutteringConfig
 	if len(cfg) > 0 {
-		_ = json.Unmarshal(cfg, &mc)
+		if err := json.Unmarshal(cfg, &mc); err != nil {
+			cc.Logger.Warn("topics: config parse failed, using defaults", "error", err)
+		}
 	}
 	if cc.Bus == nil {
 		cc.Logger.Warn("topics: no event bus available, skipping")
@@ -102,7 +104,11 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	now := t.now()
 	var lastInteraction time.Time
 	if cc.ChannelActivity != nil {
-		lastInteraction, _, _ = cc.ChannelActivity.LastInteractionGlobal(ctx)
+		var actErr error
+		lastInteraction, _, actErr = cc.ChannelActivity.LastInteractionGlobal(ctx)
+		if actErr != nil {
+			cc.Logger.Warn("topics: last interaction query failed", "error", actErr)
+		}
 	}
 	boredom := calcBoredom(now, lastInteraction)
 
@@ -140,7 +146,11 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	var mentionables []user.MentionableUser
 	if cc.Users != nil {
-		mentionables, _ = cc.Users.ListMentionable(ctx)
+		var mentionErr error
+		mentionables, mentionErr = cc.Users.ListMentionable(ctx)
+		if mentionErr != nil {
+			cc.Logger.Warn("topics: list mentionable users failed", "error", mentionErr)
+		}
 	}
 	mentionTarget := selectMentionTarget(boredom, mentionables)
 

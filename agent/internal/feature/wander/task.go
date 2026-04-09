@@ -89,7 +89,9 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	var wc wanderConfig
 	if len(cfg) > 0 {
-		_ = json.Unmarshal(cfg, &wc)
+		if err := json.Unmarshal(cfg, &wc); err != nil {
+			cc.Logger.Warn("wander: config parse failed, using defaults", "error", err)
+		}
 	}
 	if wc.SearXNGURL == "" {
 		cc.Logger.Warn("wander: no searxng_url configured, skipping")
@@ -150,8 +152,11 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		// Pre-search related topics so LLM can pick in the same call.
 		var searchResults []search.SearchResult
 		if depth < maxDepth-1 {
-			// Broad search based on current title to give LLM options.
-			searchResults, _ = searx.Search(ctx, title, searchResultsMax)
+			var searchErr error
+			searchResults, searchErr = searx.Search(ctx, title, searchResultsMax)
+			if searchErr != nil {
+				cc.Logger.Warn("wander: search failed", "title", title, "error", searchErr)
+			}
 		}
 
 		// Single LLM call: evaluate content + pick next result.

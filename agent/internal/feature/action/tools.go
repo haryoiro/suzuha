@@ -171,7 +171,9 @@ type listInput struct {
 func (t *ListTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
 	var in listInput
 	if len(input) > 0 {
-		_ = json.Unmarshal(input, &in)
+		if err := json.Unmarshal(input, &in); err != nil {
+			return tool.ErrorResult("無効な入力: " + err.Error()), nil
+		}
 	}
 
 	var actions []Action
