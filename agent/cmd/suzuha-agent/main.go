@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -350,6 +351,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 					taskCfg, err = json.Marshal(j.Config)
 					if err != nil {
 						logger.Error("trigger: job config marshal に失敗", "task", taskName, "error", err)
+						http.Error(w, `{"ok":false,"error":"config marshal failed"}`, http.StatusInternalServerError)
+						return
 					}
 					break
 				}
@@ -719,7 +722,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		// Look up home channel from DB.
 		var deviceChannel string
 		db := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
-		if err := db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = true LIMIT 1").Scan(&deviceChannel); err != nil && err != sql.ErrNoRows {
+		if err := db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = true LIMIT 1").Scan(&deviceChannel); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			logger.Error("ホームチャンネルの取得に失敗", "error", err)
 		}
 		var sttClient stt.STT
@@ -737,7 +740,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		}
 		// Look up owner from DB
 		var ownerID, ownerName string
-		if err := db.QueryRow("SELECT id, display_name FROM users WHERE role = 'owner' LIMIT 1").Scan(&ownerID, &ownerName); err != nil && err != sql.ErrNoRows {
+		if err := db.QueryRow("SELECT id, display_name FROM users WHERE role = 'owner' LIMIT 1").Scan(&ownerID, &ownerName); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			logger.Error("オーナー情報の取得に失敗", "error", err)
 		}
 		if ownerID == "" {
