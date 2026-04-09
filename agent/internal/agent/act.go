@@ -222,6 +222,3 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 
 	return nil, intermediateText, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
 }
-
-// isSimilarText returns true if two texts are similar enough to be considered duplicates.
-// Used for intra-turn dedup (intermediate text vs final response). Threshold: 95%.
