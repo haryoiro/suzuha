@@ -100,7 +100,11 @@ func (r *ProviderRegistry) ListProviders(ctx context.Context) ([]ProviderEntry, 
 		if err := rows.Scan(&e.Name, &e.Type, &encKey, &e.APIBase, &e.Source); err != nil {
 			return nil, fmt.Errorf("provider: scan: %w", err)
 		}
-		e.APIKey, _ = r.cipher.Decrypt(encKey)
+		apiKey, err := r.cipher.Decrypt(encKey)
+		if err != nil {
+			return nil, fmt.Errorf("provider: decrypt api key for %q: %w", e.Name, err)
+		}
+		e.APIKey = apiKey
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -119,7 +123,11 @@ func (r *ProviderRegistry) GetProvider(ctx context.Context, name string) (*Provi
 	if err != nil {
 		return nil, fmt.Errorf("provider: get: %w", err)
 	}
-	e.APIKey, _ = r.cipher.Decrypt(encKey)
+	apiKey, err := r.cipher.Decrypt(encKey)
+	if err != nil {
+		return nil, fmt.Errorf("provider: decrypt api key for %q: %w", name, err)
+	}
+	e.APIKey = apiKey
 	return &e, nil
 }
 
