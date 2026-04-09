@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,9 +31,10 @@ func (h *AdminHandler) PromptsList(ctx context.Context) ([]api.PromptFile, error
 			h.logger.Error("プロンプトファイルの読み込みに失敗", "name", name, "error", err.Error())
 			continue
 		}
-		info, _ := os.Stat(path)
 		var updatedAt string
-		if info != nil {
+		if info, err := os.Stat(path); err != nil {
+			slog.Warn("プロンプトファイルのstat取得に失敗", "name", name, "error", err)
+		} else {
 			updatedAt = info.ModTime().Format(time.RFC3339)
 		}
 		files = append(files, api.PromptFile{
@@ -56,9 +58,10 @@ func (h *AdminHandler) PromptsGet(ctx context.Context, params api.PromptsGetPara
 		}
 		return nil, fmt.Errorf("read failed")
 	}
-	info, _ := os.Stat(path)
 	var updatedAt string
-	if info != nil {
+	if info, err := os.Stat(path); err != nil {
+		slog.Warn("プロンプトファイルのstat取得に失敗", "name", params.Name, "error", err)
+	} else {
 		updatedAt = info.ModTime().Format(time.RFC3339)
 	}
 	return &api.PromptFile{

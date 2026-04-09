@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -39,7 +40,9 @@ func (h *AdminHandler) ForgetGroups(ctx context.Context, params api.ForgetGroups
 			continue
 		}
 		if metaJSON.Valid && metaJSON.String != "" {
-			_ = json.Unmarshal([]byte(metaJSON.String), &e.metadata)
+			if err := json.Unmarshal([]byte(metaJSON.String), &e.metadata); err != nil {
+				slog.Warn("メタデータのパースに失敗", "id", e.id, "error", err)
+			}
 		}
 		all = append(all, e)
 	}

@@ -40,7 +40,10 @@ func (h *AdminHandler) UsersList(ctx context.Context, params api.UsersListParams
 
 	data := make([]api.User, 0, len(users))
 	for _, u := range users {
-		links, _ := h.userStore.ListPlatformLinks(ctx, u.ID)
+		links, err := h.userStore.ListPlatformLinks(ctx, u.ID)
+		if err != nil {
+			return nil, fmt.Errorf("listing platform links: %w", err)
+		}
 		data = append(data, userToAPI(u, links))
 	}
 	return &api.UsersListOK{Data: data, Total: int32(total)}, nil
@@ -51,7 +54,10 @@ func (h *AdminHandler) UsersGet(ctx context.Context, params api.UsersGetParams) 
 	if err != nil {
 		return nil, fmt.Errorf("not found")
 	}
-	links, _ := h.userStore.ListPlatformLinks(ctx, u.ID)
+	links, err := h.userStore.ListPlatformLinks(ctx, u.ID)
+	if err != nil {
+		return nil, fmt.Errorf("listing platform links: %w", err)
+	}
 	return &api.UsersGetOK{Data: userToAPI(*u, links)}, nil
 }
 

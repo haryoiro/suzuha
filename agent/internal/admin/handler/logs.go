@@ -72,7 +72,11 @@ func (h *LogHandler) Stream(w http.ResponseWriter, r *http.Request) {
 			if levelFilter != "" && !strings.EqualFold(entry.Level, levelFilter) {
 				continue
 			}
-			data, _ := json.Marshal(entry)
+			data, err := json.Marshal(entry)
+			if err != nil {
+				h.logger.Warn("ログエントリのシリアライズに失敗", "error", err)
+				continue
+			}
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 		}
