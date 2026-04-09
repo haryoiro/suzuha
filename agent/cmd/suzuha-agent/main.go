@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -329,15 +330,30 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		var reqBody struct {
 			Config map[string]any `json:"config"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, `{"ok":false,"error":"invalid JSON"}`, http.StatusBadRequest)
+			return
+		}
 
 		var taskCfg json.RawMessage
 		if reqBody.Config != nil {
-			taskCfg, _ = json.Marshal(reqBody.Config)
+			var err error
+			taskCfg, err = json.Marshal(reqBody.Config)
+			if err != nil {
+				logger.Error("trigger: config marshal に失敗", "task", taskName, "error", err)
+				http.Error(w, `{"ok":false,"error":"config marshal failed"}`, http.StatusInternalServerError)
+				return
+			}
 		} else {
 			for _, j := range cfg.Consolidator.Scheduler.Jobs {
 				if j.Task == taskName {
-					taskCfg, _ = json.Marshal(j.Config)
+					var err error
+					taskCfg, err = json.Marshal(j.Config)
+					if err != nil {
+						logger.Error("trigger: job config marshal に失敗", "task", taskName, "error", err)
+						http.Error(w, `{"ok":false,"error":"config marshal failed"}`, http.StatusInternalServerError)
+						return
+					}
 					break
 				}
 			}
@@ -530,11 +546,17 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 
 	saveDisabledTools := func() {
 		names := registry.DisabledNames()
-		data, _ := json.Marshal(names)
-		_, _ = llmDB.Exec(
+		data, err := json.Marshal(names)
+		if err != nil {
+			logger.Error("disabled tools の marshal に失敗", "error", err)
+			return
+		}
+		if _, err := llmDB.Exec(
 			`INSERT INTO app_settings (key, value) VALUES ('disabled_tools', $1) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
 			string(data),
-		)
+		); err != nil {
+			logger.Error("disabled tools の保存に失敗", "error", err)
+		}
 	}
 
 	mux.HandleFunc("GET /internal/tools", func(w http.ResponseWriter, r *http.Request) {
@@ -687,7 +709,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 					Style:     p.Style,
 				}
 			}
-			ttsClient, _ = tts.NewTTSChain(deviceTTSConfigs, logger)
+			var err error
+			ttsClient, err = tts.NewTTSChain(deviceTTSConfigs, logger)
+			if err != nil {
+				logger.Error("TTS クライアントの初期化に失敗", "error", err)
+			}
 		}
 		yoloURL := os.Getenv("YOLO_URL")
 		if yoloURL == "" {
@@ -696,19 +722,27 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		// Look up home channel from DB.
 		var deviceChannel string
 		db := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
-		_ = db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = true LIMIT 1").Scan(&deviceChannel)
+		if err := db.QueryRow("SELECT channel_id FROM channel_settings WHERE home = true LIMIT 1").Scan(&deviceChannel); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			logger.Error("ホームチャンネルの取得に失敗", "error", err)
+		}
 		var sttClient stt.STT
 		if cfg.Voice.Enabled && len(cfg.Voice.STT) > 0 {
-			sttClient, _ = stt.NewSTT(stt.STTProviderConfig{
+			var err error
+			sttClient, err = stt.NewSTT(stt.STTProviderConfig{
 				Provider: cfg.Voice.STT[0].Provider,
 				APIKey:   cfg.Voice.STT[0].APIKey,
 				Model:    cfg.Voice.STT[0].Model,
 				URL:      cfg.Voice.STT[0].URL,
 			})
+			if err != nil {
+				logger.Error("STT クライアントの初期化に失敗", "error", err)
+			}
 		}
 		// Look up owner from DB
 		var ownerID, ownerName string
-		_ = db.QueryRow("SELECT id, display_name FROM users WHERE role = 'owner' LIMIT 1").Scan(&ownerID, &ownerName)
+		if err := db.QueryRow("SELECT id, display_name FROM users WHERE role = 'owner' LIMIT 1").Scan(&ownerID, &ownerName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			logger.Error("オーナー情報の取得に失敗", "error", err)
+		}
 		if ownerID == "" {
 			ownerID = "owner"
 			ownerName = "オーナー"
