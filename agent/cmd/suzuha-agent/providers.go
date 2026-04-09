@@ -293,7 +293,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				tracer := lfTP.Tracer("suzuha-agent")
 				llmClient.SetTracer(tracer)
 				ag.SetTracer(tracer)
-				ag.AddHook(langfuse.NewHook(tracer))
+				ag.AddHook(newLangfuseAdapter(langfuse.NewHook(tracer)))
 			}
 
 			// Set media store for memory attachment loading.

@@ -8,11 +8,25 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
+
+// BenchAgent はベンチマークが Agent に求める振る舞いを定義する (consumer-side interface)。
+type BenchAgent interface {
+	HandleBatch(ctx context.Context, batch []event.Event) error
+}
+
+// BenchContext はベンチマークがコンテキスト操作に求める振る舞いを定義する (consumer-side interface)。
+type BenchContext interface {
+	ReplaceAll(msgs []llm.Message)
+	Add(msg llm.Message)
+}
+
+// SessionSetup はベンチマーク初期化時に Agent のセッションとコンテキストを設定するコールバック。
+// cmd 層が agent パッケージの具象型を使って実装する。
+type SessionSetup func(runner *Runner) (agentCtx BenchContext, err error)
 
 // RunnerConfig はベンチマークランナーの設定。
 type RunnerConfig struct {
@@ -23,18 +37,34 @@ type RunnerConfig struct {
 // Runner はベンチマークを実行する。
 // Agent は外部から注入される (本番と同じ DI パスで構築されたもの)。
 type Runner struct {
-	cfg    RunnerConfig
-	ag     *agent.Agent
-	logger *slog.Logger
+	cfg      RunnerConfig
+	ag       BenchAgent
+	agentCtx BenchContext
+	logger   *slog.Logger
 
 	mu            sync.Mutex
 	currentCaseID string
 	responses     map[string]string
 }
 
+// CurrentCaseID はキャプチャ用に現在のケース ID を返す。
+func (r *Runner) CurrentCaseID() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.currentCaseID
+}
+
+// CaptureResponse は応答テキストをケース ID に紐づけて記録する。
+func (r *Runner) CaptureResponse(caseID, text string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.responses[caseID] = text
+}
+
 // NewRunner はスナップショットを復元し、ランナーを作成する。
 // Agent は呼び出し側が本番と同じ DI で構築して渡す。
-func NewRunner(cfg RunnerConfig, ag *agent.Agent, logger *slog.Logger) (*Runner, error) {
+// setup は cmd 層で agent 固有のセッション差し替えを行うコールバック。
+func NewRunner(cfg RunnerConfig, ag BenchAgent, setup SessionSetup, logger *slog.Logger) (*Runner, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -53,11 +83,12 @@ func NewRunner(cfg RunnerConfig, ag *agent.Agent, logger *slog.Logger) (*Runner,
 		responses: make(map[string]string),
 	}
 
-	// Session を応答キャプチャ用に差し替え
-	ag.SetSession(agent.SourceKeyDiscord, &captureSession{
-		agentCtx: ag.AgentContextFor(agent.SourceKeyDiscord),
-		runner:   r,
-	})
+	// cmd 層のコールバックでセッションを差し替え、agentCtx を取得
+	agentCtx, err := setup(r)
+	if err != nil {
+		return nil, fmt.Errorf("bench: セッション設定に失敗: %w", err)
+	}
+	r.agentCtx = agentCtx
 
 	return r, nil
 }
@@ -69,8 +100,7 @@ func (r *Runner) RunScenario(ctx context.Context, s *Scenario) []Result {
 
 	for _, tc := range s.Cases {
 		// ケースごとにコンテキストをリセットして inject_logs から再構築
-		agentCtx := r.ag.AgentContextFor(agent.SourceKeyDiscord)
-		agentCtx.ReplaceAll(nil)
+		r.agentCtx.ReplaceAll(nil)
 
 		r.injectLogs(s.InjectLogs)
 
@@ -87,7 +117,6 @@ func (r *Runner) RunScenario(ctx context.Context, s *Scenario) []Result {
 }
 
 func (r *Runner) injectLogs(logs []InjectLog) {
-	agentCtx := r.ag.AgentContextFor(agent.SourceKeyDiscord)
 	for _, l := range logs {
 		channel := l.Channel
 		if channel == "" {
@@ -100,7 +129,7 @@ func (r *Runner) injectLogs(logs []InjectLog) {
 			Channel:   channel,
 			Timestamp: jtime.Now(),
 		}
-		agentCtx.Add(msg)
+		r.agentCtx.Add(msg)
 	}
 }
 
@@ -239,35 +268,5 @@ func restoreSnapshot(snapshotPath, dbURL string) error {
 		slog.Warn("pg_restore 警告", "output", string(out))
 	}
 
-	return nil
-}
-
-// captureSession は応答テキストをキャプチャする Session 実装。
-// 本番の Session と同じ DirectiveConfig を持ちつつ、Respond でテキストをキャプチャする。
-type captureSession struct {
-	agentCtx *agent.Context
-	runner   *Runner
-}
-
-var _ agent.Session = (*captureSession)(nil)
-
-func (s *captureSession) Source() agent.SourceKey       { return agent.SourceKeyDiscord }
-func (s *captureSession) Context() *agent.Context       { return s.agentCtx }
-func (s *captureSession) PersistKey() string            { return "bench_discord" }
-func (s *captureSession) BeginTurn(p *agent.Perception) {}
-func (s *captureSession) DirectiveConfig() agent.DirectiveConfig {
-	return agent.DirectiveConfig{
-		ForceRespond:       true,
-		DrainWindow:        0,
-		SkipChannelFilter:  true,
-		SkipCatchUpStale:   true,
-		SkipChannelHistory: false, // 会話履歴の注入は有効にする
-	}
-}
-
-func (s *captureSession) Respond(_ context.Context, text string) error {
-	s.runner.mu.Lock()
-	defer s.runner.mu.Unlock()
-	s.runner.responses[s.runner.currentCaseID] = text
 	return nil
 }
