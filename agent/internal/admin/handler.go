@@ -8,7 +8,6 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
@@ -18,7 +17,9 @@ type AdminHandler struct {
 
 	memStore   memory.AdminStore
 	userStore  user.AdminStore
-	schedStore *action.Store
+	schedStore ActionStore
+	diaryStore DiaryStore
+	locStore   LocationStore
 	mediaStore memory.MediaStore
 	db         *sql.DB
 	agentBase  string // e.g. "http://agent:9090"
@@ -32,7 +33,9 @@ type AdminHandler struct {
 func NewAdminHandler(
 	memStore memory.AdminStore,
 	userStore user.AdminStore,
-	schedStore *action.Store,
+	schedStore ActionStore,
+	diaryStore DiaryStore,
+	locStore LocationStore,
 	mediaStore memory.MediaStore,
 	agentBase string,
 	promptDir string,
@@ -42,6 +45,8 @@ func NewAdminHandler(
 		memStore:   memStore,
 		userStore:  userStore,
 		schedStore: schedStore,
+		diaryStore: diaryStore,
+		locStore:   locStore,
 		mediaStore: mediaStore,
 		db:         memStore.DB(),
 		agentBase:  agentBase,
