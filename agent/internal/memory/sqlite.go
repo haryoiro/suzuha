@@ -11,8 +11,8 @@ import (
 	"log/slog"
 	"math"
 	"sort"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
