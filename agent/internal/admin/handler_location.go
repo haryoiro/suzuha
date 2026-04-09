@@ -97,7 +97,10 @@ func (h *AdminHandler) LocationListPlaces(ctx context.Context) (*api.LocationLis
 
 	data := make([]api.Place, len(places))
 	for i, p := range places {
-		pid, _ := strconv.Atoi(p.ID)
+		pid, err := strconv.Atoi(p.ID)
+		if err != nil {
+			return nil, fmt.Errorf("parsing place ID %q: %w", p.ID, err)
+		}
 		data[i] = api.Place{
 			ID:        int32(pid),
 			Name:      p.Name,

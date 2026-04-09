@@ -150,7 +150,10 @@ func (h *AdminHandler) LLMModelsList(ctx context.Context, params api.LLMModelsLi
 }
 
 func (h *AdminHandler) LLMModelsCreate(ctx context.Context, req *api.LLMModel) (*api.OkResponse, error) {
-	body, _ := json.Marshal(req)
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling model: %w", err)
+	}
 	if _, err := h.proxyPostRaw(ctx, "/internal/llm/models", bytes.NewReader(body)); err != nil {
 		return nil, err
 	}
@@ -174,7 +177,10 @@ func (h *AdminHandler) LLMRolesList(ctx context.Context) ([]api.LLMRoleAssignmen
 }
 
 func (h *AdminHandler) LLMRolesUpdate(ctx context.Context, req *api.LLMRoleUpdateReq, params api.LLMRolesUpdateParams) (*api.OkResponse, error) {
-	body, _ := json.Marshal(req)
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling role update: %w", err)
+	}
 	if _, err := h.proxyPutRaw(ctx, "/internal/llm/roles/"+params.Role, bytes.NewReader(body)); err != nil {
 		return nil, err
 	}
@@ -249,7 +255,10 @@ func (h *AdminHandler) ForgetRun(ctx context.Context, req api.OptForgetRunReq) (
 	if req.IsSet() {
 		if st, ok := req.Value.GetSimilarityThreshold().Get(); ok {
 			cfg := map[string]any{"config": map[string]any{"similarity_threshold": st}}
-			data, _ := json.Marshal(cfg)
+			data, err := json.Marshal(cfg)
+			if err != nil {
+				return nil, fmt.Errorf("marshaling forget config: %w", err)
+			}
 			body = bytes.NewReader(data)
 		}
 	}

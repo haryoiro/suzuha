@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/go-faster/jx"
@@ -30,7 +31,11 @@ func memToAPI(m memory.Memory) api.Memory {
 	if m.Metadata != nil {
 		meta := make(api.MemoryMetadata, len(m.Metadata))
 		for k, v := range m.Metadata {
-			b, _ := json.Marshal(v)
+			b, err := json.Marshal(v)
+			if err != nil {
+				slog.Warn("メタデータのシリアライズに失敗", "key", k, "error", err)
+				continue
+			}
 			meta[k] = jx.Raw(b)
 		}
 		am.Metadata = api.NewOptMemoryMetadata(meta)
@@ -45,7 +50,10 @@ func metadataFromAPI(m api.MemoryMetadata) map[string]any {
 	result := make(map[string]any, len(m))
 	for k, v := range m {
 		var val any
-		_ = json.Unmarshal(v, &val)
+		if err := json.Unmarshal(v, &val); err != nil {
+			slog.Warn("メタデータのデシリアライズに失敗", "key", k, "error", err)
+			continue
+		}
 		result[k] = val
 	}
 	return result
