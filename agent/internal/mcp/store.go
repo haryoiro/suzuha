@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/config"
@@ -69,10 +70,16 @@ func (s *AppStore) Setup(ctx context.Context) error {
 
 // Add inserts a new installed app.
 func (s *AppStore) Add(ctx context.Context, app *App) error {
-	argsJSON, _ := json.Marshal(app.Args)
-	envJSON, _ := json.Marshal(app.Env)
+	argsJSON, err := json.Marshal(app.Args)
+	if err != nil {
+		return fmt.Errorf("mcp: アプリ引数のマーシャルに失敗: %w", err)
+	}
+	envJSON, err := json.Marshal(app.Env)
+	if err != nil {
+		return fmt.Errorf("mcp: アプリ環境変数のマーシャルに失敗: %w", err)
+	}
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO mcp_apps (name, title, description, version, registry_type, identifier, command, args, env, transport)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		app.Name, app.Title, app.Description, app.Version,
