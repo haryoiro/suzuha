@@ -154,7 +154,9 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 	}
 	u.Role = Role(roleStr)
 	if metaJSON.Valid {
-		_ = json.Unmarshal([]byte(metaJSON.String), &u.Metadata)
+		if err := json.Unmarshal([]byte(metaJSON.String), &u.Metadata); err != nil {
+			return nil, fmt.Errorf("user: メタデータのパースに失敗: %w", err)
+		}
 	}
 	return &u, nil
 }
@@ -292,7 +294,9 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 		}
 		u.Role = Role(roleStr)
 		if metaJSON.Valid {
-			_ = json.Unmarshal([]byte(metaJSON.String), &u.Metadata)
+			if err := json.Unmarshal([]byte(metaJSON.String), &u.Metadata); err != nil {
+				return nil, 0, fmt.Errorf("user: メタデータのパースに失敗: %w", err)
+			}
 		}
 		users = append(users, u)
 	}

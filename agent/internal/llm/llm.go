@@ -750,18 +750,21 @@ func ConvertTools(tools []tool.Tool) []providers.Tool {
 	if len(tools) == 0 {
 		return nil
 	}
-	out := make([]providers.Tool, len(tools))
-	for i, t := range tools {
+	out := make([]providers.Tool, 0, len(tools))
+	for _, t := range tools {
 		var params map[string]any
-		_ = json.Unmarshal(t.InputSchema(), &params)
-		out[i] = providers.Tool{
+		if err := json.Unmarshal(t.InputSchema(), &params); err != nil {
+			slog.Warn("llm: ツールの入力スキーマのパースに失敗", "tool", t.Name(), "error", err)
+			continue
+		}
+		out = append(out, providers.Tool{
 			Type: "function",
 			Function: providers.Function{
 				Name:        t.Name(),
 				Description: t.Description(),
 				Parameters:  params,
 			},
-		}
+		})
 	}
 	return out
 }
