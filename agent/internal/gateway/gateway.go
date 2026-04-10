@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -88,8 +89,7 @@ func (g *Gateway) runSource(ctx context.Context, idx int) error {
 	if err != nil && ctx.Err() == nil {
 		g.updateState(idx, StateError)
 		g.setError(idx, err.Error())
-		g.logger.Error("ソース異常終了", "source", src.source.Name(), "error", err)
-		return err
+		return fmt.Errorf("source %s terminated: %w", src.source.Name(), err)
 	}
 
 	g.updateState(idx, StateStopped)

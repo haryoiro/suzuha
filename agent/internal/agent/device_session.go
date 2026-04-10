@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 )
 
@@ -34,8 +35,7 @@ func (s *DeviceSession) Respond(ctx context.Context, text string) error {
 	}
 	s.logger.Info("デバイスに声で返す", "length", len(text))
 	if err := s.speaker.SpeakText(ctx, text); err != nil {
-		s.logger.Warn("デバイスへの声が届かなかった", "error", err)
-		return err
+		return fmt.Errorf("speaking to device: %w", err)
 	}
 	return nil
 }
