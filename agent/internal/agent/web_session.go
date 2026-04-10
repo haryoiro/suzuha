@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 )
 
@@ -39,8 +40,7 @@ func (s *WebSession) Respond(ctx context.Context, text string) error {
 	}
 	s.logger.Info("Webクライアントに声で返す", "length", len(text))
 	if err := s.speaker.SpeakTextTo(ctx, text, "web"); err != nil {
-		s.logger.Warn("Webクライアントへの声が届かなかった", "error", err)
-		return err
+		return fmt.Errorf("speaking to web client: %w", err)
 	}
 	return nil
 }
