@@ -225,6 +225,22 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			return resp, intermediateText, nil
 		}
 
+		// skip_response が含まれる場合、コンテキストに何も残さない。
+		// 副作用ツール (discord_react 等) だけ実行して即終了。
+		if containsSkipTool(resp.ToolCalls) {
+			for _, tc := range resp.ToolCalls {
+				if tc.Function.Name == "skip_response" {
+					continue
+				}
+				if t, ok := toolMap[tc.Function.Name]; ok {
+					if _, err := t.Execute(ctx, json.RawMessage(tc.Function.Arguments)); err != nil {
+						a.logger.Warn("skip中のツール失敗", "tool", tc.Function.Name, "error", err)
+					}
+				}
+			}
+			return resp, intermediateText, nil
+		}
+
 		agentCtx.Add(llm.Message{
 			Role:        "assistant",
 			Content:     resp.Text,
@@ -235,7 +251,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 		})
 
 		// Send intermediate text if the LLM returned text alongside tool calls.
-		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" && !containsSkipTool(resp.ToolCalls) {
+		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" {
 			a.logger.Info("途中で話した",
 				"channel", channel, "length", len(stripped))
 			if err := sess.Respond(ctx, stripped); err != nil {
