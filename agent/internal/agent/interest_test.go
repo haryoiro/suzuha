@@ -6,71 +6,75 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 )
 
-func TestShouldRespond_CLI(t *testing.T) {
-	e := event.NewMessageEvent("cli", event.MessagePayload{Content: "hello"})
-	if !ShouldRespond(e, "bot123") {
-		t.Error("CLI events should always trigger a response")
+func TestShouldRespond(t *testing.T) {
+	tests := []struct {
+		name  string
+		event event.Event
+		want  bool
+	}{
+		{
+			"CLI event",
+			event.NewMessageEvent("cli", event.MessagePayload{Content: "hello"}),
+			true,
+		},
+		{
+			"trigger event",
+			event.Event{Source: "timer", Type: "trigger"},
+			true,
+		},
+		{
+			"DM event",
+			event.NewMessageEvent("discord", event.MessagePayload{Content: "hi", IsDM: true}),
+			true,
+		},
+		{
+			"mention event",
+			event.NewMessageEvent("discord", event.MessagePayload{Content: "hey", IsMention: true}),
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ShouldRespond(tt.event, "bot123"); got != tt.want {
+				t.Errorf("ShouldRespond() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestShouldRespond_Trigger(t *testing.T) {
-	e := event.Event{Source: "timer", Type: "trigger"}
-	if !ShouldRespond(e, "bot123") {
-		t.Error("trigger events should always trigger a response")
+func TestIsDirectlyAddressed(t *testing.T) {
+	tests := []struct {
+		name  string
+		event event.Event
+		want  bool
+	}{
+		{
+			"DM",
+			event.NewMessageEvent("discord", event.MessagePayload{Content: "hello", IsDM: true}),
+			true,
+		},
+		{
+			"mention",
+			event.NewMessageEvent("discord", event.MessagePayload{Content: "hey", IsMention: true}),
+			true,
+		},
+		{
+			"regular message",
+			event.NewMessageEvent("discord", event.MessagePayload{Content: "some random message", Channel: "general"}),
+			false,
+		},
+		{
+			"bot mention in content",
+			event.NewMessageEvent("discord", event.MessagePayload{Content: "hello <@bot123> how are you", Channel: "general"}),
+			true,
+		},
 	}
-}
-
-func TestShouldRespond_DM(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
-		Content: "hi", IsDM: true,
-	})
-	if !ShouldRespond(e, "bot123") {
-		t.Error("DM events should always trigger a response")
-	}
-}
-
-func TestShouldRespond_Mention(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
-		Content: "hey", IsMention: true,
-	})
-	if !ShouldRespond(e, "bot123") {
-		t.Error("mention events should always trigger a response")
-	}
-}
-
-func TestIsDirectlyAddressed_DM(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
-		Content: "hello", IsDM: true,
-	})
-	if !isDirectlyAddressed(e, "bot123") {
-		t.Error("DM should be directly addressed")
-	}
-}
-
-func TestIsDirectlyAddressed_Mention(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
-		Content: "hey", IsMention: true,
-	})
-	if !isDirectlyAddressed(e, "bot123") {
-		t.Error("mention should be directly addressed")
-	}
-}
-
-func TestIsDirectlyAddressed_RegularMessage(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
-		Content: "some random message", Channel: "general",
-	})
-	if isDirectlyAddressed(e, "bot123") {
-		t.Error("regular channel message should NOT be directly addressed")
-	}
-}
-
-func TestIsDirectlyAddressed_BotMentionInContent(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
-		Content: "hello <@bot123> how are you", Channel: "general",
-	})
-	if !isDirectlyAddressed(e, "bot123") {
-		t.Error("content with <@botID> should be directly addressed")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isDirectlyAddressed(tt.event, "bot123"); got != tt.want {
+				t.Errorf("isDirectlyAddressed() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
