@@ -14,6 +14,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
+// ProfileProvider は参加者のプロフィール情報をプロンプトブロックとして提供する。
 type ProfileProvider struct {
 	Users  user.Store
 	Memory memory.Store

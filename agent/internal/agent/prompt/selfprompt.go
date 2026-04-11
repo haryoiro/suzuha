@@ -8,6 +8,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
+// SelfPromptProvider はセルフプロンプトイベントの内容をプロンプトブロックとして提供する。
 type SelfPromptProvider struct{}
 
 func (SelfPromptProvider) ProvideContext(_ context.Context, req Request) Block {

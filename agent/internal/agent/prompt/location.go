@@ -8,6 +8,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/feature/location"
 )
 
+// LocationProvider は現在地情報をプロンプトブロックとして提供する。
 type LocationProvider struct {
 	Store *location.Store
 }

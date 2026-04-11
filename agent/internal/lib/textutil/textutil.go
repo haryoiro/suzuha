@@ -2,6 +2,7 @@ package textutil
 
 import "strings"
 
+// TruncateRunes は文字列を指定したルーン数で切り詰め、超過時は末尾に "..." を付与する。
 func TruncateRunes(s string, maxRunes int) string {
 	runes := []rune(s)
 	if len(runes) <= maxRunes {
@@ -10,6 +11,7 @@ func TruncateRunes(s string, maxRunes int) string {
 	return string(runes[:maxRunes]) + "..."
 }
 
+// StripCodeFence はコードブロックのフェンス記号を除去する。
 func StripCodeFence(s string) string {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "```json") {
@@ -21,6 +23,7 @@ func StripCodeFence(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// EstimateTokens は文字種ごとの重みを用いて文字列のトークン数を推定する。
 func EstimateTokens(s string) int {
 	var total float64
 	for _, r := range s {

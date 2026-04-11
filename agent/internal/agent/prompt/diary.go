@@ -13,6 +13,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
+// DiaryProvider は直近の日記エントリをプロンプトブロックとして提供する。
 type DiaryProvider struct {
 	DB     *sql.DB
 	Logger *slog.Logger

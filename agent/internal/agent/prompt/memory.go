@@ -41,6 +41,7 @@ func modalityFromMime(mime string) embedding.Modality {
 	}
 }
 
+// MemoryProvider はメモリ検索結果をプロンプトブロックとして提供する。
 type MemoryProvider struct {
 	Memory memory.Store
 	Media  memory.MediaStore

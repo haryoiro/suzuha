@@ -48,9 +48,9 @@ func IsVideoURL(rawURL string) bool {
 	return videoPlatformHosts[host]
 }
 
-// ExtractVideoURLs はテキスト中の動画 URL を全て抽出する。
 var urlPattern = regexp.MustCompile(`https?://[^\s<>"]+`)
 
+// ExtractVideoURLs はテキスト中の動画 URL を全て抽出する。
 func ExtractVideoURLs(text string) []string {
 	matches := urlPattern.FindAllString(text, -1)
 	var result []string

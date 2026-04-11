@@ -14,12 +14,12 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// --- schedule_create ---
-
+// CreateTool はメッセージの予約投稿を作成するツール。
 type CreateTool struct {
 	store *Store
 }
 
+// NewCreateTool は CreateTool のインスタンスを生成する。
 func NewCreateTool(store *Store) *CreateTool {
 	return &CreateTool{store: store}
 }
@@ -138,12 +138,12 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	return tool.TextResult(result), nil
 }
 
-// --- schedule_list ---
-
+// ListTool は予約済みメッセージの一覧を表示するツール。
 type ListTool struct {
 	store *Store
 }
 
+// NewListTool は ListTool のインスタンスを生成する。
 func NewListTool(store *Store) *ListTool {
 	return &ListTool{store: store}
 }
@@ -206,12 +206,12 @@ func (t *ListTool) Execute(ctx context.Context, input json.RawMessage) (*tool.To
 	return tool.TextResult(sb.String()), nil
 }
 
-// --- schedule_cancel ---
-
+// CancelTool は予約済みメッセージをキャンセルするツール。
 type CancelTool struct {
 	store *Store
 }
 
+// NewCancelTool は CancelTool のインスタンスを生成する。
 func NewCancelTool(store *Store) *CancelTool {
 	return &CancelTool{store: store}
 }
