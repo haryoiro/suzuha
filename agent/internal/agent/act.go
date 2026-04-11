@@ -90,6 +90,10 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 		a.logger.Info("黙った (サイレント)",
 			"raw_text", textutil.TruncateRunes(resp.Text, 100))
 		return "", nil
+	case a.isDuplicateResponse(p.Channel, text):
+		a.logger.Info("同じこと言いそうなので黙った (dedup)",
+			"channel", p.Channel, "length", len(text))
+		return "", nil
 	default:
 		return text, nil
 	}

@@ -75,6 +75,27 @@ type Agent struct {
 
 	lastEphemeralMu sync.RWMutex
 	lastEphemeral   []llm.Message
+
+	// lastResponseMu protects lastResponse.
+	lastResponseMu sync.Mutex
+	// lastResponse はチャンネルごとの直前の返答テキストを保持する。
+	// 同一チャンネルへの連続重複返答を防ぐために使用。
+	lastResponse map[string]string
+}
+
+// isDuplicateResponse は直前の返答と同じ内容かを判定し、返答を記録する。
+func (a *Agent) isDuplicateResponse(channel, text string) bool {
+	if channel == "" {
+		return false
+	}
+	a.lastResponseMu.Lock()
+	defer a.lastResponseMu.Unlock()
+	if a.lastResponse == nil {
+		a.lastResponse = make(map[string]string)
+	}
+	prev := a.lastResponse[channel]
+	a.lastResponse[channel] = text
+	return prev == text
 }
 
 // broadcastExpression sends an expression change if a broadcaster is configured.
