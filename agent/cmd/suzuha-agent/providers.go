@@ -117,6 +117,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				logger.Warn("プロバイダのシードに失敗", "error", err)
 			}
 
+			// 静的モデルカタログを最新の定義で同期
+			if err := reg.SeedStaticModels(context.Background()); err != nil {
+				logger.Warn("静的モデルカタログのシードに失敗", "error", err)
+			}
+
 			return reg, nil
 		})
 

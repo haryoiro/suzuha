@@ -406,6 +406,40 @@ func (r *ProviderRegistry) SeedProviders(ctx context.Context, cfgProviders []con
 	return nil
 }
 
+// SeedStaticModels は登録済みプロバイダの静的モデルカタログを DB に反映する。
+// 各プロバイダタイプの ProviderMeta から静的リストを取得し、SeedModels で upsert する。
+func (r *ProviderRegistry) SeedStaticModels(ctx context.Context) error {
+	providers, err := r.ListProviders(ctx)
+	if err != nil {
+		return fmt.Errorf("model: seed: プロバイダ一覧取得に失敗: %w", err)
+	}
+	seenTypes := make(map[string]bool)
+	for _, p := range providers {
+		if seenTypes[p.Type] {
+			continue
+		}
+		seenTypes[p.Type] = true
+
+		meta := GetProviderMeta(p.Type)
+		if meta == nil {
+			continue
+		}
+		models, err := meta.ListModels(ctx, p.APIKey, p.APIBase)
+		if err != nil {
+			r.logger.Warn("model: 静的モデル取得に失敗", "type", p.Type, "error", err)
+			continue
+		}
+		for i := range models {
+			models[i].ProviderName = p.Name
+		}
+		if err := r.SeedModels(ctx, models); err != nil {
+			return err
+		}
+		r.logger.Info("model: 静的カタログをシード", "type", p.Type, "count", len(models))
+	}
+	return nil
+}
+
 // SeedModels はモデルカタログにエントリをシードする (source="static" のみ上書き)。
 func (r *ProviderRegistry) SeedModels(ctx context.Context, models []ModelInfo) error {
 	for _, m := range models {
