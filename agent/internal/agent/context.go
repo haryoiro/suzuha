@@ -172,6 +172,25 @@ func (c *Context) TokenCalibration() float64 {
 	return float64(c.lastActualTokens) / float64(est)
 }
 
+// ActualTokens はプロバイダ実測値ベースのトークン数を返す。
+// 実測値がない場合は EstimatedTokens にフォールバック。
+func (c *Context) ActualTokens() int {
+	c.mu.RLock()
+	actual := c.lastActualTokens
+	snapshot := c.estimateAtSnapshot
+	c.mu.RUnlock()
+
+	if actual > 0 {
+		currentEst := c.EstimatedTokens()
+		delta := currentEst - snapshot
+		if delta < 0 {
+			delta = 0
+		}
+		return actual + delta
+	}
+	return c.EstimatedTokens()
+}
+
 // ResetTokenTracking は compact 後にトークン追跡をリセットする。
 func (c *Context) ResetTokenTracking() {
 	c.mu.Lock()

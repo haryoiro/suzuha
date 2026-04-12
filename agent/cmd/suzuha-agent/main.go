@@ -304,7 +304,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		json.NewEncoder(w).Encode(map[string]any{
 			"messages":         msgs,
 			"count":            len(msgs),
-			"estimated_tokens": actx.EstimatedTokens(),
+			"estimated_tokens": actx.ActualTokens(),
 			"usage_ratio":      actx.UsageRatio(),
 			"max_tokens":       actx.MaxTokens(),
 			"background":       ag.LastBackground(),
