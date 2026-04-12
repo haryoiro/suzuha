@@ -545,8 +545,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 		if span != nil {
 			span.RecordError(err)
 		}
-		c.logger.Error("LLMが答えてくれなかった", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
-		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
+		return nil, fmt.Errorf("llm: 補完に失敗 (model=%s, elapsed=%dms): %w", model, elapsed.Milliseconds(), err)
 	}
 
 	if len(resp.Choices) == 0 {
@@ -803,8 +802,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	elapsed := time.Since(start)
 
 	if err != nil {
-		c.logger.Error("埋め込みに失敗しました", "model", c.embeddingModel, "elapsed_ms", elapsed.Milliseconds(), "error", err)
-		return nil, fmt.Errorf("llm: 埋め込みに失敗: %w", err)
+		return nil, fmt.Errorf("llm: 埋め込みに失敗 (model=%s, elapsed=%dms): %w", c.embeddingModel, elapsed.Milliseconds(), err)
 	}
 
 	if len(resp.Data) == 0 {
@@ -889,8 +887,7 @@ func (c *Client) DescribeImage(ctx context.Context, imageURL string, prompt ...s
 	elapsed := time.Since(start)
 
 	if err != nil {
-		c.logger.Error("ビジョン補完に失敗しました", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err)
-		return "", fmt.Errorf("llm: ビジョンに失敗: %w", err)
+		return "", fmt.Errorf("llm: ビジョンに失敗 (model=%s, elapsed=%dms): %w", model, elapsed.Milliseconds(), err)
 	}
 
 	if len(resp.Choices) == 0 {

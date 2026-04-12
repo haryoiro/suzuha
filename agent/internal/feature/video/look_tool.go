@@ -77,8 +77,7 @@ func (t *lookTool) Execute(ctx context.Context, input json.RawMessage) (*tool.To
 	// フレーム切り出し
 	jpeg, err := t.extractor.ExtractFrame(ctx, args.URL, sec)
 	if err != nil {
-		t.logger.Warn("video_look: フレーム取得失敗", "url", args.URL, "error", err)
-		return tool.ErrorResult(fmt.Sprintf("フレームの取得に失敗しました: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("フレームの取得に失敗しました (url=%s): %v", args.URL, err)), nil
 	}
 
 	// VLM で描写
@@ -106,7 +105,6 @@ func (t *lookTool) Execute(ctx context.Context, input json.RawMessage) (*tool.To
 	// 別モデルで描写
 	description, err := t.llmClient.DescribeImage(ctx, dataURI, prompt)
 	if err != nil {
-		t.logger.Warn("video_look: VLM 描写失敗", "error", err)
 		return tool.ErrorResult(fmt.Sprintf("画像の描写に失敗しました: %v", err)), nil
 	}
 

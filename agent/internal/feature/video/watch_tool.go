@@ -69,8 +69,7 @@ func (t *watchTool) Execute(ctx context.Context, input json.RawMessage) (*tool.T
 
 	info, lines, err := t.fetcher.Fetch(ctx, args.URL, langs)
 	if err != nil {
-		t.logger.Warn("video_watch: 字幕取得に失敗", "url", args.URL, "error", err)
-		return tool.ErrorResult(fmt.Sprintf("字幕の取得に失敗しました: %v", err)), nil
+		return tool.ErrorResult(fmt.Sprintf("字幕の取得に失敗しました (url=%s): %v", args.URL, err)), nil
 	}
 
 	if len(lines) == 0 {
