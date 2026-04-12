@@ -39,6 +39,10 @@ type VoiceSpeaker interface {
 	// SpeakText synthesizes and sends voice audio to the channel's guild voice connection.
 	SpeakText(ctx context.Context, guildID, text string) error
 
+	// SpeakStream は文チャネルから逐次 TTS → 音声送信する。
+	// チャネルがクローズされるまで各文を TTS で合成し、ストリーミングで送信する。
+	SpeakStream(ctx context.Context, guildID string, sentences <-chan string) error
+
 	// IsConnected returns true if there is an active voice session for the guild.
 	IsConnected(guildID string) bool
 }

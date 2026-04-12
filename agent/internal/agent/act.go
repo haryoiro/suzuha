@@ -48,11 +48,22 @@ func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
 	return sess.Respond(ctx, text)
 }
 
+// llmRoleForPerception は Perception に基づいて LLM ロールを決定する。
+// voice 会話には "voice" ロール (glm-4.7 等の高速モデル) を使用し、
+// テキスト会話には "conversation" ロール (glm-5.1 等の高精度モデル) を使用する。
+func llmRoleForPerception(p *Perception) string {
+	if p.IsVoice {
+		return "voice"
+	}
+	return "conversation"
+}
+
 // ActWith runs the LLM completion with tool loop, filters the response,
 // and returns the response text. It does NOT route the response to any output;
 // the caller is responsible for sending the response via Session.Respond().
 func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p *Perception, t *Thought) (string, error) {
-	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel, p.LastMessage.ChannelName)
+	llmRole := llmRoleForPerception(p)
+	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel, p.LastMessage.ChannelName, llmRole)
 	if err != nil {
 		return "", fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
@@ -70,50 +81,106 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 		})
 	}
 
-	// Send response (strip directive tags and silent markers).
-	// Think tags are already parsed in llm.Complete().
+	return a.filterResponse(resp, intermediateText, p.Channel), nil
+}
+
+// filterResponse はレスポンスを検査し、送信すべきテキストを返す。
+// skip_response / silent / dedup のいずれかに該当する場合は空文字を返す。
+func (a *Agent) filterResponse(resp *llm.Response, intermediateText, channel string) string {
 	text := strings.TrimSpace(llm.StripDirectiveTags(resp.Text))
 	switch {
 	case text == "":
 		a.logger.Debug("何も思いつかなかった")
-		return "", nil
+		return ""
 	case containsSkipTool(resp.ToolCalls):
 		a.logger.Info("黙った (skip_response)",
 			"had_text", text != "")
-		return "", nil
+		return ""
 	case intermediateText != "" && isSimilarText(intermediateText, text):
 		a.logger.Info("同じこと言いそうなので黙った",
 			"intermediate_length", len(intermediateText),
 			"final_length", len(text))
-		return "", nil
+		return ""
 	case llm.IsSilentResponse(text):
 		a.logger.Info("黙った (サイレント)",
 			"raw_text", textutil.TruncateRunes(resp.Text, 100))
-		return "", nil
-	case a.isDuplicateResponse(p.Channel, text):
+		return ""
+	case a.isDuplicateResponse(channel, text):
 		a.logger.Info("同じこと言いそうなので黙った (dedup)",
-			"channel", p.Channel, "length", len(text))
-		return "", nil
+			"channel", channel, "length", len(text))
+		return ""
 	default:
-		return text, nil
+		return text
 	}
+}
+
+// toolSet は LLM 呼び出しに使うツール一式を保持する。
+type toolSet struct {
+	tools   []tool.Tool
+	toolMap map[string]tool.Tool
+}
+
+// prepareTools は directive に基づいてツール一式を準備する。
+// [RESPOND] 以外の directive では skip_response ツールを注入する。
+func (a *Agent) prepareTools(directive string) toolSet {
+	tools := a.tools.AllEnabled()
+	if !strings.HasPrefix(directive, "[RESPOND]") {
+		tools = append(tools, skipResponseTool{})
+	}
+	m := make(map[string]tool.Tool, len(tools))
+	for _, t := range tools {
+		m[t.Name()] = t
+	}
+	return toolSet{tools: tools, toolMap: m}
+}
+
+// buildIterMessages はイテレーション用のメッセージリストを構築する。
+// iter=0 では Thought からビルド、iter>0 ではコンテキストのメッセージを使用する。
+// reactive compact やチャンネルグルーピングも含む。
+func (a *Agent) buildIterMessages(
+	ctx context.Context,
+	agentCtx *Context,
+	t *Thought,
+	ts toolSet,
+	maxCtx int,
+	channel string,
+	iter int,
+) []llm.Message {
+	var msgs []llm.Message
+	if iter == 0 {
+		msgs = t.BuildMessages(agentCtx.SystemPrompt(), agentCtx.Messages())
+	} else {
+		msgs = agentCtx.MessagesWithSystem()
+	}
+	msgs = trimMessagesToFit(msgs, ts.tools, maxCtx)
+
+	// Reactive Compact: ツールループ中にコンテキストが 90% を超えたら
+	// 緊急圧縮してコンテキストを解放する。
+	if iter > 0 && maxCtx > 0 {
+		estimated := agentCtx.EstimatedTokens()
+		if float64(estimated)/float64(maxCtx) > 0.9 {
+			a.logger.Warn("ツールループ中にコンテキスト逼迫、緊急圧縮",
+				"usage_ratio", fmt.Sprintf("%.2f", float64(estimated)/float64(maxCtx)),
+				"estimated", estimated, "max", maxCtx)
+			a.compactAsyncFor(ctx, agentCtx, sourceKeyFromChannel(channel, a.contexts))
+			msgs = agentCtx.MessagesWithSystem()
+			msgs = trimMessagesToFit(msgs, ts.tools, maxCtx)
+		}
+	}
+
+	if channel != "" {
+		msgs = groupByChannel(msgs, channel)
+	}
+	return msgs
 }
 
 // completeWithToolsUsing runs the LLM and executes tool calls in a loop,
 // using the given agent context and session for typing/intermediate responses.
-func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName string) (*llm.Response, string, error) {
-	directive := t.Directive
-	allTools := a.tools.AllEnabled()
-
-	if !strings.HasPrefix(directive, "[RESPOND]") {
-		allTools = append(allTools, skipResponseTool{})
-	}
-
-	// Build a local tool map for this call (includes injected skip_response).
-	toolMap := make(map[string]tool.Tool, len(allTools))
-	for _, t := range allTools {
-		toolMap[t.Name()] = t
-	}
+// llmRole determines which LLM provider/model to use (e.g. "conversation", "voice").
+func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName, llmRole string) (*llm.Response, string, error) {
+	ts := a.prepareTools(t.Directive)
+	rc := a.llm.For(llmRole)
+	maxCtx := rc.MaxContextTokens()
 
 	maxIter := 10
 	var intermediateText string
@@ -128,40 +195,9 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			}
 		}
 
-		var msgs []llm.Message
-		if iter == 0 {
-			msgs = t.BuildMessages(agentCtx.SystemPrompt(), agentCtx.Messages())
-		} else {
-			msgs = agentCtx.MessagesWithSystem()
-		}
-		// Trim messages to fit within max context, reserving space for tools.
-		maxCtx := a.llm.MaxContextTokens()
-		msgs = trimMessagesToFit(msgs, allTools, maxCtx)
-
-		// Reactive Compact: ツールループ中にコンテキストが 90% を超えたら
-		// 緊急圧縮してコンテキストを解放する。
-		if iter > 0 && maxCtx > 0 {
-			estimated := agentCtx.EstimatedTokens()
-			if float64(estimated)/float64(maxCtx) > 0.9 {
-				a.logger.Warn("ツールループ中にコンテキスト逼迫、緊急圧縮",
-					"usage_ratio", fmt.Sprintf("%.2f", float64(estimated)/float64(maxCtx)),
-					"estimated", estimated, "max", maxCtx)
-				a.compactAsyncFor(ctx, agentCtx, sourceKeyFromChannel(channel, a.contexts))
-				// 圧縮後のメッセージで再構築
-				msgs = agentCtx.MessagesWithSystem()
-				msgs = trimMessagesToFit(msgs, allTools, maxCtx)
-			}
-		}
-
-		// チャンネルごとにグルーピングし、現チャンネルを末尾に寄せる。
-		// LLM の recency bias を活かして現チャンネルの会話にフォーカスさせる。
-		if channel != "" {
-			msgs = groupByChannel(msgs, channel)
-		}
-
-		rc := a.llm.For("conversation")
+		msgs := a.buildIterMessages(ctx, agentCtx, t, ts, maxCtx, channel, iter)
 		provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
-		provTools := llm.ConvertTools(allTools)
+		provTools := llm.ConvertTools(ts.tools)
 
 		var span trace.Span
 		if a.tracer != nil {
@@ -171,7 +207,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 					attribute.String("gen_ai.system", rc.ProviderName()),
 					attribute.String("gen_ai.request.model", rc.Model()),
 					attribute.Int("gen_ai.prompt.message_count", len(msgs)),
-					attribute.Int("gen_ai.request.tool_count", len(allTools)),
+					attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
 				),
 			)
 			defer span.End()
@@ -236,7 +272,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				if tc.Function.Name == "skip_response" {
 					continue
 				}
-				if t, ok := toolMap[tc.Function.Name]; ok {
+				if t, ok := ts.toolMap[tc.Function.Name]; ok {
 					if _, err := t.Execute(ctx, json.RawMessage(tc.Function.Arguments)); err != nil {
 						a.logger.Warn("skip中のツール失敗", "tool", tc.Function.Name, "error", err)
 					}
@@ -264,7 +300,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			intermediateText = stripped
 		}
 
-		allStopAfter := a.executeToolCalls(ctx, agentCtx, sess, toolMap, resp.ToolCalls, channel, iter)
+		allStopAfter := a.executeToolCalls(ctx, agentCtx, sess, ts.toolMap, resp.ToolCalls, channel, iter)
 
 		if allStopAfter {
 			a.logger.Info("ツールが完了した", "iteration", iter)

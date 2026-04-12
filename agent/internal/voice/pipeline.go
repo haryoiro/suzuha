@@ -165,6 +165,56 @@ func (p *Pipeline) SpeakText(ctx context.Context, guildID, text string) error {
 	return sess.SendPCM(stereo)
 }
 
+// SpeakStream は文チャネルから逐次 TTS → 音声送信する。
+// DAVE 待機は 1 回だけ行い、各文を TTS で合成して順次送信する。
+func (p *Pipeline) SpeakStream(ctx context.Context, guildID string, sentences <-chan string) error {
+	p.mu.Lock()
+	sess, ok := p.sessions[guildID]
+	p.mu.Unlock()
+	if !ok {
+		// drain channel to prevent goroutine leak
+		for range sentences {
+		}
+		return fmt.Errorf("voice: ギルド %s のセッションが見つかりません", guildID)
+	}
+
+	if err := sess.BeginSpeaking(); err != nil {
+		for range sentences {
+		}
+		return fmt.Errorf("voice: speaking 開始失敗: %w", err)
+	}
+	defer sess.EndSpeaking()
+
+	for sentence := range sentences {
+		if ctx.Err() != nil {
+			for range sentences {
+			}
+			return ctx.Err()
+		}
+
+		pcm, sampleRate, err := p.tts.Synthesize(ctx, sentence)
+		if err != nil {
+			p.logger.Warn("ストリーミング TTS 失敗、スキップ", "error", err, "sentence", sentence)
+			continue
+		}
+		if len(pcm) == 0 {
+			continue
+		}
+
+		pcm48k := ResamplePCM(pcm, sampleRate, 48000)
+		stereo := monoToStereo(pcm48k)
+
+		if err := sess.SendPCMChunk(stereo); err != nil {
+			// drain remaining sentences to prevent goroutine leak in caller.
+			for range sentences {
+			}
+			return fmt.Errorf("voice: PCM チャンク送信失敗: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // handleSpeech is called when VAD detects a complete speech segment.
 // It transcribes the audio and publishes it as a voice event.
 func (p *Pipeline) handleSpeech(ctx context.Context, guildID, channelID, userID string, pcm []byte) {

@@ -43,6 +43,7 @@ type Session struct {
 	// Opus encoder for sending audio (48kHz stereo).
 	encoderMu sync.Mutex
 	encoder   *opus.Encoder
+	speaking  bool // BeginSpeaking で true、EndSpeaking で false
 
 	// discordgo event handler cleanup functions.
 	cleanupHandlers []func()
@@ -159,42 +160,38 @@ func (s *Session) cleanup() {
 	s.cleanupHandlers = nil
 }
 
-// SendPCM encodes PCM to Opus and sends it to the voice channel.
-// PCM must be 16-bit LE, stereo (2ch), 48kHz.
-func (s *Session) SendPCM(pcm []byte) error {
+// opusFrameSamples は 20ms フレームのサンプル数 (48kHz)。
+const opusFrameSamples = 960
+
+// opusFrameBytes は 48kHz ステレオ 20ms フレームのバイト数。
+const opusFrameBytes = opusFrameSamples * 2 * 2 // stereo, 16-bit
+
+// silenceFrame は Opus silence パケット。
+var silenceFrame = []byte{0xF8, 0xFF, 0xFE}
+
+// BeginSpeaking は DAVE 鍵待機・speaking フラグ設定・無音プリアンブルを行う。
+// encoderMu を取得し保持する。必ず EndSpeaking で解放すること。
+func (s *Session) BeginSpeaking() error {
 	if s.conn == nil {
 		return fmt.Errorf("voice: VCに接続されていません")
 	}
 
-	// 20ms frame at 48kHz stereo = 960 samples * 2 channels = 1920 int16 samples = 3840 bytes.
-	const frameSamples = 960
-	const frameBytes = frameSamples * 2 * 2 // stereo, 16-bit
-
-	// Serialize all sends per session to avoid speaking flag race conditions.
 	s.encoderMu.Lock()
-	defer s.encoderMu.Unlock()
 
-	// Wait for DAVE key ratchet to be ready before sending.
 	if err := s.waitForDAVEReady(); err != nil {
+		s.encoderMu.Unlock()
 		return err
 	}
 
-	// Additional delay for DAVE epoch convergence: give other clients time
-	// to process the MLS epoch transition and derive our sender key.
+	// DAVE epoch convergence 待ち: 他クライアントが MLS epoch を処理する時間を確保。
 	time.Sleep(2 * time.Second)
 
-	// Set speaking flag inside lock to prevent concurrent clear/set races.
 	ctx := context.Background()
 	if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
 		s.logger.Warn("話し始めの合図に失敗", "error", err)
 	}
-	defer func() { _ = s.conn.SetSpeaking(ctx, 0) }()
 
 	udp := s.conn.UDP()
-
-	// Send extended silence frames to prime the Discord audio stream
-	// and allow DAVE epoch convergence on receiving clients.
-	silenceFrame := []byte{0xF8, 0xFF, 0xFE}
 	for range 15 {
 		if _, err := udp.Write(silenceFrame); err != nil {
 			s.logger.Warn("無音の送信に失敗", "error", err)
@@ -202,34 +199,42 @@ func (s *Session) SendPCM(pcm []byte) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	totalFrames := len(pcm) / frameBytes
+	s.speaking = true
+	return nil
+}
+
+// SendPCMChunk は BeginSpeaking 済みの状態で PCM チャンクを Opus エンコードして送信する。
+// PCM は 16-bit LE, stereo, 48kHz。BeginSpeaking が先に呼ばれていること。
+func (s *Session) SendPCMChunk(pcm []byte) error {
+	if !s.speaking {
+		return fmt.Errorf("voice: BeginSpeaking が呼ばれていません")
+	}
+	udp := s.conn.UDP()
+	ctx := context.Background()
+
+	totalFrames := len(pcm) / opusFrameBytes
 	s.logger.Debug("音声を送り始める", "pcm_bytes", len(pcm),
 		"frames", totalFrames, "duration_ms", totalFrames*20)
 
 	var sentFrames int
-	for offset := 0; offset+frameBytes <= len(pcm); offset += frameBytes {
-		// Convert bytes to int16 slice.
-		frame := make([]int16, frameSamples*2) // stereo
+	for offset := 0; offset+opusFrameBytes <= len(pcm); offset += opusFrameBytes {
+		frame := make([]int16, opusFrameSamples*2) // stereo
 		for i := range frame {
 			frame[i] = int16(binary.LittleEndian.Uint16(pcm[offset+i*2:]))
 		}
 
-		// Encode to Opus.
 		opusBuf := make([]byte, 1000)
 		n, err := s.encoder.Encode(frame, opusBuf)
 		if err != nil {
 			return fmt.Errorf("voice: Opusエンコード失敗: %w", err)
 		}
 
-		// Send via disgo's UDP connection with retry on DAVE key errors.
 		if _, err := udp.Write(opusBuf[:n]); err != nil {
 			if strings.Contains(err.Error(), "missing key ratchet") {
-				// DAVE key transition in progress — wait and retry this frame.
 				s.logger.Debug("暗号鍵を待っている")
 				if waitErr := s.waitForDAVEReady(); waitErr != nil {
 					return waitErr
 				}
-				// Re-set speaking flag after waiting.
 				_ = s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone)
 				if _, err := udp.Write(opusBuf[:n]); err != nil {
 					return fmt.Errorf("voice: Opus送信失敗（リトライ後）: %w", err)
@@ -240,21 +245,48 @@ func (s *Session) SendPCM(pcm []byte) error {
 		}
 
 		sentFrames++
-
-		// Pace at 20ms per frame to avoid flooding.
 		time.Sleep(20 * time.Millisecond)
 	}
 
 	s.logger.Debug("音声を送り終わった", "sent", sentFrames, "total", totalFrames)
+	return nil
+}
 
-	// Send trailing silence frames before clearing speaking flag.
+// EndSpeaking は trailing silence を送り、speaking フラグをクリアし、encoderMu を解放する。
+// BeginSpeaking とペアで使うこと。ストリーミング利用時は defer で呼ぶこと。
+func (s *Session) EndSpeaking() {
+	if !s.speaking {
+		return
+	}
+	s.speaking = false
+
+	if s.conn == nil {
+		s.encoderMu.Unlock()
+		return
+	}
+
+	udp := s.conn.UDP()
 	for range 5 {
 		_, _ = udp.Write(silenceFrame)
 		time.Sleep(20 * time.Millisecond)
 	}
 
+	ctx := context.Background()
+	_ = s.conn.SetSpeaking(ctx, 0)
+
 	s.logger.Debug("音声の送信が完了")
-	return nil
+	s.encoderMu.Unlock()
+}
+
+// SendPCM は PCM 全体を一括エンコード・送信する。
+// BeginSpeaking + SendPCMChunk + EndSpeaking のラッパー。
+// PCM は 16-bit LE, stereo (2ch), 48kHz。
+func (s *Session) SendPCM(pcm []byte) error {
+	if err := s.BeginSpeaking(); err != nil {
+		return err
+	}
+	defer s.EndSpeaking()
+	return s.SendPCMChunk(pcm)
 }
 
 // waitForDAVEReady probes the UDP connection with a silent Opus frame to check

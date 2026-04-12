@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
@@ -81,6 +82,30 @@ func (s *DiscordSession) Respond(ctx context.Context, text string) error {
 
 	// Text channel.
 	return s.chat.Send(ctx, s.turnChannel, text)
+}
+
+// RespondStream は LLM ストリーミングレスポンスを音声で逐次返す。
+// voice が接続中ならストリーミング TTS、そうでなければテキスト送信にフォールバック。
+func (s *DiscordSession) RespondStream(ctx context.Context, sentences <-chan string) error {
+	// Voice channel: stream TTS.
+	if s.voice != nil && s.turnGuildID != "" && s.voice.IsConnected(s.turnGuildID) {
+		s.logger.Info("VCでストリーミング返答", "guild", s.turnGuildID)
+		if err := s.voice.SpeakStream(ctx, s.turnGuildID, sentences); err != nil {
+			s.logger.Warn("VCストリーミング失敗", "error", err)
+			return err
+		}
+		return nil
+	}
+
+	// Text channel fallback: drain sentences and send as one message.
+	var buf []string
+	for sentence := range sentences {
+		buf = append(buf, sentence)
+	}
+	if len(buf) == 0 {
+		return nil
+	}
+	return s.chat.Send(ctx, s.turnChannel, strings.Join(buf, ""))
 }
 
 // Typing sends a typing indicator (Discord-specific, used during tool loops).

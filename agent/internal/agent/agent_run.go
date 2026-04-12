@@ -227,8 +227,16 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	}
 
 	// 4. Act: LLM completion, tool loop, get response text.
+	// Voice sessions use streaming LLM → TTS for lower latency.
 	// Use hookCtx so LLM/tool spans are children of the pipeline.turn trace.
-	text, err := a.ActWith(hookCtx, agentCtx, sess, p, t)
+	var text string
+	var err error
+	if ds, ok := sess.(*DiscordSession); ok && ds.turnIsVoice && ds.voice != nil && ds.voice.IsConnected(ds.turnGuildID) {
+		// Voice streaming: actStreamWith handles both LLM streaming and voice response.
+		text, err = a.actStreamWith(hookCtx, agentCtx, ds, p, t)
+	} else {
+		text, err = a.ActWith(hookCtx, agentCtx, sess, p, t)
+	}
 	if err != nil {
 		return err
 	}
@@ -239,7 +247,13 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterAct(c, p, t) })
 
 	// 5. Route response through the session.
-	if text != "" {
+	// Voice streaming already sent the response in actStreamWith.
+	if ds, ok := sess.(*DiscordSession); ok && ds.turnIsVoice {
+		// Voice: response was already sent via RespondStream in actStreamWith.
+		if text != "" {
+			a.logger.Info("話した", "source_key", string(key), "length", len(text), "content", textutil.TruncateRunes(text, 200))
+		}
+	} else if text != "" {
 		a.logger.Info("話した", "source_key", string(key), "length", len(text), "content", textutil.TruncateRunes(text, 200))
 		if err := sess.Respond(ctx, text); err != nil {
 			a.logger.Error("返事の送信に失敗", "error", err)

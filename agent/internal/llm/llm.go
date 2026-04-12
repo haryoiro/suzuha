@@ -332,16 +332,29 @@ func (rc *RoleClient) MaxContextTokens() int {
 }
 
 // For はロールに割り当てられたプロバイダを返す。
-// フォールバック: role → "background" → "conversation"
+// roleFallbacks はロールごとのフォールバックチェーン。
+// voice は conversation の変種なので background をスキップする。
+var roleFallbacks = map[string][]string{
+	"voice": {"voice", "conversation"},
+}
+
+// defaultRoleFallback は roleFallbacks に登録されていないロール用。
+var defaultRoleFallback = []string{"background", "conversation"}
+
+// フォールバック: ロール固有チェーン → デフォルト (background → conversation)
 // 返される RoleClient は Client への参照を保持し、SwapRole() の変更が即座に反映される。
 func (c *Client) For(role string) *RoleClient {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// 解決されたロール名を決定
+	// ロール固有のフォールバックチェーンを取得
+	chain, ok := roleFallbacks[role]
+	if !ok {
+		chain = append([]string{role}, defaultRoleFallback...)
+	}
+
 	resolved := role
-	fallback := []string{role, "background", "conversation"}
-	for _, r := range fallback {
+	for _, r := range chain {
 		if _, ok := c.roles[r]; ok {
 			resolved = r
 			break
