@@ -67,10 +67,14 @@ const MessageRow = memo(function MessageRow({ msg }: { msg: ContextMessage }) {
   );
 });
 
-const EphemeralSection = memo(function EphemeralSection({
+const CollapsibleSection = memo(function CollapsibleSection({
+  label,
   messages,
+  color,
 }: {
+  label: string;
   messages: ContextMessage[];
+  color: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -89,20 +93,20 @@ const EphemeralSection = memo(function EphemeralSection({
         }}
       >
         {open ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
-        <span>Ephemeral ({messages.length})</span>
+        <span>{label} ({messages.length})</span>
       </div>
       {open && (
         <div
           style={{
-            background: "rgba(114,46,209,0.1)",
-            border: "1px solid rgba(114,46,209,0.3)",
+            background: `rgba(${color},0.1)`,
+            border: `1px solid rgba(${color},0.3)`,
             borderRadius: 6,
             maxHeight: 200,
             overflow: "auto",
           }}
         >
           {messages.map((msg, i) => (
-            <MessageRow key={`eph-${i}`} msg={msg} />
+            <MessageRow key={`${label}-${i}`} msg={msg} />
           ))}
         </div>
       )}
@@ -173,8 +177,11 @@ export const ContextPage = memo(function ContextPage() {
         </Button>
       </div>
 
-      {data.ephemeral && data.ephemeral.length > 0 && (
-        <EphemeralSection messages={data.ephemeral} />
+      {data.background && data.background.length > 0 && (
+        <CollapsibleSection label="Background" messages={data.background} color="114,46,209" />
+      )}
+      {data.foreground && data.foreground.length > 0 && (
+        <CollapsibleSection label="Foreground" messages={data.foreground} color="46,114,209" />
       )}
 
       <div

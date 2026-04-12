@@ -73,8 +73,9 @@ type Agent struct {
 	// ExpressionBroadcaster is called to broadcast expression changes to device/web clients.
 	ExpressionBroadcaster func(expression int)
 
-	lastEphemeralMu sync.RWMutex
-	lastEphemeral   []llm.Message
+	lastEphemeralMu  sync.RWMutex
+	lastBackground   []llm.Message
+	lastForeground   []llm.Message
 
 	// lastResponseMu protects lastResponse.
 	lastResponseMu sync.Mutex
@@ -317,11 +318,29 @@ func buildProviders(
 	}
 }
 
-// LastEphemeral returns the most recently injected ephemeral messages.
-func (a *Agent) LastEphemeral() []llm.Message {
+// LastBackground returns the most recently injected background messages.
+func (a *Agent) LastBackground() []llm.Message {
 	a.lastEphemeralMu.RLock()
 	defer a.lastEphemeralMu.RUnlock()
-	out := make([]llm.Message, len(a.lastEphemeral))
-	copy(out, a.lastEphemeral)
+	out := make([]llm.Message, len(a.lastBackground))
+	copy(out, a.lastBackground)
 	return out
+}
+
+// LastForeground returns the most recently injected foreground messages.
+func (a *Agent) LastForeground() []llm.Message {
+	a.lastEphemeralMu.RLock()
+	defer a.lastEphemeralMu.RUnlock()
+	out := make([]llm.Message, len(a.lastForeground))
+	copy(out, a.lastForeground)
+	return out
+}
+
+// UpdateTokenCounter はプロバイダタイプとモデル名からトークンカウンタを更新する。
+// conversation ロールの swap 時に呼ぶ。
+func (a *Agent) UpdateTokenCounter(providerType, model string) {
+	counter := llm.NewTokenCounter(providerType, model, a.logger)
+	for _, ctx := range a.contexts {
+		ctx.SetTokenCounter(counter)
+	}
 }

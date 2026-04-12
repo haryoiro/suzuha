@@ -107,6 +107,7 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 func (a *Agent) resetAndPersistWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
 	agentCtx.ResetInjectedUsers()
 	agentCtx.ResetSeenChannels()
+	agentCtx.ResetTokenTracking()
 	a.persistContext(ctx, agentCtx, sourceKey)
 }
 

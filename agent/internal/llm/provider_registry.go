@@ -51,6 +51,7 @@ type RoleAssignment struct {
 type RoleSpec struct {
 	ProviderInst providers.Provider
 	ProviderName string
+	ProviderType string // "openai", "zhipu", "gemini", "qwen"
 	ModelID      string
 	APIBase      string
 	MaxContext   int
@@ -329,6 +330,7 @@ func (r *ProviderRegistry) buildRoleSpec(ctx context.Context, providerName, mode
 	spec := &RoleSpec{
 		ProviderInst: inst,
 		ProviderName: providerName,
+		ProviderType: entry.Type,
 		ModelID:      modelID,
 		APIBase:      entry.APIBase,
 	}

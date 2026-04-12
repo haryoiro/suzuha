@@ -307,7 +307,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 			"estimated_tokens": actx.EstimatedTokens(),
 			"usage_ratio":      actx.UsageRatio(),
 			"max_tokens":       actx.MaxTokens(),
-			"ephemeral":        ag.LastEphemeral(),
+			"background":       ag.LastBackground(),
+			"foreground":       ag.LastForeground(),
 		})
 	})
 	mux.HandleFunc("GET /internal/scheduler/jobs", func(w http.ResponseWriter, r *http.Request) {
@@ -385,8 +386,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 					continue
 				}
 				llmClient.SwapRoleSpec(a.Role, *spec)
-				if a.Role == "conversation" && spec.MaxContext > 0 {
-					ag.AgentContext().SetMaxTokens(spec.MaxContext)
+				if a.Role == "conversation" {
+					if spec.MaxContext > 0 {
+						ag.AgentContext().SetMaxTokens(spec.MaxContext)
+					}
+					ag.UpdateTokenCounter(spec.ProviderType, spec.ModelID)
 				}
 				logger.Info("LLMロールを復元", "role", a.Role, "provider", a.ProviderName, "model", a.ModelID)
 			}
@@ -514,12 +518,15 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 
 		llmClient.SwapRoleSpec(role, *spec)
 
-		if role == "conversation" && spec.MaxContext > 0 {
-			ag.AgentContext().SetMaxTokens(spec.MaxContext)
-			if ag.AgentContext().UsageRatio() > 0.5 {
-				compactCtx, compactCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-				ag.ForceCompact(compactCtx)
-				compactCancel()
+		if role == "conversation" {
+			ag.UpdateTokenCounter(spec.ProviderType, spec.ModelID)
+			if spec.MaxContext > 0 {
+				ag.AgentContext().SetMaxTokens(spec.MaxContext)
+				if ag.AgentContext().UsageRatio() > 0.5 {
+					compactCtx, compactCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+					ag.ForceCompact(compactCtx)
+					compactCancel()
+				}
 			}
 		}
 

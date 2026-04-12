@@ -140,11 +140,9 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 		"directive", directive)
 
 	// admin 表示用キャッシュ
-	allEphemeral := make([]llm.Message, 0, len(bg)+len(fg))
-	allEphemeral = append(allEphemeral, bg...)
-	allEphemeral = append(allEphemeral, fg...)
 	a.lastEphemeralMu.Lock()
-	a.lastEphemeral = allEphemeral
+	a.lastBackground = bg
+	a.lastForeground = fg
 	a.lastEphemeralMu.Unlock()
 
 	return &Thought{

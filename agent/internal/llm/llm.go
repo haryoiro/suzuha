@@ -121,6 +121,7 @@ func IsSilentResponse(text string) bool {
 type roleProvider struct {
 	provider     providers.Provider
 	providerName string
+	providerType string // "openai", "zhipu", "gemini", "qwen"
 	model        string
 	apiBase      string
 	maxCtx       int
@@ -170,11 +171,34 @@ func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapa
 	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
 }
 
+// ConversationProviderType は conversation ロールのプロバイダタイプを返す。
+func (c *Client) ConversationProviderType() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	rp, ok := c.roles["conversation"]
+	if !ok {
+		return ""
+	}
+	return rp.providerType
+}
+
+// ConversationModel は conversation ロールのモデル名を返す。
+func (c *Client) ConversationModel() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	rp, ok := c.roles["conversation"]
+	if !ok {
+		return ""
+	}
+	return rp.model
+}
+
 // SwapRoleSpec はロールのプロバイダを RoleSpec で切り替える。
 func (c *Client) SwapRoleSpec(role string, spec RoleSpec) {
 	rp := roleProvider{
 		provider:     spec.ProviderInst,
 		providerName: spec.ProviderName,
+		providerType: spec.ProviderType,
 		model:        spec.ModelID,
 		apiBase:      spec.APIBase,
 		maxCtx:       spec.MaxContext,
@@ -696,11 +720,8 @@ func ConvertMessages(msgs []Message, visionCapable bool) []providers.Message {
 			content = fmt.Sprintf("[time=%s server=%s channel=#%s channel_id=%s guild_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
 				ts, m.GuildName, m.ChannelName, m.Channel, m.GuildID, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
 		}
-		// assistant メッセージには channel 名だけを最小限付与。
-		// フルメタデータを付けると LLM がフォーマットを真似るため、チャンネル名のみ。
-		if m.Role == "assistant" && m.Channel != "" && m.ChannelName != "" {
-			content = fmt.Sprintf("[channel=#%s]\n%s", m.ChannelName, content)
-		}
+		// assistant メッセージにはメタデータを付与しない。
+		// LLM がフォーマットを真似て出力に含めてしまうため。
 
 		// Strip tool_calls from assistant messages if any response is missing.
 		var toolCalls []providers.ToolCall

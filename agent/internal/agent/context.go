@@ -11,13 +11,23 @@ import (
 // The system prompt (IDENTITY.md) is stored separately from messages
 // so it is never affected by compaction or truncation.
 type Context struct {
-	mu              sync.RWMutex
-	messages        []llm.Message
-	systemPrompt    string          // pinned system prompt, immune to compaction
-	maxTokens       int
-	tokenCalibration float64        // actual/estimated ratio from last LLM Usage; 0 = uncalibrated
-	injectedUsers   map[string]bool // tracks which user IDs have had profiles injected
-	seenChannels    map[string]bool // tracks channels with bootstrapped history
+	mu            sync.RWMutex
+	messages      []llm.Message
+	systemPrompt  string          // pinned system prompt, immune to compaction
+	maxTokens     int
+	injectedUsers map[string]bool // tracks which user IDs have had profiles injected
+	seenChannels  map[string]bool // tracks channels with bootstrapped history
+
+	// tokenCounter はプロバイダ固有のトークンカウンタ。
+	// nil の場合は textutil.EstimateTokens にフォールバック。
+	tokenCounter func(string) int
+
+	// Token tracking: プロバイダの実測値をベースに差分推定で補完する。
+	// lastActualTokens はプロバイダが返した PromptTokens（bg/fg/tools 全込み）。
+	// estimateAtSnapshot は lastActualTokens 取得時点の EstimatedTokens。
+	// 差分 = 現在の推定 - スナップショット時推定 でメッセージ増分を反映する。
+	lastActualTokens   int
+	estimateAtSnapshot int
 }
 
 // NewContext creates a context manager.
@@ -82,65 +92,92 @@ func (c *Context) Len() int {
 	return len(c.messages)
 }
 
+// SetTokenCounter はプロバイダ固有のトークンカウンタを設定する。
+func (c *Context) SetTokenCounter(fn func(string) int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tokenCounter = fn
+}
+
+// countTokens は設定されたカウンタでトークン数を返す（ロック不要）。
+func (c *Context) countTokens(text string) int {
+	if c.tokenCounter != nil {
+		return c.tokenCounter(text)
+	}
+	return textutil.EstimateTokens(text)
+}
+
+// estimatedTokensLocked はロックを取らずに推定トークン数を返す（内部用）。
+func (c *Context) estimatedTokensLocked() int {
+	total := 0
+	if c.systemPrompt != "" {
+		total += c.countTokens(c.systemPrompt) + 4
+	}
+	for _, m := range c.messages {
+		total += c.countTokens(m.Content) + 4
+	}
+	return total
+}
+
 // EstimatedTokens returns a rough token count using Unicode-aware heuristics.
 // Includes the pinned system prompt.
 func (c *Context) EstimatedTokens() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	total := 0
-	if c.systemPrompt != "" {
-		total += textutil.EstimateTokens(c.systemPrompt) + 4
-	}
-	for _, m := range c.messages {
-		total += textutil.EstimateTokens(m.Content) + 4 // +4 for role overhead
-	}
-	return total
+	return c.estimatedTokensLocked()
 }
 
-// UsageRatio returns estimated token usage as a fraction of max.
-// If a calibration ratio has been set via CalibrateTokens, the raw
-// estimate is multiplied by that ratio for better accuracy.
+// UsageRatio はプロバイダの実測トークン数をベースに使用率を返す。
+// 実測値がない場合（初回応答前）はヒューリスティック推定にフォールバック。
 func (c *Context) UsageRatio() float64 {
 	if c.maxTokens <= 0 {
 		return 0
 	}
-	est := float64(c.EstimatedTokens())
 	c.mu.RLock()
-	cal := c.tokenCalibration
+	actual := c.lastActualTokens
+	snapshot := c.estimateAtSnapshot
 	c.mu.RUnlock()
-	if cal > 0 {
-		est *= cal
+
+	if actual > 0 {
+		currentEst := c.EstimatedTokens()
+		delta := currentEst - snapshot
+		if delta < 0 {
+			delta = 0
+		}
+		return float64(actual+delta) / float64(c.maxTokens)
 	}
-	return est / float64(c.maxTokens)
+	return float64(c.EstimatedTokens()) / float64(c.maxTokens)
 }
 
-// CalibrateTokens updates the calibration ratio using the actual token
-// count reported by the LLM provider (from Usage.PromptTokens).
-// The ratio is smoothed with an exponential moving average so a single
-// outlier doesn't swing the estimate too far.
+// CalibrateTokens はプロバイダが返した PromptTokens（実測値）を記録する。
+// bg/fg/tools/directive を含む全トークン数なので、compact 判定の精度が上がる。
 func (c *Context) CalibrateTokens(actualPromptTokens int) {
-	est := c.EstimatedTokens()
-	if est <= 0 || actualPromptTokens <= 0 {
+	if actualPromptTokens <= 0 {
 		return
 	}
-	newRatio := float64(actualPromptTokens) / float64(est)
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.tokenCalibration <= 0 {
-		// First calibration — use the raw ratio.
-		c.tokenCalibration = newRatio
-	} else {
-		// EMA: 70% old, 30% new.
-		c.tokenCalibration = c.tokenCalibration*0.7 + newRatio*0.3
-	}
+	c.lastActualTokens = actualPromptTokens
+	c.estimateAtSnapshot = c.estimatedTokensLocked()
 }
 
-// TokenCalibration returns the current calibration ratio (0 = uncalibrated).
+// TokenCalibration はプロバイダ実測値と推定値の比率を返す（ログ用）。
 func (c *Context) TokenCalibration() float64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.tokenCalibration
+	est := c.estimatedTokensLocked()
+	if est <= 0 || c.lastActualTokens <= 0 {
+		return 0
+	}
+	return float64(c.lastActualTokens) / float64(est)
+}
+
+// ResetTokenTracking は compact 後にトークン追跡をリセットする。
+func (c *Context) ResetTokenTracking() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastActualTokens = 0
+	c.estimateAtSnapshot = 0
 }
 
 // KeepOnly retains only the messages at the given indices.

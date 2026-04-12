@@ -368,7 +368,8 @@ export interface ContextResponse {
   estimated_tokens: number;
   usage_ratio: number;
   max_tokens: number;
-  ephemeral?: ContextMessage[];
+  background?: ContextMessage[];
+  foreground?: ContextMessage[];
   source?: ContextSource;
 }
 
