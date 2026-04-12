@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     port: 5174,
     host: true,
+    allowedHosts: true,
     watch: { usePolling: true, interval: 500 },
     proxy: {
       "/ws/web": {

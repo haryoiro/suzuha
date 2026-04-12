@@ -8,6 +8,7 @@ const apiTarget = process.env.API_URL ?? 'http://localhost:8080'
 export default defineConfig({
   plugins: [react()],
   server: {
+    allowedHosts: true,
     watch: {
       // Docker bind mount ではファイル変更の inotify が届かないため polling を使用
       usePolling: true,
