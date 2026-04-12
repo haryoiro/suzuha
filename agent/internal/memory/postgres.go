@@ -72,13 +72,13 @@ const pgMemColumns = "id, type, content, embedding, metadata, keywords, topic, p
 
 func scanPGMem(row interface{ Scan(dest ...any) error }) (Memory, error) {
 	var m Memory
-	var metaJSON, keywordsJSON, personsJSON sql.NullString
+	var metaJSON, keywordsJSON, topicStr, personsJSON sql.NullString
 	var eventTime sql.NullTime
 	var embBytes []byte
 
 	err := row.Scan(
 		&m.ID, &m.Type, &m.Content, &embBytes,
-		&metaJSON, &keywordsJSON, &m.Topic, &personsJSON,
+		&metaJSON, &keywordsJSON, &topicStr, &personsJSON,
 		&eventTime, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err != nil {
@@ -95,6 +95,9 @@ func scanPGMem(row interface{ Scan(dest ...any) error }) (Memory, error) {
 	}
 	if keywordsJSON.Valid && keywordsJSON.String != "" {
 		json.Unmarshal([]byte(keywordsJSON.String), &m.Keywords)
+	}
+	if topicStr.Valid {
+		m.Topic = topicStr.String
 	}
 	if personsJSON.Valid && personsJSON.String != "" {
 		json.Unmarshal([]byte(personsJSON.String), &m.Persons)
