@@ -188,7 +188,11 @@ func (s *Session) SendPCM(pcm []byte) error {
 	if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
 		s.logger.Warn("話し始めの合図に失敗", "error", err)
 	}
-	defer func() { _ = s.conn.SetSpeaking(ctx, 0) }()
+	defer func() {
+		if err := s.conn.SetSpeaking(ctx, 0); err != nil {
+			s.logger.Warn("話し終わりの合図に失敗", "error", err)
+		}
+	}()
 
 	udp := s.conn.UDP()
 
@@ -230,7 +234,9 @@ func (s *Session) SendPCM(pcm []byte) error {
 					return waitErr
 				}
 				// Re-set speaking flag after waiting.
-				_ = s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone)
+				if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
+					return fmt.Errorf("voice: speaking フラグ再設定に失敗: %w", err)
+				}
 				if _, err := udp.Write(opusBuf[:n]); err != nil {
 					return fmt.Errorf("voice: Opus送信失敗（リトライ後）: %w", err)
 				}
@@ -249,7 +255,9 @@ func (s *Session) SendPCM(pcm []byte) error {
 
 	// Send trailing silence frames before clearing speaking flag.
 	for range 5 {
-		_, _ = udp.Write(silenceFrame)
+		if _, err := udp.Write(silenceFrame); err != nil {
+			s.logger.Debug("末尾の無音フレーム送信に失敗", "error", err)
+		}
 		time.Sleep(20 * time.Millisecond)
 	}
 

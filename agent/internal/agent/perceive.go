@@ -116,7 +116,9 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 
 	// Track channel activity for topic backoff (non-bot, non-internal messages only).
 	if msg.Channel != "" && a.convStore != nil && msg.UserID != a.botID && evt.Source != event.SourceInternal {
-		_ = a.convStore.TrackActivity(ctx, msg.Channel, time.Now())
+		if err := a.convStore.TrackActivity(ctx, msg.Channel, time.Now()); err != nil {
+			a.logger.Warn("チャンネルアクティビティの追跡に失敗", "channel", msg.Channel, "error", err)
+		}
 	}
 
 	// Handle attached images.

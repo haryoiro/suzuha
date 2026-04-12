@@ -251,7 +251,9 @@ func (c *Chat) Typing(_ context.Context, channel string) {
 	if c.session == nil {
 		return
 	}
-	_ = c.session.ChannelTyping(channel)
+	if err := c.session.ChannelTyping(channel); err != nil {
+		c.log.Debug("タイピング表示に失敗", "channel", channel, "error", err)
+	}
 }
 
 // messageToEvent converts a Discord message to an Event.
