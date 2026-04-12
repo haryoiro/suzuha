@@ -1,14 +1,8 @@
 import { memo, useState } from "react";
 import { Spin, Empty, Button, DatePicker, Tag, Card } from "antd";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { dayjs } from "../lib/date";
 import { useDiary, useDiaryDates } from "../hooks/useDiary";
-
-function formatHourLabel(hour: string): string {
-  // "2026-03-22T15:00" → "15:00"
-  const t = hour.split("T")[1];
-  return t ?? hour;
-}
 
 const DiaryPage = memo(function DiaryPage() {
   const [date, setDate] = useState(() => dayjs().format("YYYY-MM-DD"));
@@ -191,7 +185,7 @@ const DiaryPage = memo(function DiaryPage() {
                           color: "rgba(255,255,255,0.7)",
                         }}
                       >
-                        {formatHourLabel(h.hour)}
+                        {h.hour}
                       </Tag>
                     </div>
                     <pre

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { diaryApi } from "../lib/api";
-import type { DiaryEntry } from "../lib/api";
+import { toJST } from "../lib/date";
 
 export interface DailyDiary {
   id: string;
@@ -30,7 +30,8 @@ export function useDiary(targetDate: string) {
       const hourly: HourlyDigest[] = [];
 
       for (const entry of res.data) {
-        const periodDate = entry.period_start.slice(0, 10);
+        const jst = toJST(entry.period_start);
+        const periodDate = jst.format("YYYY-MM-DD");
 
         if (entry.kind === "daily" && periodDate === targetDate) {
           daily = { id: entry.id, date: periodDate, content: entry.content };
@@ -39,13 +40,12 @@ export function useDiary(targetDate: string) {
         if (entry.kind === "hourly" && periodDate === targetDate) {
           hourly.push({
             id: entry.id,
-            hour: entry.period_start.slice(0, 16).replace(" ", "T"),
+            hour: jst.format("HH:mm"),
             content: entry.content,
           });
         }
       }
 
-      // 時系列順にソート。
       hourly.sort((a, b) => a.hour.localeCompare(b.hour));
 
       return { date: targetDate, daily, hourly };
@@ -63,7 +63,7 @@ export function useDiaryDates() {
 
       const dates = new Set<string>();
       for (const entry of res.data) {
-        const periodDate = entry.period_start.slice(0, 10);
+        const periodDate = toJST(entry.period_start).format("YYYY-MM-DD");
         dates.add(periodDate);
       }
 
