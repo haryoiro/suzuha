@@ -20,12 +20,14 @@ type registeredSource struct {
 type Gateway struct {
 	mu      sync.RWMutex
 	sources []registeredSource
+	clock   *jtime.Clock
 	logger  *slog.Logger
 }
 
 // New は新しい Gateway を作成する。
-func New(logger *slog.Logger) *Gateway {
+func New(clock *jtime.Clock, logger *slog.Logger) *Gateway {
 	return &Gateway{
+		clock:  clock,
 		logger: logger,
 	}
 }
@@ -102,7 +104,7 @@ func (g *Gateway) updateState(idx int, state SourceState) {
 	defer g.mu.Unlock()
 	g.sources[idx].status.State = state
 	if state == StateRunning {
-		now := jtime.Now()
+		now := g.clock.Now()
 		g.sources[idx].status.StartedAt = &now
 	}
 }

@@ -2,12 +2,14 @@ package agent
 
 import (
 	"testing"
+	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 func TestShouldRespond_CLI(t *testing.T) {
-	e := event.NewMessageEvent("cli", event.MessagePayload{Content: "hello"})
+	e := event.NewMessageEvent(jtime.New(time.UTC), "cli", event.MessagePayload{Content: "hello"})
 	if !ShouldRespond(e, "bot123") {
 		t.Error("CLI events should always trigger a response")
 	}
@@ -21,7 +23,7 @@ func TestShouldRespond_Trigger(t *testing.T) {
 }
 
 func TestShouldRespond_DM(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
+	e := event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content: "hi", IsDM: true,
 	})
 	if !ShouldRespond(e, "bot123") {
@@ -30,7 +32,7 @@ func TestShouldRespond_DM(t *testing.T) {
 }
 
 func TestShouldRespond_Mention(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
+	e := event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content: "hey", IsMention: true,
 	})
 	if !ShouldRespond(e, "bot123") {
@@ -39,7 +41,7 @@ func TestShouldRespond_Mention(t *testing.T) {
 }
 
 func TestIsDirectlyAddressed_DM(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
+	e := event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content: "hello", IsDM: true,
 	})
 	if !isDirectlyAddressed(e, "bot123") {
@@ -48,7 +50,7 @@ func TestIsDirectlyAddressed_DM(t *testing.T) {
 }
 
 func TestIsDirectlyAddressed_Mention(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
+	e := event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content: "hey", IsMention: true,
 	})
 	if !isDirectlyAddressed(e, "bot123") {
@@ -57,7 +59,7 @@ func TestIsDirectlyAddressed_Mention(t *testing.T) {
 }
 
 func TestIsDirectlyAddressed_RegularMessage(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
+	e := event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content: "some random message", Channel: "general",
 	})
 	if isDirectlyAddressed(e, "bot123") {
@@ -66,7 +68,7 @@ func TestIsDirectlyAddressed_RegularMessage(t *testing.T) {
 }
 
 func TestIsDirectlyAddressed_BotMentionInContent(t *testing.T) {
-	e := event.NewMessageEvent("discord", event.MessagePayload{
+	e := event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content: "hello <@bot123> how are you", Channel: "general",
 	})
 	if !isDirectlyAddressed(e, "bot123") {

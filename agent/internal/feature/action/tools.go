@@ -17,11 +17,12 @@ import (
 // --- schedule_create ---
 
 type CreateTool struct {
+	clock *jtime.Clock
 	store *Store
 }
 
-func NewCreateTool(store *Store) *CreateTool {
-	return &CreateTool{store: store}
+func NewCreateTool(clock *jtime.Clock, store *Store) *CreateTool {
+	return &CreateTool{clock: clock, store: store}
 }
 
 func (t *CreateTool) Name() string    { return "schedule_create" }
@@ -103,7 +104,7 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		}
 	case cronSchedule != nil:
 		// Auto-calculate the next occurrence from the cron expression.
-		scheduledAt = cronSchedule.Next(jtime.Now())
+		scheduledAt = cronSchedule.Next(t.clock.Now())
 	default:
 		return tool.ErrorResult("scheduled_at または cron_expr のいずれかが必須です"), nil
 	}

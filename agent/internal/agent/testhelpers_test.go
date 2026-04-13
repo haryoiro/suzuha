@@ -7,6 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -149,6 +150,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 			MaxContextTokens: 10000,
 		},
 		regs,
+		jtime.New(time.UTC),
 		nil, // llm.Client — nil is OK when we don't call Act
 		tool.NewRegistry(),
 		&mockMemory{},
@@ -168,7 +170,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 
 // makeMessageEvent creates a test event with the given content and channel.
 func makeMessageEvent(content, channel, userID string) event.Event {
-	return event.NewMessageEvent("discord", event.MessagePayload{
+	return event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content:  content,
 		Channel:  channel,
 		UserID:   userID,
@@ -178,7 +180,7 @@ func makeMessageEvent(content, channel, userID string) event.Event {
 
 // makeDirectMessageEvent creates a DM event.
 func makeDirectMessageEvent(content, userID string) event.Event {
-	return event.NewMessageEvent("discord", event.MessagePayload{
+	return event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content:  content,
 		Channel:  "dm-channel",
 		UserID:   userID,
@@ -189,7 +191,7 @@ func makeDirectMessageEvent(content, userID string) event.Event {
 
 // makeMentionEvent creates a mention event.
 func makeMentionEvent(content, channel, userID string) event.Event {
-	return event.NewMessageEvent("discord", event.MessagePayload{
+	return event.NewMessageEvent(jtime.New(time.UTC), "discord", event.MessagePayload{
 		Content:   content,
 		Channel:   channel,
 		UserID:    userID,

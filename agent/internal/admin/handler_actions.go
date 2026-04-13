@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/robfig/cron/v3"
 )
@@ -67,7 +66,7 @@ func (h *AdminHandler) ScheduledActionsCreate(ctx context.Context, req *api.Crea
 		if parseErr != nil {
 			return nil, fmt.Errorf("invalid cron_expr: %s", parseErr.Error())
 		}
-		scheduledAt = sched.Next(jtime.Now()).UTC()
+		scheduledAt = sched.Next(h.clock.Now()).UTC()
 	} else {
 		return nil, fmt.Errorf("either scheduled_at or cron_expr is required")
 	}

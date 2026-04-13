@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 // Middleware wraps a Notifier with additional behavior.
@@ -86,7 +85,7 @@ func (q *quietHoursNotifier) Reply(ctx context.Context, channelID, content, repl
 }
 
 func (q *quietHoursNotifier) suppressed(source, channelID string) bool {
-	now := jtime.Now()
+	now := time.Now().In(q.loc)
 	if inQuietWindow(now, q.startH, q.startM, q.endH, q.endM) {
 		q.logger.Info("quiet_hours: 通知を抑制しました",
 			"source", source,

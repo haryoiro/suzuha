@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/external/embedding"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/pgvector/pgvector-go"
 )
 
@@ -73,7 +72,7 @@ func (s *PostgresStore) List(ctx context.Context, opts ListOpts) ([]Memory, int,
 
 // Update は既存のメモリを更新する。
 func (s *PostgresStore) Update(ctx context.Context, mem *Memory) error {
-	mem.UpdatedAt = jtime.Now()
+	mem.UpdatedAt = s.clock.Now()
 
 	meta := mem.Metadata
 	if len(mem.Attachments) > 0 {

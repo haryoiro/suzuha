@@ -10,6 +10,7 @@ import (
 	"github.com/haryoiro/suzuha/external/stt"
 	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/voice"
 )
 
@@ -43,6 +44,7 @@ type ImageHandler interface {
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[string]Client // all connected clients (ESP + Web)
+	clock   *jtime.Clock
 	bus     *event.Bus
 	tts     tts.TTS
 	stt     stt.STT
@@ -59,7 +61,7 @@ type Hub struct {
 
 // NewHub creates a new device Hub.
 // Call SetImageHandler after creation to wire the vision pipeline.
-func NewHub(bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, ownerID, ownerName string, logger *slog.Logger) *Hub {
+func NewHub(clock *jtime.Clock, bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, ownerID, ownerName string, logger *slog.Logger) *Hub {
 	espVAD := voice.NewVAD()
 	espVAD.SpeechThreshold = 100          // match device energy threshold
 	espVAD.SilenceDuration = time.Second  // ~10 chunks of 100ms
@@ -68,6 +70,7 @@ func NewHub(bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, ownerID, owner
 
 	return &Hub{
 		clients:   make(map[string]Client),
+		clock:     clock,
 		bus:       bus,
 		tts:       ttsClient,
 		stt:       sttClient,

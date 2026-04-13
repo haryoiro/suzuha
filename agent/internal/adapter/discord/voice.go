@@ -26,7 +26,7 @@ func (c *Chat) SetupVoice(sttClient stt.STT, ttsClient tts.TTS) {
 		c.log.Warn("voice: セッション未初期化のためセットアップをスキップ")
 		return
 	}
-	c.voicePipeline = voice.NewPipeline(c.session, c.bus, sttClient, ttsClient, c.log)
+	c.voicePipeline = voice.NewPipeline(c.session, c.clock, c.bus, sttClient, ttsClient, c.log)
 	c.log.Info("voice: パイプラインをセットアップしました")
 }
 

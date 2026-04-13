@@ -6,7 +6,6 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/feature/diary"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 func (h *AdminHandler) DiaryList(ctx context.Context, params api.DiaryListParams) (*api.DiaryListOK, error) {
@@ -33,7 +32,7 @@ func (h *AdminHandler) DiaryList(ctx context.Context, params api.DiaryListParams
 		entries = entries[:limit]
 	}
 
-	loc := jtime.Location()
+	loc := h.clock.Location()
 	data := make([]api.DiaryEntry, len(entries))
 	for i, e := range entries {
 		data[i] = api.DiaryEntry{

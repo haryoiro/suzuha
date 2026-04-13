@@ -26,7 +26,7 @@ func (t *HourlyTask) Description() string { return "1時間ごとの出来事を
 func (t *HourlyTask) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
 
 func (t *HourlyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
-	now := jtime.Now()
+	now := cc.Clock.Now()
 	windowEnd := now.Truncate(time.Hour)
 	windowStart := windowEnd.Add(-time.Hour)
 
@@ -50,8 +50,8 @@ func (t *HourlyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ j
 	prevDigests := fetchPreviousDigests(ctx, cc, windowStart)
 
 	// 5. Build LLM prompt and summarize.
-	localStart := jtime.In(windowStart)
-	summary, err := summarizeHour(ctx, cc.LLM, cc.SystemPrompt, localStart, convLogs, recentMems, recentMemos, prevDigests)
+	localStart := cc.Clock.In(windowStart)
+	summary, err := summarizeHour(ctx, cc.Clock, cc.LLM, cc.SystemPrompt, localStart, convLogs, recentMems, recentMemos, prevDigests)
 	if err != nil {
 		cc.Logger.Error("diary_hourly: 要約に失敗", "error", err)
 		return err
@@ -215,7 +215,7 @@ func sectionHeading(sk sectionKey) string {
 	}
 }
 
-func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []Entry) (string, error) {
+func summarizeHour(ctx context.Context, clock *jtime.Clock, llmClient *llm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []Entry) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("以下はこの1時間の出来事です。日記の一節として主観的に2〜3文で要約してください。\n")
@@ -248,7 +248,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 					name = l.Role
 				}
 				content := textutil.TruncateRunes(l.Content, 200)
-				fmt.Fprintf(&sb, "- [%s] %s: %s\n", jtime.In(l.TS).Format("15:04"), name, content)
+				fmt.Fprintf(&sb, "- [%s] %s: %s\n", clock.In(l.TS).Format("15:04"), name, content)
 			}
 			sb.WriteString("\n")
 		}
@@ -258,7 +258,7 @@ func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt stri
 	if len(memos) > 0 {
 		sb.WriteString("## メモ\n")
 		for _, m := range memos {
-			ts := jtime.In(m.CreatedAt).Format("15:04")
+			ts := clock.In(m.CreatedAt).Format("15:04")
 			fmt.Fprintf(&sb, "- [%s] %s\n", ts, textutil.TruncateRunes(m.Content, 200))
 		}
 		sb.WriteString("\n")

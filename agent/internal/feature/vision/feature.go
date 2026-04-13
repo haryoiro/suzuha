@@ -8,6 +8,7 @@ import (
 
 	"github.com/haryoiro/suzuha/external/detect"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
@@ -25,13 +26,13 @@ type Feature struct {
 
 // New は vision Feature を作成する。
 // dev はデバイスコマンド送信用、vision は VLM 画像説明用 (nil 可)。
-func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, dev deviceCommander, vision VisionDescriber, logger *slog.Logger) *Feature {
+func New(clock *jtime.Clock, bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, dev deviceCommander, vision VisionDescriber, logger *slog.Logger) *Feature {
 	var yolo *detect.YOLOClient
 	if yoloURL != "" {
 		yolo = detect.NewYOLOClient(yoloURL)
 	}
 	frames := NewFrameStore()
-	changes := NewChangeDetector(bus, 30*time.Second, defaultChannel)
+	changes := NewChangeDetector(clock, bus, 30*time.Second, defaultChannel)
 	tracker := NewObjectTracker(DefaultTrackerConfig(), servo, logger)
 	pipeline := NewPipeline(frames, changes, tracker, yolo, logger)
 

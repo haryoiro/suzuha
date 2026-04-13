@@ -129,7 +129,7 @@ func (h *Hub) transcribeAndRespond(pcm []byte, source string) {
 	h.espVAD.Reset()
 
 	// Publish as message event — agent pipeline will process and respond
-	h.bus.Publish(event.NewMessageEvent(source, event.MessagePayload{
+	h.bus.Publish(event.NewMessageEvent(h.clock, source, event.MessagePayload{
 		Content:  text,
 		UserID:   h.ownerID,
 		UserName: h.ownerName,

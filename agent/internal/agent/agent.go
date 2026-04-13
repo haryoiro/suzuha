@@ -47,6 +47,7 @@ type Agent struct {
 	contexts  map[SourceKey]*Context
 	compactMu map[SourceKey]*sync.Mutex
 	sessions  map[SourceKey]Session
+	clock     *jtime.Clock
 	llm       *llm.Client
 	tools     *tool.Registry
 	memory    memory.Store
@@ -136,8 +137,8 @@ type Thought struct {
 }
 
 // BuildMessages はシステムプロンプトと会話履歴を組み合わせて LLM に渡すメッセージ列を構築する。
-func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message) []llm.Message {
-	now := jtime.Now()
+func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message, clock *jtime.Clock) []llm.Message {
+	now := clock.Now()
 	var msgs []llm.Message
 	if systemPrompt != "" {
 		msgs = append(msgs, llm.Message{
@@ -158,6 +159,7 @@ func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message)
 func New(
 	cfg Config,
 	registrations []SourceRegistration,
+	clock *jtime.Clock,
 	llmClient *llm.Client,
 	tools *tool.Registry,
 	memStore memory.Store,
@@ -207,6 +209,7 @@ func New(
 		contexts:         contexts,
 		compactMu:        compactMu,
 		sessions:         sessions,
+		clock:            clock,
 		llm:              llmClient,
 		tools:            tools,
 		memory:           memStore,
@@ -222,7 +225,7 @@ func New(
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
 		maxContextTokens: cfg.MaxContextTokens,
-		contextProviders: buildProviders(memStore, db, userStore, cfg.BotID, logger),
+		contextProviders: buildProviders(clock, memStore, db, userStore, cfg.BotID, logger),
 	}
 }
 
@@ -302,6 +305,7 @@ func (a *Agent) SetTracer(t trace.Tracer) {
 }
 
 func buildProviders(
+	clock *jtime.Clock,
 	memStore memory.Store,
 	db *sql.DB,
 	userStore user.Store,
@@ -309,12 +313,12 @@ func buildProviders(
 	logger *slog.Logger,
 ) []prompt.Provider {
 	return []prompt.Provider{
-		&prompt.DiaryProvider{DB: db, Logger: logger},
-		&prompt.MemoryProvider{Memory: memStore, Logger: logger},
-		&prompt.LocationProvider{},
-		&prompt.ProfileProvider{Users: userStore, Memory: memStore, BotID: botID, Logger: logger},
-		&prompt.ChannelProvider{},
-		prompt.SelfPromptProvider{},
+		&prompt.DiaryProvider{Clock: clock, DB: db, Logger: logger},
+		&prompt.MemoryProvider{Clock: clock, Memory: memStore, Logger: logger},
+		&prompt.LocationProvider{Clock: clock},
+		&prompt.ProfileProvider{Clock: clock, Users: userStore, Memory: memStore, BotID: botID, Logger: logger},
+		&prompt.ChannelProvider{Clock: clock},
+		prompt.SelfPromptProvider{Clock: clock},
 	}
 }
 

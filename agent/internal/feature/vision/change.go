@@ -20,6 +20,7 @@ type ChangeDetector struct {
 	prev           map[string]int // label → count
 	lastSent       time.Time
 	cooldown       time.Duration // minimum interval between events
+	clock          *jtime.Clock
 	bus            *event.Bus
 	defaultChannel string // Discord channel ID for notifications
 	enabled        bool
@@ -28,10 +29,11 @@ type ChangeDetector struct {
 // NewChangeDetector creates a ChangeDetector.
 // cooldown is the minimum time between agent notifications (to avoid spam).
 // defaultChannel is the Discord channel ID where notifications are sent.
-func NewChangeDetector(bus *event.Bus, cooldown time.Duration, defaultChannel string) *ChangeDetector {
+func NewChangeDetector(clock *jtime.Clock, bus *event.Bus, cooldown time.Duration, defaultChannel string) *ChangeDetector {
 	return &ChangeDetector{
 		prev:           make(map[string]int),
 		cooldown:       cooldown,
+		clock:          clock,
 		bus:            bus,
 		defaultChannel: defaultChannel,
 		enabled:        false,
@@ -91,7 +93,7 @@ func (cd *ChangeDetector) Update(detections []detect.Detection) bool {
 			Content: msg,
 			Channel: cd.defaultChannel,
 		},
-		Timestamp: jtime.Now(),
+		Timestamp: cd.clock.Now(),
 	})
 
 	return true

@@ -14,6 +14,7 @@ import (
 )
 
 type DiaryProvider struct {
+	Clock  *jtime.Clock
 	DB     *sql.DB
 	Logger *slog.Logger
 }
@@ -23,7 +24,7 @@ func (p *DiaryProvider) ProvideContext(ctx context.Context, _ Request) Block {
 		return Block{}
 	}
 	ds := diary.NewStore(p.DB)
-	entries, err := ds.ListByKind(ctx, "hourly", jtime.Now().Add(-12*time.Hour), 24)
+	entries, err := ds.ListByKind(ctx, "hourly", p.Clock.Now().Add(-12*time.Hour), 24)
 	if err != nil {
 		p.Logger.Debug("日記を取得できなかった", "error", err)
 		return Block{}
@@ -43,6 +44,6 @@ func (p *DiaryProvider) ProvideContext(ctx context.Context, _ Request) Block {
 	}
 
 	return Block{Background: []llm.Message{{
-		Role: "system", Content: sb.String(), Timestamp: jtime.Now(),
+		Role: "system", Content: sb.String(), Timestamp: p.Clock.Now(),
 	}}}
 }

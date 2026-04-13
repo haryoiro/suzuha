@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -66,7 +65,7 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 			Content:     resp.Text,
 			Channel:     p.Channel,
 			ChannelName: p.LastMessage.ChannelName,
-			Timestamp:   jtime.Now(),
+			Timestamp:   a.clock.Now(),
 		})
 	}
 
@@ -130,7 +129,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 
 		var msgs []llm.Message
 		if iter == 0 {
-			msgs = t.BuildMessages(agentCtx.SystemPrompt(), agentCtx.Messages())
+			msgs = t.BuildMessages(agentCtx.SystemPrompt(), agentCtx.Messages(), a.clock)
 		} else {
 			msgs = agentCtx.MessagesWithSystem()
 		}
@@ -250,7 +249,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			Content:     resp.Text,
 			Channel:     channel,
 			ChannelName: channelName,
-			Timestamp:   jtime.Now(),
+			Timestamp:   a.clock.Now(),
 			ToolCalls:   resp.ToolCalls,
 		})
 

@@ -4,6 +4,9 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 func pgDSN() string {
@@ -16,7 +19,7 @@ func pgDSN() string {
 func newTestPGStore(t *testing.T) *PostgresStore {
 	t.Helper()
 	dsn := pgDSN()
-	store, err := NewPostgresStore(dsn, nil, true, nil)
+	store, err := NewPostgresStore(dsn, jtime.New(time.UTC), nil, true, nil)
 	if err != nil {
 		t.Fatalf("NewPostgresStore: %v", err)
 	}

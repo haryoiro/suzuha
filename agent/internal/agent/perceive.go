@@ -20,7 +20,6 @@ import (
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
@@ -350,7 +349,7 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 			Role:      "system",
 			Content:   content,
 			Channel:  channelID,
-			Timestamp: jtime.Now(),
+			Timestamp: a.clock.Now(),
 		})
 		a.logger.Info("最近の会話を振り返った", "channel", channelID, "length", len(content))
 	}

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -49,7 +48,7 @@ type persistedState struct {
 type Task struct {
 	mu           sync.Mutex
 	lastPostedAt time.Time
-	// nowFunc is used for testing; defaults to time.Now.
+	// nowFunc is used for testing; defaults to cc.Clock.Now.
 	nowFunc func() time.Time
 }
 
@@ -75,11 +74,11 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 	return nil
 }
 
-func (t *Task) now() time.Time {
+func (t *Task) now(cc *scheduler.CronContext) time.Time {
 	if t.nowFunc != nil {
 		return t.nowFunc()
 	}
-	return jtime.Now()
+	return cc.Clock.Now()
 }
 
 // mutteringConfig holds task-specific configuration from config.yaml.
@@ -101,7 +100,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 
 	// --- Boredom-based posting decision ---
-	now := t.now()
+	now := t.now(cc)
 	var lastInteraction time.Time
 	if cc.ChannelActivity != nil {
 		var actErr error
@@ -138,7 +137,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	}
 
 	// Build context for self-prompt.
-	localNow := jtime.In(now)
+	localNow := cc.Clock.In(now)
 	timeHint := buildTimeHint(localNow)
 
 	recentMemories := fetchRecentContext(ctx, cc, 8)
@@ -156,7 +155,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	// Publish self-prompt event to agent pipeline.
 	prompt := buildSelfPrompt(localNow, timeHint, boredom, recentMemories, pastMutterings, mentionTarget)
-	evt := event.NewSelfPromptEvent(mc.ChannelID, prompt)
+	evt := event.NewSelfPromptEvent(cc.Clock, mc.ChannelID, prompt)
 	cc.Bus.Publish(evt)
 
 	cc.Logger.Info("topics: published self-prompt event",

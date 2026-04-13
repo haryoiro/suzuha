@@ -23,11 +23,14 @@ import (
 	"os"
 	"strings"
 
+	"time"
+
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/bench"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -104,8 +107,11 @@ func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPat
 		// Runner 内で復元するので、ここでは cfg に設定するだけ
 	}
 
+	// Timezone-aware clock (ベンチでは UTC)
+	clock := jtime.New(time.UTC)
+
 	// Agent を本番と同等の構成で構築 (DB だけベンチ用)
-	ag, store, err := buildAgent(cfg, dbURL, snapshotPath, logger)
+	ag, store, err := buildAgent(cfg, dbURL, snapshotPath, clock, logger)
 	if err != nil {
 		return fmt.Errorf("Agent 構築に失敗: %w", err)
 	}
@@ -131,7 +137,7 @@ func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPat
 		runner, err := bench.NewRunner(bench.RunnerConfig{
 			SnapshotPath: snapshotPath,
 			BenchDBURL:   dbURL,
-		}, ag, setup, logger)
+		}, clock, ag, setup, logger)
 		if err != nil {
 			return fmt.Errorf("Runner 構築に失敗: %w", err)
 		}
@@ -165,9 +171,9 @@ func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPat
 }
 
 // buildAgent は本番と同等の DI で Agent を構築する (DB のみベンチ用)。
-func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Logger) (*agent.Agent, memory.Backend, error) {
+func buildAgent(cfg *config.Config, dbURL, snapshotPath string, clock *jtime.Clock, logger *slog.Logger) (*agent.Agent, memory.Backend, error) {
 	// Memory Store (ParadeDB)
-	store, err := memory.NewPostgresStore(dbURL, nil, true, logger)
+	store, err := memory.NewPostgresStore(dbURL, clock, nil, true, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("PostgresStore 構築に失敗: %w", err)
 	}
@@ -217,6 +223,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 			DrainWindow:      -1,
 		},
 		regs,
+		clock,
 		llmClient,
 		tool.NewRegistry(),
 		store,

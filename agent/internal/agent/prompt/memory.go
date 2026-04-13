@@ -42,6 +42,7 @@ func modalityFromMime(mime string) embedding.Modality {
 }
 
 type MemoryProvider struct {
+	Clock  *jtime.Clock
 	Memory memory.Store
 	Media  memory.MediaStore
 	Logger *slog.Logger
@@ -138,13 +139,13 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 			Role:      "user",
 			Content:   "[Memory context with images]\n" + textContent,
 			ImageURLs: attachedImages,
-			Timestamp: jtime.Now(),
+			Timestamp: p.Clock.Now(),
 		}}}
 	}
 
 	return Block{Background: []llm.Message{{
 		Role:      "system",
 		Content:   textContent,
-		Timestamp: jtime.Now(),
+		Timestamp: p.Clock.Now(),
 	}}}
 }

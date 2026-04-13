@@ -12,6 +12,7 @@ import (
 	"github.com/haryoiro/suzuha/external/stt"
 	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 func base64EncodeBytes(b []byte) string {
@@ -22,6 +23,7 @@ func base64EncodeBytes(b []byte) string {
 // It manages voice sessions, STT, and TTS.
 type Pipeline struct {
 	discordSession *discordgo.Session
+	clock          *jtime.Clock
 	bus            *event.Bus
 	stt            stt.STT
 	tts            tts.TTS
@@ -33,9 +35,10 @@ type Pipeline struct {
 }
 
 // NewPipeline creates a voice pipeline.
-func NewPipeline(ds *discordgo.Session, bus *event.Bus, sttClient stt.STT, ttsClient tts.TTS, logger *slog.Logger) *Pipeline {
+func NewPipeline(ds *discordgo.Session, clock *jtime.Clock, bus *event.Bus, sttClient stt.STT, ttsClient tts.TTS, logger *slog.Logger) *Pipeline {
 	p := &Pipeline{
 		discordSession: ds,
+		clock:          clock,
 		bus:            bus,
 		stt:            sttClient,
 		tts:            ttsClient,
@@ -71,7 +74,7 @@ func (p *Pipeline) handleStreamPreview(guildID string, jpeg []byte) {
 		guildName = g.Name
 	}
 
-	evt := event.NewMessageEvent("discord", event.MessagePayload{
+	evt := event.NewMessageEvent(p.clock, "discord", event.MessagePayload{
 		Content:     "[画面共有の映像]",
 		Channel:     channelID,
 		UserID:      "",
@@ -210,7 +213,7 @@ func (p *Pipeline) handleSpeech(ctx context.Context, guildID, channelID, userID 
 	}
 
 	// Publish as a voice event to the agent pipeline.
-	evt := event.NewMessageEvent("discord", event.MessagePayload{
+	evt := event.NewMessageEvent(p.clock, "discord", event.MessagePayload{
 		Content:     text,
 		Channel:     channelID,
 		UserID:      userID,

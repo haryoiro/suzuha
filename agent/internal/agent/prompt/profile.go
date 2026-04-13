@@ -15,6 +15,7 @@ import (
 )
 
 type ProfileProvider struct {
+	Clock  *jtime.Clock
 	Users  user.Store
 	Memory memory.Store
 	BotID  string
@@ -70,7 +71,7 @@ func (p *ProfileProvider) ProvideContext(ctx context.Context, req Request) Block
 
 	out := make([]llm.Message, 0, len(results))
 	for _, r := range results {
-		out = append(out, llm.Message{Role: "system", Content: r.content, Timestamp: jtime.Now()})
+		out = append(out, llm.Message{Role: "system", Content: r.content, Timestamp: p.Clock.Now()})
 	}
 	return Block{Background: out}
 }

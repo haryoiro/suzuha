@@ -92,6 +92,18 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return do.MustInvoke[memory.Backend](i).DB(), nil
 		})
 
+		// Clock (timezone-aware time utility, injected into all components).
+		do.Provide(i, func(i do.Injector) (*jtime.Clock, error) {
+			cfg := do.MustInvoke[*config.Config](i)
+			loc := time.UTC
+			if tz := cfg.Timezone; tz != "" {
+				if parsed, err := time.LoadLocation(tz); err == nil {
+					loc = parsed
+				}
+			}
+			return jtime.New(loc), nil
+		})
+
 		// Provider Registry (3-layer model: providers / models / roles).
 		do.Provide(i, func(i do.Injector) (*llm.ProviderRegistry, error) {
 			cfg := do.MustInvoke[*config.Config](i)
@@ -145,9 +157,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			if cfg.Discord.Token == "" {
 				return nil, nil
 			}
+			clock := do.MustInvoke[*jtime.Clock](i)
 			bus := do.MustInvoke[*event.Bus](i)
 			logger := do.MustInvoke[*slog.Logger](i)
-			return discord.New(cfg.Discord.Token, cfg.Discord.BotID, bus, logger), nil
+			return discord.New(cfg.Discord.Token, cfg.Discord.BotID, clock, bus, logger), nil
 		})
 
 		// Chat interface: Discord if token is set, otherwise CLI.
@@ -159,9 +172,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				logger.Info("チャットモード: discord")
 				return dc, nil
 			}
+			clock := do.MustInvoke[*jtime.Clock](i)
 			bus := do.MustInvoke[*event.Bus](i)
 			logger.Info("チャットモード: cli")
-			return cli.New(os.Stdin, os.Stdout, bus), nil
+			return cli.New(os.Stdin, os.Stdout, clock, bus), nil
 		})
 
 		// Agent.
@@ -203,6 +217,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 					MaxContextTokens: cfg.LLM.MaxTokens,
 					},
 				regs,
+				do.MustInvoke[*jtime.Clock](i),
 				do.MustInvoke[*llm.Client](i),
 				do.MustInvoke[*tool.Registry](i),
 				do.MustInvoke[memory.Backend](i),
@@ -269,8 +284,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			videoExtractor := transcript.NewYtDlpFrameExtractor()
 			ag.SetVideoMeta(ytFetcher)
 
+			clock := do.MustInvoke[*jtime.Clock](i)
 			features := []scheduler.Feature{
-				action.New(store.DB()),
+				action.New(clock, store.DB()),
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
 				research.New(searxURL, 5),
@@ -321,7 +337,8 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Schedule store (used by admin server).
 		do.Provide(i, func(i do.Injector) (*action.Store, error) {
 			store := do.MustInvoke[memory.Backend](i)
-			return action.NewStore(store.DB()), nil
+			clock := do.MustInvoke[*jtime.Clock](i)
+			return action.NewStore(store.DB(), clock.Location()), nil
 		})
 
 		// Media store for binary attachments (images, audio).
@@ -339,12 +356,13 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// flooding the agent log stream with HTTP access logs).
 		do.Provide(i, func(i do.Injector) (*admin.Server, error) {
 			cfg := do.MustInvoke[*config.Config](i)
+			clock := do.MustInvoke[*jtime.Clock](i)
 			store := do.MustInvoke[memory.Backend](i)
 			userStore := do.MustInvoke[*user.SQLiteStore](i)
 			schedStore := do.MustInvoke[*action.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
-			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger)
+			return admin.NewServer(cfg.Admin, clock, store, userStore, schedStore, mediaStore, adminLogger)
 		})
 
 		// Scheduler (nil when disabled in config).
@@ -369,15 +387,8 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	// Build notifier with middleware chain.
 	var notifier notification.Notifier = notification.NewChatNotifier(chatIface, logger)
 
-	schedulerLoc := time.UTC
-	if tz := cfg.Timezone; tz != "" {
-		if parsed, tzErr := time.LoadLocation(tz); tzErr == nil {
-			schedulerLoc = parsed
-		} else {
-			logger.Warn("scheduler: 無効なタイムゾーンです。UTCを使用します", "timezone", tz, "error", tzErr)
-		}
-	}
-	jtime.Init(schedulerLoc)
+	clock := do.MustInvoke[*jtime.Clock](i)
+	schedulerLoc := clock.Location()
 	logger.Info("timezone", "location", schedulerLoc.String())
 
 	if cfg.Consolidator.Scheduler.QuietHours.Enabled {
@@ -418,6 +429,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 		MemoryAdmin:     store,
 		MediaStore:      mediaStore,
 		Bus:             bus,
+		Clock:           clock,
 		Timezone:        schedulerLoc,
 		SystemPrompt:    cfg.Agent.SystemPrompt,
 	}

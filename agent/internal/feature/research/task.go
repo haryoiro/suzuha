@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/external/search"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
 
@@ -32,11 +31,11 @@ var _ scheduler.CronTask = (*Task)(nil)
 func (t *Task) Name() string        { return "research" }
 func (t *Task) Description() string { return "ランダムなトピックをリサーチする" }
 
-func (t *Task) now() time.Time {
+func (t *Task) now(cc *scheduler.CronContext) time.Time {
 	if t.nowFunc != nil {
 		return t.nowFunc()
 	}
-	return jtime.Now()
+	return cc.Clock.Now()
 }
 
 func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
@@ -95,7 +94,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	cc.Logger.Info("research: finished", "query", query, "sources", len(sources))
 
 	t.mu.Lock()
-	t.lastResearchedAt = t.now()
+	t.lastResearchedAt = t.now(cc)
 	t.mu.Unlock()
 	t.saveState(ctx, cc)
 	return nil

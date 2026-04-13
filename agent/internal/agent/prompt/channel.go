@@ -9,15 +9,17 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
-type ChannelProvider struct{}
+type ChannelProvider struct {
+	Clock *jtime.Clock
+}
 
-func (ChannelProvider) ProvideContext(_ context.Context, req Request) Block {
+func (p *ChannelProvider) ProvideContext(_ context.Context, req Request) Block {
 	var block Block
 
 	if req.Source == "discord" && req.Channel != "" {
 		if summary := buildOtherChannels(req.Messages, req.Channel); summary != "" {
 			block.Background = append(block.Background, llm.Message{
-				Role: "system", Content: summary, Timestamp: jtime.Now(),
+				Role: "system", Content: summary, Timestamp: p.Clock.Now(),
 			})
 		}
 	}
@@ -25,7 +27,7 @@ func (ChannelProvider) ProvideContext(_ context.Context, req Request) Block {
 	if req.IsHome {
 		block.Foreground = append(block.Foreground, llm.Message{
 			Role: "system", Content: "ここは自分の住処チャンネルです。リラックスして自由に話して。",
-			Timestamp: jtime.Now(),
+			Timestamp: p.Clock.Now(),
 		})
 	}
 

@@ -12,8 +12,9 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin/handler"
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/feature/action"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
@@ -25,10 +26,10 @@ type Server struct {
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
+func NewServer(cfg config.Admin, clock *jtime.Clock, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 
-	adminHandler := NewAdminHandler(store, userStore, schedStore, mediaStore, agentBase, cfg.PromptDir, logger)
+	adminHandler := NewAdminHandler(clock, store, userStore, schedStore, mediaStore, agentBase, cfg.PromptDir, logger)
 
 	ogenServer, err := api.NewServer(adminHandler)
 	if err != nil {

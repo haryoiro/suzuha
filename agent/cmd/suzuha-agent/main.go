@@ -30,6 +30,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/feature/vision"
 	"github.com/haryoiro/suzuha/internal/gateway"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/feature/location"
@@ -89,7 +90,7 @@ func run() error {
 	}
 
 	// Create Gateway early so startInternalHTTP can register Device source.
-	gw := gateway.New(logger)
+	gw := gateway.New(do.MustInvoke[*jtime.Clock](injector), logger)
 
 	// Register Discord OnReady callback.
 	dc := do.MustInvoke[*discord.Chat](injector)
@@ -754,9 +755,10 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 			ownerID = "owner"
 			ownerName = "オーナー"
 		}
-		hub := device.NewHub(bus, ttsClient, sttClient, ownerID, ownerName, logger)
+		clock := do.MustInvoke[*jtime.Clock](injector)
+		hub := device.NewHub(clock, bus, ttsClient, sttClient, ownerID, ownerName, logger)
 		devAdapter := device.NewDeviceAdapter(hub)
-		visionFeature := vision.New(bus, yoloURL, deviceChannel, devAdapter, devAdapter,
+		visionFeature := vision.New(clock, bus, yoloURL, deviceChannel, devAdapter, devAdapter,
 			do.MustInvoke[*llm.Client](injector), logger)
 		hub.SetImageHandler(visionFeature.Pipeline())
 		do.ProvideValue(injector, visionFeature)

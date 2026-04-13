@@ -9,6 +9,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
@@ -56,6 +57,7 @@ type CronContext struct {
 	Bus *event.Bus // Agent event bus for publishing self-prompt events. May be nil.
 
 	// Environment
+	Clock        *jtime.Clock   // Timezone-aware clock. Must not be nil.
 	Timezone     *time.Location // Scheduler-level timezone. Nil defaults to UTC.
 	SystemPrompt string         // Loaded from IDENTITY.md + SOUL.md. Empty if not configured.
 }

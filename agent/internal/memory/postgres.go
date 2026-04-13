@@ -18,6 +18,7 @@ import (
 // PostgresStore は ParadeDB (PostgreSQL + pgvector + pg_search) を使った Store 実装。
 type PostgresStore struct {
 	db         *sql.DB
+	clock      *jtime.Clock
 	embedder   embedding.Embedder
 	mediaStore MediaStore
 	onSave     func()
@@ -26,7 +27,7 @@ type PostgresStore struct {
 }
 
 // NewPostgresStore は ParadeDB に接続し、マイグレーションを実行する。
-func NewPostgresStore(dsn string, embedder embedding.Embedder, runMigrations bool, logger *slog.Logger) (*PostgresStore, error) {
+func NewPostgresStore(dsn string, clock *jtime.Clock, embedder embedding.Embedder, runMigrations bool, logger *slog.Logger) (*PostgresStore, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -50,6 +51,7 @@ func NewPostgresStore(dsn string, embedder embedding.Embedder, runMigrations boo
 
 	return &PostgresStore{
 		db:       db,
+		clock:    clock,
 		embedder: embedder,
 		logger:   logger,
 		embedSig: make(chan struct{}, 1),
@@ -113,7 +115,7 @@ func (s *PostgresStore) initMemFields(mem *Memory) {
 	if mem.ID == "" {
 		mem.ID = uuid.NewString()
 	}
-	now := jtime.Now()
+	now := s.clock.Now()
 	if mem.CreatedAt.IsZero() {
 		mem.CreatedAt = now
 	}

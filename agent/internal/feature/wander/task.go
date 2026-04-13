@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/external/search"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
@@ -60,11 +59,11 @@ var _ scheduler.CronTask = (*Task)(nil)
 func (t *Task) Name() string        { return "wander" }
 func (t *Task) Description() string { return "自律的にネットを散歩する" }
 
-func (t *Task) now() time.Time {
+func (t *Task) now(cc *scheduler.CronContext) time.Time {
 	if t.nowFunc != nil {
 		return t.nowFunc()
 	}
-	return jtime.Now()
+	return cc.Clock.Now()
 }
 
 func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
@@ -261,7 +260,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	// --- Step 4: Persist state ---
 	t.mu.Lock()
-	t.lastWanderedAt = t.now()
+	t.lastWanderedAt = t.now(cc)
 	t.mu.Unlock()
 	t.saveState(ctx, cc)
 

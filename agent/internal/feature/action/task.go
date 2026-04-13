@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -23,8 +22,8 @@ func (t *Task) Description() string { return "期限到来のスケジュール�
 func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
 
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
-	store := NewStore(cc.DB)
-	now := jtime.Now()
+	store := NewStore(cc.DB, cc.Clock.Location())
+	now := cc.Clock.Now()
 
 	// Use wall clock in the scheduler's timezone, but store uses UTC.
 	actions, err := store.FetchDue(ctx, now)

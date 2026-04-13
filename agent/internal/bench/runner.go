@@ -38,6 +38,7 @@ type RunnerConfig struct {
 // Agent は外部から注入される (本番と同じ DI パスで構築されたもの)。
 type Runner struct {
 	cfg      RunnerConfig
+	clock    *jtime.Clock
 	ag       BenchAgent
 	agentCtx BenchContext
 	logger   *slog.Logger
@@ -64,7 +65,7 @@ func (r *Runner) CaptureResponse(caseID, text string) {
 // NewRunner はスナップショットを復元し、ランナーを作成する。
 // Agent は呼び出し側が本番と同じ DI で構築して渡す。
 // setup は cmd 層で agent 固有のセッション差し替えを行うコールバック。
-func NewRunner(cfg RunnerConfig, ag BenchAgent, setup SessionSetup, logger *slog.Logger) (*Runner, error) {
+func NewRunner(cfg RunnerConfig, clock *jtime.Clock, ag BenchAgent, setup SessionSetup, logger *slog.Logger) (*Runner, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -78,6 +79,7 @@ func NewRunner(cfg RunnerConfig, ag BenchAgent, setup SessionSetup, logger *slog
 
 	r := &Runner{
 		cfg:       cfg,
+		clock:     clock,
 		ag:        ag,
 		logger:    logger,
 		responses: make(map[string]string),
@@ -127,7 +129,7 @@ func (r *Runner) injectLogs(logs []InjectLog) {
 			UserName:  l.UserName,
 			Content:   l.Content,
 			Channel:   channel,
-			Timestamp: jtime.Now(),
+			Timestamp: r.clock.Now(),
 		}
 		r.agentCtx.Add(msg)
 	}
@@ -204,9 +206,9 @@ func (r *Runner) sendAndCapture(ctx context.Context, caseID, prompt, source, cha
 
 	var evt event.Event
 	if source == "internal" {
-		evt = event.NewSelfPromptEvent(channel, prompt)
+		evt = event.NewSelfPromptEvent(r.clock, channel, prompt)
 	} else {
-		evt = event.NewMessageEvent(source, event.MessagePayload{
+		evt = event.NewMessageEvent(r.clock, source, event.MessagePayload{
 			Content:   prompt,
 			Channel:   channel,
 			UserID:    "bench-user",

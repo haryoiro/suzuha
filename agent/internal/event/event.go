@@ -7,6 +7,16 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
+// EventFactory はタイムゾーンを保持するイベント生成ユーティリティ。
+type EventFactory struct {
+	Clock *jtime.Clock
+}
+
+// NewEventFactory は指定された Clock でイベントファクトリを生成する。
+func NewEventFactory(clock *jtime.Clock) *EventFactory {
+	return &EventFactory{Clock: clock}
+}
+
 // MessagePayload carries typed fields for a chat message event.
 type MessagePayload struct {
 	Content     string   `json:"content"`
@@ -40,25 +50,25 @@ type Event struct {
 }
 
 // NewMessageEvent creates a message event with a generated ID and current timestamp.
-func NewMessageEvent(source string, msg MessagePayload) Event {
+func NewMessageEvent(clock *jtime.Clock, source string, msg MessagePayload) Event {
 	return Event{
 		ID:        uuid.NewString(),
 		Source:    source,
 		Type:      "message",
 		Message:   msg,
-		Timestamp: jtime.Now(),
+		Timestamp: clock.Now(),
 	}
 }
 
 // NewSelfPromptEvent creates an internal self-prompt event (e.g. boredom trigger).
 // These events are processed by the agent pipeline but do not count as user interaction.
-func NewSelfPromptEvent(channel, content string) Event {
+func NewSelfPromptEvent(clock *jtime.Clock, channel, content string) Event {
 	return Event{
 		ID:        uuid.NewString(),
 		Source:    SourceInternal,
 		Type:      TypeSelfPrompt,
 		Message:   MessagePayload{Content: content, Channel: channel},
-		Timestamp: jtime.Now(),
+		Timestamp: clock.Now(),
 	}
 }
 

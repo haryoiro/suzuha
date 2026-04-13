@@ -7,19 +7,21 @@ import (
 	"io"
 
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
 
 // Chat は stdin/stdout を使う CLI チャットアダプタ。
 // chat.Interface と gateway.Source を満たす。
 type Chat struct {
-	in  io.Reader
-	out io.Writer
-	bus *event.Bus
+	in    io.Reader
+	out   io.Writer
+	clock *jtime.Clock
+	bus   *event.Bus
 }
 
 // New creates a CLI chat instance.
-func New(in io.Reader, out io.Writer, bus *event.Bus) *Chat {
-	return &Chat{in: in, out: out, bus: bus}
+func New(in io.Reader, out io.Writer, clock *jtime.Clock, bus *event.Bus) *Chat {
+	return &Chat{in: in, out: out, clock: clock, bus: bus}
 }
 
 // Name は gateway.Source を満たす。
@@ -48,7 +50,7 @@ func (c *Chat) Run(ctx context.Context) error {
 			if line == "" {
 				continue
 			}
-			c.bus.Publish(event.NewMessageEvent("cli", event.MessagePayload{
+			c.bus.Publish(event.NewMessageEvent(c.clock, "cli", event.MessagePayload{
 				Content:  line,
 				Channel:  "cli",
 				UserID:   "local",

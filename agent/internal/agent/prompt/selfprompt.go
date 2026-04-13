@@ -8,13 +8,15 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
-type SelfPromptProvider struct{}
+type SelfPromptProvider struct {
+	Clock *jtime.Clock
+}
 
-func (SelfPromptProvider) ProvideContext(_ context.Context, req Request) Block {
+func (p SelfPromptProvider) ProvideContext(_ context.Context, req Request) Block {
 	if req.EventType != event.TypeSelfPrompt {
 		return Block{}
 	}
 	return Block{Foreground: []llm.Message{{
-		Role: "system", Content: req.EventContent, Timestamp: jtime.Now(),
+		Role: "system", Content: req.EventContent, Timestamp: p.Clock.Now(),
 	}}}
 }

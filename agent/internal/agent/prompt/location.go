@@ -3,12 +3,13 @@ package prompt
 import (
 	"context"
 
+	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 )
 
 type LocationProvider struct {
+	Clock *jtime.Clock
 	Store *location.Store
 }
 
@@ -21,6 +22,6 @@ func (p *LocationProvider) ProvideContext(_ context.Context, _ Request) Block {
 		return Block{}
 	}
 	return Block{Background: []llm.Message{{
-		Role: "system", Content: snippet, Timestamp: jtime.Now(),
+		Role: "system", Content: snippet, Timestamp: p.Clock.Now(),
 	}}}
 }

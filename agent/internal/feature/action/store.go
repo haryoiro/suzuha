@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/robfig/cron/v3"
 )
 
@@ -30,12 +29,16 @@ type Action struct {
 
 // Store handles scheduled_actions DB operations.
 type Store struct {
-	db *sql.DB
+	db  *sql.DB
+	loc *time.Location
 }
 
 // NewStore creates a new Store.
-func NewStore(db *sql.DB) *Store {
-	return &Store{db: db}
+func NewStore(db *sql.DB, loc *time.Location) *Store {
+	if loc == nil {
+		loc = time.UTC
+	}
+	return &Store{db: db, loc: loc}
 }
 
 // Setup creates the table if it doesn't exist (idempotent).
@@ -159,7 +162,7 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 
 	if cronExpr != "" {
 		// Recurring: compute next execution time and reschedule.
-		next, parseErr := nextCronTime(cronExpr, now)
+		next, parseErr := nextCronTime(cronExpr, now, s.loc)
 		if parseErr != nil {
 			// Cron expression invalid — mark executed and stop recurring.
 			return s.markDone(ctx, id, now)
@@ -187,13 +190,13 @@ func (s *Store) markDone(ctx context.Context, id string, now time.Time) error {
 
 // nextCronTime parses a cron expression and returns the next occurrence after t.
 // The time is interpreted in the configured timezone.
-func nextCronTime(expr string, t time.Time) (time.Time, error) {
+func nextCronTime(expr string, t time.Time, loc *time.Location) (time.Time, error) {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	sched, err := parser.Parse(expr)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("cron式 %q の解析に失敗: %w", expr, err)
 	}
-	return sched.Next(jtime.In(t)), nil
+	return sched.Next(t.In(loc)), nil
 }
 
 func scanActions(rows *sql.Rows) ([]Action, error) {

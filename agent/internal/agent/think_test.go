@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -224,7 +225,7 @@ func TestResponseDirective_ActiveButTooManyMessages(t *testing.T) {
 func TestResponseDirective_SelfPromptBypass(t *testing.T) {
 	// Self-prompts are handled in Think before calling responseDirective,
 	// but isDirectlyAddressed returns true for them.
-	evt := event.NewSelfPromptEvent("ch1", "bored")
+	evt := event.NewSelfPromptEvent(jtime.New(time.UTC), "ch1", "bored")
 	d := responseDirective(evt, "bot123", convState{}, episodeSig{})
 	if !strings.HasPrefix(d, "[RESPOND]") {
 		t.Errorf("expected [RESPOND] for self-prompt, got: %s", d)

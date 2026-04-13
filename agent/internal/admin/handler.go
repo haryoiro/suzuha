@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/feature/action"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
@@ -16,6 +17,7 @@ import (
 type AdminHandler struct {
 	api.UnimplementedHandler
 
+	clock      *jtime.Clock
 	memStore   memory.AdminStore
 	userStore  user.AdminStore
 	schedStore *action.Store
@@ -30,6 +32,7 @@ type AdminHandler struct {
 
 // NewAdminHandler creates a new AdminHandler.
 func NewAdminHandler(
+	clock *jtime.Clock,
 	memStore memory.AdminStore,
 	userStore user.AdminStore,
 	schedStore *action.Store,
@@ -39,6 +42,7 @@ func NewAdminHandler(
 	logger *slog.Logger,
 ) *AdminHandler {
 	return &AdminHandler{
+		clock:      clock,
 		memStore:   memStore,
 		userStore:  userStore,
 		schedStore: schedStore,

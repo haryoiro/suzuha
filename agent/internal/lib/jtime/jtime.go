@@ -1,33 +1,37 @@
 // Package jtime provides timezone-aware time utilities.
-// Call Init once at startup with the configured location.
-// All other functions use the configured location.
+// Use New to create a Clock bound to a specific location,
+// then pass the Clock to components that need timezone-aware time.
 package jtime
 
 import (
 	"time"
 )
 
-var loc = time.UTC
+// Clock はタイムゾーンを保持する時刻ユーティリティ。
+type Clock struct {
+	loc *time.Location
+}
 
-// Init sets the global timezone location.
-// Must be called once at startup before other functions.
-func Init(l *time.Location) {
-	if l != nil {
-		loc = l
+// New は指定されたタイムゾーンで Clock を生成する。
+// loc が nil の場合は UTC を使用する。
+func New(loc *time.Location) *Clock {
+	if loc == nil {
+		loc = time.UTC
 	}
+	return &Clock{loc: loc}
 }
 
-// Now returns the current time in the configured timezone.
-func Now() time.Time {
-	return time.Now().In(loc)
+// Now は設定されたタイムゾーンでの現在時刻を返す。
+func (c *Clock) Now() time.Time {
+	return time.Now().In(c.loc)
 }
 
-// Location returns the configured timezone location.
-func Location() *time.Location {
-	return loc
+// Location は設定されたタイムゾーンを返す。
+func (c *Clock) Location() *time.Location {
+	return c.loc
 }
 
-// In converts t to the configured timezone.
-func In(t time.Time) time.Time {
-	return t.In(loc)
+// In は t を設定されたタイムゾーンに変換する。
+func (c *Clock) In(t time.Time) time.Time {
+	return t.In(c.loc)
 }

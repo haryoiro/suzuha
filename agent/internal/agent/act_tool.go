@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -170,7 +169,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 			Content:    fmt.Sprintf("error: %v", r.err),
 			Channel:    channel,
 			ToolCallID: r.tc.ID,
-			Timestamp:  jtime.Now(),
+			Timestamp:  a.clock.Now(),
 		})
 		return
 	}
@@ -183,7 +182,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 			Content:    fmt.Sprintf("error: %v", r.err),
 			Channel:    channel,
 			ToolCallID: r.tc.ID,
-			Timestamp:  jtime.Now(),
+			Timestamp:  a.clock.Now(),
 		})
 		return
 	}
@@ -213,7 +212,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 		Content:    content,
 		Channel:    channel,
 		ToolCallID: r.tc.ID,
-		Timestamp:  jtime.Now(),
+		Timestamp:  a.clock.Now(),
 	})
 
 	// Share python_exec output to Discord as a code block.
@@ -230,7 +229,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 			Content:   content,
 			ImageURLs: r.result.ImageURLs,
 			Channel:   channel,
-			Timestamp: jtime.Now(),
+			Timestamp: a.clock.Now(),
 		})
 	}
 }

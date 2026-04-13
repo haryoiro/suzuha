@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/voice"
 )
 
@@ -21,6 +22,7 @@ var _ chat.Typer = (*Chat)(nil)
 type Chat struct {
 	token           string
 	botID           string
+	clock           *jtime.Clock
 	bus             *event.Bus
 	log             *slog.Logger
 	session         *discordgo.Session
@@ -44,8 +46,8 @@ func (c *Chat) OnReady(fn func(*discordgo.Session)) {
 func (c *Chat) Name() string { return "discord" }
 
 // New creates a Discord chat instance.
-func New(token, botID string, bus *event.Bus, log *slog.Logger) *Chat {
-	return &Chat{token: token, botID: botID, bus: bus, log: log}
+func New(token, botID string, clock *jtime.Clock, bus *event.Bus, log *slog.Logger) *Chat {
+	return &Chat{token: token, botID: botID, clock: clock, bus: bus, log: log}
 }
 
 // Run connects to Discord and starts listening for messages.
@@ -256,7 +258,7 @@ func (c *Chat) Typing(_ context.Context, channel string) {
 
 // messageToEvent converts a Discord message to an Event.
 func (c *Chat) messageToEvent(channel, messageID, userID, userName, content string, isMention, isDM, isBot bool, guildID, guildName, channelName string, imageURLs []string) event.Event {
-	return event.NewMessageEvent("discord", event.MessagePayload{
+	return event.NewMessageEvent(c.clock, "discord", event.MessagePayload{
 		Content:     content,
 		Channel:     channel,
 		MessageID:   messageID,

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -24,9 +23,9 @@ func (t *DailyTask) Description() string { return "1日の日記をまとめる"
 func (t *DailyTask) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
 
 func (t *DailyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
-	now := jtime.Now()
+	now := cc.Clock.Now()
 	yesterday := now.Add(-24 * time.Hour)
-	localYesterday := jtime.In(yesterday)
+	localYesterday := cc.Clock.In(yesterday)
 	dayStart := time.Date(localYesterday.Year(), localYesterday.Month(), localYesterday.Day(), 0, 0, 0, 0, localYesterday.Location())
 
 	// diary_entries テーブルから hourly digest を取得。
