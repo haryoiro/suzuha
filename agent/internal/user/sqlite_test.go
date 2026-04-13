@@ -4,7 +4,6 @@ package user
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -169,10 +168,4 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
-// Ensure that the *sql.DB parameter is correctly typed.
 var _ Store = (*SQLiteStore)(nil)
-
-func init() {
-	// Prevent "imported and not used" for sql package.
-	_ = sql.ErrNoRows
-}
