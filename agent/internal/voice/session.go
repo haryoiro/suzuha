@@ -3,10 +3,10 @@ package voice
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	botgateway "github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/voice"
 	"github.com/disgoorg/godave/golibdave"
+	"github.com/disgoorg/godave/libdave"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/hraban/opus"
 )
@@ -223,7 +224,7 @@ func (s *Session) SendPCM(pcm []byte) error {
 
 		// Send via disgo's UDP connection with retry on DAVE key errors.
 		if _, err := udp.Write(opusBuf[:n]); err != nil {
-			if strings.Contains(err.Error(), "missing key ratchet") {
+			if errors.Is(err, libdave.ErrMissingKeyRatchet) {
 				// DAVE key transition in progress — wait and retry this frame.
 				s.logger.Debug("暗号鍵を待っている")
 				if waitErr := s.waitForDAVEReady(); waitErr != nil {
@@ -273,7 +274,7 @@ func (s *Session) waitForDAVEReady() error {
 			}
 			return nil
 		}
-		if !strings.Contains(err.Error(), "missing key ratchet") {
+		if !errors.Is(err, libdave.ErrMissingKeyRatchet) {
 			return fmt.Errorf("voice: DAVE鍵待機中にエラー: %w", err)
 		}
 		time.Sleep(200 * time.Millisecond)
