@@ -66,7 +66,10 @@ func (s *Store) Setup(ctx context.Context) error {
 	_, err = s.db.ExecContext(ctx, `
 		CREATE INDEX IF NOT EXISTS idx_scheduled_actions_due
 		ON scheduled_actions (status, scheduled_at)`)
-	return err
+	if err != nil {
+		return fmt.Errorf("schedule: インデックス作成に失敗: %w", err)
+	}
+	return nil
 }
 
 // Create inserts a new scheduled action with auto-generated UUID.
@@ -83,7 +86,10 @@ func (s *Store) Create(ctx context.Context, a *Action) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		a.ID, a.ChannelID, a.Content, a.ScheduledAt.UTC().Format(time.RFC3339), nullString(a.CronExpr), a.RandomMinutes, nullString(a.CreatedBy), mode,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("schedule: アクションの作成に失敗: %w", err)
+	}
+	return nil
 }
 
 // ListPending returns all pending actions ordered by scheduled_at ASC.
@@ -172,7 +178,10 @@ func (s *Store) MarkExecuted(ctx context.Context, id string, now time.Time) erro
 		_, err = s.db.ExecContext(ctx, `
 			UPDATE scheduled_actions SET scheduled_at = $1, executed_at = $2
 			WHERE id = $3`, next.UTC().Format(time.RFC3339), now.UTC().Format(time.RFC3339), id)
-		return err
+		if err != nil {
+			return fmt.Errorf("schedule: 次回実行のスケジュール更新に失敗: %w", err)
+		}
+		return nil
 	}
 
 	return s.markDone(ctx, id, now)
@@ -182,7 +191,10 @@ func (s *Store) markDone(ctx context.Context, id string, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE scheduled_actions SET status = 'executed', executed_at = $1
 		WHERE id = $2`, now.UTC().Format(time.RFC3339), id)
-	return err
+	if err != nil {
+		return fmt.Errorf("schedule: 実行済みへの更新に失敗: %w", err)
+	}
+	return nil
 }
 
 // nextCronTime parses a cron expression and returns the next occurrence after t.
@@ -332,14 +344,20 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 func (s *Store) IncrRetry(ctx context.Context, id string, count int) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE scheduled_actions SET retry_count = $1 WHERE id = $2`, count, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("schedule: リトライ回数の更新に失敗: %w", err)
+	}
+	return nil
 }
 
 // MarkFailed marks an action as failed after exceeding retry limit.
 func (s *Store) MarkFailed(ctx context.Context, id string, count int) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE scheduled_actions SET status = 'failed', retry_count = $1 WHERE id = $2`, count, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("schedule: 失敗への更新に失敗: %w", err)
+	}
+	return nil
 }
 
 func nullString(s string) any {

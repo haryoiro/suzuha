@@ -65,7 +65,10 @@ func (s *AppStore) Setup(ctx context.Context) error {
 			installed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 			enabled      BOOLEAN NOT NULL DEFAULT true
 		)`)
-	return err
+	if err != nil {
+		return fmt.Errorf("mcp: テーブル作成に失敗: %w", err)
+	}
+	return nil
 }
 
 // Add inserts a new installed app.
@@ -86,13 +89,19 @@ func (s *AppStore) Add(ctx context.Context, app *App) error {
 		app.RegistryType, app.Identifier, app.Command,
 		string(argsJSON), string(envJSON), app.Transport,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("mcp: アプリの追加に失敗: %w", err)
+	}
+	return nil
 }
 
 // Remove deletes an installed app by name.
 func (s *AppStore) Remove(ctx context.Context, name string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM mcp_apps WHERE name = $1`, name)
-	return err
+	if err != nil {
+		return fmt.Errorf("mcp: アプリの削除に失敗: %w", err)
+	}
+	return nil
 }
 
 // List returns all installed apps.

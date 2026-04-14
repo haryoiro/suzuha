@@ -55,7 +55,10 @@ func (s *Store) LogTurn(ctx context.Context, entry TurnEntry) error {
 		nullIfEmpty(entry.ToolCalls), nullIfEmpty(entry.ToolCallID),
 		entry.Timestamp, entry.SourceKey,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("conversation: ターンログの記録に失敗: %w", err)
+	}
+	return nil
 }
 
 // ListLogs は指定期間の会話ログを返す。
@@ -112,7 +115,10 @@ func (s *Store) TrackActivity(ctx context.Context, channelID string, at time.Tim
 		`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES ($1, $2)
 		 ON CONFLICT(channel_id) DO UPDATE SET last_user_message_at = EXCLUDED.last_user_message_at`,
 		channelID, at)
-	return err
+	if err != nil {
+		return fmt.Errorf("conversation: アクティビティの記録に失敗: %w", err)
+	}
+	return nil
 }
 
 // SaveSnapshot はコンテキストスナップショットを保存する。
@@ -125,7 +131,10 @@ func (s *Store) SaveSnapshot(ctx context.Context, sourceKey string, messages []l
 		`INSERT INTO context_snapshot (source_key, messages, updated_at) VALUES ($1, $2, now())
 		 ON CONFLICT (source_key) DO UPDATE SET messages = EXCLUDED.messages, updated_at = now()`,
 		sourceKey, string(data))
-	return err
+	if err != nil {
+		return fmt.Errorf("conversation: snapshot の保存に失敗: %w", err)
+	}
+	return nil
 }
 
 // LoadSnapshot はコンテキストスナップショットを復元する。
