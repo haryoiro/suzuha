@@ -10,16 +10,28 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
+// memoryAdmin は Consolidator が使用するメモリ管理操作の consumer-side interface。
+type memoryAdmin interface {
+	ListEmbeddedMemories(ctx context.Context) ([]memory.Memory, error)
+	ListAllEmbeddings(ctx context.Context) (map[string][]float32, error)
+	DeleteBatch(ctx context.Context, ids []string) (int, error)
+}
+
+// memorySaver は統合結果の保存を行う consumer-side interface。
+type memorySaver interface {
+	Save(ctx context.Context, mem *memory.Memory) error
+}
+
 // Consolidator は既存メモリの重複排除・マージを実行する。
 type Consolidator struct {
 	llm    Completer
-	admin  memory.AdminStore
-	store  memory.Store
+	admin  memoryAdmin
+	store  memorySaver
 	logger *slog.Logger
 }
 
 // NewConsolidator は Consolidator を作成する。
-func NewConsolidator(llm Completer, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
+func NewConsolidator(llm Completer, admin memoryAdmin, store memorySaver, logger *slog.Logger) *Consolidator {
 	return &Consolidator{llm: llm, admin: admin, store: store, logger: logger}
 }
 

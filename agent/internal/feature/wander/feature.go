@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
@@ -15,13 +14,13 @@ import (
 type Feature struct {
 	searxngURL   string
 	llm          *llm.Client
-	mem          memory.Store
+	mem          memorySaver
 	systemPrompt string
 	maxDepth     int
 }
 
 // New creates a Wander Feature.
-func New(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, maxDepth int) *Feature {
+func New(searxngURL string, llmClient *llm.Client, memStore memorySaver, systemPrompt string, maxDepth int) *Feature {
 	return &Feature{
 		searxngURL:   searxngURL,
 		llm:          llmClient,

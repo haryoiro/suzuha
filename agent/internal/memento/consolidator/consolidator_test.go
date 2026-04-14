@@ -12,12 +12,11 @@ import (
 
 // --- モック ---
 
-// mockAdminStore は consolidate テスト用の AdminStore モック。
+// mockAdminStore は consolidate テスト用の memoryAdmin モック。
 type mockAdminStore struct {
-	memory.AdminStore // 未実装メソッドは panic する（テスト対象外）
-	memories          []memory.Memory
-	embeddings        map[string][]float32
-	deleted           []string
+	memories   []memory.Memory
+	embeddings map[string][]float32
+	deleted    []string
 }
 
 func (m *mockAdminStore) ListEmbeddedMemories(_ context.Context) ([]memory.Memory, error) {
@@ -30,6 +29,8 @@ func (m *mockAdminStore) DeleteBatch(_ context.Context, ids []string) (int, erro
 	m.deleted = append(m.deleted, ids...)
 	return len(ids), nil
 }
+
+var _ memoryAdmin = (*mockAdminStore)(nil)
 
 // mockCompleter はLLMレスポンスを固定で返すモック。
 type mockCompleter struct {
@@ -46,14 +47,15 @@ func (m *mockCompleter) CompleteRaw(_ context.Context, _ []llm.RawMessage) (*llm
 
 // mockSaveStore は Save を記録するモック。
 type mockSaveStore struct {
-	memory.Store // 未実装メソッドは panic する
-	saved        []*memory.Memory
+	saved []*memory.Memory
 }
 
 func (m *mockSaveStore) Save(_ context.Context, mem *memory.Memory) error {
 	m.saved = append(m.saved, mem)
 	return nil
 }
+
+var _ memorySaver = (*mockSaveStore)(nil)
 
 // --- テストケース ---
 

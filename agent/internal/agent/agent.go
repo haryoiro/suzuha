@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/external/transcript"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/conversation"
@@ -26,6 +27,30 @@ import (
 // DefaultDrainWindow is the default delay after the last event before
 // finalizing a batch. This allows closely-spaced messages to be grouped.
 const DefaultDrainWindow = 3 * time.Second
+
+// memoryStore は Agent とその prompt.Provider が必要とするメモリ操作の consumer-side interface。
+// memory.Store (14メソッド) のうち、実際に使用する6メソッドのみを要求する。
+type memoryStore interface {
+	// Agent 本体が使用 (perceive.go, think.go)
+	SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]memory.Memory, error)
+	ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]memory.Memory, error)
+	// prompt.MemoryProvider が使用
+	SearchWithContext(ctx context.Context, query string, limit int, filter memory.SymbolicFilter) ([]memory.Memory, error)
+	SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]memory.Memory, error)
+	// prompt.ProfileProvider が使用
+	ListByType(ctx context.Context, memType memory.MemoryType, limit int) ([]memory.Memory, error)
+	ListByUser(ctx context.Context, userID string, limit int) ([]memory.Memory, error)
+}
+
+// userStore は Agent とその prompt.Provider が必要とするユーザー操作の consumer-side interface。
+// user.Store (8メソッド) のうち、実際に使用する3メソッドのみを要求する。
+type userStore interface {
+	// Agent 本体が使用 (perceive.go)
+	Resolve(ctx context.Context, platform, platformUserID, platformName string) (*user.User, error)
+	TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error
+	// prompt.ProfileProvider が使用
+	GetUserGuilds(ctx context.Context, userID string) ([]user.UserGuild, error)
+}
 
 // acquirer は agent が必要とするメモリ獲得機能を定義する (consumer-side interface)。
 type acquirer interface {
@@ -49,8 +74,8 @@ type Agent struct {
 	sessions  map[SourceKey]Session
 	llm       *llm.Client
 	tools     *tool.Registry
-	memory    memory.Store
-	users     user.Store
+	memory    memoryStore
+	users     userStore
 	bus       *event.Bus
 	acquirer  acquirer
 	convStore       conversationStore
@@ -160,8 +185,8 @@ func New(
 	registrations []SourceRegistration,
 	llmClient *llm.Client,
 	tools *tool.Registry,
-	memStore memory.Store,
-	userStore user.Store,
+	memStore memoryStore,
+	userStore userStore,
 	bus *event.Bus,
 	acq acquirer,
 	convStore conversationStore,
@@ -302,9 +327,9 @@ func (a *Agent) SetTracer(t trace.Tracer) {
 }
 
 func buildProviders(
-	memStore memory.Store,
+	memStore memoryStore,
 	db *sql.DB,
-	userStore user.Store,
+	userStore userStore,
 	botID string,
 	logger *slog.Logger,
 ) []prompt.Provider {

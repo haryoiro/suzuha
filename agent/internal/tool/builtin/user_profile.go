@@ -9,18 +9,24 @@ import (
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
+// userProfileUpdater はユーザー解決と表示名更新を行う consumer-side interface。
+type userProfileUpdater interface {
+	Resolve(ctx context.Context, platform, platformUserID, platformName string) (*user.User, error)
+	UpdateDisplayName(ctx context.Context, userID, displayName string) error
+}
+
 // ContextUpdater is called after a user profile is updated to keep short-term memory consistent.
 type ContextUpdater func(userID, newName string)
 
 // UpdateUserProfile allows the LLM to update a user's display name.
 type UpdateUserProfile struct {
-	users     user.Store
+	users     userProfileUpdater
 	onUpdate  ContextUpdater
 }
 
 // NewUpdateUserProfile creates the tool with a user store and an optional callback
 // for updating short-term memory (agent context).
-func NewUpdateUserProfile(users user.Store, onUpdate ContextUpdater) *UpdateUserProfile {
+func NewUpdateUserProfile(users userProfileUpdater, onUpdate ContextUpdater) *UpdateUserProfile {
 	return &UpdateUserProfile{users: users, onUpdate: onUpdate}
 }
 

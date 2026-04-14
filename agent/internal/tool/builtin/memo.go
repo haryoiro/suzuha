@@ -10,13 +10,29 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
+// memorySaver はメモの保存を行う consumer-side interface。
+type memorySaver interface {
+	Save(ctx context.Context, mem *memory.Memory) error
+}
+
+// memoSearcher はメモの型別検索を行う consumer-side interface。
+type memoSearcher interface {
+	SearchByType(ctx context.Context, query string, memType memory.MemoryType, limit int) ([]memory.Memory, error)
+}
+
+// memoStore はメモの取得と保存を行う consumer-side interface。
+type memoStore interface {
+	Save(ctx context.Context, mem *memory.Memory) error
+	Get(ctx context.Context, id string) (*memory.Memory, error)
+}
+
 // ── memo_create ──
 
 type MemoCreate struct {
-	store memory.Store
+	store memorySaver
 }
 
-func NewMemoCreate(store memory.Store) *MemoCreate {
+func NewMemoCreate(store memorySaver) *MemoCreate {
 	return &MemoCreate{store: store}
 }
 
@@ -74,10 +90,10 @@ func (t *MemoCreate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 // ── memo_search ──
 
 type MemoSearch struct {
-	store memory.Store
+	store memoSearcher
 }
 
-func NewMemoSearch(store memory.Store) *MemoSearch {
+func NewMemoSearch(store memoSearcher) *MemoSearch {
 	return &MemoSearch{store: store}
 }
 
@@ -149,10 +165,10 @@ func (t *MemoSearch) Execute(ctx context.Context, input json.RawMessage) (*tool.
 // ── memo_update ──
 
 type MemoUpdate struct {
-	store memory.Store
+	store memoStore
 }
 
-func NewMemoUpdate(store memory.Store) *MemoUpdate {
+func NewMemoUpdate(store memoStore) *MemoUpdate {
 	return &MemoUpdate{store: store}
 }
 
@@ -184,14 +200,7 @@ func (t *MemoUpdate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
-	// Store needs AdminStore for Get+Update. We use the Store interface
-	// which is actually *SQLiteStore that also implements AdminStore.
-	adminStore, ok := t.store.(memory.AdminStore)
-	if !ok {
-		return tool.ErrorResult("メモの更新に対応していない"), nil
-	}
-
-	existing, err := adminStore.Get(ctx, in.ID)
+	existing, err := t.store.Get(ctx, in.ID)
 	if err != nil {
 		return tool.ErrorResult("メモが見つからない: " + err.Error()), nil
 	}

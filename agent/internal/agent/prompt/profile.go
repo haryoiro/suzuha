@@ -14,9 +14,23 @@ import (
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
+// MemoryProfiler はプロフィール構築に必要なメモリリスト機能を提供する。
+type MemoryProfiler interface {
+	ListByType(ctx context.Context, memType memory.MemoryType, limit int) ([]memory.Memory, error)
+	ListByUser(ctx context.Context, userID string, limit int) ([]memory.Memory, error)
+	ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]memory.Memory, error)
+}
+
+// UserResolver はプラットフォームユーザーの解決とギルド情報取得を提供する。
+type UserResolver interface {
+	Resolve(ctx context.Context, platform, platformUserID, platformName string) (*user.User, error)
+	GetUserGuilds(ctx context.Context, userID string) ([]user.UserGuild, error)
+}
+
+// ProfileProvider はユーザープロフィールと自己認識をプロンプトブロックとして提供する。
 type ProfileProvider struct {
-	Users  user.Store
-	Memory memory.Store
+	Users  UserResolver
+	Memory MemoryProfiler
 	BotID  string
 	Logger *slog.Logger
 }

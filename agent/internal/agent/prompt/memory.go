@@ -13,6 +13,12 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
+// MemoryContextSearcher はコンテキスト付きメモリ検索とマルチモーダル検索を提供する。
+type MemoryContextSearcher interface {
+	SearchWithContext(ctx context.Context, query string, limit int, filter memory.SymbolicFilter) ([]memory.Memory, error)
+	SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]memory.Memory, error)
+}
+
 func parseDataURI(uri string) ([]byte, string) {
 	if !strings.HasPrefix(uri, "data:") {
 		return nil, ""
@@ -41,8 +47,9 @@ func modalityFromMime(mime string) embedding.Modality {
 	}
 }
 
+// MemoryProvider はメモリ検索結果をプロンプトブロックとして提供する。
 type MemoryProvider struct {
-	Memory memory.Store
+	Memory MemoryContextSearcher
 	Media  memory.MediaStore
 	Logger *slog.Logger
 }

@@ -12,11 +12,16 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
+// memorySaver はメモリの保存を行う consumer-side interface。
+type memorySaver interface {
+	Save(ctx context.Context, mem *memory.Memory) error
+}
+
 // WanderTool allows the LLM to trigger a casual web wandering session.
 type WanderTool struct {
 	searx        *search.SearXNGClient
 	llm          *llm.Client
-	mem          memory.Store
+	mem          memorySaver
 	systemPrompt string
 	maxDepth     int
 }
@@ -24,7 +29,7 @@ type WanderTool struct {
 var _ tool.Tool = (*WanderTool)(nil)
 
 // NewWanderTool creates a wander tool.
-func NewWanderTool(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, maxDepth int) *WanderTool {
+func NewWanderTool(searxngURL string, llmClient *llm.Client, memStore memorySaver, systemPrompt string, maxDepth int) *WanderTool {
 	if maxDepth <= 0 {
 		maxDepth = defaultMaxDepth
 	}
