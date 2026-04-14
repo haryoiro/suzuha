@@ -10,18 +10,23 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
+// memorySaver はメモリの保存機能を提供する (consumer-side interface)。
+type memorySaver interface {
+	Save(ctx context.Context, mem *memory.Memory) error
+}
+
 // Feature is the self-contained web wandering feature.
 // It provides a scheduler task for autonomous wandering and an agent tool.
 type Feature struct {
 	searxngURL   string
 	llm          *llm.Client
-	mem          memory.Store
+	mem          memorySaver
 	systemPrompt string
 	maxDepth     int
 }
 
 // New creates a Wander Feature.
-func New(searxngURL string, llmClient *llm.Client, memStore memory.Store, systemPrompt string, maxDepth int) *Feature {
+func New(searxngURL string, llmClient *llm.Client, memStore memorySaver, systemPrompt string, maxDepth int) *Feature {
 	return &Feature{
 		searxngURL:   searxngURL,
 		llm:          llmClient,

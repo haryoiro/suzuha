@@ -41,6 +41,18 @@ type conversationStore interface {
 	DeleteChannel(ctx context.Context, channelID string) error
 }
 
+// memoryReader は Agent が直接使用するメモリ読み取り機能を定義する (consumer-side interface)。
+type memoryReader interface {
+	SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]memory.Memory, error)
+	ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]memory.Memory, error)
+}
+
+// userResolver は Agent が直接使用するユーザー解決機能を定義する (consumer-side interface)。
+type userResolver interface {
+	Resolve(ctx context.Context, platform, platformUserID, platformName string) (*user.User, error)
+	TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error
+}
+
 // Agent is the main event loop that processes events, calls the LLM,
 // executes tools, and sends responses.
 type Agent struct {
@@ -49,8 +61,8 @@ type Agent struct {
 	sessions  map[SourceKey]Session
 	llm       *llm.Client
 	tools     *tool.Registry
-	memory    memory.Store
-	users     user.Store
+	memory    memoryReader
+	users     userResolver
 	bus       *event.Bus
 	acquirer  acquirer
 	convStore       conversationStore

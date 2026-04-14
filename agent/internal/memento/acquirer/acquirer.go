@@ -14,16 +14,23 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
+// memoryStore は Acquirer が必要とするメモリ操作を定義する (consumer-side interface)。
+type memoryStore interface {
+	IsDuplicateBatch(ctx context.Context, candidates []memory.DupCandidate) ([]memory.DupResult, error)
+	Save(ctx context.Context, mem *memory.Memory) error
+	ListRecent(ctx context.Context, since time.Time, limit int) ([]memory.Memory, error)
+}
+
 // Acquirer は会話コンテキストから長期メモリを抽出する。
 type Acquirer struct {
 	llm    Completer
-	store  memory.Store
+	store  memoryStore
 	config Config
 	logger *slog.Logger
 }
 
 // NewAcquirer は Acquirer を作成する。
-func NewAcquirer(llm Completer, store memory.Store, cfg Config, logger *slog.Logger) *Acquirer {
+func NewAcquirer(llm Completer, store memoryStore, cfg Config, logger *slog.Logger) *Acquirer {
 	return &Acquirer{llm: llm, store: store, config: cfg, logger: logger}
 }
 

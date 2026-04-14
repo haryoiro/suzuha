@@ -41,8 +41,15 @@ func modalityFromMime(mime string) embedding.Modality {
 	}
 }
 
+// MemorySearcher はプロンプト構築用のメモリ検索機能を提供する。
+type MemorySearcher interface {
+	SearchWithContext(ctx context.Context, query string, limit int, filter memory.SymbolicFilter) ([]memory.Memory, error)
+	SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]memory.Memory, error)
+}
+
+// MemoryProvider はメモリ検索結果をプロンプトブロックとして提供する。
 type MemoryProvider struct {
-	Memory memory.Store
+	Memory MemorySearcher
 	Media  memory.MediaStore
 	Logger *slog.Logger
 }
