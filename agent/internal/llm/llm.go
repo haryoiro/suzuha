@@ -946,7 +946,10 @@ func retryOnRateLimit(ctx context.Context, logger *slog.Logger, fn func() error)
 		case <-time.After(delay):
 		}
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("llm: リトライ上限超過: %w", err)
+	}
+	return nil
 }
 
 

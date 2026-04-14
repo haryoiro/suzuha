@@ -200,7 +200,10 @@ func (s *PostgresStore) SaveRaw(ctx context.Context, mem *Memory) error {
 		jsonOrNull(meta), jsonOrNull(mem.Keywords), mem.Topic, jsonOrNull(mem.Persons),
 		mem.EventTime, mem.CreatedAt, mem.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("memory: メモリの保存に失敗: %w", err)
+	}
+	return nil
 }
 
 func (s *PostgresStore) ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error) {

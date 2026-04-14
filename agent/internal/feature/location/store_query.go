@@ -270,13 +270,19 @@ func (s *Store) UpsertDevice(ctx context.Context, deviceID, ownerName, userID st
 		`INSERT INTO location_devices (device_id, owner_name, user_id) VALUES ($1, $2, $3)
 		 ON CONFLICT(device_id) DO UPDATE SET owner_name = excluded.owner_name, user_id = excluded.user_id`,
 		deviceID, ownerName, uid)
-	return err
+	if err != nil {
+		return fmt.Errorf("location: デバイスの登録に失敗: %w", err)
+	}
+	return nil
 }
 
 // DeleteDevice removes a device mapping.
 func (s *Store) DeleteDevice(ctx context.Context, deviceID string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM location_devices WHERE device_id = $1`, deviceID)
-	return err
+	if err != nil {
+		return fmt.Errorf("location: デバイスの削除に失敗: %w", err)
+	}
+	return nil
 }
 
 // ListPlaces returns all named places.
@@ -305,7 +311,10 @@ func (s *Store) CreatePlace(ctx context.Context, p Place) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO location_places (id, name, latitude, longitude, radius_m) VALUES ($1, $2, $3, $4, $5)`,
 		p.ID, p.Name, p.Latitude, p.Longitude, p.RadiusM)
-	return err
+	if err != nil {
+		return fmt.Errorf("location: 場所の作成に失敗: %w", err)
+	}
+	return nil
 }
 
 // UpdatePlace updates an existing place.
@@ -313,13 +322,19 @@ func (s *Store) UpdatePlace(ctx context.Context, p Place) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE location_places SET name = $1, latitude = $2, longitude = $3, radius_m = $4 WHERE id = $5`,
 		p.Name, p.Latitude, p.Longitude, p.RadiusM, p.ID)
-	return err
+	if err != nil {
+		return fmt.Errorf("location: 場所の更新に失敗: %w", err)
+	}
+	return nil
 }
 
 // DeletePlace removes a place.
 func (s *Store) DeletePlace(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM location_places WHERE id = $1`, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("location: 場所の削除に失敗: %w", err)
+	}
+	return nil
 }
 
 // LoadCache warms the in-memory cache from the database on startup.

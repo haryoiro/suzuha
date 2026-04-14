@@ -130,7 +130,10 @@ func (p *Pipeline) Leave(guildID string) error {
 	err := sess.Leave()
 	delete(p.sessions, guildID)
 	p.logger.Info("ボイスチャンネルから出た", "guild", guildID)
-	return err
+	if err != nil {
+		return fmt.Errorf("voice: セッション切断に失敗: %w", err)
+	}
+	return nil
 }
 
 // IsConnected returns true if there is an active voice session for the guild.

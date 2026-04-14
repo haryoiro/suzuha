@@ -61,5 +61,8 @@ func (c *Chat) Run(ctx context.Context) error {
 // Send writes a message to stdout.
 func (c *Chat) Send(_ context.Context, _ string, text string) error {
 	_, err := fmt.Fprintln(c.out, text)
-	return err
+	if err != nil {
+		return fmt.Errorf("cli: メッセージ送信に失敗: %w", err)
+	}
+	return nil
 }
