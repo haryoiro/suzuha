@@ -91,13 +91,19 @@ func (s *PostgresStore) Update(ctx context.Context, mem *Memory) error {
 		jsonOrNull(mem.Keywords), mem.Topic, jsonOrNull(mem.Persons),
 		mem.EventTime, mem.UpdatedAt, mem.ID,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("memory: 更新に失敗: %w", err)
+	}
+	return nil
 }
 
 // Delete は ID でメモリを削除する。
 func (s *PostgresStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM memories WHERE id = $1`, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("memory: 削除に失敗: %w", err)
+	}
+	return nil
 }
 
 // DeleteBatch は複数 ID のメモリを一括削除し、削除件数を返す。

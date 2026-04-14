@@ -43,5 +43,8 @@ func (s *CLISession) DirectiveConfig() DirectiveConfig {
 // Respond はテキストを stdout に書き込む。
 func (s *CLISession) Respond(_ context.Context, text string) error {
 	_, err := fmt.Fprintln(s.out, text)
-	return err
+	if err != nil {
+		return fmt.Errorf("cli: レスポンスの書き込みに失敗: %w", err)
+	}
+	return nil
 }

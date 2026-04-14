@@ -3,6 +3,7 @@ package channel
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -73,7 +74,7 @@ func (s *Store) Set(ctx context.Context, cs *Settings) error {
 		   updated_at = excluded.updated_at`,
 		cs.ChannelID, cs.GuildID, string(cs.Mode), cs.Home, now)
 	if err != nil {
-		return err
+		return fmt.Errorf("channel: 設定の保存に失敗: %w", err)
 	}
 	cs.UpdatedAt = now
 
@@ -88,7 +89,7 @@ func (s *Store) Delete(ctx context.Context, channelID string) error {
 	_, err := s.db.ExecContext(ctx,
 		`DELETE FROM channel_settings WHERE channel_id = $1`, channelID)
 	if err != nil {
-		return err
+		return fmt.Errorf("channel: 設定の削除に失敗: %w", err)
 	}
 	s.mu.Lock()
 	delete(s.cache, channelID)
@@ -145,7 +146,7 @@ func (s *Store) Reload(ctx context.Context) error {
 		`SELECT channel_id, guild_id, mode, home, updated_at
 		 FROM channel_settings`)
 	if err != nil {
-		return err
+		return fmt.Errorf("channel: 設定の読み込みに失敗: %w", err)
 	}
 	defer rows.Close()
 
