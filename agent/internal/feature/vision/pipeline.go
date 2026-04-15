@@ -12,6 +12,7 @@ import (
 // updates change detector and object tracker.
 // It implements device.ImageHandler.
 type Pipeline struct {
+	ctx       context.Context
 	frames    *FrameStore
 	changes   *ChangeDetector
 	tracker   *ObjectTracker
@@ -21,8 +22,9 @@ type Pipeline struct {
 }
 
 // NewPipeline creates a vision processing pipeline.
-func NewPipeline(frames *FrameStore, changes *ChangeDetector, tracker *ObjectTracker, yolo *detect.YOLOClient, logger *slog.Logger) *Pipeline {
+func NewPipeline(ctx context.Context, frames *FrameStore, changes *ChangeDetector, tracker *ObjectTracker, yolo *detect.YOLOClient, logger *slog.Logger) *Pipeline {
 	return &Pipeline{
+		ctx:       ctx,
 		frames:    frames,
 		changes:   changes,
 		tracker:   tracker,
@@ -40,7 +42,7 @@ func (p *Pipeline) HandleImage(jpeg []byte) {
 		go func() {
 			defer p.detectSem.Release(1)
 
-			result, err := p.yolo.Detect(context.Background(), jpeg)
+			result, err := p.yolo.Detect(p.ctx, jpeg)
 			if err != nil {
 				p.logger.Debug("物体検出に失敗", "error", err)
 				return

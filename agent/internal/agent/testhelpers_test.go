@@ -142,6 +142,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		},
 	}
 	ag := New(
+		context.Background(),
 		Config{
 			SystemPrompt:     "You are a test bot.",
 			BotID:            "bot123",

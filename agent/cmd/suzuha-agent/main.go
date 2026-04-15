@@ -135,7 +135,7 @@ func run() error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := channelStore.Reload(context.Background()); err != nil {
+				if err := channelStore.Reload(ctx); err != nil {
 					logger.Warn("channel settings periodic reload failed", "error", err)
 				}
 			}
@@ -756,7 +756,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		}
 		hub := device.NewHub(bus, ttsClient, sttClient, ownerID, ownerName, logger)
 		devAdapter := device.NewDeviceAdapter(hub)
-		visionFeature := vision.New(bus, yoloURL, deviceChannel, devAdapter, devAdapter,
+		visionFeature := vision.New(context.Background(), bus, yoloURL, deviceChannel, devAdapter, devAdapter,
 			do.MustInvoke[*llm.Client](injector), logger)
 		hub.SetImageHandler(visionFeature.Pipeline())
 		do.ProvideValue(injector, visionFeature)

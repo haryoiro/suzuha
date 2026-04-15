@@ -126,7 +126,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 		}
 	}
 
-	directive := a.resolveDirective(agentCtx, p, dc)
+	directive := a.resolveDirective(ctx, agentCtx, p, dc)
 
 	// 記憶検索結果が空の場合、捏造防止の注意を directive に追加
 	if len(bg) == 0 && !dc.SkipChannelHistory {
@@ -184,7 +184,7 @@ func extractParticipants(msgs []llm.Message, botID string) []prompt.Participant 
 	return out
 }
 
-func (a *Agent) resolveDirective(agentCtx *Context, p *Perception, dc DirectiveConfig) string {
+func (a *Agent) resolveDirective(ctx context.Context, agentCtx *Context, p *Perception, dc DirectiveConfig) string {
 	if dc.DirectiveTemplate != "" {
 		return dc.DirectiveTemplate
 	}
@@ -205,7 +205,7 @@ func (a *Agent) resolveDirective(agentCtx *Context, p *Perception, dc DirectiveC
 	}
 
 	cs := conversationStateFrom(agentCtx.Messages(), p.Channel, a.botID)
-	es := a.episodeSignal(context.Background(), p.LastMessage.Source, p.LastMessage.UserID)
+	es := a.episodeSignal(ctx, p.LastMessage.Source, p.LastMessage.UserID)
 	return responseDirective(p.LastEvent, a.botID, cs, es)
 }
 

@@ -14,7 +14,8 @@ func Package(i do.Injector) {
 		db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
 		logger := do.MustInvoke[*slog.Logger](i)
 		s := NewStore(db)
-		if err := s.Reload(context.Background()); err != nil {
+		// TODO(haryoiro): DI フレームワークがコンテキストを渡さないため context.TODO() を使用
+		if err := s.Reload(context.TODO()); err != nil {
 			logger.Warn("channel settings reload failed", "error", err)
 		}
 		return s, nil

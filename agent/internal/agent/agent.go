@@ -156,6 +156,7 @@ func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message)
 
 // New creates an Agent.
 func New(
+	ctx context.Context,
 	cfg Config,
 	registrations []SourceRegistration,
 	llmClient *llm.Client,
@@ -189,7 +190,7 @@ func New(
 
 		// Try to restore context from previous session.
 		if convStore != nil {
-			if saved, err := convStore.LoadSnapshot(context.Background(), persistKey); err == nil && len(saved) > 0 {
+			if saved, err := convStore.LoadSnapshot(ctx, persistKey); err == nil && len(saved) > 0 {
 				if saved[0].Role == "system" {
 					saved = saved[1:]
 				}

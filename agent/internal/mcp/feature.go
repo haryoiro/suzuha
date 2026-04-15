@@ -31,10 +31,9 @@ func NewFeature(mcpMgr *Manager, logger *slog.Logger) *Feature {
 
 func (f *Feature) Name() string { return "mcpapps" }
 
-func (f *Feature) Setup(_ context.Context, db *sql.DB) error {
+func (f *Feature) Setup(ctx context.Context, db *sql.DB) error {
 	f.store = NewAppStore(db)
 
-	ctx := context.Background()
 	if err := f.store.Setup(ctx); err != nil {
 		return err
 	}

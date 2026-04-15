@@ -196,6 +196,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			return agent.New(
+				context.Background(),
 				agent.Config{
 					SystemPrompt:     cfg.Agent.SystemPrompt,
 					BotID:            cfg.Discord.BotID,

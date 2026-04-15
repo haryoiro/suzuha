@@ -209,6 +209,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 	}
 
 	ag := agent.New(
+		context.Background(),
 		agent.Config{
 			SystemPrompt:     cfg.Agent.SystemPrompt,
 			BotID:            "bench-bot",

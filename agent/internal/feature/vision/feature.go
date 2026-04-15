@@ -25,7 +25,7 @@ type Feature struct {
 
 // New は vision Feature を作成する。
 // dev はデバイスコマンド送信用、vision は VLM 画像説明用 (nil 可)。
-func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, dev deviceCommander, vision VisionDescriber, logger *slog.Logger) *Feature {
+func New(ctx context.Context, bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, dev deviceCommander, vision VisionDescriber, logger *slog.Logger) *Feature {
 	var yolo *detect.YOLOClient
 	if yoloURL != "" {
 		yolo = detect.NewYOLOClient(yoloURL)
@@ -33,7 +33,7 @@ func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, d
 	frames := NewFrameStore()
 	changes := NewChangeDetector(bus, 30*time.Second, defaultChannel)
 	tracker := NewObjectTracker(DefaultTrackerConfig(), servo, logger)
-	pipeline := NewPipeline(frames, changes, tracker, yolo, logger)
+	pipeline := NewPipeline(ctx, frames, changes, tracker, yolo, logger)
 
 	return &Feature{
 		frames:   frames,
