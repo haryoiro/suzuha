@@ -31,4 +31,8 @@ func Package(i do.Injector) {
 			logger,
 		)
 	})
+
+	do.Provide(i, func(i do.Injector) (*TokenCounterFactory, error) {
+		return NewTokenCounterFactory(), nil
+	})
 }

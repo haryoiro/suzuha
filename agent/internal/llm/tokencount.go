@@ -12,19 +12,26 @@ import (
 // TokenCounter はテキストのトークン数を返す関数。
 type TokenCounter func(text string) int
 
-// tiktokenCache はモデルごとの tiktoken.Tiktoken をキャッシュする。
-var (
-	tiktokenMu    sync.RWMutex
-	tiktokenCache = map[string]*tiktoken.Tiktoken{}
-)
+// TokenCounterFactory はモデルごとの tiktoken エンコーダをキャッシュし、TokenCounter を生成する。
+type TokenCounterFactory struct {
+	mu    sync.RWMutex
+	cache map[string]*tiktoken.Tiktoken
+}
 
-func getTiktoken(model string) *tiktoken.Tiktoken {
-	tiktokenMu.RLock()
-	if enc, ok := tiktokenCache[model]; ok {
-		tiktokenMu.RUnlock()
+// NewTokenCounterFactory は TokenCounterFactory を生成する。
+func NewTokenCounterFactory() *TokenCounterFactory {
+	return &TokenCounterFactory{
+		cache: make(map[string]*tiktoken.Tiktoken),
+	}
+}
+
+func (f *TokenCounterFactory) getTiktoken(model string) *tiktoken.Tiktoken {
+	f.mu.RLock()
+	if enc, ok := f.cache[model]; ok {
+		f.mu.RUnlock()
 		return enc
 	}
-	tiktokenMu.RUnlock()
+	f.mu.RUnlock()
 
 	enc, err := tiktoken.EncodingForModel(model)
 	if err != nil {
@@ -35,18 +42,18 @@ func getTiktoken(model string) *tiktoken.Tiktoken {
 		}
 	}
 
-	tiktokenMu.Lock()
-	tiktokenCache[model] = enc
-	tiktokenMu.Unlock()
+	f.mu.Lock()
+	f.cache[model] = enc
+	f.mu.Unlock()
 	return enc
 }
 
-// NewTokenCounter はプロバイダタイプとモデル名からトークンカウンタを生成する。
+// NewCounter はプロバイダタイプとモデル名からトークンカウンタを生成する。
 // OpenAI 互換プロバイダは tiktoken、それ以外はヒューリスティックにフォールバック。
-func NewTokenCounter(providerType, model string, logger *slog.Logger) TokenCounter {
+func (f *TokenCounterFactory) NewCounter(providerType, model string, logger *slog.Logger) TokenCounter {
 	switch providerType {
 	case "openai":
-		enc := getTiktoken(model)
+		enc := f.getTiktoken(model)
 		if enc != nil {
 			logger.Info("トークンカウンタを設定", "type", "tiktoken", "provider", providerType, "model", model)
 			return func(text string) int {
@@ -56,7 +63,7 @@ func NewTokenCounter(providerType, model string, logger *slog.Logger) TokenCount
 	case "zhipu", "qwen":
 		// ZhiPu/Qwen は独自トークナイザーだが Go 実装がないため
 		// cl100k_base で近似（OpenAI 互換 API 形式）。
-		enc := getTiktoken("gpt-4")
+		enc := f.getTiktoken("gpt-4")
 		if enc != nil {
 			logger.Info("トークンカウンタを設定", "type", "tiktoken-approx", "provider", providerType, "model", model)
 			return func(text string) int {

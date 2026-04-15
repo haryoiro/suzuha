@@ -7,6 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -158,6 +159,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		nil, // convStore — nil is OK for tests
 		nil, // db — nil is OK for tests that don't track channel activity
 		nil, // channelSettings — nil skips channel filtering
+		llm.NewTokenCounterFactory(),
 		slog.Default(),
 	)
 	for _, o := range opts {

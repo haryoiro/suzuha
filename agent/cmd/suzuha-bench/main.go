@@ -226,6 +226,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 		convStore,
 		db,
 		nil, // channelSettings
+		llm.NewTokenCounterFactory(),
 		logger,
 	)
 

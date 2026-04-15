@@ -32,6 +32,11 @@ type acquirer interface {
 	Acquire(ctx context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error)
 }
 
+// tokenCounterFactory はトークンカウンタを生成する (consumer-side interface)。
+type tokenCounterFactory interface {
+	NewCounter(providerType, model string, logger *slog.Logger) llm.TokenCounter
+}
+
 // conversationStore は会話ログとコンテキストスナップショットの永続化を担う (consumer-side interface)。
 type conversationStore interface {
 	LogTurn(ctx context.Context, entry conversation.TurnEntry) error
@@ -59,8 +64,9 @@ type Agent struct {
 	locationStore   *location.Store
 	mediaStore      memory.MediaStore
 	videoMeta       transcript.MetadataFetcher // nil if video feature not configured
-	logger          *slog.Logger
-	contextProviders []prompt.Provider
+	logger               *slog.Logger
+	tokenCounterFactory  tokenCounterFactory
+	contextProviders     []prompt.Provider
 	hooks            []PipelineHook
 	tracer           trace.Tracer
 
@@ -167,6 +173,7 @@ func New(
 	convStore conversationStore,
 	db *sql.DB,
 	channelSettings *channelpkg.Store,
+	tcFactory tokenCounterFactory,
 	logger *slog.Logger,
 ) *Agent {
 	dw := cfg.DrainWindow
@@ -204,19 +211,20 @@ func New(
 	}
 
 	return &Agent{
-		contexts:         contexts,
-		compactMu:        compactMu,
-		sessions:         sessions,
-		llm:              llmClient,
-		tools:            tools,
-		memory:           memStore,
-		users:            userStore,
-		bus:              bus,
-		acquirer:         acq,
-		convStore:        convStore,
-		db:               db,
-		channelSettings:  channelSettings,
-		logger:           logger,
+		contexts:            contexts,
+		compactMu:           compactMu,
+		sessions:            sessions,
+		llm:                 llmClient,
+		tools:               tools,
+		memory:              memStore,
+		users:               userStore,
+		bus:                 bus,
+		acquirer:            acq,
+		convStore:           convStore,
+		db:                  db,
+		channelSettings:     channelSettings,
+		tokenCounterFactory: tcFactory,
+		logger:              logger,
 		systemPrompt:     cfg.SystemPrompt,
 		botID:            cfg.BotID,
 		contextWindowPct: cfg.ContextWindowPct,
@@ -339,7 +347,7 @@ func (a *Agent) LastForeground() []llm.Message {
 // UpdateTokenCounter はプロバイダタイプとモデル名からトークンカウンタを更新する。
 // conversation ロールの swap 時に呼ぶ。
 func (a *Agent) UpdateTokenCounter(providerType, model string) {
-	counter := llm.NewTokenCounter(providerType, model, a.logger)
+	counter := a.tokenCounterFactory.NewCounter(providerType, model, a.logger)
 	for _, ctx := range a.contexts {
 		ctx.SetTokenCounter(counter)
 	}

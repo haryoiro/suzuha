@@ -212,6 +212,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				conversation.NewStore(do.MustInvokeNamed[*sql.DB](i, "shared-db")),
 				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
 				channelSettings,
+				do.MustInvoke[*llm.TokenCounterFactory](i),
 				logger,
 			), nil
 		})
