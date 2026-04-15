@@ -387,36 +387,39 @@ func (s *SQLiteStore) FindDuplicates(ctx context.Context, k int, threshold float
 		if all[i].visited {
 			continue
 		}
-		neighRows, err := s.db.QueryContext(ctx,
-			`SELECT v2.id, v2.distance
-			 FROM memories_vec v1
-			 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = ?
-			 WHERE v1.id = ?`, k, all[i].ID)
-		if err != nil {
-			continue
-		}
-
-		group := []Memory{all[i].Memory}
-		all[i].visited = true
-
-		for neighRows.Next() {
-			var nid string
-			var dist float32
-			if err := neighRows.Scan(&nid, &dist); err != nil {
-				continue
+		group := func() []Memory {
+			neighRows, err := s.db.QueryContext(ctx,
+				`SELECT v2.id, v2.distance
+				 FROM memories_vec v1
+				 JOIN memories_vec v2 ON v2.embedding MATCH v1.embedding AND v2.k = ?
+				 WHERE v1.id = ?`, k, all[i].ID)
+			if err != nil {
+				return nil
 			}
-			if nid == all[i].ID || float64(dist) >= threshold {
-				continue
-			}
-			for j := range all {
-				if all[j].ID == nid && !all[j].visited && all[j].Type == all[i].Type {
-					group = append(group, all[j].Memory)
-					all[j].visited = true
-					break
+			defer neighRows.Close()
+
+			group := []Memory{all[i].Memory}
+			all[i].visited = true
+
+			for neighRows.Next() {
+				var nid string
+				var dist float32
+				if err := neighRows.Scan(&nid, &dist); err != nil {
+					continue
+				}
+				if nid == all[i].ID || float64(dist) >= threshold {
+					continue
+				}
+				for j := range all {
+					if all[j].ID == nid && !all[j].visited && all[j].Type == all[i].Type {
+						group = append(group, all[j].Memory)
+						all[j].visited = true
+						break
+					}
 				}
 			}
-		}
-		neighRows.Close()
+			return group
+		}()
 
 		if len(group) > 1 {
 			groups = append(groups, DuplicateGroup{Memories: group})
