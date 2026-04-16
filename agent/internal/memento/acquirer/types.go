@@ -1,20 +1,16 @@
 package acquirer
 
 import (
-	"context"
-
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
 // Completer はLLM補完呼び出しを抽象化するインターフェース (consumer-side)。
-type Completer interface {
-	CompleteRaw(ctx context.Context, msgs []llm.RawMessage) (*llm.Response, error)
-}
+type Completer = memento.Completer
 
 // AcquireRequest はメモリ抽出のリクエスト。
 type AcquireRequest struct {
-	Messages []llm.Message
+	Messages []memento.ConversationMessage
 }
 
 // AcquireResult は抽出されたメモリを返す結果。

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
@@ -100,7 +101,7 @@ func TestDoCompactWith_ResetsInjectedUsers(t *testing.T) {
 // trackingAcquirer records whether Acquire was called and what was passed.
 type trackingAcquirer struct {
 	called   bool
-	messages []llm.Message
+	messages []memento.ConversationMessage
 }
 
 func (c *trackingAcquirer) Acquire(_ context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error) {

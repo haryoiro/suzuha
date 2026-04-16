@@ -33,6 +33,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memento/consolidator"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -444,19 +445,38 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	return sched, nil
 }
 
+// llmCompleterAdapter は llm.RoleClient を memento.Completer に適合させるアダプタ。
+type llmCompleterAdapter struct {
+	rc *llm.RoleClient
+}
+
+func (a *llmCompleterAdapter) CompleteRaw(ctx context.Context, msgs []memento.RawMessage) (*memento.CompletionResponse, error) {
+	raw := make([]llm.RawMessage, len(msgs))
+	for i, m := range msgs {
+		raw[i] = llm.RawMessage{Role: m.Role, Content: m.Content}
+	}
+	resp, err := a.rc.CompleteRaw(ctx, raw)
+	if err != nil {
+		return nil, err
+	}
+	return &memento.CompletionResponse{Text: resp.Text}, nil
+}
+
 // mementoPackage registers memento sub-package providers into the DI injector.
 func mementoPackage(i do.Injector) {
 	do.Provide(i, func(i do.Injector) (*acquirer.Acquirer, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[memory.Backend](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return acquirer.NewAcquirer(llmClient.For("background"), store, acquirer.DefaultConfig(), logger), nil
+		completer := &llmCompleterAdapter{rc: llmClient.For("background")}
+		return acquirer.NewAcquirer(completer, store, acquirer.DefaultConfig(), logger), nil
 	})
 
 	do.Provide(i, func(i do.Injector) (*consolidator.Consolidator, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[memory.Backend](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return consolidator.NewConsolidator(llmClient.For("background"), store, store, logger), nil
+		completer := &llmCompleterAdapter{rc: llmClient.For("background")}
+		return consolidator.NewConsolidator(completer, store, store, logger), nil
 	})
 }

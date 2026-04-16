@@ -1,15 +1,11 @@
 package consolidator
 
 import (
-	"context"
-
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 )
 
 // Completer はLLM補完呼び出しを抽象化するインターフェース (consumer-side)。
-type Completer interface {
-	CompleteRaw(ctx context.Context, msgs []llm.RawMessage) (*llm.Response, error)
-}
+type Completer = memento.Completer
 
 // ConsolidateOpts は1回の統合実行を制御するオプション。
 type ConsolidateOpts struct {

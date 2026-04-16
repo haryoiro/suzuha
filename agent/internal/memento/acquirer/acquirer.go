@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 
 	"github.com/haryoiro/suzuha/internal/memory"
 )
@@ -66,12 +66,12 @@ func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireRe
 	return result, nil
 }
 
-func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memory, error) {
+func (a *Acquirer) extract(ctx context.Context, msgs []memento.ConversationMessage) ([]memory.Memory, error) {
 	existing := a.fetchRecentMemories(ctx)
 	systemPrompt := buildSystemPrompt(a.config.Rules)
 	userPrompt := buildCompactPrompt(msgs, existing)
 
-	resp, err := a.llm.CompleteRaw(ctx, []llm.RawMessage{
+	resp, err := a.llm.CompleteRaw(ctx, []memento.RawMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	})
@@ -109,7 +109,7 @@ func (a *Acquirer) fetchRecentMemories(ctx context.Context) []memory.Memory {
 	return mems
 }
 
-func collectMediaKeysByIndex(msgs []llm.Message) map[int][]string {
+func collectMediaKeysByIndex(msgs []memento.ConversationMessage) map[int][]string {
 	result := make(map[int][]string)
 	for i, m := range msgs {
 		if len(m.MediaKeys) > 0 {

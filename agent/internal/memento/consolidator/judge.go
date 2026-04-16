@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 )
 
 // --- LLM判定 ---
@@ -29,7 +29,7 @@ const judgeSystemPrompt = `あなたは記憶の管理者です。類似した�
 func (c *Consolidator) judgeBatch(ctx context.Context, groups []memoryGroup) ([]decision, error) {
 	prompt := buildJudgePrompt(groups)
 
-	resp, err := c.llm.CompleteRaw(ctx, []llm.RawMessage{
+	resp, err := c.llm.CompleteRaw(ctx, []memento.RawMessage{
 		{Role: "system", Content: judgeSystemPrompt},
 		{Role: "user", Content: prompt},
 	})

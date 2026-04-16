@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -53,7 +53,7 @@ func buildSystemPrompt(rules []ExtractionRule) string {
 }
 
 // buildCompactPrompt はメッセージとオプションの既存メモリコンテキストからユーザープロンプトを構築する。
-func buildCompactPrompt(messages []llm.Message, existingMemories []memory.Memory) string {
+func buildCompactPrompt(messages []memento.ConversationMessage, existingMemories []memory.Memory) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "以下の%d件のメッセージから、長期記憶として保存すべき情報を抽出してください。\n\n", len(messages))
 

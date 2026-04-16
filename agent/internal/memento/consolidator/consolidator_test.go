@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
@@ -37,11 +37,11 @@ type mockCompleter struct {
 	err      error
 }
 
-func (m *mockCompleter) CompleteRaw(_ context.Context, _ []llm.RawMessage) (*llm.Response, error) {
+func (m *mockCompleter) CompleteRaw(_ context.Context, _ []memento.RawMessage) (*memento.CompletionResponse, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	return &llm.Response{Text: m.response}, nil
+	return &memento.CompletionResponse{Text: m.response}, nil
 }
 
 // mockSaveStore は Save を記録するモック。

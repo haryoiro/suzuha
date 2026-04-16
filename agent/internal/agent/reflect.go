@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/memento"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 )
 
@@ -24,6 +25,23 @@ func filterOutInjectedHistory(msgs []llm.Message) []llm.Message {
 		filtered = append(filtered, m)
 	}
 	return filtered
+}
+
+// toConversationMessages は llm.Message を memento.ConversationMessage に変換する。
+func toConversationMessages(msgs []llm.Message) []memento.ConversationMessage {
+	out := make([]memento.ConversationMessage, len(msgs))
+	for i, m := range msgs {
+		out[i] = memento.ConversationMessage{
+			Role:      m.Role,
+			Content:   m.Content,
+			UserID:    m.UserID,
+			UserName:  m.UserName,
+			Source:    m.Source,
+			MediaKeys: m.MediaKeys,
+			ImageURLs: m.ImageURLs,
+		}
+	}
+	return out
 }
 
 // Reflect is the backward-compatible wrapper that calls ReflectWith
@@ -86,7 +104,7 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 	if a.acquirer != nil {
 		filtered := filterOutInjectedHistory(msgs)
 		_, err := a.acquirer.Acquire(ctx, &acq.AcquireRequest{
-			Messages: filtered,
+			Messages: toConversationMessages(filtered),
 		})
 		if err != nil {
 			a.logger.Warn("記憶の抽出に失敗", "error", err)
