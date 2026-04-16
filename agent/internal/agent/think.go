@@ -28,7 +28,10 @@ type convState struct {
 }
 
 func (a *Agent) conversationState(channel string) convState {
-	return conversationStateFrom(a.contexts[SourceKeyDiscord].Messages(), channel, a.botID)
+	a.mu.RLock()
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
+	return conversationStateFrom(actx.Messages(), channel, a.botID)
 }
 
 func conversationStateFrom(msgs []llm.Message, channel, botID string) convState {
@@ -89,7 +92,10 @@ func (a *Agent) episodeSignal(ctx context.Context, platform, platformUserID stri
 }
 
 func (a *Agent) Think(ctx context.Context, p *Perception) *Thought {
-	return a.ThinkWith(ctx, a.contexts[SourceKeyDiscord], p, DirectiveConfig{})
+	a.mu.RLock()
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
+	return a.ThinkWith(ctx, actx, p, DirectiveConfig{})
 }
 
 func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception, dc DirectiveConfig) *Thought {

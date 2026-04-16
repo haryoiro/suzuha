@@ -28,7 +28,10 @@ import (
 // Perceive is the backward-compatible wrapper that calls PerceiveWith
 // with the discord context and a zero DirectiveConfig.
 func (a *Agent) Perceive(ctx context.Context, batch []event.Event) *Perception {
-	return a.PerceiveWith(ctx, a.contexts[SourceKeyDiscord], batch, DirectiveConfig{})
+	a.mu.RLock()
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
+	return a.PerceiveWith(ctx, actx, batch, DirectiveConfig{})
 }
 
 // PerceiveWith ingests all events in the batch into the given context,

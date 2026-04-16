@@ -29,7 +29,10 @@ func filterOutInjectedHistory(msgs []llm.Message) []llm.Message {
 // Reflect is the backward-compatible wrapper that calls ReflectWith
 // with the discord source key.
 func (a *Agent) Reflect(ctx context.Context, p *Perception) {
-	a.ReflectWith(ctx, a.contexts[SourceKeyDiscord], p, SourceKeyDiscord)
+	a.mu.RLock()
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
+	a.ReflectWith(ctx, actx, p, SourceKeyDiscord)
 }
 
 // ReflectWith logs the conversation turn, persists context to DB,
@@ -43,7 +46,10 @@ func (a *Agent) ReflectWith(ctx context.Context, agentCtx *Context, p *Perceptio
 
 // compactAsync is the backward-compatible wrapper.
 func (a *Agent) compactAsync(ctx context.Context) {
-	a.compactAsyncFor(ctx, a.contexts[SourceKeyDiscord], SourceKeyDiscord)
+	a.mu.RLock()
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
+	a.compactAsyncFor(ctx, actx, SourceKeyDiscord)
 }
 
 // compactAsyncFor triggers context compaction in a background goroutine
@@ -51,7 +57,9 @@ func (a *Agent) compactAsync(ctx context.Context) {
 // The pipeline continues processing while compaction runs.
 // Only one compaction runs at a time per source key; concurrent requests are skipped.
 func (a *Agent) compactAsyncFor(ctx context.Context, agentCtx *Context, sourceKey SourceKey) {
+	a.mu.RLock()
 	mu := a.compactMu[sourceKey]
+	a.mu.RUnlock()
 	if !mu.TryLock() {
 		a.logger.Debug("記憶の整理はもうやってる", "source_key", string(sourceKey))
 		return
@@ -69,7 +77,9 @@ func (a *Agent) compactAsyncFor(ctx context.Context, agentCtx *Context, sourceKe
 
 // compact triggers context compaction synchronously (used by ForceCompact).
 func (a *Agent) compact(ctx context.Context) {
+	a.mu.RLock()
 	agentCtx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
 	msgs := agentCtx.Messages()
 	a.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 }
@@ -113,13 +123,18 @@ func (a *Agent) resetAndPersistWith(ctx context.Context, agentCtx *Context, sour
 
 // resetAndPersist is the backward-compatible wrapper.
 func (a *Agent) resetAndPersist(ctx context.Context) {
-	a.resetAndPersistWith(ctx, a.contexts[SourceKeyDiscord], SourceKeyDiscord)
+	a.mu.RLock()
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
+	a.resetAndPersistWith(ctx, actx, SourceKeyDiscord)
 }
 
 // DeleteChannel removes all data for a channel: in-memory context messages,
 // channel_settings, channel_activity, conversation_logs, and user_guild_channels.
 func (a *Agent) DeleteChannel(ctx context.Context, key SourceKey, channelID string) int {
+	a.mu.RLock()
 	actx := a.contexts[key]
+	a.mu.RUnlock()
 	removed := actx.RemoveByChannel(channelID)
 	if a.convStore != nil {
 		if err := a.convStore.DeleteChannel(ctx, channelID); err != nil {

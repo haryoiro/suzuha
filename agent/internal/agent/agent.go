@@ -44,6 +44,8 @@ type conversationStore interface {
 // Agent is the main event loop that processes events, calls the LLM,
 // executes tools, and sends responses.
 type Agent struct {
+	// mu protects contexts, compactMu, and sessions maps from concurrent access.
+	mu        sync.RWMutex
 	contexts  map[SourceKey]*Context
 	compactMu map[SourceKey]*sync.Mutex
 	sessions  map[SourceKey]Session
@@ -228,12 +230,24 @@ func New(
 
 // AgentContext returns the agent's discord context for external use (e.g. tool callbacks).
 func (a *Agent) AgentContext() *Context {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	return a.contexts[SourceKeyDiscord]
 }
 
 // AgentContextFor returns the context for the given source key.
 // If no context exists yet, a new one is created and stored.
 func (a *Agent) AgentContextFor(key SourceKey) *Context {
+	a.mu.RLock()
+	if ctx, ok := a.contexts[key]; ok {
+		a.mu.RUnlock()
+		return ctx
+	}
+	a.mu.RUnlock()
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// Double-check after acquiring write lock.
 	if ctx, ok := a.contexts[key]; ok {
 		return ctx
 	}
@@ -260,6 +274,8 @@ type DeviceSpeaker interface {
 
 // SetSession registers a Session for the given source key.
 func (a *Agent) SetSession(key SourceKey, sess Session) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.sessions[key] = sess
 	if sess.Context() != nil {
 		a.contexts[key] = sess.Context()
@@ -272,6 +288,8 @@ func (a *Agent) SetSession(key SourceKey, sess Session) {
 
 // GetSession returns the Session for the given source key, or nil if not set.
 func (a *Agent) GetSession(key SourceKey) Session {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	return a.sessions[key]
 }
 
@@ -340,6 +358,8 @@ func (a *Agent) LastForeground() []llm.Message {
 // conversation ロールの swap 時に呼ぶ。
 func (a *Agent) UpdateTokenCounter(providerType, model string) {
 	counter := llm.NewTokenCounter(providerType, model, a.logger)
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	for _, ctx := range a.contexts {
 		ctx.SetTokenCounter(counter)
 	}

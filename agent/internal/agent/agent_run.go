@@ -19,10 +19,12 @@ func (a *Agent) Run(ctx context.Context) error {
 	events := a.bus.Subscribe()
 
 	// Create per-source channels from registered sessions.
+	a.mu.RLock()
 	channels := make(map[SourceKey]chan event.Event, len(a.sessions))
 	for key := range a.sessions {
 		channels[key] = make(chan event.Event, 16)
 	}
+	a.mu.RUnlock()
 
 	// Launch one worker per source key.
 	var wg sync.WaitGroup
@@ -57,7 +59,9 @@ func (a *Agent) Run(ctx context.Context) error {
 
 // runWorker processes events for a single source key.
 func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Event) {
+	a.mu.RLock()
 	sess := a.sessions[key]
+	a.mu.RUnlock()
 	var dc DirectiveConfig
 	if sess != nil {
 		dc = sess.DirectiveConfig()
@@ -181,7 +185,9 @@ func (a *Agent) HandleBatch(ctx context.Context, batch []event.Event) error {
 // Perceive -> (compact check) -> Think -> Act -> Reflect.
 // PipelineHooks are called after each stage for observability.
 func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []event.Event) error {
+	a.mu.RLock()
 	sess := a.sessions[key]
+	a.mu.RUnlock()
 	if sess == nil {
 		return fmt.Errorf("no session for source %s", key)
 	}
@@ -270,6 +276,7 @@ func (a *Agent) catchUpStale(ctx context.Context, events <-chan event.Event) []e
 func (a *Agent) catchUpStaleFor(ctx context.Context, key SourceKey, events <-chan event.Event, drainWindow time.Duration) []event.Event {
 	var agentCtx *Context
 	var dc DirectiveConfig
+	a.mu.RLock()
 	if sess := a.sessions[key]; sess != nil {
 		agentCtx = sess.Context()
 		dc = sess.DirectiveConfig()
@@ -277,6 +284,7 @@ func (a *Agent) catchUpStaleFor(ctx context.Context, key SourceKey, events <-cha
 		agentCtx = a.contexts[key]
 		dc = a.directiveConfigFor(key)
 	}
+	a.mu.RUnlock()
 
 	var latest []event.Event
 	for {
@@ -327,6 +335,8 @@ func (a *Agent) catchUpStaleFor(ctx context.Context, key SourceKey, events <-cha
 // ReloadPrompt updates the system prompt across all contexts.
 func (a *Agent) ReloadPrompt(newPrompt string) {
 	a.systemPrompt = newPrompt
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	for _, agentCtx := range a.contexts {
 		agentCtx.SetSystemPrompt(newPrompt)
 	}

@@ -36,9 +36,12 @@ var _ tool.Tool = skipResponseTool{}
 // Act is the backward-compatible wrapper that calls ActWith with the discord context
 // and session, then routes the response through the discord session.
 func (a *Agent) Act(ctx context.Context, p *Perception, t *Thought) error {
+	a.mu.RLock()
 	sess := a.sessions[SourceKeyDiscord]
+	actx := a.contexts[SourceKeyDiscord]
+	a.mu.RUnlock()
 	sess.BeginTurn(p)
-	text, err := a.ActWith(ctx, a.contexts[SourceKeyDiscord], sess, p, t)
+	text, err := a.ActWith(ctx, actx, sess, p, t)
 	if err != nil {
 		return err
 	}
@@ -146,7 +149,10 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				a.logger.Warn("ツールループ中にコンテキスト逼迫、緊急圧縮",
 					"usage_ratio", fmt.Sprintf("%.2f", float64(estimated)/float64(maxCtx)),
 					"estimated", estimated, "max", maxCtx)
-				a.compactAsyncFor(ctx, agentCtx, sourceKeyFromChannel(channel, a.contexts))
+				a.mu.RLock()
+				sk := sourceKeyFromChannel(channel, a.contexts)
+				a.mu.RUnlock()
+				a.compactAsyncFor(ctx, agentCtx, sk)
 				// 圧縮後のメッセージで再構築
 				msgs = agentCtx.MessagesWithSystem()
 				msgs = trimMessagesToFit(msgs, allTools, maxCtx)
