@@ -105,7 +105,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	searx := search.NewSearXNG(wc.SearXNGURL)
 	systemPrompt := cc.SystemPrompt
 
-	// --- Step 1: Determine starting point ---
 	var startTitle, startContent string
 
 	t.mu.Lock()
@@ -141,7 +140,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		cc.Logger.Info("wander: starting from wikipedia", "title", article.Title)
 	}
 
-	// --- Step 2: Exploration loop ---
 	// Each hop: search first, then one LLM call (evaluate + pick combined).
 	path := []hop{}
 	title := startTitle
@@ -232,7 +230,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		content = pageContent
 	}
 
-	// --- Step 3: Reflect and save ---
 	if len(path) == 0 {
 		cc.Logger.Warn("wander: 探索できずに終了（hopなし）", "start_title", startTitle)
 	}
@@ -259,7 +256,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 			"reflection_length", len(summary))
 	}
 
-	// --- Step 4: Persist state ---
 	t.mu.Lock()
 	t.lastWanderedAt = t.now()
 	t.mu.Unlock()

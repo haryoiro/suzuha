@@ -264,8 +264,6 @@ func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, e
 	return result, rows.Err()
 }
 
-// --- AdminStore implementation ---
-
 func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int, error) {
 	if limit <= 0 {
 		limit = 50

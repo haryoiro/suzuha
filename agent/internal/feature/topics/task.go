@@ -100,7 +100,6 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		return nil
 	}
 
-	// --- Boredom-based posting decision ---
 	now := t.now()
 	var lastInteraction time.Time
 	if cc.ChannelActivity != nil {

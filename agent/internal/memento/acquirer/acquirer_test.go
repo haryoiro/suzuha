@@ -7,8 +7,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
-// --- JSON parser tests ---
-
 func TestParseExtractedMemories_Basic(t *testing.T) {
 	input := `[
 		{"type":"user","content":"user_id=12345のたろうはPythonが好き","keywords":["Python"],"topic":"技術","persons":["12345"],"event_time":null},
@@ -111,8 +109,6 @@ func TestParseExtractedMemories_EmptyContent(t *testing.T) {
 	}
 }
 
-// --- Legacy parser tests ---
-
 func TestParseLegacyCompactResponse_MemoriesOnly(t *testing.T) {
 	input := `MEMORIES:
 - [user] Likes Go programming
@@ -172,8 +168,6 @@ func TestParseLegacyMemoryLine_Episode(t *testing.T) {
 	}
 }
 
-// --- Prompt builder tests ---
-
 func TestBuildSystemPrompt_WithRules(t *testing.T) {
 	prompt := buildSystemPrompt([]ExtractionRule{Disambiguation})
 	if !containsAll(prompt, "曖昧さ排除", "代名詞禁止", "相対時間禁止") {
@@ -213,8 +207,6 @@ func TestBuildCompactPrompt_NoExistingMemories(t *testing.T) {
 		t.Error("expected no existing memory section when none provided")
 	}
 }
-
-// --- helpers ---
 
 func containsAll(s string, substrs ...string) bool {
 	for _, sub := range substrs {

@@ -119,8 +119,6 @@ func (h *AdminHandler) LLMUpdate(ctx context.Context, req jx.Raw) (jx.Raw, error
 	return h.proxyPutRaw(ctx, "/internal/llm", jxReader(req))
 }
 
-// --- LLM Provider / Model / Role (ogen interface) ---
-
 func (h *AdminHandler) LLMProvidersList(ctx context.Context) ([]api.LLMProvider, error) {
 	data, err := h.proxyGet(ctx, "/internal/llm/providers")
 	if err != nil {
@@ -187,8 +185,6 @@ func (h *AdminHandler) LLMRolesUpdate(ctx context.Context, req *api.LLMRoleUpdat
 	return &api.OkResponse{Ok: true}, nil
 }
 
-// --- Scheduler (ogen interface) ---
-
 func (h *AdminHandler) SchedulerJobs(ctx context.Context) (jx.Raw, error) {
 	return h.proxyGet(ctx, "/internal/scheduler/jobs")
 }
@@ -197,13 +193,9 @@ func (h *AdminHandler) SchedulerTrigger(ctx context.Context, req jx.Raw, params 
 	return h.proxyPostRaw(ctx, "/internal/trigger/"+params.Task, jxReader(req))
 }
 
-// --- Tools execute (ogen interface) ---
-
 func (h *AdminHandler) ToolsExecute(ctx context.Context, req jx.Raw, params api.ToolsExecuteParams) (jx.Raw, error) {
 	return h.proxyPostRaw(ctx, "/internal/tools/"+params.Name+"/execute", jxReader(req))
 }
-
-// --- Device (ogen interface) ---
 
 func (h *AdminHandler) DeviceVisionGet(ctx context.Context) (jx.Raw, error) {
 	return h.proxyGet(ctx, "/internal/device/vision")
@@ -229,8 +221,6 @@ func (h *AdminHandler) DeviceTrackerSet(ctx context.Context, req jx.Raw) (jx.Raw
 	return h.proxyPutRaw(ctx, "/internal/device/tracker", jxReader(req))
 }
 
-// --- Voicevox (ogen interface) ---
-
 func (h *AdminHandler) VoicevoxSpeakers(ctx context.Context) (jx.Raw, error) {
 	return h.proxyGet(ctx, "/internal/voicevox/speakers")
 }
@@ -242,8 +232,6 @@ func (h *AdminHandler) VoicevoxCurrentSpeaker(ctx context.Context) (jx.Raw, erro
 func (h *AdminHandler) VoicevoxSetSpeaker(ctx context.Context, req jx.Raw) (jx.Raw, error) {
 	return h.proxyPutRaw(ctx, "/internal/voicevox/speaker", jxReader(req))
 }
-
-// --- Channels delete (ogen interface) ---
 
 func (h *AdminHandler) ChannelsDelete(ctx context.Context, params api.ChannelsDeleteParams) (*api.OkResponse, error) {
 	h.deleteChannelByID(ctx, params.ChannelId)

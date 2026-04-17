@@ -13,8 +13,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
-// --- Mock memory.Store ---
-
 type mockMemory struct{}
 
 func (m *mockMemory) Save(_ context.Context, _ *memory.Memory) error { return nil }
@@ -58,8 +56,6 @@ func (m *mockMemory) Close() error { return nil }
 
 var _ memory.Store = (*mockMemory)(nil)
 
-// --- Mock user.Store ---
-
 type mockUsers struct {
 	resolveUser *user.User // returned by Resolve
 }
@@ -88,8 +84,6 @@ func (m *mockUsers) Close() error { return nil }
 
 var _ user.Store = (*mockUsers)(nil)
 
-// --- Mock chat.Interface ---
-
 type mockChat struct {
 	sent []string
 }
@@ -99,8 +93,6 @@ func (m *mockChat) Send(_ context.Context, _, text string) error {
 	m.sent = append(m.sent, text)
 	return nil
 }
-
-// --- Mock acquirer ---
 
 type mockAcquirer struct {
 	acquireResult *acq.AcquireResult
@@ -112,8 +104,6 @@ func (m *mockAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.A
 	}
 	return &acq.AcquireResult{}, nil
 }
-
-// --- Test Agent builder ---
 
 func newTestAgent(opts ...func(*Agent)) *Agent {
 	bus := event.NewBus(16)

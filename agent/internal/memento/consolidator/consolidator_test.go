@@ -10,8 +10,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 
-// --- モック ---
-
 // mockAdminStore は consolidate テスト用の AdminStore モック。
 type mockAdminStore struct {
 	memory.AdminStore // 未実装メソッドは panic する（テスト対象外）
@@ -54,8 +52,6 @@ func (m *mockSaveStore) Save(_ context.Context, mem *memory.Memory) error {
 	m.saved = append(m.saved, mem)
 	return nil
 }
-
-// --- テストケース ---
 
 func TestConsolidate_NilAdmin(t *testing.T) {
 	c := &Consolidator{logger: slog.Default()}

@@ -10,8 +10,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
-// --- LLM判定 ---
-
 const judgeSystemPrompt = `あなたは記憶の管理者です。類似した記憶のグループを評価し、重複を判定してください。
 
 判定ルール:

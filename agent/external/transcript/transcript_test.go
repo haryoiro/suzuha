@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-// --- URL tests ---
-
 func TestExtractYouTubeID(t *testing.T) {
 	tests := []struct {
 		url  string
@@ -66,8 +64,6 @@ func TestExtractVideoURLs(t *testing.T) {
 		t.Errorf("urls[1] = %q, want nicovideo", urls[1])
 	}
 }
-
-// --- Chain tests ---
 
 type mockFetcher struct {
 	supports bool
@@ -146,8 +142,6 @@ func TestChain_NoSupported(t *testing.T) {
 		t.Error("対応 fetcher なしはエラーを返すべき")
 	}
 }
-
-// --- Format tests ---
 
 func TestFormatTranscript(t *testing.T) {
 	info := VideoInfo{Title: "テスト動画", Duration: 125}

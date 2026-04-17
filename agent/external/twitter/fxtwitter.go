@@ -68,8 +68,6 @@ func (f *FxTwitterFetcher) Fetch(ctx context.Context, rawURL string) (*Tweet, er
 	return apiResp.Tweet.toTweet(), nil
 }
 
-// --- FxTwitter API レスポンス型 ---
-
 type fxTwitterResponse struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`

@@ -377,8 +377,6 @@ func (t *ObjectTracker) updateMatched(obj *trackedObject, d detect.Detection) {
 	obj.smoothY = a*ty + (1-a)*obj.smoothY
 }
 
-// --- helpers ---
-
 func computeIoU(a, b [4]int) float64 {
 	x1 := max(a[0], b[0])
 	y1 := max(a[1], b[1])

@@ -123,8 +123,6 @@ func (c *Consolidator) executeMerge(ctx context.Context, d decision) error {
 	return c.store.Save(ctx, mem)
 }
 
-// --- 内部型 ---
-
 type memEntry struct {
 	id        string
 	memType   memory.MemoryType

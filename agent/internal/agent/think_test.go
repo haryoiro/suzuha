@@ -9,10 +9,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
-// ---------------------------------------------------------------------------
-// conversationState tests
-// ---------------------------------------------------------------------------
-
 func TestConversationState_BotNeverSpoke(t *testing.T) {
 	ag := newTestAgent()
 	ch := "ch1"
@@ -107,10 +103,6 @@ func TestConversationState_DifferentChannel(t *testing.T) {
 			convScanLimit, cs.messagesSinceBotSpoke)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// responseDirective tests
-// ---------------------------------------------------------------------------
 
 func TestResponseDirective_DirectlyAddressed(t *testing.T) {
 	evt := makeMentionEvent("hello", "ch1", "user1")
