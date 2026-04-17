@@ -233,8 +233,9 @@ func extractInputOutput(e fireworksEntry) (input any, expectedOutput any) {
 	}
 	if len(e.Tools) > 0 {
 		var tools any
-		json.Unmarshal(e.Tools, &tools)
-		inputObj["tools"] = tools
+		if err := json.Unmarshal(e.Tools, &tools); err == nil {
+			inputObj["tools"] = tools
+		}
 	}
 	// Add system prompt if present.
 	for _, m := range e.Messages {
@@ -317,7 +318,10 @@ func (c *langfuseClient) fetchDatasetItems(ctx context.Context, datasetName stri
 				TotalPages int `json:"totalPages"`
 			} `json:"meta"`
 		}
-		json.NewDecoder(resp.Body).Decode(&result)
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("synth: データセットレスポンスのデコードに失敗: %w", err)
+		}
 		resp.Body.Close()
 
 		allItems = append(allItems, result.Data...)

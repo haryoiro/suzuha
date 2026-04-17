@@ -86,21 +86,29 @@ func scanPGMem(row interface{ Scan(dest ...any) error }) (Memory, error) {
 	}
 
 	if metaJSON.Valid && metaJSON.String != "" {
-		json.Unmarshal([]byte(metaJSON.String), &m.Metadata)
+		if err := json.Unmarshal([]byte(metaJSON.String), &m.Metadata); err != nil {
+			slog.Warn("memory: メタデータのJSON解析に失敗", "id", m.ID, "error", err)
+		}
 		if atts, ok := m.Metadata["attachments"]; ok {
 			if raw, err := json.Marshal(atts); err == nil {
-				json.Unmarshal(raw, &m.Attachments)
+				if err := json.Unmarshal(raw, &m.Attachments); err != nil {
+					slog.Warn("memory: 添付ファイル情報のJSON解析に失敗", "id", m.ID, "error", err)
+				}
 			}
 		}
 	}
 	if keywordsJSON.Valid && keywordsJSON.String != "" {
-		json.Unmarshal([]byte(keywordsJSON.String), &m.Keywords)
+		if err := json.Unmarshal([]byte(keywordsJSON.String), &m.Keywords); err != nil {
+			slog.Warn("memory: キーワードのJSON解析に失敗", "id", m.ID, "error", err)
+		}
 	}
 	if topicStr.Valid {
 		m.Topic = topicStr.String
 	}
 	if personsJSON.Valid && personsJSON.String != "" {
-		json.Unmarshal([]byte(personsJSON.String), &m.Persons)
+		if err := json.Unmarshal([]byte(personsJSON.String), &m.Persons); err != nil {
+			slog.Warn("memory: 人物情報のJSON解析に失敗", "id", m.ID, "error", err)
+		}
 	}
 	if eventTime.Valid {
 		m.EventTime = &eventTime.Time

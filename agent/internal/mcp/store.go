@@ -125,11 +125,15 @@ func (s *AppStore) query(ctx context.Context, q string, args ...any) ([]App, err
 			return nil, err
 		}
 
-		json.Unmarshal([]byte(argsStr), &app.Args)
+		if err := json.Unmarshal([]byte(argsStr), &app.Args); err != nil {
+			return nil, fmt.Errorf("mcp: アプリ %s の引数パースに失敗: %w", app.Name, err)
+		}
 		if app.Args == nil {
 			app.Args = []string{}
 		}
-		json.Unmarshal([]byte(envStr), &app.Env)
+		if err := json.Unmarshal([]byte(envStr), &app.Env); err != nil {
+			return nil, fmt.Errorf("mcp: アプリ %s の環境変数パースに失敗: %w", app.Name, err)
+		}
 		if app.Env == nil {
 			app.Env = make(map[string]string)
 		}

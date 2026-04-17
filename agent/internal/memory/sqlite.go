@@ -53,13 +53,17 @@ func scanMem(scanner interface{ Scan(dest ...any) error }) (Memory, error) {
 		}
 	}
 	if keywordsStr.Valid {
-		json.Unmarshal([]byte(keywordsStr.String), &m.Keywords)
+		if err := json.Unmarshal([]byte(keywordsStr.String), &m.Keywords); err != nil {
+			slog.Warn("memory: キーワードのJSON解析に失敗", "id", m.ID, "error", err)
+		}
 	}
 	if topicStr.Valid {
 		m.Topic = topicStr.String
 	}
 	if personsStr.Valid {
-		json.Unmarshal([]byte(personsStr.String), &m.Persons)
+		if err := json.Unmarshal([]byte(personsStr.String), &m.Persons); err != nil {
+			slog.Warn("memory: 人物情報のJSON解析に失敗", "id", m.ID, "error", err)
+		}
 	}
 	if eventTime.Valid {
 		t := eventTime.Time
@@ -70,12 +74,15 @@ func scanMem(scanner interface{ Scan(dest ...any) error }) (Memory, error) {
 }
 
 // marshalStringSlice は文字列スライスをJSONエンコードした文字列を返す。空の場合は nil を返す。
-func marshalStringSlice(s []string) any {
+func marshalStringSlice(s []string) (any, error) {
 	if len(s) == 0 {
-		return nil
+		return nil, nil
 	}
-	b, _ := json.Marshal(s)
-	return string(b)
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil, fmt.Errorf("memory: JSONエンコードに失敗: %w", err)
+	}
+	return string(b), nil
 }
 
 // nullTimePtr は *time.Time から sql.NullTime を返す。

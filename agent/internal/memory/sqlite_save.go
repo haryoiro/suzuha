@@ -37,6 +37,14 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 	if err != nil {
 		return fmt.Errorf("memory: メタデータのJSON変換に失敗: %w", err)
 	}
+	keywordsJSON, err := marshalStringSlice(mem.Keywords)
+	if err != nil {
+		return err
+	}
+	personsJSON, err := marshalStringSlice(mem.Persons)
+	if err != nil {
+		return err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -48,8 +56,8 @@ func (s *SQLiteStore) saveWithEmbedding(ctx context.Context, mem *Memory) error 
 		`INSERT OR REPLACE INTO memories (id, type, content, metadata, keywords, topic, persons, event_time, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
-		marshalStringSlice(mem.Keywords), nullString(mem.Topic),
-		marshalStringSlice(mem.Persons), nullTimePtr(mem.EventTime),
+		keywordsJSON, nullString(mem.Topic),
+		personsJSON, nullTimePtr(mem.EventTime),
 		mem.CreatedAt, mem.UpdatedAt,
 	); err != nil {
 		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
@@ -93,6 +101,14 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 	if err != nil {
 		return fmt.Errorf("memory: メタデータのJSON変換に失敗: %w", err)
 	}
+	keywordsJSON, err := marshalStringSlice(mem.Keywords)
+	if err != nil {
+		return err
+	}
+	personsJSON, err := marshalStringSlice(mem.Persons)
+	if err != nil {
+		return err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -104,8 +120,8 @@ func (s *SQLiteStore) saveContentAndFTS(ctx context.Context, mem *Memory) error 
 		`INSERT OR REPLACE INTO memories (id, type, content, metadata, keywords, topic, persons, event_time, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mem.ID, string(mem.Type), mem.Content, string(metadataJSON),
-		marshalStringSlice(mem.Keywords), nullString(mem.Topic),
-		marshalStringSlice(mem.Persons), nullTimePtr(mem.EventTime),
+		keywordsJSON, nullString(mem.Topic),
+		personsJSON, nullTimePtr(mem.EventTime),
 		mem.CreatedAt, mem.UpdatedAt,
 	); err != nil {
 		return fmt.Errorf("memory: レコードの挿入に失敗: %w", err)
@@ -274,6 +290,14 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 	if err != nil {
 		return fmt.Errorf("memory: メタデータのJSON変換に失敗: %w", err)
 	}
+	keywordsJSON, err := marshalStringSlice(mem.Keywords)
+	if err != nil {
+		return err
+	}
+	personsJSON, err := marshalStringSlice(mem.Persons)
+	if err != nil {
+		return err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -284,8 +308,8 @@ func (s *SQLiteStore) Update(ctx context.Context, mem *Memory) error {
 	res, err := tx.ExecContext(ctx,
 		`UPDATE memories SET type = ?, content = ?, metadata = ?, keywords = ?, topic = ?, persons = ?, event_time = ?, updated_at = ? WHERE id = ?`,
 		string(mem.Type), mem.Content, string(metadataJSON),
-		marshalStringSlice(mem.Keywords), nullString(mem.Topic),
-		marshalStringSlice(mem.Persons), nullTimePtr(mem.EventTime),
+		keywordsJSON, nullString(mem.Topic),
+		personsJSON, nullTimePtr(mem.EventTime),
 		mem.UpdatedAt, mem.ID,
 	)
 	if err != nil {
