@@ -52,45 +52,43 @@ func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, pla
 	).Scan(&userID)
 
 	if err == nil {
-		// User exists — load and return.
-		u, err := s.getInTx(ctx, tx, userID)
-		if err != nil {
-			// Orphaned platform_link: link exists but user row is missing.
-			// Delete the stale link and fall through to create a new user.
-			if _, delErr := tx.ExecContext(ctx,
-				`DELETE FROM platform_links WHERE platform = $1 AND platform_user_id = $2`,
-				platform, platformUserID,
-			); delErr != nil {
-				return nil, fmt.Errorf("user: 孤立リンクの削除に失敗: %w", delErr)
+		u, loadErr := s.getInTx(ctx, tx, userID)
+		if loadErr == nil {
+			if s.botUserIDs[platformUserID] && !u.IsBot {
+				if _, err := tx.ExecContext(ctx,
+					`UPDATE users SET is_bot = true, updated_at = $1 WHERE id = $2`,
+					time.Now(), userID,
+				); err != nil {
+					return nil, fmt.Errorf("user: ボットフラグの設定に失敗: %w", err)
+				}
+				u.IsBot = true
 			}
-			goto createUser
-		}
-		// If this is a known bot ID but the user wasn't marked yet, fix it.
-		if s.botUserIDs[platformUserID] && !u.IsBot {
-			if _, err := tx.ExecContext(ctx,
-				`UPDATE users SET is_bot = true, updated_at = $1 WHERE id = $2`,
-				time.Now(), userID,
-			); err != nil {
-				return nil, fmt.Errorf("user: ボットフラグの設定に失敗: %w", err)
+			if err := tx.Commit(); err != nil {
+				return nil, fmt.Errorf("user: コミットに失敗: %w", err)
 			}
-			u.IsBot = true
+			return u, nil
 		}
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("user: コミットに失敗: %w", err)
+		// Orphaned platform_link: link exists but user row is missing.
+		// Delete the stale link and fall through to create a new user.
+		if _, delErr := tx.ExecContext(ctx,
+			`DELETE FROM platform_links WHERE platform = $1 AND platform_user_id = $2`,
+			platform, platformUserID,
+		); delErr != nil {
+			return nil, fmt.Errorf("user: 孤立リンクの削除に失敗: %w", delErr)
 		}
-		return u, nil
-	}
-	if err != sql.ErrNoRows {
+	} else if err != sql.ErrNoRows {
 		return nil, fmt.Errorf("user: プラットフォームリンクの検索に失敗: %w", err)
 	}
 
-createUser:
-	// User does not exist — create.
+	return s.createUserInTx(ctx, tx, platform, platformUserID, platformName)
+}
+
+func (s *SQLiteStore) createUserInTx(ctx context.Context, tx *sql.Tx, platform, platformUserID, platformName string) (*User, error) {
 	isBot := s.botUserIDs[platformUserID]
 	role := RoleMember
 	switch {
 	case isBot:
-		role = RoleMember // bot gets member role, identified by is_bot flag
+		role = RoleMember
 	case platform == "cli":
 		role = RoleOwner
 	}

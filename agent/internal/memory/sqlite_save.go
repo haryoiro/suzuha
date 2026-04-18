@@ -232,15 +232,15 @@ func (s *SQLiteStore) RunEmbeddingWorker(ctx context.Context) {
 		case <-time.After(wait):
 		}
 
-		// Drain any extra signals.
+	drain:
 		for {
 			select {
 			case <-s.embedSig:
 			default:
-				goto process
+				break drain
 			}
 		}
-	process:
+
 		for {
 			n, err := s.BackfillEmbeddings(ctx, batchSize)
 			if err != nil {
