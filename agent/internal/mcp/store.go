@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/config"
 )
 
 // App represents an installed MCP app persisted in the database.
@@ -26,9 +25,9 @@ type App struct {
 	Enabled      bool              `json:"enabled"`
 }
 
-// ToToolServer converts a stored App to a config.ToolServer.
-func (a *App) ToToolServer() config.ToolServer {
-	return config.ToolServer{
+// ToToolServer converts a stored App to a ServerConfig.
+func (a *App) ToToolServer() ServerConfig {
+	return ServerConfig{
 		Name:      a.Name,
 		Type:      "mcp",
 		Transport: a.Transport,

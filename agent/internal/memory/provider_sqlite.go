@@ -8,6 +8,7 @@ import (
 	"github.com/haryoiro/suzuha/external/embedding"
 )
 
-func newSQLiteBackend(dbPath string, embedder embedding.Embedder, logger *slog.Logger) (Backend, error) {
+// NewSQLiteBackend は SQLite バックエンドを生成する。
+func NewSQLiteBackend(dbPath string, embedder embedding.Embedder, logger *slog.Logger) (Backend, error) {
 	return NewSQLiteStore(dbPath, embedder, true, logger)
 }

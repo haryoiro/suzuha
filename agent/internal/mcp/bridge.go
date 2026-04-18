@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/tool"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -42,7 +41,7 @@ func NewManager(logger *slog.Logger, registry *tool.Registry) *Manager {
 
 // Start connects to each configured MCP server and registers discovered tools.
 // Failures are logged but do not prevent other servers from connecting.
-func (m *Manager) Start(ctx context.Context, servers []config.ToolServer) {
+func (m *Manager) Start(ctx context.Context, servers []ServerConfig) {
 	for _, srv := range servers {
 		if srv.Type != "mcp" {
 			continue
@@ -56,7 +55,7 @@ func (m *Manager) Start(ctx context.Context, servers []config.ToolServer) {
 
 // ConnectServer connects to an MCP server and registers its tools.
 // Returns the list of registered tool names.
-func (m *Manager) ConnectServer(ctx context.Context, srv config.ToolServer) ([]string, error) {
+func (m *Manager) ConnectServer(ctx context.Context, srv ServerConfig) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

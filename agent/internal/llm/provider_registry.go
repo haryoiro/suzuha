@@ -9,13 +9,20 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"github.com/mozilla-ai/any-llm-go/providers/gemini"
 	"github.com/mozilla-ai/any-llm-go/providers/openai"
 )
+
+// ProviderSeed は config.yaml から読み込んだプロバイダ定義のシード用入力。
+type ProviderSeed struct {
+	Name    string
+	Type    string
+	APIKey  string
+	APIBase string
+}
 
 // ProviderEntry はプロバイダ接続情報。
 type ProviderEntry struct {
@@ -385,7 +392,7 @@ func newProviderInstance(providerType, apiKey, apiBase string) (providers.Provid
 // --- Seeding ---
 
 // SeedProviders は config.yaml のプロバイダ定義を DB にシードする。
-func (r *ProviderRegistry) SeedProviders(ctx context.Context, cfgProviders []config.LLMProvider) error {
+func (r *ProviderRegistry) SeedProviders(ctx context.Context, cfgProviders []ProviderSeed) error {
 	for _, cp := range cfgProviders {
 		existing, err := r.GetProvider(ctx, cp.Name)
 		if err == nil && existing.Source == "user" {

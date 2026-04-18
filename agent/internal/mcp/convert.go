@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/haryoiro/suzuha/internal/config"
 )
 
 // SelectPackage picks the best installable package from a server entry.
@@ -35,11 +33,11 @@ func SelectPackage(srv ServerJSON) (RegistryPackage, error) {
 		srv.Name, strings.Join(types, ", "))
 }
 
-// ToToolServer converts an MCP Registry Package to a config.ToolServer.
+// ToToolServer converts an MCP Registry Package to a ServerConfig.
 // userEnv provides user-supplied environment variable values.
-func ToToolServer(serverName string, pkg RegistryPackage, userEnv map[string]string) (config.ToolServer, error) {
+func ToToolServer(serverName string, pkg RegistryPackage, userEnv map[string]string) (ServerConfig, error) {
 	if pkg.RegistryType != "npm" {
-		return config.ToolServer{}, fmt.Errorf("サポートされていないレジストリタイプ %q; npmのみサポートされています", pkg.RegistryType)
+		return ServerConfig{}, fmt.Errorf("サポートされていないレジストリタイプ %q; npmのみサポートされています", pkg.RegistryType)
 	}
 
 	// Build command args.
@@ -89,7 +87,7 @@ func ToToolServer(serverName string, pkg RegistryPackage, userEnv map[string]str
 	}
 
 	if len(missing) > 0 {
-		return config.ToolServer{}, fmt.Errorf("必須環境変数が不足しています: %s", strings.Join(missing, ", "))
+		return ServerConfig{}, fmt.Errorf("必須環境変数が不足しています: %s", strings.Join(missing, ", "))
 	}
 
 	// Sanitize server name for use as config name and OpenAI function name
@@ -97,7 +95,7 @@ func ToToolServer(serverName string, pkg RegistryPackage, userEnv map[string]str
 	safeName := strings.ReplaceAll(serverName, "/", "-")
 	safeName = strings.ReplaceAll(safeName, ".", "-")
 
-	return config.ToolServer{
+	return ServerConfig{
 		Name:      safeName,
 		Type:      "mcp",
 		Transport: pkg.Transport.Type,

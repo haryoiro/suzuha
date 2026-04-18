@@ -11,7 +11,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/admin/handler"
 	"github.com/haryoiro/suzuha/internal/admin/middleware"
-	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -20,12 +19,12 @@ import (
 // Server is the admin dashboard HTTP server.
 type Server struct {
 	handler http.Handler
-	cfg     config.Admin
+	cfg     ServerConfig
 	logger  *slog.Logger
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
+func NewServer(cfg ServerConfig, store memory.AdminStore, userStore user.AdminStore, schedStore *action.Store, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 
 	adminHandler := NewAdminHandler(store, userStore, schedStore, mediaStore, agentBase, cfg.PromptDir, logger)
@@ -81,7 +80,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	// Wrap with middleware.
 	h := middleware.Logging(logger, mux)
 	h = middleware.CORS(h)
-	h = middleware.BasicAuth(cfg.Auth.Username, cfg.Auth.Password, h)
+	h = middleware.BasicAuth(cfg.AuthUsername, cfg.AuthPassword, h)
 
 	return &Server{handler: h, cfg: cfg, logger: logger}, nil
 }

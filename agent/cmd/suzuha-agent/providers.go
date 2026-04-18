@@ -50,15 +50,122 @@ func allPackages(cfgPath string) []func(do.Injector) {
 	return []func(do.Injector){
 		agentPackages(cfgPath),
 		config.Package,
-		observe.Package,
+		infraPackages,
 		event.Package,
 		tool.Package,
-		memory.Package,
-		llm.Package,
-		mcp.Package,
 		mementoPackage,
-		user.Package,
 		channel.Package,
+	}
+}
+
+// infraPackages registers DI providers for infra packages that previously
+// imported config directly. Config values are extracted here in the cmd layer
+// and passed as plain parameters.
+func infraPackages(i do.Injector) {
+	do.Provide(i, func(i do.Injector) (*observe.RingBuffer, error) {
+		return observe.NewRingBuffer(1000), nil
+	})
+	do.Provide(i, func(i do.Injector) (*slog.Logger, error) {
+		cfg := do.MustInvoke[*config.Config](i)
+		ring := do.MustInvoke[*observe.RingBuffer](i)
+		return observe.NewLoggerWithRing(cfg.Observe.LogLevel, ring), nil
+	})
+
+	do.Provide(i, func(i do.Injector) (memory.Backend, error) {
+		cfg := do.MustInvoke[*config.Config](i)
+		logger := do.MustInvoke[*slog.Logger](i)
+		embedder := do.MustInvokeNamed[embedding.Embedder](i, "embedder")
+		if cfg.Memory.PostgresURL != "" {
+			return memory.NewPostgresStore(cfg.Memory.PostgresURL, embedder, true, logger)
+		}
+		return memory.NewSQLiteBackend(cfg.Memory.DBPath, embedder, logger)
+	})
+
+	do.Provide(i, func(i do.Injector) (*llm.Client, error) {
+		cfg := do.MustInvoke[*config.Config](i)
+		logger := do.MustInvoke[*slog.Logger](i)
+		return llm.NewClient(
+			cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.APIKey, cfg.LLM.APIBase,
+			cfg.LLM.MaxTokens,
+			llm.EmbeddingConfig{
+				Provider: cfg.Embedding.Provider,
+				Model:    cfg.Embedding.Model,
+				APIKey:   cfg.Embedding.APIKey,
+				APIBase:  cfg.Embedding.APIBase,
+				Dims:     cfg.Embedding.Dims,
+			},
+			llm.VisionConfig{
+				Provider: cfg.Vision.Provider,
+				Model:    cfg.Vision.Model,
+				APIKey:   cfg.Vision.APIKey,
+				APIBase:  cfg.Vision.APIBase,
+			},
+			logger,
+		)
+	})
+
+	do.Provide(i, func(i do.Injector) (*mcp.Manager, error) {
+		logger := do.MustInvoke[*slog.Logger](i)
+		registry := do.MustInvoke[*tool.Registry](i)
+		cfg := do.MustInvoke[*config.Config](i)
+		mgr := mcp.NewManager(logger, registry)
+		startCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		mgr.Start(startCtx, toMCPServerConfigs(cfg.ToolServers))
+		cancel()
+		return mgr, nil
+	})
+
+	do.Provide(i, func(i do.Injector) (*user.SQLiteStore, error) {
+		db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+		cfg := do.MustInvoke[*config.Config](i)
+		return user.NewSQLiteStore(db, cfg.Discord.BotID), nil
+	})
+}
+
+// toMCPServerConfigs は config.ToolServer スライスを mcp.ServerConfig スライスに変換する。
+func toMCPServerConfigs(cfgServers []config.ToolServer) []mcp.ServerConfig {
+	out := make([]mcp.ServerConfig, len(cfgServers))
+	for i, s := range cfgServers {
+		out[i] = mcp.ServerConfig{
+			Name:      s.Name,
+			Type:      s.Type,
+			Transport: s.Transport,
+			URL:       s.URL,
+			Command:   s.Command,
+			Args:      s.Args,
+			Env:       s.Env,
+		}
+	}
+	return out
+}
+
+// toLLMProviderSeeds は config.LLMProvider スライスを llm.ProviderSeed スライスに変換する。
+func toLLMProviderSeeds(cfgProviders []config.LLMProvider) []llm.ProviderSeed {
+	out := make([]llm.ProviderSeed, len(cfgProviders))
+	for i, p := range cfgProviders {
+		out[i] = llm.ProviderSeed{
+			Name:    p.Name,
+			Type:    p.Type,
+			APIKey:  p.APIKey,
+			APIBase: p.APIBase,
+		}
+	}
+	return out
+}
+
+// toAdminServerConfig は config.Admin を admin.ServerConfig に変換する。
+func toAdminServerConfig(cfg config.Admin) admin.ServerConfig {
+	return admin.ServerConfig{
+		Addr:            cfg.Addr,
+		AgentMetrics:    cfg.AgentMetrics,
+		AgentLogs:       cfg.AgentLogs,
+		AgentContext:    cfg.AgentContext,
+		ConsolLogs:      cfg.ConsolLogs,
+		ConsolidatorAPI: cfg.ConsolidatorAPI,
+		StaticDir:       cfg.StaticDir,
+		PromptDir:       cfg.PromptDir,
+		AuthUsername:     cfg.Auth.Username,
+		AuthPassword:    cfg.Auth.Password,
 	}
 }
 
@@ -113,7 +220,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			// config.yaml のプロバイダ定義をシード
-			if err := reg.SeedProviders(context.Background(), cfg.LLM.Providers); err != nil {
+			if err := reg.SeedProviders(context.Background(), toLLMProviderSeeds(cfg.LLM.Providers)); err != nil {
 				logger.Warn("プロバイダのシードに失敗", "error", err)
 			}
 
@@ -344,7 +451,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			schedStore := do.MustInvoke[*action.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
-			return admin.NewServer(cfg.Admin, store, userStore, schedStore, mediaStore, adminLogger)
+			return admin.NewServer(toAdminServerConfig(cfg.Admin), store, userStore, schedStore, mediaStore, adminLogger)
 		})
 
 		// Scheduler (nil when disabled in config).
