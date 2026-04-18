@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,8 +16,9 @@ import (
 // StreamWatcher monitors Discord voice channel streams (screen shares)
 // and periodically captures preview images.
 type StreamWatcher struct {
-	session *discordgo.Session
-	logger  *slog.Logger
+	session    *discordgo.Session
+	logger     *slog.Logger
+	httpClient *http.Client
 
 	mu      sync.Mutex
 	streams map[string]*activeStream // stream_key -> stream info
@@ -36,6 +38,9 @@ func NewStreamWatcher(session *discordgo.Session, logger *slog.Logger) *StreamWa
 	return &StreamWatcher{
 		session: session,
 		logger:  logger,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 		streams: make(map[string]*activeStream),
 	}
 }
@@ -102,7 +107,9 @@ func (sw *StreamWatcher) captureAll() {
 	sw.mu.Unlock()
 
 	for _, s := range keys {
-		jpeg, err := sw.fetchPreview(s.StreamKey)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		jpeg, err := sw.fetchPreview(ctx, s.StreamKey)
+		cancel()
 		if err != nil {
 			sw.logger.Debug("stream: プレビュー取得失敗", "key", s.StreamKey, "error", err)
 			continue
@@ -114,19 +121,18 @@ func (sw *StreamWatcher) captureAll() {
 }
 
 // fetchPreview calls the undocumented Discord stream preview endpoint.
-func (sw *StreamWatcher) fetchPreview(streamKey string) ([]byte, error) {
-	// POST /streams/{stream_key}/preview returns {"url": "https://..."}
+func (sw *StreamWatcher) fetchPreview(ctx context.Context, streamKey string) ([]byte, error) {
 	url := fmt.Sprintf("https://discord.com/api/v10/streams/%s/preview", streamKey)
 
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("voice: プレビューリクエスト作成に失敗: %w", err)
 	}
 	req.Header.Set("Authorization", sw.session.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sw.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("voice: プレビューAPI呼び出しに失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -139,16 +145,19 @@ func (sw *StreamWatcher) fetchPreview(streamKey string) ([]byte, error) {
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("voice: プレビューURLのデコードに失敗: %w", err)
 	}
 	if result.URL == "" {
 		return nil, fmt.Errorf("empty preview URL")
 	}
 
-	// Download the preview image.
-	imgResp, err := http.Get(result.URL)
+	imgReq, err := http.NewRequestWithContext(ctx, http.MethodGet, result.URL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("voice: 画像リクエスト作成に失敗: %w", err)
+	}
+	imgResp, err := sw.httpClient.Do(imgReq)
+	if err != nil {
+		return nil, fmt.Errorf("voice: プレビュー画像取得に失敗: %w", err)
 	}
 	defer imgResp.Body.Close()
 

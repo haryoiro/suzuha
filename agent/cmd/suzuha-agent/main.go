@@ -666,8 +666,14 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	}
 	if cfg.Voice.Enabled && voicevoxCfg != nil && voicevoxCfg.URL != "" {
 		voicevoxURL := voicevoxCfg.URL
+		voicevoxClient := &http.Client{Timeout: 10 * time.Second}
 		mux.HandleFunc("GET /internal/voicevox/speakers", func(w http.ResponseWriter, r *http.Request) {
-			resp, err := http.Get(voicevoxURL + "/speakers")
+			req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, voicevoxURL+"/speakers", nil)
+			if err != nil {
+				http.Error(w, `{"error":"request creation failed"}`, http.StatusInternalServerError)
+				return
+			}
+			resp, err := voicevoxClient.Do(req)
 			if err != nil {
 				http.Error(w, `{"error":"voicevox unreachable"}`, http.StatusBadGateway)
 				return

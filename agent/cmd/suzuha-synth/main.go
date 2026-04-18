@@ -175,9 +175,10 @@ func runUpload(cfgPath, filePath, datasetName string) error {
 
 	ctx := context.Background()
 	lf := &langfuseClient{
-		endpoint: cfg.Langfuse.Endpoint,
-		pubKey:   cfg.Langfuse.PublicKey,
-		secKey:   cfg.Langfuse.SecretKey,
+		endpoint:   cfg.Langfuse.Endpoint,
+		pubKey:     cfg.Langfuse.PublicKey,
+		secKey:     cfg.Langfuse.SecretKey,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 
 	if err := lf.createDataset(ctx, datasetName); err != nil {
@@ -257,9 +258,10 @@ func runExport(cfgPath, datasetName, outputPath string) error {
 	}
 
 	lf := &langfuseClient{
-		endpoint: cfg.Langfuse.Endpoint,
-		pubKey:   cfg.Langfuse.PublicKey,
-		secKey:   cfg.Langfuse.SecretKey,
+		endpoint:   cfg.Langfuse.Endpoint,
+		pubKey:     cfg.Langfuse.PublicKey,
+		secKey:     cfg.Langfuse.SecretKey,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 
 	ctx := context.Background()
@@ -306,7 +308,7 @@ func (c *langfuseClient) fetchDatasetItems(ctx context.Context, datasetName stri
 			c.endpoint, datasetName, page)
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		req.SetBasicAuth(c.pubKey, c.secKey)
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -472,9 +474,10 @@ func stripLeadingNumber(s string) string {
 
 // langfuseClient is a minimal Langfuse API client for dataset operations.
 type langfuseClient struct {
-	endpoint string
-	pubKey   string
-	secKey   string
+	endpoint   string
+	pubKey     string
+	secKey     string
+	httpClient *http.Client
 }
 
 func (c *langfuseClient) createDataset(ctx context.Context, name string) error {
@@ -482,7 +485,7 @@ func (c *langfuseClient) createDataset(ctx context.Context, name string) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/api/public/v2/datasets", bytes.NewReader(body))
 	req.SetBasicAuth(c.pubKey, c.secKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -513,7 +516,7 @@ func (c *langfuseClient) createDatasetItemRaw(ctx context.Context, datasetName s
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/api/public/dataset-items", bytes.NewReader(body))
 	req.SetBasicAuth(c.pubKey, c.secKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
