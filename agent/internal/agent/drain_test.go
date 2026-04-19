@@ -18,7 +18,7 @@ func TestTimedDrain_BatchesCloseEvents(t *testing.T) {
 	ag.bus = bus
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	events := bus.Subscribe()
 
@@ -42,7 +42,7 @@ func TestTimedDrain_BatchesCloseEvents(t *testing.T) {
 
 	// Timed drain.
 	timer := time.NewTimer(ag.drainWindow)
-	defer timer.Stop()
+	t.Cleanup(func() { timer.Stop() })
 drain:
 	for {
 		select {

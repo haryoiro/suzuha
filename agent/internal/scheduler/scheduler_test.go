@@ -101,7 +101,7 @@ func TestSchedulerLoadAndRun(t *testing.T) {
 	}
 
 	sched.Start()
-	defer sched.Stop()
+	t.Cleanup(func() { sched.Stop() })
 
 	// Wait for at least one execution.
 	deadline := time.After(3 * time.Second)

@@ -146,10 +146,10 @@ func TestSaveWithEmbedFunc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
-	defer store.Close()
+	t.Cleanup(func() { store.Close() })
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
 
 	// Start the background embedding worker (Save is async without pre-computed embedding).
 	go store.RunEmbeddingWorker(ctx)
@@ -183,7 +183,7 @@ func TestMigrateSkip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second open without migrate: %v", err)
 	}
-	defer store2.Close()
+	t.Cleanup(func() { store2.Close() })
 
 	// Should still be able to query.
 	ctx := context.Background()
