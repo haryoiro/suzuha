@@ -3,13 +3,16 @@ package di
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/haryoiro/suzuha/external/embedding"
+	"github.com/haryoiro/suzuha/external/stt"
 	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/external/twitter"
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
@@ -19,6 +22,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/adapter/cli"
+	"github.com/haryoiro/suzuha/internal/adapter/device"
 	"github.com/haryoiro/suzuha/internal/adapter/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/event"
@@ -359,6 +363,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Scheduler (nil when disabled in config).
 		do.Provide(i, provideScheduler)
 
+		// Device Hub (ESP32 WebSocket + Web widget) and Vision feature.
+		do.Provide(i, provideDeviceHub)
+		do.Provide(i, provideVisionFeature)
+
 		// Control (internal) API — sub-handler ごとに DI 登録し、
 		// control.NewHandler が合成する。
 		do.Provide(i, control.NewRuntimeHandler)
@@ -367,6 +375,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		do.Provide(i, control.NewVoicevoxHandler)
 		do.Provide(i, control.NewToolsHandler)
 		do.Provide(i, control.NewLLMHandler)
+		do.Provide(i, control.NewDeviceHandler)
 		do.Provide(i, func(i do.Injector) (gen.Handler, error) {
 			return control.NewHandler(i), nil
 		})
@@ -463,6 +472,88 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	}
 
 	return sched, nil
+}
+
+// provideDeviceHub は ESP32/Web ウィジェット用の device.Hub を構築する。
+// voice/TTS/STT の設定、DB の owner/home 情報を裏で解決する。
+func provideDeviceHub(i do.Injector) (*device.Hub, error) {
+	cfg := do.MustInvoke[*config.Config](i)
+	bus := do.MustInvoke[*event.Bus](i)
+	logger := do.MustInvoke[*slog.Logger](i)
+	db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+
+	var ttsClient tts.TTS
+	if cfg.Voice.Enabled && len(cfg.Voice.TTS) > 0 {
+		deviceTTSConfigs := make([]tts.TTSProviderConfig, len(cfg.Voice.TTS))
+		for idx, p := range cfg.Voice.TTS {
+			deviceTTSConfigs[idx] = tts.TTSProviderConfig{
+				Provider:  p.Provider,
+				URL:       p.URL,
+				SpeakerID: p.SpeakerID,
+				Model:     p.Model,
+				Style:     p.Style,
+			}
+		}
+		c, err := tts.NewTTSChain(deviceTTSConfigs, logger)
+		if err != nil {
+			logger.Error("device hub: TTS クライアント初期化失敗", "error", err)
+		} else {
+			ttsClient = c
+		}
+	}
+
+	var sttClient stt.STT
+	if cfg.Voice.Enabled && len(cfg.Voice.STT) > 0 {
+		c, err := stt.NewSTT(stt.STTProviderConfig{
+			Provider: cfg.Voice.STT[0].Provider,
+			APIKey:   cfg.Voice.STT[0].APIKey,
+			Model:    cfg.Voice.STT[0].Model,
+			URL:      cfg.Voice.STT[0].URL,
+		})
+		if err != nil {
+			logger.Error("device hub: STT クライアント初期化失敗", "error", err)
+		} else {
+			sttClient = c
+		}
+	}
+
+	var ownerID, ownerName string
+	if err := db.QueryRow(`SELECT id, display_name FROM users WHERE role = 'owner' LIMIT 1`).Scan(&ownerID, &ownerName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logger.Error("device hub: オーナー情報取得失敗", "error", err)
+	}
+	if ownerID == "" {
+		ownerID = "owner"
+		ownerName = "オーナー"
+	}
+
+	return device.NewHub(bus, ttsClient, sttClient, ownerID, ownerName, logger), nil
+}
+
+// provideVisionFeature は device.Hub を使う vision.Feature を構築する。
+// hub.SetImageHandler で vision pipeline に画像を流し込む配線も行う。
+func provideVisionFeature(i do.Injector) (*vision.Feature, error) {
+	cfg := do.MustInvoke[*config.Config](i)
+	bus := do.MustInvoke[*event.Bus](i)
+	logger := do.MustInvoke[*slog.Logger](i)
+	db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+	llmClient := do.MustInvoke[*llm.Client](i)
+	hub := do.MustInvoke[*device.Hub](i)
+
+	yoloURL := os.Getenv("YOLO_URL")
+	if yoloURL == "" {
+		yoloURL = "http://yolo:8002"
+	}
+
+	var deviceChannel string
+	if err := db.QueryRow(`SELECT channel_id FROM channel_settings WHERE home = true LIMIT 1`).Scan(&deviceChannel); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logger.Error("vision: ホームチャンネル取得失敗", "error", err)
+	}
+
+	_ = cfg // 今は使わないが config 依存を明示しておく
+	devAdapter := device.NewDeviceAdapter(hub)
+	vf := vision.New(bus, yoloURL, deviceChannel, devAdapter, devAdapter, llmClient, logger)
+	hub.SetImageHandler(vf.Pipeline())
+	return vf, nil
 }
 
 // mementoPackage registers memento sub-package providers into the DI injector.

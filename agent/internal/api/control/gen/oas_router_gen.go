@@ -14,19 +14,31 @@ var (
 	rn7AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn5AllowedHeaders = map[string]string{
+	rn4AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
+	}
+	rn6AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn9AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn13AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn11AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn33AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn30AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
 	}
 	rn26AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn23AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn19AllowedHeaders = map[string]string{
-		"POST": "Content-Type",
-	}
-	rn27AllowedHeaders = map[string]string{
+	rn34AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 )
@@ -146,6 +158,138 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				}
 
+			case 'd': // Prefix: "device/"
+
+				if l := len("device/"); len(elem) >= l && elem[0:l] == "device/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case 's': // Prefix: "servo"
+
+					if l := len("servo"); len(elem) >= l && elem[0:l] == "servo" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleDeviceServoRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: rn7AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 't': // Prefix: "tracker"
+
+					if l := len("tracker"); len(elem) >= l && elem[0:l] == "tracker" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleDeviceGetTrackerRequest([0]string{}, elemIsEscaped, w, r)
+						case "PUT":
+							s.handleDevicePatchTrackerRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET,PUT",
+								allowedHeaders: rn4AllowedHeaders,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 'v': // Prefix: "v"
+
+					if l := len("v"); len(elem) >= l && elem[0:l] == "v" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'i': // Prefix: "ision"
+
+						if l := len("ision"); len(elem) >= l && elem[0:l] == "ision" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "GET":
+								s.handleDeviceGetVisionRequest([0]string{}, elemIsEscaped, w, r)
+							case "PUT":
+								s.handleDeviceSetVisionRequest([0]string{}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "GET,PUT",
+									allowedHeaders: rn6AllowedHeaders,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					case 'o': // Prefix: "olume"
+
+						if l := len("olume"); len(elem) >= l && elem[0:l] == "olume" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch r.Method {
+							case "PUT":
+								s.handleDeviceVolumeRequest([0]string{}, elemIsEscaped, w, r)
+							default:
+								s.notAllowed(w, r, notAllowedParams{
+									allowedMethods: "PUT",
+									allowedHeaders: rn9AllowedHeaders,
+									acceptPost:     "",
+									acceptPatch:    "",
+								})
+							}
+
+							return
+						}
+
+					}
+
+				}
+
 			case 'i': // Prefix: "identity"
 
 				if l := len("identity"); len(elem) >= l && elem[0:l] == "identity" {
@@ -224,7 +368,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "GET,POST",
-									allowedHeaders: rn7AllowedHeaders,
+									allowedHeaders: rn13AllowedHeaders,
 									acceptPost:     "application/json",
 									acceptPatch:    "",
 								})
@@ -336,7 +480,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "PUT",
-										allowedHeaders: rn5AllowedHeaders,
+										allowedHeaders: rn11AllowedHeaders,
 										acceptPost:     "",
 										acceptPatch:    "",
 									})
@@ -376,6 +520,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						switch r.Method {
 						case "POST":
 							s.handleRuntimeReloadChannelSettingsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 'l': // Prefix: "location-settings"
+
+					if l := len("location-settings"); len(elem) >= l && elem[0:l] == "location-settings" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleRuntimeReloadLocationSettingsRequest([0]string{}, elemIsEscaped, w, r)
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
@@ -527,7 +696,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "PUT",
-											allowedHeaders: rn26AllowedHeaders,
+											allowedHeaders: rn33AllowedHeaders,
 											acceptPost:     "",
 											acceptPatch:    "",
 										})
@@ -554,7 +723,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "POST",
-											allowedHeaders: rn23AllowedHeaders,
+											allowedHeaders: rn30AllowedHeaders,
 											acceptPost:     "application/json",
 											acceptPatch:    "",
 										})
@@ -596,7 +765,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
-								allowedHeaders: rn19AllowedHeaders,
+								allowedHeaders: rn26AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -624,7 +793,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PUT",
-							allowedHeaders: rn27AllowedHeaders,
+							allowedHeaders: rn34AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -820,6 +989,152 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						default:
 							return
 						}
+					}
+
+				}
+
+			case 'd': // Prefix: "device/"
+
+				if l := len("device/"); len(elem) >= l && elem[0:l] == "device/" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					break
+				}
+				switch elem[0] {
+				case 's': // Prefix: "servo"
+
+					if l := len("servo"); len(elem) >= l && elem[0:l] == "servo" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = DeviceServoOperation
+							r.summary = ""
+							r.operationID = "Device_servo"
+							r.operationGroup = "Device"
+							r.pathPattern = "/internal/device/servo"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 't': // Prefix: "tracker"
+
+					if l := len("tracker"); len(elem) >= l && elem[0:l] == "tracker" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = DeviceGetTrackerOperation
+							r.summary = ""
+							r.operationID = "Device_getTracker"
+							r.operationGroup = "Device"
+							r.pathPattern = "/internal/device/tracker"
+							r.args = args
+							r.count = 0
+							return r, true
+						case "PUT":
+							r.name = DevicePatchTrackerOperation
+							r.summary = ""
+							r.operationID = "Device_patchTracker"
+							r.operationGroup = "Device"
+							r.pathPattern = "/internal/device/tracker"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'v': // Prefix: "v"
+
+					if l := len("v"); len(elem) >= l && elem[0:l] == "v" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						break
+					}
+					switch elem[0] {
+					case 'i': // Prefix: "ision"
+
+						if l := len("ision"); len(elem) >= l && elem[0:l] == "ision" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "GET":
+								r.name = DeviceGetVisionOperation
+								r.summary = ""
+								r.operationID = "Device_getVision"
+								r.operationGroup = "Device"
+								r.pathPattern = "/internal/device/vision"
+								r.args = args
+								r.count = 0
+								return r, true
+							case "PUT":
+								r.name = DeviceSetVisionOperation
+								r.summary = ""
+								r.operationID = "Device_setVision"
+								r.operationGroup = "Device"
+								r.pathPattern = "/internal/device/vision"
+								r.args = args
+								r.count = 0
+								return r, true
+							default:
+								return
+							}
+						}
+
+					case 'o': // Prefix: "olume"
+
+						if l := len("olume"); len(elem) >= l && elem[0:l] == "olume" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						if len(elem) == 0 {
+							// Leaf node.
+							switch method {
+							case "PUT":
+								r.name = DeviceVolumeOperation
+								r.summary = ""
+								r.operationID = "Device_volume"
+								r.operationGroup = "Device"
+								r.pathPattern = "/internal/device/volume"
+								r.args = args
+								r.count = 0
+								return r, true
+							default:
+								return
+							}
+						}
+
 					}
 
 				}
@@ -1063,6 +1378,31 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.operationID = "Runtime_reloadChannelSettings"
 							r.operationGroup = "Runtime"
 							r.pathPattern = "/internal/reload-channel-settings"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'l': // Prefix: "location-settings"
+
+					if l := len("location-settings"); len(elem) >= l && elem[0:l] == "location-settings" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = RuntimeReloadLocationSettingsOperation
+							r.summary = ""
+							r.operationID = "Runtime_reloadLocationSettings"
+							r.operationGroup = "Runtime"
+							r.pathPattern = "/internal/reload-location-settings"
 							r.args = args
 							r.count = 0
 							return r, true

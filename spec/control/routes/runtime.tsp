@@ -48,4 +48,12 @@ interface Runtime {
   @post
   @extension("x-ogen-operation-group", "Runtime")
   op reloadPrompt(): ReloadPromptResponse;
+
+  /**
+   * location 設定 (locations / places / devices) を DB から再読み込み。
+   */
+  @route("reload-location-settings")
+  @post
+  @extension("x-ogen-operation-group", "Runtime")
+  op reloadLocationSettings(): OkResponse;
 }

@@ -9,6 +9,7 @@ import (
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
 	AgentHandler
+	DeviceHandler
 	LLMHandler
 	RuntimeHandler
 	SchedulerHandler
@@ -32,6 +33,48 @@ type AgentHandler interface {
 	//
 	// GET /internal/identity
 	AgentOpsIdentity(ctx context.Context) (*Identity, error)
+}
+
+// DeviceHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Device
+type DeviceHandler interface {
+	// DeviceGetTracker implements Device_getTracker operation.
+	//
+	// オブジェクト追尾トラッカーの状態と設定を返す。.
+	//
+	// GET /internal/device/tracker
+	DeviceGetTracker(ctx context.Context) (*TrackerStatus, error)
+	// DeviceGetVision implements Device_getVision operation.
+	//
+	// 視界変化検出 (ChangeDetector) の状態を返す。.
+	//
+	// GET /internal/device/vision
+	DeviceGetVision(ctx context.Context) (*VisionStatus, error)
+	// DevicePatchTracker implements Device_patchTracker operation.
+	//
+	// トラッカー設定をパッチ適用する。指定されたフィールドのみ更新。.
+	//
+	// PUT /internal/device/tracker
+	DevicePatchTracker(ctx context.Context, req *TrackerPatch) (*OkResponse, error)
+	// DeviceServo implements Device_servo operation.
+	//
+	// ESP32 のサーボ (pan/tilt) を指定角度に動かす。.
+	//
+	// POST /internal/device/servo
+	DeviceServo(ctx context.Context, req *ServoRequest) (*ServoResponse, error)
+	// DeviceSetVision implements Device_setVision operation.
+	//
+	// 視界変化検出の ON/OFF を切り替える。.
+	//
+	// PUT /internal/device/vision
+	DeviceSetVision(ctx context.Context, req *SetVisionRequest) (*OkResponse, error)
+	// DeviceVolume implements Device_volume operation.
+	//
+	// ESP32 のスピーカー音量 (0-100) を設定する。.
+	//
+	// PUT /internal/device/volume
+	DeviceVolume(ctx context.Context, req *VolumeRequest) (*VolumeResponse, error)
 }
 
 // LLMHandler handles operations described by OpenAPI v3 specification.
@@ -99,6 +142,12 @@ type RuntimeHandler interface {
 	//
 	// POST /internal/reload-channel-settings
 	RuntimeReloadChannelSettings(ctx context.Context) (*OkResponse, error)
+	// RuntimeReloadLocationSettings implements Runtime_reloadLocationSettings operation.
+	//
+	// Location 設定 (locations / places / devices) を DB から再読み込み。.
+	//
+	// POST /internal/reload-location-settings
+	RuntimeReloadLocationSettings(ctx context.Context) (*OkResponse, error)
 	// RuntimeReloadPrompt implements Runtime_reloadPrompt operation.
 	//
 	// ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。.

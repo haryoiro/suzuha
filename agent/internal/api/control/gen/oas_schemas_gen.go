@@ -390,6 +390,98 @@ func (s *OkResponse) SetOk(val bool) {
 	s.Ok = val
 }
 
+// NewOptBool returns new OptBool with value set to v.
+func NewOptBool(v bool) OptBool {
+	return OptBool{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptBool is optional bool.
+type OptBool struct {
+	Value bool
+	Set   bool
+}
+
+// IsSet returns true if OptBool was set.
+func (o OptBool) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptBool) Reset() {
+	var v bool
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptBool) SetTo(v bool) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptBool) Get() (v bool, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptBool) Or(d bool) bool {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptFloat64 returns new OptFloat64 with value set to v.
+func NewOptFloat64(v float64) OptFloat64 {
+	return OptFloat64{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptFloat64 is optional float64.
+type OptFloat64 struct {
+	Value float64
+	Set   bool
+}
+
+// IsSet returns true if OptFloat64 was set.
+func (o OptFloat64) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptFloat64) Reset() {
+	var v float64
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptFloat64) SetTo(v float64) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptFloat64) Get() (v float64, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptFloat64) Or(d float64) float64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptInt32 returns new OptInt32 with value set to v.
 func NewOptInt32(v int32) OptInt32 {
 	return OptInt32{
@@ -756,6 +848,69 @@ func (s *SchedulerJobsResponse) SetData(val []SchedulerJob) {
 	s.Data = val
 }
 
+// Ref: #/components/schemas/ServoRequest
+type ServoRequest struct {
+	Pan  int32 `json:"pan"`
+	Tilt int32 `json:"tilt"`
+}
+
+// GetPan returns the value of Pan.
+func (s *ServoRequest) GetPan() int32 {
+	return s.Pan
+}
+
+// GetTilt returns the value of Tilt.
+func (s *ServoRequest) GetTilt() int32 {
+	return s.Tilt
+}
+
+// SetPan sets the value of Pan.
+func (s *ServoRequest) SetPan(val int32) {
+	s.Pan = val
+}
+
+// SetTilt sets the value of Tilt.
+func (s *ServoRequest) SetTilt(val int32) {
+	s.Tilt = val
+}
+
+// Ref: #/components/schemas/ServoResponse
+type ServoResponse struct {
+	Ok   bool  `json:"ok"`
+	Pan  int32 `json:"pan"`
+	Tilt int32 `json:"tilt"`
+}
+
+// GetOk returns the value of Ok.
+func (s *ServoResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetPan returns the value of Pan.
+func (s *ServoResponse) GetPan() int32 {
+	return s.Pan
+}
+
+// GetTilt returns the value of Tilt.
+func (s *ServoResponse) GetTilt() int32 {
+	return s.Tilt
+}
+
+// SetOk sets the value of Ok.
+func (s *ServoResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetPan sets the value of Pan.
+func (s *ServoResponse) SetPan(val int32) {
+	s.Pan = val
+}
+
+// SetTilt sets the value of Tilt.
+func (s *ServoResponse) SetTilt(val int32) {
+	s.Tilt = val
+}
+
 // Ref: #/components/schemas/SetSpeakerRequest
 type SetSpeakerRequest struct {
 	SpeakerID int32 `json:"speaker_id"`
@@ -783,6 +938,21 @@ func (s *SetToolEnabledRequest) GetEnabled() bool {
 
 // SetEnabled sets the value of Enabled.
 func (s *SetToolEnabledRequest) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
+// Ref: #/components/schemas/SetVisionRequest
+type SetVisionRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *SetVisionRequest) GetEnabled() bool {
+	return s.Enabled
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *SetVisionRequest) SetEnabled(val bool) {
 	s.Enabled = val
 }
 
@@ -908,6 +1078,137 @@ func (s *ToolsListResponse) SetData(val []ToolInfo) {
 	s.Data = val
 }
 
+// トラッカー設定のパッチ。全フィールド optional。
+// enabled と target_label は独自 setter、残りは ApplyPartial 経由で更新される。.
+// Ref: #/components/schemas/TrackerPatch
+type TrackerPatch struct {
+	Enabled          OptBool    `json:"enabled"`
+	TargetLabel      OptString  `json:"target_label"`
+	DeadZone         OptFloat64 `json:"dead_zone"`
+	SmoothingAlpha   OptFloat64 `json:"smoothing_alpha"`
+	ProportionalGain OptFloat64 `json:"proportional_gain"`
+	MaxDegPerFrame   OptFloat64 `json:"max_deg_per_frame"`
+	InvertPan        OptBool    `json:"invert_pan"`
+	InvertTilt       OptBool    `json:"invert_tilt"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *TrackerPatch) GetEnabled() OptBool {
+	return s.Enabled
+}
+
+// GetTargetLabel returns the value of TargetLabel.
+func (s *TrackerPatch) GetTargetLabel() OptString {
+	return s.TargetLabel
+}
+
+// GetDeadZone returns the value of DeadZone.
+func (s *TrackerPatch) GetDeadZone() OptFloat64 {
+	return s.DeadZone
+}
+
+// GetSmoothingAlpha returns the value of SmoothingAlpha.
+func (s *TrackerPatch) GetSmoothingAlpha() OptFloat64 {
+	return s.SmoothingAlpha
+}
+
+// GetProportionalGain returns the value of ProportionalGain.
+func (s *TrackerPatch) GetProportionalGain() OptFloat64 {
+	return s.ProportionalGain
+}
+
+// GetMaxDegPerFrame returns the value of MaxDegPerFrame.
+func (s *TrackerPatch) GetMaxDegPerFrame() OptFloat64 {
+	return s.MaxDegPerFrame
+}
+
+// GetInvertPan returns the value of InvertPan.
+func (s *TrackerPatch) GetInvertPan() OptBool {
+	return s.InvertPan
+}
+
+// GetInvertTilt returns the value of InvertTilt.
+func (s *TrackerPatch) GetInvertTilt() OptBool {
+	return s.InvertTilt
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *TrackerPatch) SetEnabled(val OptBool) {
+	s.Enabled = val
+}
+
+// SetTargetLabel sets the value of TargetLabel.
+func (s *TrackerPatch) SetTargetLabel(val OptString) {
+	s.TargetLabel = val
+}
+
+// SetDeadZone sets the value of DeadZone.
+func (s *TrackerPatch) SetDeadZone(val OptFloat64) {
+	s.DeadZone = val
+}
+
+// SetSmoothingAlpha sets the value of SmoothingAlpha.
+func (s *TrackerPatch) SetSmoothingAlpha(val OptFloat64) {
+	s.SmoothingAlpha = val
+}
+
+// SetProportionalGain sets the value of ProportionalGain.
+func (s *TrackerPatch) SetProportionalGain(val OptFloat64) {
+	s.ProportionalGain = val
+}
+
+// SetMaxDegPerFrame sets the value of MaxDegPerFrame.
+func (s *TrackerPatch) SetMaxDegPerFrame(val OptFloat64) {
+	s.MaxDegPerFrame = val
+}
+
+// SetInvertPan sets the value of InvertPan.
+func (s *TrackerPatch) SetInvertPan(val OptBool) {
+	s.InvertPan = val
+}
+
+// SetInvertTilt sets the value of InvertTilt.
+func (s *TrackerPatch) SetInvertTilt(val OptBool) {
+	s.InvertTilt = val
+}
+
+// Ref: #/components/schemas/TrackerStatus
+type TrackerStatus struct {
+	Enabled bool                `json:"enabled"`
+	Config  TrackerStatusConfig `json:"config"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *TrackerStatus) GetEnabled() bool {
+	return s.Enabled
+}
+
+// GetConfig returns the value of Config.
+func (s *TrackerStatus) GetConfig() TrackerStatusConfig {
+	return s.Config
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *TrackerStatus) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
+// SetConfig sets the value of Config.
+func (s *TrackerStatus) SetConfig(val TrackerStatusConfig) {
+	s.Config = val
+}
+
+type TrackerStatusConfig map[string]jx.Raw
+
+func (s *TrackerStatusConfig) init() TrackerStatusConfig {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
 // Ref: #/components/schemas/TriggerRequest
 type TriggerRequest struct {
 	Config OptTriggerRequestConfig `json:"config"`
@@ -960,6 +1261,21 @@ func (s *TriggerResponse) SetError(val OptString) {
 	s.Error = val
 }
 
+// Ref: #/components/schemas/VisionStatus
+type VisionStatus struct {
+	Enabled bool `json:"enabled"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *VisionStatus) GetEnabled() bool {
+	return s.Enabled
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *VisionStatus) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
 // Ref: #/components/schemas/VoicevoxSpeaker
 type VoicevoxSpeaker struct {
 	SpeakerID int32 `json:"speaker_id"`
@@ -984,4 +1300,46 @@ func (s *VoicevoxSpeakersOKItem) init() VoicevoxSpeakersOKItem {
 		*s = m
 	}
 	return m
+}
+
+// Ref: #/components/schemas/VolumeRequest
+type VolumeRequest struct {
+	// 0-100.
+	Level int32 `json:"level"`
+}
+
+// GetLevel returns the value of Level.
+func (s *VolumeRequest) GetLevel() int32 {
+	return s.Level
+}
+
+// SetLevel sets the value of Level.
+func (s *VolumeRequest) SetLevel(val int32) {
+	s.Level = val
+}
+
+// Ref: #/components/schemas/VolumeResponse
+type VolumeResponse struct {
+	Ok    bool  `json:"ok"`
+	Level int32 `json:"level"`
+}
+
+// GetOk returns the value of Ok.
+func (s *VolumeResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetLevel returns the value of Level.
+func (s *VolumeResponse) GetLevel() int32 {
+	return s.Level
+}
+
+// SetOk sets the value of Ok.
+func (s *VolumeResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetLevel sets the value of Level.
+func (s *VolumeResponse) SetLevel(val int32) {
+	s.Level = val
 }

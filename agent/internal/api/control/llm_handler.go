@@ -147,6 +147,24 @@ func (h *LLMHandler) LLMAssignRole(ctx context.Context, req *gen.AssignRoleReque
 	return &gen.OkResponse{Ok: true}, nil
 }
 
+// structToJxMap は struct を JSON 経由で map[string]jx.Raw に変換する。
+// Record<unknown> 型の単一レスポンスフィールド用。
+func structToJxMap[MapT ~map[string]jx.Raw, T any](v T) MapT {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return MapT{}
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return MapT{}
+	}
+	out := make(MapT, len(m))
+	for k, v := range m {
+		out[k] = jx.Raw(v)
+	}
+	return out
+}
+
 // structSliceToJxItems は struct のスライスを JSON 経由で ogen の
 // map[string]jx.Raw スライスに変換する。Record<unknown>[] 返値の合成用。
 // ItemT は gen の map[string]jx.Raw 型エイリアス (LLMListProvidersOKItem 等)。
