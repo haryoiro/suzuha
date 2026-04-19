@@ -1,4 +1,4 @@
-package channel
+package conversation
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 	"github.com/samber/do/v2"
 )
 
-// Package registers channel store providers into the DI injector.
+// Package は conversation capability の DI を登録する。
 func Package(i do.Injector) {
-	do.Provide(i, func(i do.Injector) (*Store, error) {
+	do.Provide(i, func(i do.Injector) (*SettingsStore, error) {
 		db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
 		logger := do.MustInvoke[*slog.Logger](i)
-		s := NewStore(db)
+		s := NewSettingsStore(db)
 		if err := s.Reload(context.Background()); err != nil {
 			logger.Warn("channel settings reload failed", "error", err)
 		}

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
@@ -75,7 +75,7 @@ type Agent struct {
 	bus       *event.Bus
 	acquirer  acquirer
 	convStore       conversationStore
-	channelSettings *channelpkg.Store
+	channelSettings portconv.SettingsStore
 	mediaStore      memory.MediaStore
 	videoMeta       VideoMetadataFetcher
 	tweetFetcher    TweetFetcher
@@ -192,7 +192,7 @@ func New(
 	acq acquirer,
 	convStore conversationStore,
 	diaryReader prompt.DiaryReader,
-	channelSettings *channelpkg.Store,
+	channelSettings portconv.SettingsStore,
 	logger *slog.Logger,
 ) *Agent {
 	dw := cfg.DrainWindow

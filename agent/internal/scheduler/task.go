@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/channel"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
@@ -46,7 +46,7 @@ type CronContext struct {
 
 	// Typed stores — prefer these over raw DB.
 	Users           user.Store             // User operations (resolve, affinity, etc.).
-	ChannelActivity channel.ActivityStore  // Channel activity reads.
+	ChannelActivity portconv.ActivityStore // Channel activity reads.
 	MemoryAdmin     memory.AdminStore      // Admin-level memory operations (batch delete, etc.).
 
 	// Media storage

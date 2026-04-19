@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/image/webp"
 
-	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
@@ -39,7 +39,7 @@ func (a *Agent) PerceiveWith(ctx context.Context, agentCtx *Context, batch []eve
 		var filtered []event.Event
 		for _, evt := range batch {
 			chID := evt.Message.Channel
-			if chID != "" && !evt.Message.IsDM && a.channelSettings.GetMode(chID) == channelpkg.ModeDisabled {
+			if chID != "" && !evt.Message.IsDM && a.channelSettings.GetMode(chID) == domainchannel.ModeDisabled {
 				a.logger.Debug("無効なチャンネルなのでスルー", "channel", chID)
 				continue
 			}
