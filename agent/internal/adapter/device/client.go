@@ -14,6 +14,9 @@ type Client interface {
 	Kind() string // "esp" or "web"
 	SendCommand(cmd map[string]any) error
 	SendTTS(pcm []byte) error
+	// SendTTSEnd は 1 回のストリーミング発話の終端マーカーを送る。
+	// 非対応クライアント (ESP32) は no-op で良い。
+	SendTTSEnd() error
 	Close() error
 }
 
@@ -68,6 +71,9 @@ func (d *DeviceConn) ID() string   { return d.id }
 func (d *DeviceConn) Kind() string { return "esp" }
 func (d *DeviceConn) Close() error { return d.conn.Close() }
 
+// SendTTSEnd は ESP32 側で未使用なので no-op。
+func (d *DeviceConn) SendTTSEnd() error { return nil }
+
 // --- WebConn implements Client for browser WebSocket connections ---
 
 // WebConn represents a connected browser client.
@@ -120,3 +126,10 @@ func (w *WebConn) SendTTS(pcm []byte) error {
 }
 
 func (w *WebConn) Close() error { return w.conn.Close() }
+
+// SendTTSEnd は 1 フレームだけ書き込んで「この発話おわり」をブラウザに伝える。
+func (w *WebConn) SendTTSEnd() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteMessage(websocket.BinaryMessage, []byte{FrameTTSEnd})
+}

@@ -128,6 +128,15 @@ func (h *Hub) transcribeAndRespond(pcm []byte, source string) {
 	// (prevents echo of the response).
 	h.espVAD.Reset()
 
+	// Transcript を web widget に配信 (ログ表示用)。source="web" のみ対象。
+	if source == "web" {
+		_ = h.BroadcastCommandTo("web", map[string]any{
+			"cmd":  "transcript",
+			"kind": "user",
+			"text": text,
+		})
+	}
+
 	// Publish as message event — agent pipeline will process and respond
 	h.bus.Publish(event.NewMessageEvent(source, event.MessagePayload{
 		Content:  text,
