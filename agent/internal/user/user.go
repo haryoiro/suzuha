@@ -2,48 +2,41 @@ package user
 
 import (
 	"context"
-	"time"
+
+	domain "github.com/haryoiro/suzuha/internal/domain/user"
 )
 
-// Role represents a user's permission level.
-type Role string
+// 以下は domain/user へ昇格済みの型に対する legacy エイリアス。
+// 段階移行のため internal/user/ からも参照できるよう残してある。
+// 正準定義は domain/user/ にあり、Phase 5 で本 package を adapter/store/user/ に
+// 分解した時点で本エイリアス群は不要になる。
+type (
+	// Role は domain/user.Role のエイリアス。
+	Role = domain.Role
+	// User は domain/user.User のエイリアス。
+	User = domain.User
+	// PlatformLink は domain/user.PlatformLink のエイリアス。
+	PlatformLink = domain.PlatformLink
+	// UserGuild は domain/user.UserGuild のエイリアス。
+	UserGuild = domain.UserGuild
+	// UpdateFields は domain/user.UpdateFields のエイリアス。
+	UpdateFields = domain.UpdateFields
+	// MentionableUser は domain/user.MentionableUser のエイリアス。
+	MentionableUser = domain.MentionableUser
+	// GuildSummary は domain/user.GuildSummary のエイリアス。
+	GuildSummary = domain.GuildSummary
+	// ChannelEntry は domain/user.ChannelEntry のエイリアス。
+	ChannelEntry = domain.ChannelEntry
+	// GuildChannel は domain/user.GuildChannel のエイリアス。
+	GuildChannel = domain.GuildChannel
+)
 
-// Role constants define the available permission levels.
+// Role 定数は domain/user の値を再エクスポート。
 const (
-	RoleOwner  Role = "owner"
-	RoleMember Role = "member"
-	RoleGuest  Role = "guest"
+	RoleOwner  = domain.RoleOwner
+	RoleMember = domain.RoleMember
+	RoleGuest  = domain.RoleGuest
 )
-
-// User is an internal user identity.
-type User struct {
-	ID          string         `json:"id"`
-	DisplayName string         `json:"display_name"`
-	Role        Role           `json:"role"`
-	IsBot       bool           `json:"is_bot"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-}
-
-// PlatformLink connects an internal user to a platform identity.
-type PlatformLink struct {
-	ID             string    `json:"id"`
-	UserID         string    `json:"user_id"`
-	Platform       string    `json:"platform"`
-	PlatformUserID string    `json:"platform_user_id"`
-	PlatformName   string    `json:"platform_name"`
-	CreatedAt      time.Time `json:"created_at"`
-}
-
-// UserGuild represents a guild+channel association for a user.
-type UserGuild struct {
-	GuildID     string    `json:"guild_id"`
-	GuildName   string    `json:"guild_name"`
-	ChannelID   string    `json:"channel_id"`
-	ChannelName string    `json:"channel_name"`
-	LastSeenAt  time.Time `json:"last_seen_at"`
-}
 
 // BotRegistrar は起動後に判明する bot の platform user ID を登録する。
 // Discord 接続後に自分の ID を通知する用途のみで、query 系の Store とは分離する。
@@ -105,43 +98,4 @@ type AdminStore interface {
 
 	// GetGuildChannels returns channels for a specific guild with activity info.
 	GetGuildChannels(ctx context.Context, guildID string) ([]GuildChannel, error)
-}
-
-// UpdateFields holds the optional update fields for admin Update.
-type UpdateFields struct {
-	DisplayName *string
-	Role        *Role
-	IsBot       *bool
-}
-
-// MentionableUser is a lightweight read model for mention targeting.
-type MentionableUser struct {
-	DisplayName   string `json:"display_name"`
-	DiscordUserID string `json:"discord_user_id"`
-}
-
-// GuildSummary is a read model for the guilds list admin view.
-type GuildSummary struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	MemberCount  int       `json:"member_count"`
-	ChannelCount int       `json:"channel_count"`
-}
-
-// ChannelEntry is a flat channel+guild record.
-type ChannelEntry struct {
-	ChannelID   string `json:"channel_id"`
-	ChannelName string `json:"channel_name"`
-	GuildID     string `json:"guild_id"`
-	GuildName   string `json:"guild_name"`
-}
-
-// GuildChannel combines channel data with activity info.
-type GuildChannel struct {
-	ChannelID         string  `json:"channel_id"`
-	ChannelName       string  `json:"channel_name"`
-	UserCount         int     `json:"user_count"`
-	LastSeenAt        string  `json:"last_seen_at"`
-	LastUserMessageAt *string `json:"last_user_message_at,omitempty"`
 }

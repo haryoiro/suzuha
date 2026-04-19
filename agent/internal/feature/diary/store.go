@@ -7,17 +7,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domain "github.com/haryoiro/suzuha/internal/domain/diary"
 )
 
-// Entry は日記エントリ（hourly digest または daily diary）。
-type Entry struct {
-	ID          string
-	Kind        string // "hourly" or "daily"
-	Content     string
-	PeriodStart time.Time
-	PeriodEnd   time.Time
-	CreatedAt   time.Time
-}
+// Entry は domain/diary.Entry の型エイリアス。既存呼び出しとの互換のため保持。
+type Entry = domain.Entry
 
 // Store は diary_entries テーブルへのアクセスを提供する。
 type Store struct {
