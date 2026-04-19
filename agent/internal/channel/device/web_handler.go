@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/haryoiro/suzuha/internal/voice"
+	"github.com/haryoiro/suzuha/internal/capability/voice"
 )
 
 // webAudioState holds per-connection VAD for web clients.

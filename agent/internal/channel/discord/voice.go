@@ -10,7 +10,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
 	"github.com/haryoiro/suzuha/internal/port/tool"
-	"github.com/haryoiro/suzuha/internal/voice"
+	"github.com/haryoiro/suzuha/internal/capability/voice"
 )
 
 // VoicePipeline returns the voice pipeline, creating it if necessary.

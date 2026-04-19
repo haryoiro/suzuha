@@ -18,7 +18,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
-	"github.com/haryoiro/suzuha/internal/channel"
+	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/port/chat"
 	"github.com/haryoiro/suzuha/internal/channel/cli"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
@@ -121,7 +121,7 @@ func run() error {
 	go store.RunEmbeddingWorker(ctx)
 
 	// Periodic reload of channel settings.
-	channelStore := do.MustInvoke[*channel.Store](injector)
+	channelStore := do.MustInvoke[*convcap.SettingsStore](injector)
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()

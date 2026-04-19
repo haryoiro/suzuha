@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/channel"
+	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/samber/do/v2"
 )
@@ -15,7 +15,7 @@ import (
 // RuntimeHandler は Runtime グループ (compact / reload-*) を実装する。
 type RuntimeHandler struct {
 	agent        *agent.Agent
-	channelStore *channel.Store
+	channelStore *convcap.SettingsStore
 	promptDir    string
 	configDir    string
 }
@@ -26,7 +26,7 @@ func NewRuntimeHandler(i do.Injector) (gen.RuntimeHandler, error) {
 	cfgPath := do.MustInvokeNamed[string](i, "config-path")
 	return &RuntimeHandler{
 		agent:        do.MustInvoke[*agent.Agent](i),
-		channelStore: do.MustInvoke[*channel.Store](i),
+		channelStore: do.MustInvoke[*convcap.SettingsStore](i),
 		promptDir:    cfg.Agent.PromptDir,
 		configDir:    filepath.Dir(cfgPath),
 	}, nil

@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/agent"
-	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
 	"github.com/haryoiro/suzuha/internal/port/chat"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 )
 
 // Session は Discord のテキスト / 音声対話に対応する agent.Session 実装。
@@ -16,7 +17,7 @@ type Session struct {
 	agentCtx     *agent.Context
 	chat         chat.Sender
 	voice        chat.VoiceSpeaker
-	chanSettings *channelpkg.Store
+	chanSettings portconv.SettingsStore
 	drainWindow  time.Duration
 	logger       *slog.Logger
 
@@ -32,7 +33,7 @@ func NewSession(
 	agentCtx *agent.Context,
 	chatSender chat.Sender,
 	voice chat.VoiceSpeaker,
-	chanSettings *channelpkg.Store,
+	chanSettings portconv.SettingsStore,
 	drainWindow time.Duration,
 	logger *slog.Logger,
 ) *Session {
@@ -65,7 +66,7 @@ func (s *Session) Respond(ctx context.Context, text string) error {
 	// Suppress non-active channels (Discord-specific).
 	if s.chanSettings != nil && s.turnChannel != "" && !s.turnIsDM {
 		mode := s.chanSettings.GetMode(s.turnChannel)
-		if mode != channelpkg.ModeActive {
+		if mode != domainchannel.ModeActive {
 			s.logger.Info("静かなチャンネルなので自重した",
 				"channel", s.turnChannel, "mode", string(mode))
 			return nil

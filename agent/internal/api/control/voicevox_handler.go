@@ -10,7 +10,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/voice"
+	"github.com/haryoiro/suzuha/internal/capability/voice"
 	"github.com/samber/do/v2"
 )
 

@@ -18,7 +18,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
-	"github.com/haryoiro/suzuha/internal/channel"
+	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/port/chat"
 	"github.com/haryoiro/suzuha/internal/channel/cli"
@@ -67,7 +67,7 @@ func Packages(cfgPath string) []func(do.Injector) {
 		mcp.Package,
 		mementoPackage,
 		userStore.Package,
-		channel.Package,
+		convcap.Package,
 	}
 }
 
@@ -159,7 +159,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		do.Provide(i, func(i do.Injector) (*agent.Agent, error) {
 			cfg := do.MustInvoke[*config.Config](i)
 			chatIface := do.MustInvoke[chat.Interface](i)
-			channelSettings := do.MustInvoke[*channel.Store](i)
+			channelSettings := do.MustInvoke[*convcap.SettingsStore](i)
 			logger := do.MustInvoke[*slog.Logger](i)
 
 			regs := []agent.SourceRegistration{
@@ -441,7 +441,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 
 	// Build CronContext.
 	bus := do.MustInvoke[*event.Bus](i)
-	activityStore := channel.NewActivityStore(store.DB())
+	activityStore := convcap.NewActivityStore(store.DB())
 	mediaStore := do.MustInvoke[memory.MediaStore](i)
 	cc := &scheduler.CronContext{
 		LLM:             llmClient,

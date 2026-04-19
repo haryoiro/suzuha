@@ -1,4 +1,4 @@
-package channel
+package conversation
 
 import (
 	"context"
@@ -7,23 +7,24 @@ import (
 	"time"
 )
 
-// ActivityStore provides read access to channel activity data.
+// ActivityStore はチャンネル活動データへの read アクセスを提供する。
 type ActivityStore interface {
-	// LastInteractionGlobal returns the most recent user message time across all channels,
-	// and the channel it occurred in. Returns zero time if no activity exists.
+	// LastInteractionGlobal は全チャンネルで最も新しいユーザーメッセージの時刻と
+	// それが発生したチャンネルを返す。活動がなければ zero time を返す。
 	LastInteractionGlobal(ctx context.Context) (lastMsg time.Time, channelID string, err error)
 }
 
-// DBActivityStore implements ActivityStore using the shared database.
+// DBActivityStore は共有 DB を使った ActivityStore 実装。
 type DBActivityStore struct {
 	db *sql.DB
 }
 
-// NewActivityStore creates a new DBActivityStore backed by the shared database.
+// NewActivityStore は DBActivityStore を生成する。
 func NewActivityStore(db *sql.DB) *DBActivityStore {
 	return &DBActivityStore{db: db}
 }
 
+// LastInteractionGlobal は全チャンネルで最も新しいユーザーメッセージを返す。
 func (s *DBActivityStore) LastInteractionGlobal(ctx context.Context) (time.Time, string, error) {
 	var lastMsg time.Time
 	var channelID string
@@ -38,7 +39,7 @@ func (s *DBActivityStore) LastInteractionGlobal(ctx context.Context) (time.Time,
 		return time.Time{}, "", nil
 	}
 	if err != nil {
-		return time.Time{}, "", fmt.Errorf("channel: 全チャンネルの最終インタラクション取得に失敗: %w", err)
+		return time.Time{}, "", fmt.Errorf("conversation: 全チャンネルの最終インタラクション取得に失敗: %w", err)
 	}
 	return lastMsg, channelID, nil
 }

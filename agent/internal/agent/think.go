@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
-	channelpkg "github.com/haryoiro/suzuha/internal/channel"
+	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
@@ -124,7 +124,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 	}
 
 	if !dc.ForceRespond && a.channelSettings != nil && p.Channel != "" && !p.IsDM {
-		if a.channelSettings.GetMode(p.Channel) == channelpkg.ModeListen {
+		if a.channelSettings.GetMode(p.Channel) == domainchannel.ModeListen {
 			a.logger.Info("聞いてるだけ", "channel", p.Channel)
 			return &Thought{ListenMode: true}
 		}
