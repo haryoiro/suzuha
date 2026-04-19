@@ -1,3 +1,5 @@
+// Package user は user ドメインの永続化実装 (domain/user の型を SQL に
+// マップし、port/user.Store / AdminStore / BotRegistrar を満たす)。
 package user
 
 import (
@@ -8,6 +10,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	domain "github.com/haryoiro/suzuha/internal/domain/user"
+)
+
+// 本 file から参照する domain 型のローカルエイリアス。移動コストを抑えるため
+// 既存コードの `User` / `Role` 等の bare 参照をそのまま残す。
+type (
+	User            = domain.User
+	Role            = domain.Role
+	PlatformLink    = domain.PlatformLink
+	UserGuild       = domain.UserGuild
+	UpdateFields    = domain.UpdateFields
+	MentionableUser = domain.MentionableUser
+	GuildSummary    = domain.GuildSummary
+	ChannelEntry    = domain.ChannelEntry
+	GuildChannel    = domain.GuildChannel
+)
+
+// Role 定数の再エクスポート (scanRole などで bare 名を使う)。
+const (
+	RoleOwner  = domain.RoleOwner
+	RoleMember = domain.RoleMember
+	RoleGuest  = domain.RoleGuest
 )
 
 // DBStore implements Store using the shared database connection.

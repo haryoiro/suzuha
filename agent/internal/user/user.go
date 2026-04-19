@@ -1,14 +1,19 @@
-// Package user の正準定義は port/user (interface) + domain/user (型) にある。
-// 本 file は呼び出し側の import path 温存のための互換 shim。
-// Phase 5 で adapter/store/user/ に分解したタイミングで本 shim は不要になる。
+// Package user は domain/user (型) + port/user (interface) + adapter/store/user
+// (実装) への互換 shim。既存呼び出し側の `user.X` 参照を温存するため、
+// type alias と re-export を集約する。Phase 12 (lint 厳格化) で callers を
+// 正準 package に移し、本 package ごと廃止予定。
 package user
 
 import (
+	"database/sql"
+
+	adapterUser "github.com/haryoiro/suzuha/internal/adapter/store/user"
 	domain "github.com/haryoiro/suzuha/internal/domain/user"
 	port "github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/samber/do/v2"
 )
 
-// domain/user への型エイリアス群 (データ型)。
+// domain/user への型エイリアス (データ型)。
 type (
 	Role            = domain.Role
 	User            = domain.User
@@ -21,12 +26,15 @@ type (
 	GuildChannel    = domain.GuildChannel
 )
 
-// port/user への interface エイリアス群 (契約)。
+// port/user への interface エイリアス (契約)。
 type (
 	BotRegistrar = port.BotRegistrar
 	Store        = port.Store
 	AdminStore   = port.AdminStore
 )
+
+// adapter/store/user.DBStore の型エイリアス。
+type DBStore = adapterUser.DBStore
 
 // Role 定数は domain/user の値を再エクスポート。
 const (
@@ -34,3 +42,13 @@ const (
 	RoleMember = domain.RoleMember
 	RoleGuest  = domain.RoleGuest
 )
+
+// NewDBStore は adapter/store/user.NewDBStore の再エクスポート。
+func NewDBStore(db *sql.DB, botPlatformUserIDs ...string) *DBStore {
+	return adapterUser.NewDBStore(db, botPlatformUserIDs...)
+}
+
+// Package は adapter/store/user.Package の再エクスポート (DI 登録)。
+func Package(i do.Injector) {
+	adapterUser.Package(i)
+}
