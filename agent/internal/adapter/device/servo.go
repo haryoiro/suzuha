@@ -1,6 +1,6 @@
 package device
 
-// DeviceAdapter adapts Hub to consumer-side interfaces defined in feature/vision.
+// DeviceAdapter adapts Hub to consumer-side interfaces defined in capability/vision.
 // It satisfies both servoCommander (for tracker) and deviceCommander (for tools).
 type DeviceAdapter struct {
 	hub *Hub
