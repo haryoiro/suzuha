@@ -7,6 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
 	userdom "github.com/haryoiro/suzuha/internal/domain/user"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
@@ -28,6 +29,9 @@ func (m *mockMemory) SearchByType(_ context.Context, _ string, _ memo.MemoryType
 	return nil, nil
 }
 func (m *mockMemory) SearchRecent(_ context.Context, _ string, _ int, _ time.Time) ([]memo.Memory, error) {
+	return nil, nil
+}
+func (m *mockMemory) SearchByParts(_ context.Context, _ []embedding.Part, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
 func (m *mockMemory) ListByUser(_ context.Context, _ string, _ int) ([]memo.Memory, error) {

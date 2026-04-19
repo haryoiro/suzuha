@@ -8,16 +8,17 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/haryoiro/suzuha/internal/domain/memo"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
 )
 
 // ProfileProvider は参加者のプロフィール情報をプロンプトブロックとして提供する。
 type ProfileProvider struct {
 	Users  user.Store
-	Memory memory.Store
+	Memory portmem.Memory
 	BotID  string
 	Logger *slog.Logger
 }
@@ -52,7 +53,7 @@ func (p *ProfileProvider) ProvideContext(ctx context.Context, req Request) Block
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			selfMems, err := p.Memory.ListByType(ctx, memory.MemoryTypeSelf, 3)
+			selfMems, err := p.Memory.ListByType(ctx, memo.MemoryTypeSelf, 3)
 			if err == nil && len(selfMems) > 0 {
 				var sb strings.Builder
 				sb.WriteString("[自己認識]\n")

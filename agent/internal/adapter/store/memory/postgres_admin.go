@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/adapter/embedder"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/pgvector/pgvector-go"
 )
