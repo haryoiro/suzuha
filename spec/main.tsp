@@ -3,20 +3,23 @@ import "@typespec/rest";
 import "@typespec/openapi";
 import "@typespec/openapi3";
 
-import "./memories.tsp";
-import "./users.tsp";
-import "./guilds.tsp";
-import "./channels.tsp";
-import "./actions.tsp";
-import "./location.tsp";
-import "./prompts.tsp";
-import "./tools.tsp";
-import "./logs.tsp";
-import "./agent.tsp";
-import "./diary.tsp";
-import "./scheduler.tsp";
-import "./device.tsp";
-import "./voicevox.tsp";
+import "./models/common.tsp";
+
+import "./routes/health.tsp";
+import "./routes/memories.tsp";
+import "./routes/users.tsp";
+import "./routes/guilds.tsp";
+import "./routes/channels.tsp";
+import "./routes/actions.tsp";
+import "./routes/location.tsp";
+import "./routes/prompts.tsp";
+import "./routes/tools.tsp";
+import "./routes/logs.tsp";
+import "./routes/agent.tsp";
+import "./routes/diary.tsp";
+import "./routes/scheduler.tsp";
+import "./routes/device.tsp";
+import "./routes/voicevox.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;
@@ -26,33 +29,3 @@ using TypeSpec.OpenAPI;
 @info(#{ version: "1.0.0" })
 @server("http://localhost:8080", "Admin API")
 namespace SuzuhaAdmin;
-
-// ── Common models ──
-
-model OkResponse {
-  ok: boolean;
-}
-
-model ErrorResponse {
-  error: string;
-}
-
-/** Paginated list wrapper. */
-model PaginatedList<T> {
-  data: T[];
-  total: int32;
-}
-
-/** Standard pagination query. */
-model PaginationQuery {
-  @query offset?: int32;
-  @query limit?: int32;
-}
-
-// ── Health ──
-
-@route("/api/health")
-@tag("Health")
-interface Health {
-  @get op check(): { status: string };
-}

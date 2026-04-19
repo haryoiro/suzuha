@@ -1745,6 +1745,7 @@ components:
       properties:
         error:
           type: string
+      description: エラーレスポンス。
     ForgetDeleteRequest:
       type: object
       required:
@@ -1982,6 +1983,7 @@ components:
       properties:
         ok:
           type: boolean
+      description: 成功レスポンス（単純な肯定応答）。
     PaginationQuery:
       type: object
       properties:

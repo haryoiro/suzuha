@@ -30,7 +30,7 @@ backups/
 node_modules/
 
 # ML / fine-tuning
-models/
+/models/
 unsloth_compiled_cache/
 
 # Runtime state
