@@ -233,6 +233,27 @@ func encodeLLMStatusResponse(response *LLMStatus, w http.ResponseWriter, span tr
 	return nil
 }
 
+func encodeRawStreamsDeviceDetectionsResponse(response RawStreamsDeviceDetectionsRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeRawStreamsDeviceFrameResponse(response RawStreamsDeviceFrameRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeRawStreamsLogsResponse(response RawStreamsLogsRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
 func encodeRuntimeCompactResponse(response *CompactResponse, w http.ResponseWriter, span trace.Span) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)

@@ -376,6 +376,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		do.Provide(i, control.NewToolsHandler)
 		do.Provide(i, control.NewLLMHandler)
 		do.Provide(i, control.NewDeviceHandler)
+		do.Provide(i, control.NewRawHandler)
 		do.Provide(i, func(i do.Injector) (gen.Handler, error) {
 			return control.NewHandler(i), nil
 		})

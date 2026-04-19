@@ -10,6 +10,7 @@ import "./routes/voicevox.tsp";
 import "./routes/tools.tsp";
 import "./routes/llm.tsp";
 import "./routes/device.tsp";
+import "./routes/streams.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;

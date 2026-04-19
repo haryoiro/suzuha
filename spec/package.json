@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "compile": "tsp compile admin && tsp compile control",
-    "compile:admin": "tsp compile admin",
-    "compile:control": "tsp compile control",
+    "compile": "pnpm run compile:admin && pnpm run compile:control",
+    "compile:admin": "tsp compile admin && node inject-raw-response.js generated/admin/openapi.yaml",
+    "compile:control": "tsp compile control && node inject-raw-response.js generated/control/openapi.yaml",
     "format": "tsp format \"**/*.tsp\""
   },
   "devDependencies": {

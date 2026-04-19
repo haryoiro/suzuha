@@ -2,13 +2,17 @@
 
 ## 0. このドキュメントは何か
 
-現状の `agent/internal/` を、**1 feature = 1 directory（ファイル内で役割分離）＋ 横断的な Ports & Adapters** のハイブリッド構造に置き換える。本書はその最終形（ゴール）の定義。
+現状の `agent/internal/` を、**`capability/` と `behavior/` の 2 群分離 ＋ 横断的な Ports & Adapters** に置き換える。本書はその最終形（ゴール）の定義。
+
+- **capability**：agent が「持つ」能力（memory, llm, voice 等）。port を公開し、他から呼ばれる
+- **behavior**：agent が「する」行動（diary, research, wander 等）。scheduler / LLM に駆動される
 
 設計の根拠：
 
-- feature-based の凝集度を取る → 「X を直す」は 1 ディレクトリで完結
-- Ports & Adapters の契約／実装分離を取る → LLM・DB・TTS のような横断能力だけは port と adapter に切る
-- サイズで構造を変えない → 小さい feature も大きい feature も同じファイル命名規則
+- 1 ドメインパッケージ = 1 directory → 「X を直す」は 1 ディレクトリで完結
+- Ports & Adapters の契約／実装分離 → LLM・DB・TTS のような横断能力は port と adapter に切る
+- サイズで構造を変えない → 小さいパッケージも大きいパッケージも同じファイル命名規則
+- capability と behavior で性質が違う部分だけ扱いが違う（port の有無）
 
 ---
 
@@ -17,7 +21,8 @@
 **Hexagonal Architecture (Ports & Adapters / Cockburn 2005)** × **Vertical Slice Architecture (Bogard 2017)** のハイブリッド。
 
 - port / adapter は Hexagonal の語彙をそのまま採用
-- feature の区切りは Vertical Slice の発想
+- パッケージの区切り（1 dir = 1 概念）は Vertical Slice の発想
+- capability / behavior の 2 群分離は意味の違いを反映（独自の整理）
 - DDD 由来の Entity / Value Object だけ借りる（Aggregate / Domain Event は使わない）
 - Clean Architecture の 4 層・UseCase 層は **採用しない**
 - Functional Core / Imperative Shell は **採用しない**（Go + LLM 中心の I/O には合わない）
@@ -26,30 +31,45 @@
 
 ## 2. 設計原則
 
-### 原則 1：1 feature = 1 directory
+### 原則 1：1 ドメインパッケージ = 1 directory
 
-各 feature は `internal/feature/<name>/` に全てのコードを集める。サイズに関係なく同じ構造。
+ドメイン単位のコードは **`capability/<name>/` か `behavior/<name>/`** に集める。サイズに関係なく同じ構造。
+
+### 原則 1.5：capability / behavior で意味的に分ける
+
+| 区分 | 定義 | port | 実例 |
+|---|---|---|---|
+| **capability**（能力） | agent が **持つ** 能力。他コード（runtime / behavior / channel / api）から呼ばれる | 必ず `port/<X>/` を公開 | memory, llm, voice, vision, location, mcp |
+| **behavior**（行動） | agent が **する** こと。scheduler から走らされる or LLM から呼ばれる | 持たない（shim が port/scheduler.Task / port/tool.Tool を満たす） | diary, research, wander, forget, topics, action, video |
+
+**判別基準**：
+
+- 「他から呼ばれたいか？」 → YES なら capability
+- 「自律的に走る or LLM が呼ぶか？」 → YES なら behavior
+- 両方 → どちらの性質が強いかで決める。例：location は Overland 取り込み（behavior っぽい）＋ "どこにいる" を返す（capability）が、後者の方が本質 → capability
+
+ブレを防ぐため、**capability 内は全部同じ構造、behavior 内は全部同じ構造**。2 群間で構造が違うのは意味の違いを反映しているだけ。
 
 ### 原則 2：ファイル単位で役割を分離
 
-feature 内で **1 ファイル = 1 責務**。癒着の原因は「ディレクトリに何でも入れる」ではなく「1 ファイルに複数責務を入れる」。
+capability / behavior package 内で **1 ファイル = 1 責務**。癒着の原因は「ディレクトリに何でも入れる」ではなく「1 ファイルに複数責務を入れる」。
 
 | 役割 | ファイル名 | 中身 |
 |---|---|---|
-| 公開 API | `<feature>.go` | 公開型・公開関数 |
+| 公開 API | `<name>.go` | 公開型・公開関数（package 名と一致するファイル） |
 | 純ロジック | `<verb>.go` | `search.go` / `write.go` / `consolidate.go` 等。I/O を直接触らない |
 | 永続化契約 | `store.go` | Store interface（consumer-side） |
 | 永続化実装 | `<storage>.go` | `postgres.go` / `sqlite.go` など |
 | scheduler Task | `task.go` | `port/scheduler.Task` 実装 shim |
-| LLM Tool | `tool_<name>.go` | `port/tool.Tool` 実装 shim |
+| LLM Tool | `tool_<verb>.go` | `port/tool.Tool` 実装 shim |
 | HTTP handler | `handler.go` | admin 経由の操作（必要なら） |
 | テスト | `<file>_test.go` | fake Store / fake LLM で完結 |
 
 ### 原則 3：cross-cutting は `port/` + `adapter/`
 
-複数 feature で共有される能力（LLM / embedder / TTS / STT / VAD / 字幕取得）は feature 内に置かず、`port/` に契約、`adapter/` に実装を置く。
+複数の capability / behavior で共有される能力（LLM / embedder / TTS / STT / VAD / 字幕取得）は capability 内に置かず、`port/` に契約、`adapter/` に実装を置く。
 
-`scheduler.Task` / `tool.Tool` のような interface 自体も `port/` に集約する（shim の実装は各 feature 内の `task.go` / `tool_*.go`）。
+`scheduler.Task` / `tool.Tool` のような interface 自体も `port/` に集約する（shim の実装は各 behavior / capability 内の `task.go` / `tool_*.go`）。
 
 ### 原則 4：依存方向は一方向
 
@@ -60,12 +80,15 @@ adapter/                                 （port を実装）
   │
   │    port/                             （契約）
   │      ↑
-  ├─── feature/<X>/                      （個別機能、uniform 構造）
-  │      │
-  │      ↓（公開 API のみ）
-  ├─── 他 feature/<Y>/                   （feature 間は最小限）
+  ├─── capability/<X>/                   （agent の能力、port 公開）
+  │      │  ↓（port 経由のみ）
+  │      └─ 他 capability/<Y>/           （sibling 間は必ず port 経由）
   │
-  ├── channel/                           （入出力プロトコル、feature 相当の扱い）
+  ├─── behavior/<X>/                     （agent の行動、shim ベース）
+  │      │  ↓（port 経由のみ）
+  │      └─ capability/<Y>/              （必ず port 経由）
+  │
+  ├── channel/                           （入出力プロトコル）
   ├── admin/                             （HTTP 管理サーフェス）
   │
   ↓
@@ -78,28 +101,46 @@ lib/                                     （stdlib 補完）
 stdlib
 ```
 
-- **runtime は feature を知らない**（runtime は agent loop のみ、個別機能は port 越しに呼ぶ）
-- **adapter は port だけを知る**（feature や runtime を import しない）
+- **runtime は capability / behavior を知らない**（runtime は agent loop のみ、個別パッケージは port 越しに呼ぶ）
+- **adapter は port だけを知る**（capability / behavior / runtime を import しない）
 - **port は純契約**（実装側を一切知らない）
 
-### 原則 5：feature 間の直接 import は最小限
+### 原則 5：sibling 間の直接 import 禁止
 
-`feature/A/` が `feature/B/` を直接 import するのは原則避ける。
+同種パッケージ間（capability 同士、behavior 同士、channel 同士、adapter 同士）の直接 import は禁止：
 
-- 型だけ共有するなら → `domain/` に昇格
-- interface を共有するなら → `port/` に昇格
-- ロジックを共有するなら → 片方に寄せるか、新 feature に切り出す
+- capability/A → capability/B を使いたい → `port/B` 経由のみ
+- behavior/A → behavior/B は禁止（共有ロジックは別 package に切り出す）
+- behavior/A → capability/B を使いたい → `port/B` 経由のみ
 
-どうしても必要なら **相手 feature の公開 API**（`<feature>.go` で export された型・関数）**のみ**を import 可。相手の `store.go` `task.go` `tool_*.go` を import してはならない。
+共有が必要になったら：
 
-### 原則 6：feature 内で `database/sql` を直接使わない
+- **型だけ共有** → `domain/<name>/` に昇格
+- **interface を共有** → `port/<name>/` に昇格
+- **ロジックを共有** → 片方に寄せるか、独立パッケージに切り出す
+
+### 原則 6：capability / behavior 内で `database/sql` を直接使わない
 
 `store.go` で interface を定義、`<storage>.go` がその実装。logic ファイルは Store interface だけを受け取る。これにより：
 
 - fake Store でのユニットテストが書ける
 - DB バックエンド差し替えが 1 ファイル内で済む
 
-### 原則 7：禁止 package 名
+**例外**：schema migration は capability / behavior の責務外とする。`driver/store/<name>/migrations/` 等、driver 側または専用の migration tool に集約する。現行 `scheduler.Feature.Setup(ctx, db)` のような「feature 内での CREATE TABLE」は **廃止**。
+
+### 原則 7：domain に出す型の判定
+
+型をどこに置くかは **package 外から参照されるか** で決まる：
+
+| 性質 | 置き場 | 例 |
+|---|---|---|
+| 複数 package から参照される Entity / Value Object | `domain/<name>/` | `domain/diary.Entry`（admin API と behavior/diary の両方で使う） |
+| 1 package 内に閉じる中間構造 | その package 内 | `behavior/research/` 内部の検索パラメータ構造体 |
+| enum 相当（型 + 定数） | 参照範囲次第。複数から使うなら domain/ | `domain/action.ActionStatus` |
+
+判断の起点は「**新しい型を `package <X>` 内に書いた後、同じ型を別 package の import 文に書きたくなるか？**」。イエスなら `domain/` に出す。
+
+### 原則 8：禁止 package 名
 
 `utils/`, `helpers/`, `common/`, `misc/`, `base/`, `shared/`。置き場が決まらない package は設計ミス。
 
@@ -124,11 +165,15 @@ agent/
     ├── observe/                  # cross-cutting util（framework 対象外、誰でも import 可）
     │   └── （metrics / tracing / log ring buffer）
     │
-    ├── domain/                   # 全 feature で共有される Entity / Value Object
+    ├── domain/                   # 全パッケージで共有される Entity / Value Object
     │   ├── memo/                 # Memo, MemoryType, Keywords
     │   ├── user/                 # User, Platform
     │   ├── message/              # Message, Role
-    │   └── channel/              # ChannelID, PlatformID, Source kind
+    │   ├── channel/              # ChannelID, PlatformID, Source kind
+    │   ├── diary/                # Entry, Period, EntryKind
+    │   ├── action/               # ScheduledAction, ActionStatus
+    │   ├── location/             # LocationPoint, LocationArea
+    │   └── research/             # ResearchResult 等（必要に応じて）
     │
     ├── runtime/                  # agent loop そのもの
     │   ├── agent/                # オーケストレータ・ライフサイクル
@@ -140,22 +185,24 @@ agent/
     │   ├── conversation/         # 会話履歴バッファ
     │   └── event/                # イベントバス
     │
-    ├── feature/                  # 1 dir = 1 feature（全員同じファイル構造）
-    │   ├── memory/               # 記憶（旧 memento + memory）
+    ├── capability/               # agent が持つ能力（他から呼ばれる、port あり）
+    │   ├── memory/               # 記憶（旧 memento + memory を統合）
     │   ├── llm/                  # LLM プロバイダ管理
-    │   ├── diary/                # 日記
-    │   ├── research/             # 研究行動
-    │   ├── wander/               # 徘徊
     │   ├── voice/                # VAD/STT/TTS 配線
     │   ├── vision/               # カメラ映像理解
     │   ├── location/             # GPS 取り込み + query
-    │   ├── mcp/                  # MCP クライアント管理
-    │   ├── forget/               # 記憶忘却（極小 feature）
-    │   ├── topics/               # 話題の暇度
-    │   ├── video/                # 動画理解 tool 群
-    │   └── action/               # 予約アクション実行
+    │   └── mcp/                  # MCP クライアント管理
     │
-    ├── channel/                  # 入出力プロトコル（feature 相当の扱い）
+    ├── behavior/                 # agent がする行動（scheduler / LLM に駆動される）
+    │   ├── diary/                # 日記書き込み (Task)
+    │   ├── research/             # 研究 (Task + Tool)
+    │   ├── wander/               # 徘徊 (Task + Tool)
+    │   ├── forget/               # 記憶忘却 (Task)
+    │   ├── topics/               # 話題の暇度 (Task)
+    │   ├── action/               # 予約アクション実行 (Task)
+    │   └── video/                # 動画理解 (Tool 群のみ)
+    │
+    ├── channel/                  # 入出力プロトコル（独立扱い）
     │   ├── discord/
     │   ├── device/               # ESP32 WebSocket
     │   ├── web/                  # Web widget
@@ -166,7 +213,7 @@ agent/
     │   │   ├── server.go
     │   │   ├── gen/              # ogen 生成（対象外）
     │   │   ├── handler.go        # Handler の配線
-    │   │   ├── handler_<resource>.go  # リソース別 handler（feature を呼ぶ薄い shim）
+    │   │   ├── handler_<resource>.go  # リソース別 handler（capability / behavior を呼ぶ薄い shim）
     │   │   ├── middleware/
     │   │   └── store.go          # admin 固有 Store interface（必要なら）
     │   │
@@ -180,10 +227,11 @@ agent/
     │   ├── scheduler/            # Task
     │   ├── tool/                 # Tool
     │   ├── chat/                 # Sender
-    │   ├── llm/                  # Client（feature/llm の公開 API）
-    │   ├── memory/               # Memory（feature/memory の公開 API）
-    │   ├── mcp/                  # Client（feature/mcp の公開 API）
-    │   ├── embedder/             # Embedder（feature 無し、薄い port）
+    │   ├── llm/                  # Client（capability/llm の公開 API）
+    │   │                         # 注：現行 *llm.Client は concrete struct。interface 抽出が要
+    │   ├── memory/               # Memory（capability/memory の公開 API）
+    │   ├── mcp/                  # Client（capability/mcp の公開 API）
+    │   ├── embedder/             # Embedder（capability 無し、薄い port）
     │   ├── tts/                  # Synthesizer
     │   ├── stt/                  # Transcriber
     │   ├── vad/                  # VoiceActivityDetector
@@ -211,12 +259,14 @@ agent/
 
 ---
 
-## 4. feature 内部の構造
+## 4. capability / behavior 内部の構造
 
-### 4.1 標準形（中規模 feature、例：`feature/diary/`）
+capability と behavior は **同じファイル命名規則に従う**。違いは「port を公開するか」だけ。
+
+### 4.1 behavior の標準形（例：`behavior/diary/`）
 
 ```
-feature/diary/
+behavior/diary/
 ├── diary.go              # 公開型（Entry, Period）
 ├── write.go              # 純ロジック：日記を書く
 ├── query.go              # 純ロジック：期間で取得
@@ -229,7 +279,7 @@ feature/diary/
 コード例：
 
 ```go
-// feature/diary/diary.go
+// behavior/diary/diary.go
 package diary
 
 type Entry struct {
@@ -242,12 +292,12 @@ type Entry struct {
 
 type Period struct{ Start, End time.Time }
 
-// 公開 API。他 feature はここだけ触れる
+// 公開 API。他 package はここだけ触れる
 func CurrentPeriod(now time.Time) Period { ... }
 ```
 
 ```go
-// feature/diary/write.go — 純ロジック、I/O なし
+// behavior/diary/write.go — 純ロジック、I/O なし
 func Write(ctx context.Context, s Store, llmCli llm.Client, p Period) error {
     existing, err := s.ListEntriesInRange(ctx, p.Start, p.End)
     // ...
@@ -256,7 +306,7 @@ func Write(ctx context.Context, s Store, llmCli llm.Client, p Period) error {
 ```
 
 ```go
-// feature/diary/store.go — consumer-side interface
+// behavior/diary/store.go — consumer-side interface
 type Store interface {
     SaveEntry(ctx context.Context, e Entry) error
     ListEntriesInRange(ctx context.Context, from, to time.Time) ([]Entry, error)
@@ -264,7 +314,7 @@ type Store interface {
 ```
 
 ```go
-// feature/diary/postgres.go — 唯一 database/sql を触る
+// behavior/diary/postgres.go — 唯一 database/sql を触る
 type Postgres struct{ db *sql.DB }
 
 func (p *Postgres) SaveEntry(ctx context.Context, e Entry) error {
@@ -274,7 +324,7 @@ func (p *Postgres) SaveEntry(ctx context.Context, e Entry) error {
 ```
 
 ```go
-// feature/diary/task.go — Task interface 実装 shim、50 行以下
+// behavior/diary/task.go — Task interface 実装 shim、50 行以下
 package diary
 
 type Task struct {
@@ -294,31 +344,32 @@ func (t *Task) Run(ctx context.Context) error {
 }
 ```
 
-### 4.2 大規模 feature（例：`feature/memory/`）
+### 4.2 capability の標準形（例：`capability/memory/`）
 
-ファイル数が増えるだけで構造は同じ：
+port を公開する点以外は behavior と同じ：
 
 ```
-feature/memory/
+capability/memory/
 ├── memory.go             # 公開型（Memo, Tag, MemoryType）+ Service 構造体
+│                         # Service は port/memory.Memory を実装
 ├── acquire.go            # 獲得ロジック
 ├── consolidate.go        # 統合ロジック
 ├── search.go             # FTS + Vec + Symbolic 検索
 ├── cluster.go            # union-find ヘルパー
 ├── judge.go              # LLM 判定ヘルパー
-├── store.go              # interface Store
+├── store.go              # interface Store（内部 consumer-side）
 ├── postgres.go           # Store 実装
 └── memory_test.go
 ```
 
-公開 API（`memory.Service`）が `port/memory.Memory` を満たすよう実装する。他 feature からは `port/memory` 経由のみ。
+`port/memory.Memory` を `memory.Service` が実装する。他は `port/memory` 経由のみアクセス。
 
-### 4.3 小規模 feature（例：`feature/forget/`）
+### 4.3 小規模 behavior（例：`behavior/forget/`）
 
 1-2 ファイルで完結：
 
 ```
-feature/forget/
+behavior/forget/
 ├── forget.go             # ロジックと型をまとめる
 ├── task.go               # Task 実装
 └── forget_test.go
@@ -326,12 +377,12 @@ feature/forget/
 
 `store.go` や `postgres.go` が不要なら省略。**構造テンプレは同じだが、使わないファイルは作らない**。
 
-### 4.4 Tool のみの feature（例：`feature/video/`）
+### 4.4 Tool のみの behavior（例：`behavior/video/`）
 
 Task なし、Tool 複数：
 
 ```
-feature/video/
+behavior/video/
 ├── video.go              # 公開型（Subtitle, Frame）
 ├── transcript.go         # 字幕取得ロジック（内部で port/transcript を使う）
 ├── look.go               # frame 解析ロジック（内部で port/llm を使う）
@@ -351,13 +402,20 @@ feature/video/
 | `cmd/` → 任意 | ✓ DI 配線のため |
 | `adapter/X/` → `port/X/` | ✓ 実装義務 |
 | `adapter/X/` → `domain/` `lib/` | ✓ |
-| `feature/X/` → `port/` | ✓ cross-cutting 利用 |
-| `feature/X/` → `runtime/` | ✓ Session や event を使う場合 |
-| `feature/X/` → `domain/` `lib/` | ✓ |
-| `feature/X/` → `feature/Y/`（公開 API のみ） | ✓ 最小限に |
+| `capability/X/` → `port/` | ✓ cross-cutting 利用 |
+| `capability/X/` → `domain/` `lib/` | ✓ |
+| `capability/X/` → `runtime/` | △ 必要最小限（基本は port で間に合わせる） |
+| `capability/X/` → 他 `capability/Y/` | **直接 import 禁止**、`port/Y/` 経由のみ |
+| `capability/X/` → `behavior/` | ✕ capability は behavior を知らない |
+| `behavior/X/` → `port/` | ✓ LLM / store 等を使う |
+| `behavior/X/` → `runtime/` | ✓ Session や event を使う場合 |
+| `behavior/X/` → `domain/` `lib/` | ✓ |
+| `behavior/X/` → 他 `behavior/Y/` | ✕ sibling 禁止 |
+| `behavior/X/` → `capability/Y/` | **直接 import 禁止**、`port/Y/` 経由のみ |
 | `channel/X/` → `port/` `runtime/` `domain/` | ✓ |
-| `api/admin/` → `feature/` `runtime/` `port/` | ✓ CRUD 管理のため |
-| `api/control/` → `feature/` `runtime/` `port/` | ✓ ランタイム操作のため |
+| `channel/X/` → 他 `channel/Y/` | ✕ sibling 禁止 |
+| `api/admin/` → `capability/` `behavior/` `runtime/` `port/` | ✓ CRUD 管理のため |
+| `api/control/` → `capability/` `behavior/` `runtime/` `port/` | ✓ ランタイム操作のため |
 | `api/<X>/` → `api/<X>/gen/` | ✓ 自サーフェスの ogen コード |
 | `runtime/` → `port/` `domain/` `lib/` | ✓ |
 | `port/` → `domain/` `lib/` | ✓ interface 引数型 |
@@ -366,42 +424,62 @@ feature/video/
 
 | from → to | ✕ | 理由 |
 |---|---|---|
-| `adapter/` → `feature/` `runtime/` `channel/` `api/` | ✕ | 層逆行 |
-| `port/` → `runtime/` `feature/` `adapter/` | ✕ | 契約は実装を知らない |
-| `runtime/` → `feature/` `channel/` `api/` `adapter/` | ✕ | runtime は plugin を知らない |
-| `feature/X/` → `feature/Y/` の非公開（store.go / task.go 等） | ✕ | 別 feature の内部に立ち入り禁止 |
-| `channel/X/` → `channel/Y/` | ✕ | sibling 禁止 |
-| `adapter/X/` → `adapter/Y/` | ✕ | sibling 禁止 |
+| `adapter/` → `capability/` `behavior/` `runtime/` `channel/` `api/` | ✕ | 層逆行 |
+| `port/` → `runtime/` `capability/` `behavior/` `adapter/` | ✕ | 契約は実装を知らない |
+| `runtime/` → `capability/` `behavior/` `channel/` `api/` `adapter/` | ✕ | runtime は plugin を知らない |
+| `capability/X/` ↔ 他 `capability/Y/` の直接 | ✕ | port 経由のみ |
+| `behavior/X/` ↔ 他 `behavior/Y/` | ✕ | sibling 禁止 |
+| `behavior/X/` → `capability/Y/` の直接 | ✕ | port 経由のみ |
+| `channel/X/` ↔ `channel/Y/` | ✕ | sibling 禁止 |
+| `adapter/X/` ↔ `adapter/Y/` | ✕ | sibling 禁止 |
 | `domain/` → 任意（`lib/` 除く） | ✕ | 純データ |
 | `lib/` → 任意の内部 package | ✕ | プリミティブ |
 
-### 5.3 feature 間の依存ガイドライン
+### 5.3 capability / behavior 間の依存ガイドライン
 
-優先順位：
+- **capability は他 capability を port 経由でしか使えない**：memory が llm を使うなら `port/llm` を import（`capability/llm` は直接触らない）
+- **behavior は capability を port 経由でしか使えない**：diary が memory を使うなら `port/memory` を import
+- **共有したい型があれば `domain/` に昇格**
+- **sibling 間の直接依存は一切禁止**
 
-1. **型だけ必要** → `domain/` に昇格
-2. **interface 越しに使いたい** → `port/` に昇格
-3. **相手の公開関数を直接呼びたい** → 相手の `<feature>.go` のみ import
-4. **それでも足りない** → 設計を見直す
+これで「capability 同士の癒着」「behavior 同士の癒着」が構造的に防止される。
 
 ---
 
 ## 6. port と adapter のパターン
 
-### 6.1 パターン A：feature 付き port
+### 6.1 パターン A：capability + port（常にセット）
 
-feature がロジックを持ち、他から呼ばれるときは port で公開：
+capability はロジックを持ち、他から呼ばれるので必ず port を公開：
 
 ```
-feature/memory/memory.go     → port/memory.Memory を満たす実装
+capability/memory/memory.go  → port/memory.Memory を満たす実装
 port/memory/memory.go        → interface Memory
 ```
 
-他 feature：`import "internal/port/memory"` のみ。`feature/memory/` は直接触らない。
+他（behavior / channel / api）：`import "internal/port/memory"` のみ。`capability/memory/` は直接触らない。
 
-該当：`memory` `llm` `mcp`
+該当：`memory` `llm` `voice` `vision` `location` `mcp`
 
-### 6.2 パターン B：薄い port（feature 無し）
+#### 6.1.1 port 内の interface 分割指針
+
+1 つの capability が複数用途で使われる場合、port/ の interface を分割する。現行 `internal/memory/` は 4 つの interface を持っているので指針として：
+
+| 用途 | port の分け方 | 現行 memory の例 |
+|---|---|---|
+| agent pipeline が使う主機能 | `port/memory.Memory` | `Store`（の一部） |
+| admin CRUD | `port/memory.Admin` | `AdminStore` |
+| media 添付管理 | `port/memory.Media` | `MediaStore` |
+| DB 接続 / lifecycle | driver 側に閉じる | `Backend`（DB を返すだけ、port 化不要） |
+
+**判断基準**：consumer が「何をしたいか」で interface を切る。1 つの巨大 interface を避け、3〜5 メソッド程度の狭い interface を複数用意。
+
+該当する分割候補：
+- **memory**：Memory / Admin / Media（Backend は port 化せず、driver/ 内部で閉じる）
+- **llm**：Client（complete 系）／ Admin（presets CRUD 系）の分離候補
+- **mcp**：Client（tool 呼び出し）／ Manager（server 管理）の分離候補
+
+### 6.2 パターン B：薄い port（capability 無し）
 
 外部 SDK wrapper が本体で、suzuha 固有のロジックが無いもの：
 
@@ -410,21 +488,21 @@ port/embedder/embedder.go    → interface Embedder
 adapter/embedder/gemini/     → Embedder 実装
 ```
 
-`feature/embedder/` は作らない。利用側の feature（例：memory）が直接 `port/embedder.Embedder` を DI で受け取る。
+`capability/embedder/` は作らない。利用側（例：memory capability）が直接 `port/embedder.Embedder` を DI で受け取る。
 
 該当：`embedder` `tts` `stt` `vad` `transcript`
 
-### 6.3 パターン C：feature のみ（port 無し）
+### 6.3 パターン C：behavior（port 無し）
 
-1 つの feature に閉じる機能：
+port を公開しない。shim を通じて scheduler / tool registry に登録されるのみ：
 
 ```
-feature/diary/               → task.go が scheduler.Task を満たす
+behavior/diary/               → task.go が scheduler.Task を満たす
 ```
 
-他 feature から直接呼ばれないなら port は不要。runtime は `port/scheduler.Task` 経由で task.go を呼ぶだけ。
+他から直接呼ばれないなら port は不要。runtime は `port/scheduler.Task` 経由で task.go を呼ぶだけ。
 
-該当：`diary` `research` `wander` `voice` `vision` `location` `forget` `topics` `video` `action`
+該当：`diary` `research` `wander` `forget` `topics` `video` `action`
 
 ---
 
@@ -434,22 +512,30 @@ feature/diary/               → task.go が scheduler.Task を満たす
 |---|---|---|
 | `external/` | 廃止 | 内容は `adapter/` へ |
 | `internal/adapter/` | リネーム → `channel/` | プロトコル adapter として |
-| `internal/feature/forget/` | `feature/forget/` 維持 | 既に小 feature 形に近い |
-| `internal/feature/topics/` | `feature/topics/` 維持 | 同上 |
-| `internal/feature/video/` | `feature/video/` 維持 | tool_watch / tool_look に役割分離 |
-| `internal/feature/wander/` | `feature/wander/` に再整理 | task.go / tool.go / logic ファイル分離 |
-| `internal/feature/research/` | `feature/research/` に再整理 | 同上 |
-| `internal/feature/diary/` | `feature/diary/` に再整理 | 同上 |
-| `internal/feature/action/` | `feature/action/` | |
-| `internal/feature/vision/` | `feature/vision/` | |
-| `internal/feature/location/` | `feature/location/` | |
-| `internal/voice/` | `feature/voice/` | |
-| `internal/memento/` + `internal/memory/` | `feature/memory/` に統合 | acquire / consolidate / search / store を 1 package に |
+| `internal/admin/` | `internal/api/admin/` | HTTP サーフェスとして |
+| `scheduler.Feature` interface | **廃止** | behavior は `task.go` / `tool_*.go` で個別に port/scheduler.Task / port/tool.Tool を満たす。DI で登録 |
+| `Feature.Setup(ctx, *sql.DB)` | **廃止** | schema migration は `driver/store/<name>/migrations/` or 専用 migration tool に分離 |
+| `api/admin/store.go` の shadow 型 | **廃止** | `Action` / `ActionListOpts` / `ActionUpdateFields` / `DiaryEntry` / `Location` / `UserLocation` / `DeviceMapping` / `Place` の 8 型全て `domain/<name>/` に一本化 |
+| `api/admin/store.go` の shadow interface | **廃止** | `ActionStore` / `DiaryStore` / `LocationStore` の 3 interface は domain 統合により不要に（admin が直接 capability の port を使う） |
+| `di/admin_adapter.go` の型変換関数 | **廃止** | `diaryStoreAdapter` / `diaryReaderAdapter` 等の変換は domain 統合で不要 |
+| `internal/memento/` + `internal/memory/` | **`capability/memory/` に統合** | acquire / consolidate / search / store を 1 package に。port/memory を新設 |
 | `internal/memento/acquirer.Completer` `internal/memento/consolidator.Completer` | 重複解消 | memory 統合で 1 つに |
-| `internal/llm/` | `feature/llm/` + `port/llm/` + `adapter/llm/<vendor>/` | |
-| `internal/mcp/` | `feature/mcp/` + `port/mcp/` | |
+| `internal/llm/` | `capability/llm/` + `port/llm/` + `adapter/llm/<vendor>/` | |
+| `internal/mcp/` | `capability/mcp/` + `port/mcp/` | |
+| `internal/voice/` | `capability/voice/` + `port/{stt,tts,vad}/` + `adapter/{stt,tts,vad}/*/` | VAD/STT/TTS は個別 port 分解 |
+| `internal/feature/vision/` | **`capability/vision/`** + `port/vision/` | camera pipeline は capability |
+| `internal/feature/location/` | **`capability/location/`** + `port/location/` | GPS store + query は capability |
+| `internal/feature/diary/` | **`behavior/diary/`** + **`domain/diary/`** に分割 | Entry/Period を domain/diary に出す |
+| `internal/feature/research/` | **`behavior/research/`** に再整理 | task.go / tool_*.go / search.go / fetch.go 等 |
+| `internal/feature/wander/` | **`behavior/wander/`** に再整理 | task.go / tool.go / wander.go |
+| `internal/feature/forget/` | **`behavior/forget/`** 維持 | 既に小 behavior 形 |
+| `internal/feature/topics/` | **`behavior/topics/`** 維持 | 同上 |
+| `internal/feature/video/` | **`behavior/video/`** 維持 | tool_watch / tool_look 形 |
+| `internal/feature/action/` | **`behavior/action/`** + **`domain/action/`** | ScheduledAction を domain に出す |
+| `internal/feature/location/` の型 | **`domain/location/`** に分離 | LocationPoint, LocationArea |
+| `internal/feature/diary/` の型 | **`domain/diary/`** に分離 | Entry, Period, EntryKind |
 | `internal/lib/` | `lib/` | 位置同じ |
-| `internal/observe/` | `observe/`（framework 対象外） | |
+| `internal/observe/` | `observe/`（framework 対象外） | 層ルール対象外 |
 
 ---
 
@@ -457,7 +543,7 @@ feature/diary/               → task.go が scheduler.Task を満たす
 
 - **ディレクトリ名** = 役割・ドメイン語彙
 - **package 名** = ディレクトリ名と一致（Go 慣習）
-- **feature 内のファイル** = §2 原則 2 の表に従う
+- **capability / behavior 内のファイル** = §2 原則 2 の表に従う
 - **adapter サブディレクトリ** = ベンダー・技術名（`openai` / `sqlite` / `voicevox`）
 - **interface 名** = 動詞＋er（`Synthesizer`, `Transcriber`, `Embedder`）or ドメイン名（`Store`, `Client`, `Memory`）
 - **禁止**：`utils/` `helpers/` `common/` `misc/` `base/` `shared/`
@@ -482,20 +568,23 @@ feature/diary/               → task.go が scheduler.Task を満たす
   ├─ agent loop 自体の変更（pipeline/session 等）？
   │     → runtime/<name>/
   │
-  ├─ 複数 feature が共有する interface？
-  │     → port/<contract>/
-  │
   ├─ 共有される Entity / 値型？
   │     → domain/<name>/
   │
-  ├─ 個別機能のロジック？
-  │     → feature/<name>/ （§4 のファイル命名に従う）
+  ├─ 複数が共有する interface？
+  │     → port/<contract>/
+  │
+  ├─ agent が「持つ」能力（他から呼ばれる、port あり）？
+  │     → capability/<name>/ + port/<name>/
+  │
+  ├─ agent が「する」行動（scheduler / LLM に駆動される）？
+  │     → behavior/<name>/
   │
   ├─ Task 実装？
-  │     → feature/<name>/task.go
+  │     → behavior/<name>/task.go
   │
   ├─ Tool 実装？
-  │     → feature/<name>/tool_<verb>.go
+  │     → behavior/<name>/tool_<verb>.go（or capability/<name>/tool_<verb>.go）
   │
   └─ cross-cutting util（log, metrics）？
         → observe/ or lib/

@@ -29,16 +29,16 @@ var (
 	rn11AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn33AllowedHeaders = map[string]string{
+	rn37AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
+	}
+	rn34AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
 	}
 	rn30AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn26AllowedHeaders = map[string]string{
-		"POST": "Content-Type",
-	}
-	rn34AllowedHeaders = map[string]string{
+	rn38AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 )
@@ -170,6 +170,56 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 				switch elem[0] {
+				case 'd': // Prefix: "detections"
+
+					if l := len("detections"); len(elem) >= l && elem[0:l] == "detections" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleRawStreamsDeviceDetectionsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 'f': // Prefix: "frame"
+
+					if l := len("frame"); len(elem) >= l && elem[0:l] == "frame" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleRawStreamsDeviceFrameRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				case 's': // Prefix: "servo"
 
 					if l := len("servo"); len(elem) >= l && elem[0:l] == "servo" {
@@ -315,71 +365,110 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-			case 'l': // Prefix: "llm"
+			case 'l': // Prefix: "l"
 
-				if l := len("llm"); len(elem) >= l && elem[0:l] == "llm" {
+				if l := len("l"); len(elem) >= l && elem[0:l] == "l" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					switch r.Method {
-					case "GET":
-						s.handleLLMStatusRequest([0]string{}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "GET",
-							allowedHeaders: nil,
-							acceptPost:     "",
-							acceptPatch:    "",
-						})
-					}
-
-					return
+					break
 				}
 				switch elem[0] {
-				case '/': // Prefix: "/"
+				case 'l': // Prefix: "lm"
 
-					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+					if l := len("lm"); len(elem) >= l && elem[0:l] == "lm" {
 						elem = elem[l:]
 					} else {
 						break
 					}
 
 					if len(elem) == 0 {
-						break
+						switch r.Method {
+						case "GET":
+							s.handleLLMStatusRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
 					}
 					switch elem[0] {
-					case 'm': // Prefix: "models"
+					case '/': // Prefix: "/"
 
-						if l := len("models"); len(elem) >= l && elem[0:l] == "models" {
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 							elem = elem[l:]
 						} else {
 							break
 						}
 
 						if len(elem) == 0 {
-							switch r.Method {
-							case "GET":
-								s.handleLLMListModelsRequest([0]string{}, elemIsEscaped, w, r)
-							case "POST":
-								s.handleLLMSaveModelRequest([0]string{}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET,POST",
-									allowedHeaders: rn13AllowedHeaders,
-									acceptPost:     "application/json",
-									acceptPatch:    "",
-								})
-							}
-
-							return
+							break
 						}
 						switch elem[0] {
-						case '/': // Prefix: "/refresh"
+						case 'm': // Prefix: "models"
 
-							if l := len("/refresh"); len(elem) >= l && elem[0:l] == "/refresh" {
+							if l := len("models"); len(elem) >= l && elem[0:l] == "models" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								switch r.Method {
+								case "GET":
+									s.handleLLMListModelsRequest([0]string{}, elemIsEscaped, w, r)
+								case "POST":
+									s.handleLLMSaveModelRequest([0]string{}, elemIsEscaped, w, r)
+								default:
+									s.notAllowed(w, r, notAllowedParams{
+										allowedMethods: "GET,POST",
+										allowedHeaders: rn13AllowedHeaders,
+										acceptPost:     "application/json",
+										acceptPatch:    "",
+									})
+								}
+
+								return
+							}
+							switch elem[0] {
+							case '/': // Prefix: "/refresh"
+
+								if l := len("/refresh"); len(elem) >= l && elem[0:l] == "/refresh" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch r.Method {
+									case "POST":
+										s.handleLLMRefreshModelsRequest([0]string{}, elemIsEscaped, w, r)
+									default:
+										s.notAllowed(w, r, notAllowedParams{
+											allowedMethods: "POST",
+											allowedHeaders: nil,
+											acceptPost:     "",
+											acceptPatch:    "",
+										})
+									}
+
+									return
+								}
+
+							}
+
+						case 'p': // Prefix: "providers"
+
+							if l := len("providers"); len(elem) >= l && elem[0:l] == "providers" {
 								elem = elem[l:]
 							} else {
 								break
@@ -388,11 +477,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							if len(elem) == 0 {
 								// Leaf node.
 								switch r.Method {
-								case "POST":
-									s.handleLLMRefreshModelsRequest([0]string{}, elemIsEscaped, w, r)
+								case "GET":
+									s.handleLLMListProvidersRequest([0]string{}, elemIsEscaped, w, r)
 								default:
 									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "POST",
+										allowedMethods: "GET",
 										allowedHeaders: nil,
 										acceptPost:     "",
 										acceptPatch:    "",
@@ -402,85 +491,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								return
 							}
 
-						}
+						case 'r': // Prefix: "roles"
 
-					case 'p': // Prefix: "providers"
-
-						if l := len("providers"); len(elem) >= l && elem[0:l] == "providers" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleLLMListProvidersRequest([0]string{}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
-					case 'r': // Prefix: "roles"
-
-						if l := len("roles"); len(elem) >= l && elem[0:l] == "roles" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							switch r.Method {
-							case "GET":
-								s.handleLLMListRolesRequest([0]string{}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-						switch elem[0] {
-						case '/': // Prefix: "/"
-
-							if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+							if l := len("roles"); len(elem) >= l && elem[0:l] == "roles" {
 								elem = elem[l:]
 							} else {
 								break
 							}
 
-							// Param: "role"
-							// Leaf parameter, slashes are prohibited
-							idx := strings.IndexByte(elem, '/')
-							if idx >= 0 {
-								break
-							}
-							args[0] = elem
-							elem = ""
-
 							if len(elem) == 0 {
-								// Leaf node.
 								switch r.Method {
-								case "PUT":
-									s.handleLLMAssignRoleRequest([1]string{
-										args[0],
-									}, elemIsEscaped, w, r)
+								case "GET":
+									s.handleLLMListRolesRequest([0]string{}, elemIsEscaped, w, r)
 								default:
 									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "PUT",
-										allowedHeaders: rn11AllowedHeaders,
+										allowedMethods: "GET",
+										allowedHeaders: nil,
 										acceptPost:     "",
 										acceptPatch:    "",
 									})
@@ -488,9 +514,72 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 								return
 							}
+							switch elem[0] {
+							case '/': // Prefix: "/"
+
+								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								// Param: "role"
+								// Leaf parameter, slashes are prohibited
+								idx := strings.IndexByte(elem, '/')
+								if idx >= 0 {
+									break
+								}
+								args[0] = elem
+								elem = ""
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch r.Method {
+									case "PUT":
+										s.handleLLMAssignRoleRequest([1]string{
+											args[0],
+										}, elemIsEscaped, w, r)
+									default:
+										s.notAllowed(w, r, notAllowedParams{
+											allowedMethods: "PUT",
+											allowedHeaders: rn11AllowedHeaders,
+											acceptPost:     "",
+											acceptPatch:    "",
+										})
+									}
+
+									return
+								}
+
+							}
 
 						}
 
+					}
+
+				case 'o': // Prefix: "ogs"
+
+					if l := len("ogs"); len(elem) >= l && elem[0:l] == "ogs" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleRawStreamsLogsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
 					}
 
 				}
@@ -696,7 +785,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "PUT",
-											allowedHeaders: rn33AllowedHeaders,
+											allowedHeaders: rn37AllowedHeaders,
 											acceptPost:     "",
 											acceptPatch:    "",
 										})
@@ -723,7 +812,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "POST",
-											allowedHeaders: rn30AllowedHeaders,
+											allowedHeaders: rn34AllowedHeaders,
 											acceptPost:     "application/json",
 											acceptPatch:    "",
 										})
@@ -765,7 +854,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
-								allowedHeaders: rn26AllowedHeaders,
+								allowedHeaders: rn30AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -793,7 +882,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PUT",
-							allowedHeaders: rn34AllowedHeaders,
+							allowedHeaders: rn38AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -1005,6 +1094,56 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					break
 				}
 				switch elem[0] {
+				case 'd': // Prefix: "detections"
+
+					if l := len("detections"); len(elem) >= l && elem[0:l] == "detections" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = RawStreamsDeviceDetectionsOperation
+							r.summary = ""
+							r.operationID = "RawStreams_deviceDetections"
+							r.operationGroup = "Raw"
+							r.pathPattern = "/internal/device/detections"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'f': // Prefix: "frame"
+
+					if l := len("frame"); len(elem) >= l && elem[0:l] == "frame" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = RawStreamsDeviceFrameOperation
+							r.summary = ""
+							r.operationID = "RawStreams_deviceFrame"
+							r.operationGroup = "Raw"
+							r.pathPattern = "/internal/device/frame"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				case 's': // Prefix: "servo"
 
 					if l := len("servo"); len(elem) >= l && elem[0:l] == "servo" {
@@ -1164,78 +1303,117 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					}
 				}
 
-			case 'l': // Prefix: "llm"
+			case 'l': // Prefix: "l"
 
-				if l := len("llm"); len(elem) >= l && elem[0:l] == "llm" {
+				if l := len("l"); len(elem) >= l && elem[0:l] == "l" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					switch method {
-					case "GET":
-						r.name = LLMStatusOperation
-						r.summary = ""
-						r.operationID = "LLM_status"
-						r.operationGroup = "LLM"
-						r.pathPattern = "/internal/llm"
-						r.args = args
-						r.count = 0
-						return r, true
-					default:
-						return
-					}
+					break
 				}
 				switch elem[0] {
-				case '/': // Prefix: "/"
+				case 'l': // Prefix: "lm"
 
-					if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+					if l := len("lm"); len(elem) >= l && elem[0:l] == "lm" {
 						elem = elem[l:]
 					} else {
 						break
 					}
 
 					if len(elem) == 0 {
-						break
+						switch method {
+						case "GET":
+							r.name = LLMStatusOperation
+							r.summary = ""
+							r.operationID = "LLM_status"
+							r.operationGroup = "LLM"
+							r.pathPattern = "/internal/llm"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
 					}
 					switch elem[0] {
-					case 'm': // Prefix: "models"
+					case '/': // Prefix: "/"
 
-						if l := len("models"); len(elem) >= l && elem[0:l] == "models" {
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
 							elem = elem[l:]
 						} else {
 							break
 						}
 
 						if len(elem) == 0 {
-							switch method {
-							case "GET":
-								r.name = LLMListModelsOperation
-								r.summary = ""
-								r.operationID = "LLM_listModels"
-								r.operationGroup = "LLM"
-								r.pathPattern = "/internal/llm/models"
-								r.args = args
-								r.count = 0
-								return r, true
-							case "POST":
-								r.name = LLMSaveModelOperation
-								r.summary = ""
-								r.operationID = "LLM_saveModel"
-								r.operationGroup = "LLM"
-								r.pathPattern = "/internal/llm/models"
-								r.args = args
-								r.count = 0
-								return r, true
-							default:
-								return
-							}
+							break
 						}
 						switch elem[0] {
-						case '/': // Prefix: "/refresh"
+						case 'm': // Prefix: "models"
 
-							if l := len("/refresh"); len(elem) >= l && elem[0:l] == "/refresh" {
+							if l := len("models"); len(elem) >= l && elem[0:l] == "models" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								switch method {
+								case "GET":
+									r.name = LLMListModelsOperation
+									r.summary = ""
+									r.operationID = "LLM_listModels"
+									r.operationGroup = "LLM"
+									r.pathPattern = "/internal/llm/models"
+									r.args = args
+									r.count = 0
+									return r, true
+								case "POST":
+									r.name = LLMSaveModelOperation
+									r.summary = ""
+									r.operationID = "LLM_saveModel"
+									r.operationGroup = "LLM"
+									r.pathPattern = "/internal/llm/models"
+									r.args = args
+									r.count = 0
+									return r, true
+								default:
+									return
+								}
+							}
+							switch elem[0] {
+							case '/': // Prefix: "/refresh"
+
+								if l := len("/refresh"); len(elem) >= l && elem[0:l] == "/refresh" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch method {
+									case "POST":
+										r.name = LLMRefreshModelsOperation
+										r.summary = ""
+										r.operationID = "LLM_refreshModels"
+										r.operationGroup = "LLM"
+										r.pathPattern = "/internal/llm/models/refresh"
+										r.args = args
+										r.count = 0
+										return r, true
+									default:
+										return
+									}
+								}
+
+							}
+
+						case 'p': // Prefix: "providers"
+
+							if l := len("providers"); len(elem) >= l && elem[0:l] == "providers" {
 								elem = elem[l:]
 							} else {
 								break
@@ -1244,12 +1422,12 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							if len(elem) == 0 {
 								// Leaf node.
 								switch method {
-								case "POST":
-									r.name = LLMRefreshModelsOperation
+								case "GET":
+									r.name = LLMListProvidersOperation
 									r.summary = ""
-									r.operationID = "LLM_refreshModels"
+									r.operationID = "LLM_listProviders"
 									r.operationGroup = "LLM"
-									r.pathPattern = "/internal/llm/models/refresh"
+									r.pathPattern = "/internal/llm/providers"
 									r.args = args
 									r.count = 0
 									return r, true
@@ -1258,93 +1436,93 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								}
 							}
 
-						}
+						case 'r': // Prefix: "roles"
 
-					case 'p': // Prefix: "providers"
-
-						if l := len("providers"); len(elem) >= l && elem[0:l] == "providers" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = LLMListProvidersOperation
-								r.summary = ""
-								r.operationID = "LLM_listProviders"
-								r.operationGroup = "LLM"
-								r.pathPattern = "/internal/llm/providers"
-								r.args = args
-								r.count = 0
-								return r, true
-							default:
-								return
-							}
-						}
-
-					case 'r': // Prefix: "roles"
-
-						if l := len("roles"); len(elem) >= l && elem[0:l] == "roles" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							switch method {
-							case "GET":
-								r.name = LLMListRolesOperation
-								r.summary = ""
-								r.operationID = "LLM_listRoles"
-								r.operationGroup = "LLM"
-								r.pathPattern = "/internal/llm/roles"
-								r.args = args
-								r.count = 0
-								return r, true
-							default:
-								return
-							}
-						}
-						switch elem[0] {
-						case '/': // Prefix: "/"
-
-							if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+							if l := len("roles"); len(elem) >= l && elem[0:l] == "roles" {
 								elem = elem[l:]
 							} else {
 								break
 							}
 
-							// Param: "role"
-							// Leaf parameter, slashes are prohibited
-							idx := strings.IndexByte(elem, '/')
-							if idx >= 0 {
-								break
-							}
-							args[0] = elem
-							elem = ""
-
 							if len(elem) == 0 {
-								// Leaf node.
 								switch method {
-								case "PUT":
-									r.name = LLMAssignRoleOperation
+								case "GET":
+									r.name = LLMListRolesOperation
 									r.summary = ""
-									r.operationID = "LLM_assignRole"
+									r.operationID = "LLM_listRoles"
 									r.operationGroup = "LLM"
-									r.pathPattern = "/internal/llm/roles/{role}"
+									r.pathPattern = "/internal/llm/roles"
 									r.args = args
-									r.count = 1
+									r.count = 0
 									return r, true
 								default:
 									return
 								}
 							}
+							switch elem[0] {
+							case '/': // Prefix: "/"
+
+								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								// Param: "role"
+								// Leaf parameter, slashes are prohibited
+								idx := strings.IndexByte(elem, '/')
+								if idx >= 0 {
+									break
+								}
+								args[0] = elem
+								elem = ""
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch method {
+									case "PUT":
+										r.name = LLMAssignRoleOperation
+										r.summary = ""
+										r.operationID = "LLM_assignRole"
+										r.operationGroup = "LLM"
+										r.pathPattern = "/internal/llm/roles/{role}"
+										r.args = args
+										r.count = 1
+										return r, true
+									default:
+										return
+									}
+								}
+
+							}
 
 						}
 
+					}
+
+				case 'o': // Prefix: "ogs"
+
+					if l := len("ogs"); len(elem) >= l && elem[0:l] == "ogs" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = RawStreamsLogsOperation
+							r.summary = ""
+							r.operationID = "RawStreams_logs"
+							r.operationGroup = "Raw"
+							r.pathPattern = "/internal/logs"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
 					}
 
 				}

@@ -3,6 +3,9 @@
 package gen
 
 import (
+	"io"
+	"net/http"
+
 	"github.com/go-faster/jx"
 )
 
@@ -665,6 +668,99 @@ func (o OptTriggerRequestConfig) Or(d TriggerRequestConfig) TriggerRequestConfig
 	}
 	return d
 }
+
+type RawStreamsDeviceDetectionsOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s RawStreamsDeviceDetectionsOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// RawStreamsDeviceDetectionsOKRawTextEventStream represents raw HTTP response for RawStreamsDeviceDetections text/event-stream.
+type RawStreamsDeviceDetectionsOKRawTextEventStream struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *RawStreamsDeviceDetectionsOKRawTextEventStream) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *RawStreamsDeviceDetectionsOKRawTextEventStream) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*RawStreamsDeviceDetectionsOKRawTextEventStream) rawStreamsDeviceDetectionsRes() {}
+
+type RawStreamsDeviceFrameOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s RawStreamsDeviceFrameOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// RawStreamsDeviceFrameOKRawImageJpeg represents raw HTTP response for RawStreamsDeviceFrame image/jpeg.
+type RawStreamsDeviceFrameOKRawImageJpeg struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *RawStreamsDeviceFrameOKRawImageJpeg) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *RawStreamsDeviceFrameOKRawImageJpeg) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*RawStreamsDeviceFrameOKRawImageJpeg) rawStreamsDeviceFrameRes() {}
+
+type RawStreamsLogsOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s RawStreamsLogsOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// RawStreamsLogsOKRawTextEventStream represents raw HTTP response for RawStreamsLogs text/event-stream.
+type RawStreamsLogsOKRawTextEventStream struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *RawStreamsLogsOKRawTextEventStream) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *RawStreamsLogsOKRawTextEventStream) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*RawStreamsLogsOKRawTextEventStream) rawStreamsLogsRes() {}
 
 // Ref: #/components/schemas/ReloadPromptResponse
 type ReloadPromptResponse struct {

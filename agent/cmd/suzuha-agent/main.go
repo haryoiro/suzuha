@@ -24,14 +24,12 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/adapter/device"
 	"github.com/haryoiro/suzuha/internal/di"
-	"github.com/haryoiro/suzuha/internal/feature/vision"
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
 	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
@@ -234,7 +232,6 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway) {
 	cfg := do.MustInvoke[*config.Config](injector)
 	logger := do.MustInvoke[*slog.Logger](injector)
-	logRing := do.MustInvoke[*observe.RingBuffer](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
 
 	controlHandler := do.MustInvoke[gen.Handler](injector)
@@ -268,17 +265,12 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		logger.Info("restored disabled tools", "count", len(names))
 	}
 
-	// ogen-backed control API はすべての /internal/* を内側で routing する。
-	// 例外 (SSE/WS/binary/custom auth) は個別パスで raw handler を登録し、
-	// ServeMux のより具体的なパターンが先に拾う (Go 1.22+ の routing 仕様)。
+	// ogen-backed control API は /internal/* を全部処理する (SSE/binary/JSON 問わず)。
+	// WebSocket のみ ogen スコープ外なので raw handler で別途登録する。
 	hub := do.MustInvoke[*device.Hub](injector)
-	visionFeature := do.MustInvoke[*vision.Feature](injector)
 	mux := http.NewServeMux()
 	mux.Handle("/internal/", controlOgen)
-	mux.Handle("/internal/logs", observe.LogHandler(logRing))
 	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
-	mux.HandleFunc("GET /internal/device/frame", visionFeature.Frames().FrameHandler())
-	mux.HandleFunc("GET /internal/device/detections", visionFeature.Frames().DetectionStreamHandler())
 	mux.HandleFunc("GET /ws/device", hub.Handler())
 	mux.HandleFunc("GET /ws/web", hub.WebHandler())
 

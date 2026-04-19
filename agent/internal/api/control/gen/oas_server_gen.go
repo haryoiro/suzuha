@@ -4,6 +4,7 @@ package gen
 
 import (
 	"context"
+	"net/http"
 )
 
 // Handler handles operations described by OpenAPI v3 specification.
@@ -11,6 +12,7 @@ type Handler interface {
 	AgentHandler
 	DeviceHandler
 	LLMHandler
+	RawHandler
 	RuntimeHandler
 	SchedulerHandler
 	ToolsHandler
@@ -124,6 +126,30 @@ type LLMHandler interface {
 	//
 	// GET /internal/llm
 	LLMStatus(ctx context.Context) (*LLMStatus, error)
+}
+
+// RawHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Raw
+type RawHandler interface {
+	// RawStreamsDeviceDetections implements RawStreams_deviceDetections operation.
+	//
+	// YOLO 検出結果の SSE ストリーム。vision.Feature.Frames() から配信。.
+	//
+	// GET /internal/device/detections
+	RawStreamsDeviceDetections(ctx context.Context, w http.ResponseWriter) error
+	// RawStreamsDeviceFrame implements RawStreams_deviceFrame operation.
+	//
+	// デバイスカメラの JPEG フレーム (binary response)。.
+	//
+	// GET /internal/device/frame
+	RawStreamsDeviceFrame(ctx context.Context, w http.ResponseWriter) error
+	// RawStreamsLogs implements RawStreams_logs operation.
+	//
+	// 内部ログの SSE ストリーム。observe.RingBuffer を tail する。.
+	//
+	// GET /internal/logs
+	RawStreamsLogs(ctx context.Context, w http.ResponseWriter) error
 }
 
 // RuntimeHandler handles operations described by OpenAPI v3 specification.

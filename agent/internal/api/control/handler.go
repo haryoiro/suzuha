@@ -16,6 +16,7 @@ type Handler struct {
 	gen.ToolsHandler
 	gen.LLMHandler
 	gen.DeviceHandler
+	gen.RawHandler
 }
 
 // NewHandler は injector から各 sub-handler を取り出して合成する。
@@ -28,5 +29,6 @@ func NewHandler(i do.Injector) gen.Handler {
 		ToolsHandler:     do.MustInvoke[gen.ToolsHandler](i),
 		LLMHandler:       do.MustInvoke[gen.LLMHandler](i),
 		DeviceHandler:    do.MustInvoke[gen.DeviceHandler](i),
+		RawHandler:       do.MustInvoke[gen.RawHandler](i),
 	}
 }
