@@ -13,17 +13,6 @@ import (
 // Middleware wraps a Notifier with additional behavior.
 type Middleware func(Notifier) Notifier
 
-// Chain applies middleware in order: Chain(a, b)(notifier) = a(b(notifier)).
-// The first middleware in the list is the outermost wrapper.
-func Chain(mws ...Middleware) Middleware {
-	return func(n Notifier) Notifier {
-		for i := len(mws) - 1; i >= 0; i-- {
-			n = mws[i](n)
-		}
-		return n
-	}
-}
-
 // QuietHoursConfig defines the quiet hours window.
 type QuietHoursConfig struct {
 	Start    string // "HH:MM" format, e.g. "23:00"

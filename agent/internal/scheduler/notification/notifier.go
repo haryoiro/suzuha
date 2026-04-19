@@ -19,14 +19,3 @@ type Notifier interface {
 	// If the platform doesn't support replies, it falls back to a regular send.
 	Reply(ctx context.Context, channelID, content, replyToID, source string) (SendResult, error)
 }
-
-// NopNotifier is a Notifier that does nothing. Useful for testing.
-type NopNotifier struct{}
-
-func (NopNotifier) Send(_ context.Context, _, _, _ string) (SendResult, error) {
-	return SendResult{}, nil
-}
-
-func (NopNotifier) Reply(_ context.Context, _, _, _, _ string) (SendResult, error) {
-	return SendResult{}, nil
-}
