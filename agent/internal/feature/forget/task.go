@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	consol "github.com/haryoiro/suzuha/internal/memento/consolidator"
+	consol "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
 

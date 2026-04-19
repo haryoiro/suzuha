@@ -1,4 +1,4 @@
-package consolidator
+package consolidate
 
 // unionFind implements a disjoint-set data structure with path compression
 // and union by rank for grouping similar memories.

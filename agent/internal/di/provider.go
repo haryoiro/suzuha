@@ -40,8 +40,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/mcp"
-	"github.com/haryoiro/suzuha/internal/memento/acquirer"
-	"github.com/haryoiro/suzuha/internal/memento/consolidator"
+	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
+	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
@@ -201,7 +201,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvoke[memory.Backend](i),
 				do.MustInvoke[user.Store](i),
 				do.MustInvoke[*event.Bus](i),
-				do.MustInvoke[*acquirer.Acquirer](i),
+				do.MustInvoke[*capmemAcq.Acquirer](i),
 				conversation.NewStore(db),
 				diaryReader,
 				channelSettings,
@@ -320,7 +320,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				&research.Task{},
 				&diary.HourlyTask{},
 				&diary.DailyTask{},
-				&forget.Task{Consolidator: do.MustInvoke[*consolidator.Consolidator](i)},
+				&forget.Task{Consolidator: do.MustInvoke[*capmemCon.Consolidator](i)},
 			}
 			return tasks, nil
 		})
@@ -563,17 +563,17 @@ func provideVisionFeature(i do.Injector) (*vision.Feature, error) {
 
 // mementoPackage registers memento sub-package providers into the DI injector.
 func mementoPackage(i do.Injector) {
-	do.Provide(i, func(i do.Injector) (*acquirer.Acquirer, error) {
+	do.Provide(i, func(i do.Injector) (*capmemAcq.Acquirer, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[memory.Backend](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return acquirer.NewAcquirer(llmClient.For("background"), store, acquirer.DefaultConfig(), logger), nil
+		return capmemAcq.NewAcquirer(llmClient.For("background"), store, capmemAcq.DefaultConfig(), logger), nil
 	})
 
-	do.Provide(i, func(i do.Injector) (*consolidator.Consolidator, error) {
+	do.Provide(i, func(i do.Injector) (*capmemCon.Consolidator, error) {
 		llmClient := do.MustInvoke[*llm.Client](i)
 		store := do.MustInvoke[memory.Backend](i)
 		logger := do.MustInvoke[*slog.Logger](i)
-		return consolidator.NewConsolidator(llmClient.For("background"), store, store, logger), nil
+		return capmemCon.NewConsolidator(llmClient.For("background"), store, store, logger), nil
 	})
 }
