@@ -228,8 +228,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return tp, nil
 		})
 
-		// Features: setup + tool/hook registration.
-		do.Provide(i, func(i do.Injector) ([]scheduler.Feature, error) {
+		// Tasks + tool registration.
+		// 旧 scheduler.Feature bundle を廃止し、tool は registry に直接登録、
+		// task は []scheduler.CronTask として返す。Setup 相当の初期化
+		// (action.Store.Setup や mcp apps 再接続等) は適宜呼び出す。
+		do.Provide(i, func(i do.Injector) ([]scheduler.CronTask, error) {
 			store := do.MustInvoke[memory.Backend](i)
 			registry := do.MustInvoke[*tool.Registry](i)
 			logger := do.MustInvoke[*slog.Logger](i)
@@ -238,7 +241,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			userStore := do.MustInvoke[user.Store](i)
 			llmClient := do.MustInvoke[*llm.Client](i)
 
-			// Register builtin tools.
+			ctx := context.Background()
+			db := store.DB()
+
+			// builtin tools.
 			registry.Register(builtin.NewFetch())
 			registry.Register(builtin.NewPythonExec())
 			registry.Register(builtin.NewUpdateUserProfile(userStore, func(userID, newName string) {
@@ -248,10 +254,31 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			registry.Register(builtin.NewMemoSearch(store))
 			registry.Register(builtin.NewMemoUpdate(store))
 
-			// Web search features (searxng is always on the compose network).
-			searxURL := "http://searxng:8080"
+			// action (scheduled_actions) — setup + tools + task.
+			actionStore := action.NewStore(db)
+			if err := actionStore.Setup(ctx); err != nil {
+				logger.Error("action: Setup に失敗", "error", err)
+			}
+			registry.Register(action.NewCreateTool(actionStore))
+			registry.Register(action.NewListTool(actionStore))
+			registry.Register(action.NewCancelTool(actionStore))
 
-			// Video transcript fetcher (YouTube Go library → yt-dlp fallback).
+			// mcp apps — store setup + reconnect + tools.
+			mcpAppStore, err := mcp.BootstrapStore(ctx, db)
+			if err != nil {
+				logger.Error("mcpapps: Setup に失敗", "error", err)
+			} else {
+				mcp.ReconnectEnabled(ctx, mcpMgr, mcpAppStore, logger)
+				for _, t := range mcp.NewTools(mcpMgr, mcpAppStore, logger) {
+					registry.Register(t)
+				}
+			}
+
+			// research (searxng は compose network 内に常在)。
+			searxURL := "http://searxng:8080"
+			registry.Register(research.NewResearchTool(searxURL, 5))
+
+			// video (transcript fetcher + YOLO frame extractor)。
 			ytFetcher := transcript.NewYouTubeFetcher()
 			videoFetcher := transcript.NewChain(logger,
 				ytFetcher,
@@ -261,22 +288,19 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			ag.SetVideoMeta(&videoMetaAdapter{inner: ytFetcher}, transcript.ExtractVideoURLs)
 			ag.SetTweetFetcher(&tweetFetcherAdapter{inner: twitter.NewFxTwitterFetcher()}, twitter.ExtractTwitterURLs)
 
-			features := []scheduler.Feature{
-				action.New(store.DB()),
-				mcp.NewFeature(mcpMgr, logger),
-				topics.New(),
-				research.New(searxURL, 5),
-				forget.New(do.MustInvoke[*consolidator.Consolidator](i)),
-				diary.New(),
-				video.New(videoFetcher, videoExtractor, llmClient, logger),
+			registry.Register(video.NewWatchTool(videoFetcher, logger))
+			if videoExtractor != nil && llmClient != nil {
+				registry.Register(video.NewLookTool(videoExtractor, llmClient, logger))
 			}
 
-			// Add vision feature if device block created it.
+			// vision (デバイスブロックで作成されていれば)。
 			if vf, err := do.Invoke[*vision.Feature](i); err == nil {
-				features = append(features, vf)
+				for _, t := range vf.Tools() {
+					registry.Register(t)
+				}
 			}
 
-			// Wire Langfuse tracing if enabled.
+			// Langfuse トレーシングの配線 (有効なら)。
 			lfTP := do.MustInvoke[*langfuse.TracerProvider](i)
 			if lfTP != nil {
 				tracer := lfTP.Tracer("suzuha-agent")
@@ -285,21 +309,19 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				ag.AddHook(newLangfuseAdapter(langfuse.NewHook(tracer)))
 			}
 
-			// Set media store for memory attachment loading.
+			// memory attachment 読み込み用の media store を配線。
 			ag.SetMediaStore(do.MustInvoke[memory.MediaStore](i))
-			for _, f := range features {
-				if err := f.Setup(context.Background(), store.DB()); err != nil {
-					logger.Error("フィーチャーのセットアップに失敗しました", "feature", f.Name(), "error", err)
-				}
-				for _, t := range f.Tools() {
-					registry.Register(t)
-				}
-				if h, ok := f.(agent.PipelineHook); ok {
-					ag.AddHook(h)
-					logger.Info("パイプラインフックを登録しました", "feature", f.Name())
-				}
+
+			// Tasks — 各 behavior / capability の scheduler.CronTask を列挙。
+			tasks := []scheduler.CronTask{
+				&action.Task{},
+				&topics.Task{},
+				&research.Task{},
+				&diary.HourlyTask{},
+				&diary.DailyTask{},
+				&forget.Task{Consolidator: do.MustInvoke[*consolidator.Consolidator](i)},
 			}
-			return features, nil
+			return tasks, nil
 		})
 
 		// Schedule store (used by admin server).
@@ -378,7 +400,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	logger := observe.NewLoggerWithRing(do.MustInvoke[*config.Config](i).Observe.LogLevel, ring)
 	chatIface := do.MustInvoke[chat.Interface](i)
 	userStore := do.MustInvoke[user.Store](i)
-	features := do.MustInvoke[[]scheduler.Feature](i)
+	tasks := do.MustInvoke[[]scheduler.CronTask](i)
 
 	// Build notifier with middleware chain.
 	var notifier notification.Notifier = notification.NewChatNotifier(chatIface, logger)
@@ -409,12 +431,10 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 
 	notifier = notification.WithChannelSettings(store.DB(), logger)(notifier)
 
-	// Build task registry from features.
+	// Register tasks directly (former features.Tasks() の代替)。
 	taskRegistry := scheduler.NewRegistry()
-	for _, f := range features {
-		for _, t := range f.Tasks() {
-			taskRegistry.Register(t)
-		}
+	for _, t := range tasks {
+		taskRegistry.Register(t)
 	}
 
 	// Build CronContext.
