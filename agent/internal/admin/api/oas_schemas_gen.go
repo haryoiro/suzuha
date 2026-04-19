@@ -1795,6 +1795,7 @@ func (s *MetricsJSONOK) SetMetrics(val []MetricEntry) {
 	s.Metrics = val
 }
 
+// 成功レスポンス（単純な肯定応答）。.
 // Ref: #/components/schemas/OkResponse
 type OkResponse struct {
 	Ok bool `json:"ok"`

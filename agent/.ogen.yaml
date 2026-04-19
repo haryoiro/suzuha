@@ -1,0 +1,6 @@
+parser:
+  allow_remote: false
+
+generator:
+  ignore_not_implemented:
+    - "all"

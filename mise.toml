@@ -8,8 +8,8 @@ node = "22"
 [tasks.spec]
 description = "TypeSpec → OpenAPI → ogen コード生成"
 run = """
-cd spec && pnpm exec tsp compile .
-docker compose -f container/compose.yaml exec agent ogen --target /app/agent/internal/admin/api --package api --clean /app/spec/generated/openapi.yaml
+pnpm --filter api compile
+docker compose -f container/compose.yaml exec agent sh -c 'cd /app/agent && go generate ./...'
 """
 
 [tasks."dev:admin"]
@@ -17,7 +17,7 @@ description = "管理画面: Go API + Vite HMR を同時起動"
 run = """
 trap 'kill 0' EXIT
 air -c .air.admin.toml &
-cd web/admin && pnpm run dev &
+pnpm --filter admin dev &
 wait
 """
 
@@ -27,7 +27,7 @@ run = "air -c .air.admin.toml"
 
 [tasks."dev:admin:web"]
 description = "Vite dev server のみ起動"
-run = "cd web/admin && pnpm run dev"
+run = "pnpm --filter admin dev"
 
 [tasks."firmware:p4"]
 description = "ESP32-P4 ファームウェアビルド"
