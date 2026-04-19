@@ -5,59 +5,55 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/adapter/embedder"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
-	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
-	"github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/haryoiro/suzuha/internal/domain/memo"
 	userdom "github.com/haryoiro/suzuha/internal/domain/user"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
+	"github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 )
 
 // --- Mock memory.Store ---
 
 type mockMemory struct{}
 
-func (m *mockMemory) Save(_ context.Context, _ *memory.Memory) error { return nil }
-func (m *mockMemory) Search(_ context.Context, _ string, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) Save(_ context.Context, _ *memo.Memory) error { return nil }
+func (m *mockMemory) Search(_ context.Context, _ string, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) SearchWithContext(_ context.Context, _ string, _ int, _ memory.SymbolicFilter) ([]memory.Memory, error) {
+func (m *mockMemory) SearchWithContext(_ context.Context, _ string, _ int, _ memo.SymbolicFilter) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) SearchByType(_ context.Context, _ string, _ memory.MemoryType, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) SearchByType(_ context.Context, _ string, _ memo.MemoryType, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) SearchRecent(_ context.Context, _ string, _ int, _ time.Time) ([]memory.Memory, error) {
+func (m *mockMemory) SearchRecent(_ context.Context, _ string, _ int, _ time.Time) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) ListByUser(_ context.Context, _ string, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) ListByUser(_ context.Context, _ string, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) ListEpisodesByParticipant(_ context.Context, _ string, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) ListEpisodesByParticipant(_ context.Context, _ string, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) ListByType(_ context.Context, _ memory.MemoryType, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) ListByType(_ context.Context, _ memo.MemoryType, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) ListRecentByType(_ context.Context, _ memory.MemoryType, _ time.Time, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) ListRecentByType(_ context.Context, _ memo.MemoryType, _ time.Time, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) ListRecent(_ context.Context, _ time.Time, _ int) ([]memory.Memory, error) {
+func (m *mockMemory) ListRecent(_ context.Context, _ time.Time, _ int) ([]memo.Memory, error) {
 	return nil, nil
 }
-func (m *mockMemory) SearchByParts(_ context.Context, _ []embedding.Part, _ int) ([]memory.Memory, error) {
-	return nil, nil
-}
-func (m *mockMemory) IsDuplicate(_ context.Context, _ string, _ memory.MemoryType) (string, []float32, error) {
+func (m *mockMemory) IsDuplicate(_ context.Context, _ string, _ memo.MemoryType) (string, []float32, error) {
 	return "", nil, nil
 }
-func (m *mockMemory) IsDuplicateBatch(_ context.Context, candidates []memory.DupCandidate) ([]memory.DupResult, error) {
-	return make([]memory.DupResult, len(candidates)), nil
+func (m *mockMemory) IsDuplicateBatch(_ context.Context, candidates []memo.DupCandidate) ([]memo.DupResult, error) {
+	return make([]memo.DupResult, len(candidates)), nil
 }
 func (m *mockMemory) Close() error { return nil }
 
-var _ memory.Store = (*mockMemory)(nil)
+var _ portmem.Memory = (*mockMemory)(nil)
 
 // --- Mock user.Store ---
 
@@ -104,14 +100,14 @@ func (m *mockChat) Send(_ context.Context, _, text string) error {
 // --- Mock acquirer ---
 
 type mockAcquirer struct {
-	acquireResult *acq.AcquireResult
+	acquireResult *portmem.AcquireResult
 }
 
-func (m *mockAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.AcquireResult, error) {
+func (m *mockAcquirer) Acquire(_ context.Context, _ *portmem.AcquireRequest) (*portmem.AcquireResult, error) {
 	if m.acquireResult != nil {
 		return m.acquireResult, nil
 	}
-	return &acq.AcquireResult{}, nil
+	return &portmem.AcquireResult{}, nil
 }
 
 // --- testSession: Session interface の最小テスト実装 ---

@@ -174,7 +174,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 	}
 
 	db := store.DB()
-	convStore := conversation.NewStore(db)
+	convStore := conversation.NewDBStore(db)
 	userStore := user.NewDBStore(db)
 
 	// LLM Client (本番と同じ設定)
