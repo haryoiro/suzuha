@@ -31,7 +31,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	user "github.com/haryoiro/suzuha/internal/adapter/store/user"
 )
 

@@ -9,7 +9,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	userdom "github.com/haryoiro/suzuha/internal/domain/user"
 )

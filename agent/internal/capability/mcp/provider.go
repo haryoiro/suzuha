@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/config"
-	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/samber/do/v2"
 )
 
