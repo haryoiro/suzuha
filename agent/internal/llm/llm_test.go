@@ -10,49 +10,6 @@ func buildTestClient(t *testing.T, roles map[string]roleProvider) *Client {
 	return &Client{roles: roles, logger: slog.Default()}
 }
 
-func TestHasVision(t *testing.T) {
-	tests := []struct {
-		name          string
-		roles         map[string]roleProvider
-		wantHasVision bool
-		wantIsCapable bool
-	}{
-		{
-			"native capability",
-			map[string]roleProvider{
-				"conversation": {capabilities: []string{"text", "vision"}},
-			},
-			true, true,
-		},
-		{
-			"separate vision role",
-			map[string]roleProvider{
-				"conversation": {capabilities: []string{"text"}},
-				"vision":       {capabilities: []string{"text", "vision"}},
-			},
-			true, false,
-		},
-		{
-			"no vision",
-			map[string]roleProvider{
-				"conversation": {capabilities: []string{"text"}},
-			},
-			false, false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := buildTestClient(t, tt.roles)
-			if got := c.HasVision(); got != tt.wantHasVision {
-				t.Errorf("HasVision() = %v, want %v", got, tt.wantHasVision)
-			}
-			if got := c.IsVisionCapable(); got != tt.wantIsCapable {
-				t.Errorf("IsVisionCapable() = %v, want %v", got, tt.wantIsCapable)
-			}
-		})
-	}
-}
-
 func TestWithCapability(t *testing.T) {
 	tests := []struct {
 		name       string

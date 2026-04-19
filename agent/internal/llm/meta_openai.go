@@ -12,8 +12,6 @@ import (
 // /v1/models は ID しか返さないため、静的マッピングで capabilities と max_context を補完する。
 type openaiMeta struct{}
 
-func (m *openaiMeta) TypeName() string { return "openai" }
-
 // knownOpenAIModels は OpenAI のよく使われるモデルの静的メタデータ。
 var knownOpenAIModels = map[string]ModelInfo{
 	"gpt-4.1":            {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},

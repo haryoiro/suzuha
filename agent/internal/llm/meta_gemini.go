@@ -13,8 +13,6 @@ import (
 // Gemini は唯一 capabilities と context window を API から返すプロバイダ。
 type geminiMeta struct{}
 
-func (m *geminiMeta) TypeName() string { return "gemini" }
-
 func (m *geminiMeta) ListModels(ctx context.Context, apiKey, _ string) ([]ModelInfo, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("gemini: API キーが必要です")

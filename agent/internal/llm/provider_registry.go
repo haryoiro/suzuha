@@ -277,34 +277,6 @@ func (r *ProviderRegistry) Assignments(ctx context.Context) ([]RoleAssignment, e
 
 // --- Resolution ---
 
-// ResolveRole はロール割り当てから RoleSpec を組み立てる。
-// モデルがカタログにない場合はデフォルト capabilities=["text"], maxContext=0 で返す。
-func (r *ProviderRegistry) ResolveRole(ctx context.Context, role string) (*RoleSpec, error) {
-	assignments, err := r.Assignments(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// フォールバック: role → "background" → "conversation"
-	var assignment *RoleAssignment
-	for _, fallback := range roleFallback(role) {
-		for i := range assignments {
-			if assignments[i].Role == fallback {
-				assignment = &assignments[i]
-				break
-			}
-		}
-		if assignment != nil {
-			break
-		}
-	}
-	if assignment == nil {
-		return nil, fmt.Errorf("role: %q に割り当てがありません", role)
-	}
-
-	return r.buildRoleSpec(ctx, assignment.ProviderName, assignment.ModelID)
-}
-
 // BuildRoleSpec はプロバイダ名+モデルIDから RoleSpec を組み立てる。
 func (r *ProviderRegistry) BuildRoleSpec(ctx context.Context, providerName, modelID string) (*RoleSpec, error) {
 	return r.buildRoleSpec(ctx, providerName, modelID)
@@ -459,17 +431,6 @@ func (r *ProviderRegistry) SeedModels(ctx context.Context, models []ModelInfo) e
 }
 
 // --- Helpers ---
-
-func roleFallback(role string) []string {
-	chain := []string{role}
-	if role != "background" && role != "conversation" {
-		chain = append(chain, "background")
-	}
-	if role != "conversation" {
-		chain = append(chain, "conversation")
-	}
-	return chain
-}
 
 func scanModel(rows *sql.Rows) (ModelInfo, error) {
 	var m ModelInfo

@@ -6,8 +6,6 @@ import "context"
 // API がないため静的リストを返す。
 type zhipuMeta struct{}
 
-func (m *zhipuMeta) TypeName() string { return "zhipu" }
-
 var knownZhipuModels = []ModelInfo{
 	{ModelID: "glm-4.7", Capabilities: []string{"text"}, MaxContext: 200000},
 	{ModelID: "glm-5.1", Capabilities: []string{"text"}, MaxContext: 200000},

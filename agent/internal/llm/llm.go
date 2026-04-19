@@ -127,7 +127,6 @@ func IsSilentResponse(text string) bool {
 type roleProvider struct {
 	provider     providers.Provider
 	providerName string
-	providerType string // "openai", "zhipu", "gemini", "qwen"
 	model        string
 	apiBase      string
 	maxCtx       int
@@ -177,34 +176,11 @@ func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapa
 	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
 }
 
-// ConversationProviderType は conversation ロールのプロバイダタイプを返す。
-func (c *Client) ConversationProviderType() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	rp, ok := c.roles["conversation"]
-	if !ok {
-		return ""
-	}
-	return rp.providerType
-}
-
-// ConversationModel は conversation ロールのモデル名を返す。
-func (c *Client) ConversationModel() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	rp, ok := c.roles["conversation"]
-	if !ok {
-		return ""
-	}
-	return rp.model
-}
-
 // SwapRoleSpec はロールのプロバイダを RoleSpec で切り替える。
 func (c *Client) SwapRoleSpec(role string, spec RoleSpec) {
 	rp := roleProvider{
 		provider:     spec.ProviderInst,
 		providerName: spec.ProviderName,
-		providerType: spec.ProviderType,
 		model:        spec.ModelID,
 		apiBase:      spec.APIBase,
 		maxCtx:       spec.MaxContext,
@@ -520,16 +496,6 @@ func (c *Client) MaxContextTokens() int {
 	return 0
 }
 
-// SetMaxContextTokens updates the conversation role's max context window.
-func (c *Client) SetMaxContextTokens(maxCtx int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if rp, ok := c.roles["conversation"]; ok {
-		rp.maxCtx = maxCtx
-		c.roles["conversation"] = rp
-	}
-}
-
 // Complete sends a completion request with optional tools.
 // 後方互換シム: conversation ロールを使用する。
 // Deprecated: Complete はメッセージ/ツール変換と tracing を内包している。
@@ -634,60 +600,6 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 			"content", textutil.TruncateRunes(reasoning, 300))
 	}
 
-	return r, nil
-}
-
-// CompleteRaw sends a completion request with pre-built provider messages (no tool support).
-// 後方互換シム: conversation ロールを使用する。
-func (c *Client) CompleteRaw(ctx context.Context, messages []providers.Message) (*Response, error) {
-	c.mu.RLock()
-	rp := c.roles["conversation"]
-	c.mu.RUnlock()
-	return c.completeRaw(ctx, rp.provider, rp.model, messages)
-}
-
-// CompleteRawDefault sends a completion request using the background provider.
-// 後方互換シム: background ロールを使用する。
-func (c *Client) CompleteRawDefault(ctx context.Context, messages []providers.Message) (*Response, error) {
-	c.mu.RLock()
-	rp, ok := c.roles["background"]
-	if !ok {
-		rp = c.roles["conversation"]
-	}
-	c.mu.RUnlock()
-	return c.completeRaw(ctx, rp.provider, rp.model, messages)
-}
-
-func (c *Client) completeRaw(ctx context.Context, prov providers.Provider, model string, messages []providers.Message) (*Response, error) {
-	params := providers.CompletionParams{
-		Model:    model,
-		Messages: messages,
-	}
-
-	var resp *providers.ChatCompletion
-	err := retryOnRateLimit(ctx, c.logger, func() error {
-		var callErr error
-		resp, callErr = prov.Completion(ctx, params)
-		return callErr
-	})
-	if err != nil {
-		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("llm: 空のレスポンス")
-	}
-
-	choice := resp.Choices[0]
-	reasoning, cleaned := parseThinkTags(choice.Message.ContentString())
-	r := &Response{
-		Text:         cleaned,
-		Reasoning:    reasoning,
-		FinishReason: choice.FinishReason,
-	}
-	if resp.Usage != nil {
-		r.Usage = *resp.Usage
-	}
 	return r, nil
 }
 
@@ -862,20 +774,6 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 func (c *Client) HasVisionCapability() (available bool, inline bool) {
 	rc, inl := c.WithCapability("conversation", "vision")
 	return rc != nil, inl
-}
-
-// HasVision returns true if vision is available.
-// 後方互換シム。
-func (c *Client) HasVision() bool {
-	avail, _ := c.HasVisionCapability()
-	return avail
-}
-
-// IsVisionCapable returns true if the active conversation LLM provider supports vision natively.
-// 後方互換シム。
-func (c *Client) IsVisionCapable() bool {
-	_, inline := c.HasVisionCapability()
-	return inline
 }
 
 // DescribeImage sends an image URL to a vision model and returns a text description.
