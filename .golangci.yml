@@ -35,10 +35,10 @@ linters:
       - '-ST1020'
       - '-SA1008'
 
-    # depguard: target-layout.md §10.1 の import 制約を強制する。
-    # 現行コードベースではまだ capability/ 等のパスが存在しないため、
-    # 該当ルールは空ディレクトリに対して no-op になる。Phase 2〜11 で
-    # 実パスが増えるに従って順次 bite する。
+    # depguard: target-layout.md §10.1 の import 制約を **strict モードで** 強制する。
+    # 全ての rule は有効、baseline exemption は無し。違反はすべてビルドエラー。
+    # `scripts/update-depguard-baseline.sh` は CI で走らせ、出力が空 (0 行) 以外なら
+    # 回帰として扱う運用。
     depguard:
       rules:
         # port は実装を一切知らない (契約層)

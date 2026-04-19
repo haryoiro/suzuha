@@ -93,12 +93,13 @@ Go コードは `agent/` ディレクトリ配下:
 - `utils` / `helpers` / `common` / `misc` / `base` / `shared` package 名
 - `init()` 関数 / グローバル可変状態
 
-## 強制
+## 強制 (strict モード)
 
-- `.golangci.yml` の depguard rule で静的検知
-- CI で `go vet` + `golangci-lint run` → 違反はビルドエラー
-- `scripts/update-depguard-baseline.sh` で Phase 毎に違反数を snapshot、増減を確認
+- `.golangci.yml` の depguard rule で静的検知、**baseline exemption なし**
+- 違反はすべてビルドエラー (`golangci-lint run` が non-zero exit)
+- `scripts/update-depguard-baseline.sh` は出力 0 行を期待、非空は回帰として扱う
+- 新しいパッケージ / 境界を追加するときは depguard rules も同 PR で更新する
 
-## 移行中の暫定ルール
+## 過渡期 shim の扱い
 
-現行 `internal/feature/` は Phase 8d で `internal/behavior/` にリネーム予定。それまでは `feature-siblings` ルール（feature 同士 import 禁止）が適用される。
+一部 package (`internal/chat`, `internal/user`, `internal/memory`) は旧呼び出し側の import path 互換のための **alias shim** として存在する。正準定義は `port/<name>/` または `domain/<name>/` + `adapter/store/<name>/`。新規コードは正準 package を直接 import すること。shim package は callers 移行完了時点で削除される。
