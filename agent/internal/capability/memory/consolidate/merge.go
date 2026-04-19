@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // MergeSourceTag はメンテナンス統合で生成されたメモリに付与するメタデータタグ。

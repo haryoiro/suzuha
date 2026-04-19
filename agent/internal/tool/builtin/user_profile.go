@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/haryoiro/suzuha/internal/tool"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/port/user"
 )
 
 // ContextUpdater is called after a user profile is updated to keep short-term memory consistent.

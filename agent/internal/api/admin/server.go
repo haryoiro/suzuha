@@ -11,8 +11,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
 	"github.com/haryoiro/suzuha/internal/api/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/port/user"
 )
 
 // Server is the admin dashboard HTTP server.

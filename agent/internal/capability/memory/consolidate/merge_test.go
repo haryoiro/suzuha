@@ -3,7 +3,7 @@ package consolidate
 import (
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 func TestBuildMergedMemory_MetadataUnion(t *testing.T) {

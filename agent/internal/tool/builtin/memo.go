@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // Completer はLLM補完呼び出しを抽象化するインターフェース (consumer-side)。

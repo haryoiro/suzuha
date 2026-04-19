@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // compactSystemPromptBase はメモリ抽出用のベースシステムプロンプト。

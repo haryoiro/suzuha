@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // extractedMemory はLLMが返すJSON構造体。

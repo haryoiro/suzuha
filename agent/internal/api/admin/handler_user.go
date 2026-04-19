@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
-	"github.com/haryoiro/suzuha/internal/user"
+	user "github.com/haryoiro/suzuha/internal/domain/user"
 )
 
 func userToAPI(u user.User, links []user.PlatformLink) gen.User {

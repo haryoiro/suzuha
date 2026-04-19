@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 func TestCosineDistance_Identical(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/conversation"
+	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/chat"
 	"github.com/haryoiro/suzuha/internal/channel/cli"
 	"github.com/haryoiro/suzuha/internal/channel/device"
@@ -42,13 +42,14 @@ import (
 	"github.com/haryoiro/suzuha/internal/mcp"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/port/user"
+	userStore "github.com/haryoiro/suzuha/internal/adapter/store/user"
 	"github.com/samber/do/v2"
 )
 
@@ -65,7 +66,7 @@ func Packages(cfgPath string) []func(do.Injector) {
 		llm.Package,
 		mcp.Package,
 		mementoPackage,
-		user.Package,
+		userStore.Package,
 		channel.Package,
 	}
 }

@@ -10,8 +10,8 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/port/user"
 )
 
 // ProfileProvider は参加者のプロフィール情報をプロンプトブロックとして提供する。
