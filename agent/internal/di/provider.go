@@ -432,7 +432,8 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 		)
 	}
 
-	notifier = notification.WithChannelSettings(store.DB(), logger)(notifier)
+	channelSettings := do.MustInvoke[*convcap.SettingsStore](i)
+	notifier = notification.WithChannelSettings(channelSettings, logger)(notifier)
 
 	// Register tasks directly (former features.Tasks() の代替)。
 	taskRegistry := scheduler.NewRegistry()

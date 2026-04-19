@@ -2,12 +2,13 @@ package notification
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
 
+	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 )
 
 // Middleware wraps a Notifier with additional behavior.
@@ -110,46 +111,39 @@ func parseHHMM(s string) (int, int, error) {
 	return t.Hour(), t.Minute(), nil
 }
 
-// WithChannelSettings returns middleware that suppresses notifications to
-// channels configured as "disabled" or "listen" in the channel_settings table.
-func WithChannelSettings(db *sql.DB, logger *slog.Logger) Middleware {
+// WithChannelSettings は channel_settings で disabled / listen のチャンネルへの
+// 通知を抑制する middleware を返す。
+func WithChannelSettings(settings portconv.SettingsStore, logger *slog.Logger) Middleware {
 	return func(inner Notifier) Notifier {
-		return &channelSettingsNotifier{inner: inner, db: db, logger: logger}
+		return &channelSettingsNotifier{inner: inner, settings: settings, logger: logger}
 	}
 }
 
 type channelSettingsNotifier struct {
-	inner  Notifier
-	db     *sql.DB
-	logger *slog.Logger
+	inner    Notifier
+	settings portconv.SettingsStore
+	logger   *slog.Logger
 }
 
 func (n *channelSettingsNotifier) Send(ctx context.Context, channelID, content, source string) (SendResult, error) {
-	if n.suppressed(ctx, channelID, source) {
+	if n.suppressed(channelID, source) {
 		return SendResult{}, nil
 	}
 	return n.inner.Send(ctx, channelID, content, source)
 }
 
 func (n *channelSettingsNotifier) Reply(ctx context.Context, channelID, content, replyToID, source string) (SendResult, error) {
-	if n.suppressed(ctx, channelID, source) {
+	if n.suppressed(channelID, source) {
 		return SendResult{}, nil
 	}
 	return n.inner.Reply(ctx, channelID, content, replyToID, source)
 }
 
-func (n *channelSettingsNotifier) suppressed(ctx context.Context, channelID, source string) bool {
-	var mode string
-	err := n.db.QueryRowContext(ctx,
-		`SELECT mode FROM channel_settings WHERE channel_id = $1`, channelID,
-	).Scan(&mode)
-	if err != nil {
-		// No row means default (active) — allow.
-		return false
-	}
-	if mode == "disabled" || mode == "listen" {
+func (n *channelSettingsNotifier) suppressed(channelID, source string) bool {
+	mode := n.settings.GetMode(channelID)
+	if mode == domainchannel.ModeDisabled || mode == domainchannel.ModeListen {
 		n.logger.Info("channel_settings: 通知を抑制しました",
-			"channel", channelID, "mode", mode, "source", source)
+			"channel", channelID, "mode", string(mode), "source", source)
 		return true
 	}
 	return false
