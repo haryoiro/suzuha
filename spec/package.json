@@ -1,15 +1,11 @@
 {
   "name": "api",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "tsp compile .",
+    "format": "tsp format \"**/*.tsp\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.30.3",
   "devDependencies": {
     "@typespec/compiler": "^1.10.0",
     "@typespec/http": "^1.10.0",

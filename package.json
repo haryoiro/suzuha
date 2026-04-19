@@ -1,0 +1,16 @@
+{
+  "name": "suzuha2",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "generate": "pnpm --filter api compile",
+    "spec:format": "pnpm --filter api format",
+    "dev:admin": "pnpm --filter admin dev",
+    "dev:widget": "pnpm --filter widget dev",
+    "build:admin": "pnpm --filter admin build",
+    "build:widget": "pnpm --filter widget build",
+    "build:web": "pnpm --filter admin --filter widget build",
+    "lint:admin": "pnpm --filter admin lint"
+  }
+}
