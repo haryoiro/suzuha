@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/haryoiro/suzuha/internal/agent"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 )
 

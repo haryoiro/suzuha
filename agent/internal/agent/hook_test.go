@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // recordingHook records which pipeline stages were called.

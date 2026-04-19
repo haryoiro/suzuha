@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // Chat は stdin/stdout を使う CLI チャットアダプタ。

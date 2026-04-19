@@ -5,7 +5,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/gateway"
+	"github.com/haryoiro/suzuha/internal/runtime/gateway"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/samber/do/v2"

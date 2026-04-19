@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 func TestShouldRespond(t *testing.T) {

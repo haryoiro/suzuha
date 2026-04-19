@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/haryoiro/suzuha/internal/event"
+import "github.com/haryoiro/suzuha/internal/runtime/event"
 
 // ShouldRespond determines whether the agent should respond to an event.
 // Rule-based priority: mentions/replies always respond.

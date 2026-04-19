@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/adapter/embedder"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
