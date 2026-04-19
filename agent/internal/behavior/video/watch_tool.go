@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/haryoiro/suzuha/internal/adapter/transcript"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 const maxTranscriptLen = 8000 // LLM コンテキストに収まるように字幕を truncate

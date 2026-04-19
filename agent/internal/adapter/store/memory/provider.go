@@ -9,7 +9,7 @@ import (
 	"github.com/samber/do/v2"
 )
 
-// Package registers memory store providers into the DI injector.
+// Package は DBStore (concrete) と interface bridging (Backend) を DI に登録する。
 func Package(i do.Injector) {
 	do.Provide(i, func(i do.Injector) (*DBStore, error) {
 		cfg := do.MustInvoke[*config.Config](i)
@@ -17,8 +17,8 @@ func Package(i do.Injector) {
 			return nil, fmt.Errorf("memory: postgres_url が設定されていません")
 		}
 		logger := do.MustInvoke[*slog.Logger](i)
-		embedder := do.MustInvokeNamed[embedding.Embedder](i, "embedder")
-		return NewDBStore(cfg.Memory.PostgresURL, embedder, true, logger)
+		embedderClient := do.MustInvokeNamed[embedding.Embedder](i, "embedder")
+		return NewDBStore(cfg.Memory.PostgresURL, embedderClient, true, logger)
 	})
 
 	do.Provide(i, func(i do.Injector) (Backend, error) {

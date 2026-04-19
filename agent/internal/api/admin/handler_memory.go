@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 func memToAPI(m memory.Memory) gen.Memory {

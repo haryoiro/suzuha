@@ -10,9 +10,9 @@ import (
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/port/user"
 )
 
 // CronTask is a pluggable periodic job, analogous to tool.Tool for agent tools.

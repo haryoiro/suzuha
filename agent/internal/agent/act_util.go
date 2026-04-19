@@ -9,7 +9,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 

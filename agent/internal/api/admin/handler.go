@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
-	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/port/user"
 )
 
 // AdminHandler implements the ogen-generated gen.Handler interface.

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/conversation"
+	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 )

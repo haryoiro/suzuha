@@ -6,52 +6,11 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/adapter/embedder"
-	"github.com/haryoiro/suzuha/internal/domain/memo"
 )
 
-// embedder 入力型の再エクスポート (SearchByParts で使う)。
-type Part = embedding.Part
-type Modality = embedding.Modality
-
-const (
-	ModalityText  = embedding.ModalityText
-	ModalityImage = embedding.ModalityImage
-	ModalityAudio = embedding.ModalityAudio
-)
-
-// domain/memo への型エイリアス群。既存呼び出し側は `memory.Memory` 等を
-// そのまま使えるよう温存する。正準定義は domain/memo/。
-type (
-	MemoryType     = memo.MemoryType
-	Attachment     = memo.Attachment
-	Memory         = memo.Memory
-	SymbolicFilter = memo.SymbolicFilter
-	DupCandidate   = memo.DupCandidate
-	DupResult      = memo.DupResult
-	DuplicateGroup = memo.DuplicateGroup
-	ListOpts       = memo.ListOpts
-)
-
-// MemoryType 定数の再エクスポート。
-const (
-	MemoryTypeUser    = memo.MemoryTypeUser
-	MemoryTypeWorld   = memo.MemoryTypeWorld
-	MemoryTypeTool    = memo.MemoryTypeTool
-	MemoryTypeEpisode = memo.MemoryTypeEpisode
-	MemoryTypeSelf    = memo.MemoryTypeSelf
-	MemoryTypeMemo    = memo.MemoryTypeMemo
-)
-
-// MediaStore stores and retrieves binary media data.
-type MediaStore interface {
-	Put(ctx context.Context, key string, data []byte) error
-	Get(ctx context.Context, key string) ([]byte, error)
-	Delete(ctx context.Context, key string) error
-}
-
-// Store is the long-term memory storage interface.
-// embedding.Part を使う SearchByParts を含むため、port/memory.Memory には
-// 収まらない追加メソッドを持つ。embedder 側の port 整備後に
+// Store は long-term memory の主 storage interface。
+// embedder.Part を使う SearchByParts を含むため、port/memory.Memory には
+// 収まらない追加メソッドを持つ。embedder の port 整備後に
 // Store = port/memory.Memory へ統合予定。
 type Store interface {
 	Save(ctx context.Context, mem *Memory) error
@@ -70,7 +29,7 @@ type Store interface {
 	Close() error
 }
 
-// AdminStore extends Store with methods needed by the admin dashboard.
+// AdminStore は admin dashboard が必要とする管理系メソッドを追加する。
 type AdminStore interface {
 	Store
 
@@ -85,12 +44,11 @@ type AdminStore interface {
 	ListEmbeddedMemories(ctx context.Context) ([]Memory, error)
 	ListAllEmbeddings(ctx context.Context) (map[string][]float32, error)
 
-	// DB returns the underlying *sql.DB for direct queries.
-	// Deprecated: prefer using typed methods instead. Will be removed in a future phase.
+	// DB は生の *sql.DB を返す。typed メソッドへの移行が進んだら削除予定。
 	DB() *sql.DB
 }
 
-// Backend は AdminStore + ライフサイクル管理を統合したインターフェース。
+// Backend は AdminStore + ライフサイクル管理を統合した interface。
 type Backend interface {
 	AdminStore
 	SetMediaStore(ms MediaStore)

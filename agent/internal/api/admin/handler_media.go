@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/adapter/embedder"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 const maxUploadSize = 20 * 1024 * 1024 // 20 MB

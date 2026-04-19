@@ -8,15 +8,15 @@ import (
 	"time"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/conversation"
+	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
-	"github.com/haryoiro/suzuha/internal/tool"
-	"github.com/haryoiro/suzuha/internal/user"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/user"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -69,7 +69,7 @@ type Agent struct {
 	compactMu map[SourceKey]*sync.Mutex
 	sessions  map[SourceKey]Session
 	llm       *llm.Client
-	tools     *tool.Registry
+	tools     *toolreg.Registry
 	memory    memory.Store
 	users     user.Store
 	bus       *event.Bus
@@ -185,7 +185,7 @@ func New(
 	cfg Config,
 	registrations []SourceRegistration,
 	llmClient *llm.Client,
-	tools *tool.Registry,
+	tools *toolreg.Registry,
 	memStore memory.Store,
 	userStore user.Store,
 	bus *event.Bus,

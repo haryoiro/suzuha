@@ -7,7 +7,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/samber/do/v2"
 )
 

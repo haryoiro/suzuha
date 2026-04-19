@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // ResearchTool triggers a fast web research session.

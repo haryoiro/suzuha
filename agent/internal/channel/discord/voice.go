@@ -9,7 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/haryoiro/suzuha/internal/voice"
 )
 

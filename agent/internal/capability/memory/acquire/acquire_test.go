@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // --- JSON parser tests ---

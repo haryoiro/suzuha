@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/internal/chat"
+	"github.com/haryoiro/suzuha/internal/port/chat"
 )
 
 // ChatNotifier implements Notifier by routing messages directly through

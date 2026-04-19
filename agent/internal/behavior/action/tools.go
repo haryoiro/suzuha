@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/robfig/cron/v3"
 )
 

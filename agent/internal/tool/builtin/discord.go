@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // discordTool is a generic tool backed by a discordgo.Session.

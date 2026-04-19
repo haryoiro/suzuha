@@ -8,9 +8,10 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/embedder"
 	"github.com/haryoiro/suzuha/internal/event"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
-	"github.com/haryoiro/suzuha/internal/memory"
-	"github.com/haryoiro/suzuha/internal/tool"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/user"
+	userdom "github.com/haryoiro/suzuha/internal/domain/user"
 )
 
 // --- Mock memory.Store ---
@@ -61,27 +62,27 @@ var _ memory.Store = (*mockMemory)(nil)
 // --- Mock user.Store ---
 
 type mockUsers struct {
-	resolveUser *user.User // returned by Resolve
+	resolveUser *userdom.User // returned by Resolve
 }
 
-func (m *mockUsers) Resolve(_ context.Context, _, _, _ string) (*user.User, error) {
+func (m *mockUsers) Resolve(_ context.Context, _, _, _ string) (*userdom.User, error) {
 	if m.resolveUser != nil {
 		return m.resolveUser, nil
 	}
-	return &user.User{ID: "u1", DisplayName: "TestUser"}, nil
+	return &userdom.User{ID: "u1", DisplayName: "TestUser"}, nil
 }
-func (m *mockUsers) Get(_ context.Context, _ string) (*user.User, error) {
-	return &user.User{ID: "u1"}, nil
+func (m *mockUsers) Get(_ context.Context, _ string) (*userdom.User, error) {
+	return &userdom.User{ID: "u1"}, nil
 }
 func (m *mockUsers) UpdateDisplayName(_ context.Context, _, _ string) error          { return nil }
 func (m *mockUsers) TrackGuildChannel(_ context.Context, _, _, _, _, _ string) error { return nil }
-func (m *mockUsers) GetUserGuilds(_ context.Context, _ string) ([]user.UserGuild, error) {
+func (m *mockUsers) GetUserGuilds(_ context.Context, _ string) ([]userdom.UserGuild, error) {
 	return nil, nil
 }
-func (m *mockUsers) ResolveExisting(_ context.Context, _, _ string) (*user.User, error) {
-	return &user.User{ID: "u1"}, nil
+func (m *mockUsers) ResolveExisting(_ context.Context, _, _ string) (*userdom.User, error) {
+	return &userdom.User{ID: "u1"}, nil
 }
-func (m *mockUsers) ListMentionable(_ context.Context) ([]user.MentionableUser, error) {
+func (m *mockUsers) ListMentionable(_ context.Context) ([]userdom.MentionableUser, error) {
 	return nil, nil
 }
 func (m *mockUsers) Close() error { return nil }
@@ -172,7 +173,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		},
 		regs,
 		nil, // llm.Client — nil is OK when we don't call Act
-		tool.NewRegistry(),
+		toolreg.NewRegistry(),
 		&mockMemory{},
 		&mockUsers{},
 		bus,

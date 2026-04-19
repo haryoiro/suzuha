@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // trackingAcquirer records whether Acquire was called and what was passed.

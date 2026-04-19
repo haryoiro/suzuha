@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 func newDiscordCreateChannel(s *discordgo.Session) tool.Tool {

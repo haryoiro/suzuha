@@ -19,8 +19,8 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/conversation"
-	"github.com/haryoiro/suzuha/internal/chat"
+	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
+	"github.com/haryoiro/suzuha/internal/port/chat"
 	"github.com/haryoiro/suzuha/internal/channel/cli"
 	"github.com/haryoiro/suzuha/internal/channel/device"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
@@ -42,13 +42,14 @@ import (
 	"github.com/haryoiro/suzuha/internal/mcp"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
-	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/port/user"
+	userStore "github.com/haryoiro/suzuha/internal/adapter/store/user"
 	"github.com/samber/do/v2"
 )
 
@@ -60,12 +61,12 @@ func Packages(cfgPath string) []func(do.Injector) {
 		config.Package,
 		observe.Package,
 		event.Package,
-		tool.Package,
+		toolreg.Package,
 		memory.Package,
 		llm.Package,
 		mcp.Package,
 		mementoPackage,
-		user.Package,
+		userStore.Package,
 		channel.Package,
 	}
 }
@@ -197,7 +198,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 					},
 				regs,
 				do.MustInvoke[*llm.Client](i),
-				do.MustInvoke[*tool.Registry](i),
+				do.MustInvoke[*toolreg.Registry](i),
 				do.MustInvoke[memory.Backend](i),
 				do.MustInvoke[user.Store](i),
 				do.MustInvoke[*event.Bus](i),
@@ -235,7 +236,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// (action.Store.Setup や mcp apps 再接続等) は適宜呼び出す。
 		do.Provide(i, func(i do.Injector) ([]scheduler.CronTask, error) {
 			store := do.MustInvoke[memory.Backend](i)
-			registry := do.MustInvoke[*tool.Registry](i)
+			registry := do.MustInvoke[*toolreg.Registry](i)
 			logger := do.MustInvoke[*slog.Logger](i)
 			mcpMgr := do.MustInvoke[*mcp.Manager](i)
 			ag := do.MustInvoke[*agent.Agent](i)

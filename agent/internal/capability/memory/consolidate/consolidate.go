@@ -7,7 +7,7 @@ import (
 	"time"
 
 
-	"github.com/haryoiro/suzuha/internal/memory"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 )
 
 // Consolidator は既存メモリの重複排除・マージを実行する。
