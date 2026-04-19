@@ -11,7 +11,7 @@ import (
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/external/transcript"
 	"github.com/haryoiro/suzuha/external/twitter"
-	"github.com/haryoiro/suzuha/internal/admin"
+	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/conversation"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/admin"
+	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/haryoiro/suzuha/internal/feature/diary"
 	"github.com/haryoiro/suzuha/internal/feature/location"

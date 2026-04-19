@@ -3,4 +3,4 @@
 // agent container via `go tool ogen`.
 package agent
 
-//go:generate go tool ogen --target ./internal/admin/api --package api --clean ../spec/generated/openapi.yaml
+//go:generate go tool ogen --target ./internal/api/admin/gen --package gen --clean ../spec/generated/openapi.yaml

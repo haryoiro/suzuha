@@ -20,7 +20,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/external/stt"
 	"github.com/haryoiro/suzuha/external/tts"
-	"github.com/haryoiro/suzuha/internal/admin"
+	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
