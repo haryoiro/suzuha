@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: container/Dockerfile.dev
-    command: ["-c", "container/air.agent.toml"]
+    entrypoint: ["bash", "/app/container/start-agent.sh"]
     ports:
       - "9090:9090"
       - "8080:8080"

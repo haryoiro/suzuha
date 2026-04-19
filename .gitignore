@@ -4,6 +4,11 @@ tmp/
 *.dll
 *.so
 *.dylib
+/suzuha-admin
+/suzuha-agent
+/suzuha-bench
+/suzuha-synth
+/migrate_sqlite_to_pg
 
 # Environment
 .env
@@ -47,5 +52,6 @@ Thumbs.db
 current_frame.jpg
 /build/
 backups/
+backup/
 bench/snapshots/
 bench/results.json
