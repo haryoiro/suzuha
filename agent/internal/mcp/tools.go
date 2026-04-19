@@ -12,12 +12,12 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// ── search_mcp_apps ──
-
+// SearchTool は MCP レジストリからサーバーを検索するツール。
 type SearchTool struct {
 	registry *RegistryClient
 }
 
+// NewSearchTool は SearchTool のインスタンスを生成する。
 func NewSearchTool(reg *RegistryClient) *SearchTool {
 	return &SearchTool{registry: reg}
 }
@@ -106,8 +106,7 @@ func (t *SearchTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 
 var _ tool.Tool = (*SearchTool)(nil)
 
-// ── install_mcp_app ──
-
+// InstallTool は MCP サーバーアプリをレジストリからインストールするツール。
 type InstallTool struct {
 	store    *AppStore
 	mcpMgr   *Manager
@@ -115,6 +114,7 @@ type InstallTool struct {
 	logger   *slog.Logger
 }
 
+// NewInstallTool は InstallTool のインスタンスを生成する。
 func NewInstallTool(store *AppStore, mcpMgr *Manager, reg *RegistryClient, logger *slog.Logger) *InstallTool {
 	return &InstallTool{store: store, mcpMgr: mcpMgr, registry: reg, logger: logger}
 }
@@ -230,13 +230,13 @@ func (t *InstallTool) Execute(ctx context.Context, input json.RawMessage) (*tool
 
 var _ tool.Tool = (*InstallTool)(nil)
 
-// ── uninstall_mcp_app ──
-
+// UninstallTool はインストール済みの MCP アプリをアンインストールするツール。
 type UninstallTool struct {
 	store  *AppStore
 	mcpMgr *Manager
 }
 
+// NewUninstallTool は UninstallTool のインスタンスを生成する。
 func NewUninstallTool(store *AppStore, mcpMgr *Manager) *UninstallTool {
 	return &UninstallTool{store: store, mcpMgr: mcpMgr}
 }
@@ -281,13 +281,13 @@ func (t *UninstallTool) Execute(ctx context.Context, input json.RawMessage) (*to
 
 var _ tool.Tool = (*UninstallTool)(nil)
 
-// ── list_mcp_apps ──
-
+// ListAppsTool はインストール済みの MCP アプリ一覧を表示するツール。
 type ListAppsTool struct {
 	store  *AppStore
 	mcpMgr *Manager
 }
 
+// NewListAppsTool は ListAppsTool のインスタンスを生成する。
 func NewListAppsTool(store *AppStore, mcpMgr *Manager) *ListAppsTool {
 	return &ListAppsTool{store: store, mcpMgr: mcpMgr}
 }

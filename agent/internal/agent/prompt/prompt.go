@@ -6,6 +6,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
+// Request は LLM への会話リクエストに必要な情報をまとめる。
 type Request struct {
 	Query        string
 	ImageURLs    []string
@@ -20,16 +21,19 @@ type Request struct {
 	IsHome       bool
 }
 
+// Participant は会話の参加者情報を保持する。
 type Participant struct {
 	Platform string
 	UserID   string
 }
 
+// Block はプロンプトの背景情報とフォアグラウンド情報をまとめる。
 type Block struct {
 	Background []llm.Message
 	Foreground []llm.Message
 }
 
+// Provider はコンテキスト情報をプロンプトブロックとして提供する。
 type Provider interface {
 	ProvideContext(ctx context.Context, req Request) Block
 }

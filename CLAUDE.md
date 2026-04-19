@@ -2,11 +2,12 @@
 
 ## リポジトリ構成
 
-Go workspace (`go.work`) を使用したモノレポ:
+Go workspace (`go.work`) + pnpm workspace (`pnpm-workspace.yaml`) のモノレポ:
 
 - `agent/` — Go モジュール (`cmd/`, `internal/`, `external/`)
-- `spec/` — TypeSpec API 定義 + 生成 OpenAPI
-- `web/` — フロントエンド (admin, widget)
+- `spec/` — TypeSpec API 定義 (`routes/`, `models/`, `docs/`, `generated/`)
+- `admin/` — 管理画面 (React SPA, Vite + Ant Design)
+- `widget/` — 音声ウィジェット (React + WebSocket)
 - `firmware/` — ESP32 ファームウェア
 - `container/` — Docker 設定
 
@@ -20,6 +21,14 @@ docker compose -f container/compose.yaml exec agent go test ./agent/...
 ```
 
 SQLite バックエンドを含める場合は `-tags 'fts5,sqlite'` を追加（CGO 必須）。
+
+## API 生成
+
+```bash
+mise run spec   # pnpm --filter api compile → go generate ./... (ogen)
+```
+
+spec の書き方は `spec/docs/typespec-rules.md` と `naming-conventions.md` を参照。
 
 ## コミット
 

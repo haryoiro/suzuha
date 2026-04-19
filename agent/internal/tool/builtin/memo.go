@@ -10,12 +10,12 @@ import (
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// ── memo_create ──
-
+// MemoCreate はメモを新規作成するツール。
 type MemoCreate struct {
 	store memory.Store
 }
 
+// NewMemoCreate は MemoCreate のインスタンスを生成する。
 func NewMemoCreate(store memory.Store) *MemoCreate {
 	return &MemoCreate{store: store}
 }
@@ -71,12 +71,12 @@ func (t *MemoCreate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	return tool.TextResult(result), nil
 }
 
-// ── memo_search ──
-
+// MemoSearch はメモを検索するツール。
 type MemoSearch struct {
 	store memory.Store
 }
 
+// NewMemoSearch は MemoSearch のインスタンスを生成する。
 func NewMemoSearch(store memory.Store) *MemoSearch {
 	return &MemoSearch{store: store}
 }
@@ -146,12 +146,12 @@ func (t *MemoSearch) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	return tool.TextResult(sb.String()), nil
 }
 
-// ── memo_update ──
-
+// MemoUpdate は既存のメモを更新するツール。
 type MemoUpdate struct {
 	store memory.Store
 }
 
+// NewMemoUpdate は MemoUpdate のインスタンスを生成する。
 func NewMemoUpdate(store memory.Store) *MemoUpdate {
 	return &MemoUpdate{store: store}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
+// ChannelProvider はチャンネル情報をプロンプトブロックとして提供する。
 type ChannelProvider struct{}
 
 func (ChannelProvider) ProvideContext(_ context.Context, req Request) Block {

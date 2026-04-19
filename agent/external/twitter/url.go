@@ -42,9 +42,9 @@ func ExtractTweetID(rawURL string) string {
 	return m[1]
 }
 
-// ExtractTwitterURLs はテキスト中の X/Twitter URL を全て抽出する。
 var urlPattern = regexp.MustCompile(`https?://[^\s<>"]+`)
 
+// ExtractTwitterURLs はテキスト中の X/Twitter URL を全て抽出する。
 func ExtractTwitterURLs(text string) []string {
 	matches := urlPattern.FindAllString(text, -1)
 	var result []string

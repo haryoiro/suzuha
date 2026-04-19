@@ -22,7 +22,7 @@ type DiaryReader interface {
 	ListByKind(ctx context.Context, kind string, since time.Time, limit int) ([]DiaryEntry, error)
 }
 
-// DiaryProvider は直近の日記エントリをコンテキストに注入する。
+// DiaryProvider は直近の日記エントリをプロンプトブロックとして提供する。
 type DiaryProvider struct {
 	Reader DiaryReader
 	Logger *slog.Logger

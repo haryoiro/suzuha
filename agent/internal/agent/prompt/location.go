@@ -12,7 +12,7 @@ type LocationSnippetBuilder interface {
 	BuildContextSnippet() string
 }
 
-// LocationProvider は位置情報をコンテキストに注入する。
+// LocationProvider は現在地情報をプロンプトブロックとして提供する。
 type LocationProvider struct {
 	Store LocationSnippetBuilder
 }
