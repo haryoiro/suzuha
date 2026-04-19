@@ -6,7 +6,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/device"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/feature/vision"
+	"github.com/haryoiro/suzuha/internal/capability/vision"
 	"github.com/samber/do/v2"
 )
 

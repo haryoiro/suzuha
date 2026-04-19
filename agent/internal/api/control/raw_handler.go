@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/feature/vision"
+	"github.com/haryoiro/suzuha/internal/capability/vision"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/ogen-go/ogen/middleware"
 	"github.com/samber/do/v2"

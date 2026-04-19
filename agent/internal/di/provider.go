@@ -33,7 +33,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/feature/research"
 	"github.com/haryoiro/suzuha/internal/feature/topics"
 	"github.com/haryoiro/suzuha/internal/feature/video"
-	"github.com/haryoiro/suzuha/internal/feature/vision"
+	"github.com/haryoiro/suzuha/internal/capability/vision"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
