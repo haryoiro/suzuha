@@ -13,14 +13,14 @@ import (
 // DeviceHandler は Device グループ (vision / servo / volume / tracker) を実装する。
 // 物理デバイス (ESP32) への JSON コマンド送信と vision 設定を束ねる。
 type DeviceHandler struct {
-	vision *vision.Feature
+	vision *vision.Service
 	hub    *device.Hub
 }
 
 // NewDeviceHandler は DI injector から依存を取り出して DeviceHandler を生成する。
 func NewDeviceHandler(i do.Injector) (gen.DeviceHandler, error) {
 	return &DeviceHandler{
-		vision: do.MustInvoke[*vision.Feature](i),
+		vision: do.MustInvoke[*vision.Service](i),
 		hub:    do.MustInvoke[*device.Hub](i),
 	}, nil
 }

@@ -82,3 +82,19 @@ type ListOpts struct {
 	OrderBy  string     // "created_at" | "updated_at" (default "updated_at")
 	OrderDir string     // "asc" | "desc" (default "desc")
 }
+
+// ConsolidateOpts は 1 回の統合 (重複排除) 実行を制御するオプション。
+// capability/memory/consolidate の実装と capability/memory/forget のタスクが共有する。
+type ConsolidateOpts struct {
+	SimilarityThreshold float64 `json:"similarity_threshold"`
+	MaxGroupSize        int     `json:"max_group_size"`
+	MaxGroupsPerLLMCall int     `json:"max_groups_per_llm_call"`
+	DryRun              bool    `json:"dry_run"`
+}
+
+// ConsolidateResult は統合中に行われた処理の結果を報告する。
+type ConsolidateResult struct {
+	Groups       int
+	TotalDeleted int
+	TotalMerged  int
+}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"go.opentelemetry.io/otel/attribute"
@@ -54,23 +55,12 @@ type Message struct {
 	Injected bool `json:"injected,omitempty"`
 }
 
-// Response wraps an LLM completion response.
-type Response struct {
-	Text         string
-	Reasoning    string // content inside <think>...</think> tags, if any
-	ToolCalls    []providers.ToolCall
-	FinishReason string
-	Usage        providers.Usage
-}
-
-// RawMessage は providers.Message の型エイリアス。
-// 外部パッケージが providers を直接 import せずに済むようにする。
-type RawMessage = providers.Message
-
-// HasToolCalls returns true if the response contains tool calls.
-func (r *Response) HasToolCalls() bool {
-	return len(r.ToolCalls) > 0
-}
+// Response / RawMessage は port/llm の正準定義への型エイリアス。
+// 既存呼び出し側 (`llm.Response` / `llm.RawMessage`) を温存する。
+type (
+	Response   = portllm.Response
+	RawMessage = portllm.RawMessage
+)
 
 // parseThinkTags separates reasoning content from response text.
 // Handles both "<think>reasoning</think>response" and "reasoning</think>response".

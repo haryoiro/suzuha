@@ -1,4 +1,4 @@
-package diary
+package summarize
 
 import (
 	"context"

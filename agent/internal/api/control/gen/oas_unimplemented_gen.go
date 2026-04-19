@@ -162,7 +162,7 @@ func (UnimplementedHandler) LLMStatus(ctx context.Context) (r *LLMStatus, _ erro
 
 // RawStreamsDeviceDetections implements RawStreams_deviceDetections operation.
 //
-// YOLO 検出結果の SSE ストリーム。vision.Feature.Frames() から配信。.
+// YOLO 検出結果の SSE ストリーム。vision.Service.Frames() から配信。.
 //
 // GET /internal/device/detections
 func (UnimplementedHandler) RawStreamsDeviceDetections(ctx context.Context, w http.ResponseWriter) error {

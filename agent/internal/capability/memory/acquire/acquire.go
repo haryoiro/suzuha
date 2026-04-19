@@ -8,22 +8,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
-
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 )
 
 // Acquirer は会話コンテキストから長期メモリを抽出する。
 type Acquirer struct {
-	llm    Completer
+	llm    portllm.Completer
 	store  memory.Store
 	config Config
 	logger *slog.Logger
 }
 
 // NewAcquirer は Acquirer を作成する。
-func NewAcquirer(llm Completer, store memory.Store, cfg Config, logger *slog.Logger) *Acquirer {
+func NewAcquirer(llm portllm.Completer, store memory.Store, cfg Config, logger *slog.Logger) *Acquirer {
 	return &Acquirer{llm: llm, store: store, config: cfg, logger: logger}
 }
 

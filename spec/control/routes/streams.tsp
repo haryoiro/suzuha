@@ -43,7 +43,7 @@ interface RawStreams {
   @extension("x-ogen-raw-response", true)
   op logs(): SSEBody;
 
-  /** YOLO 検出結果の SSE ストリーム。vision.Feature.Frames() から配信。 */
+  /** YOLO 検出結果の SSE ストリーム。vision.Service.Frames() から配信。 */
   @route("device/detections")
   @get
   @extension("x-ogen-operation-group", "Raw")

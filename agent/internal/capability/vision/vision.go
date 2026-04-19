@@ -8,9 +8,9 @@ import (
 	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
-// Feature は物体検出・追跡・変化通知を提供する capability。
+// Service は物体検出・追跡・変化通知を提供する vision capability。
 // pipeline (hot path) + tools (LLM 公開) + SSE 配信用の Frames を集約する。
-type Feature struct {
+type Service struct {
 	frames   *FrameStore
 	changes  *ChangeDetector
 	tracker  *ObjectTracker
@@ -20,9 +20,9 @@ type Feature struct {
 	logger   *slog.Logger
 }
 
-// New は vision Feature を作成する。
+// New は vision Service を作成する。
 // dev はデバイスコマンド送信用、vision は VLM 画像説明用 (nil 可)。
-func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, dev deviceCommander, vision VisionDescriber, logger *slog.Logger) *Feature {
+func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, dev deviceCommander, vision VisionDescriber, logger *slog.Logger) *Service {
 	var yolo *YOLOClient
 	if yoloURL != "" {
 		yolo = NewYOLOClient(yoloURL)
@@ -32,7 +32,7 @@ func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, d
 	tracker := NewObjectTracker(DefaultTrackerConfig(), servo, logger)
 	pipeline := NewPipeline(frames, changes, tracker, yolo, logger)
 
-	return &Feature{
+	return &Service{
 		frames:   frames,
 		changes:  changes,
 		tracker:  tracker,
@@ -44,26 +44,26 @@ func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, d
 }
 
 // Tools は LLM に公開するツール群を返す。dev が nil なら空。
-func (f *Feature) Tools() []tool.Tool {
-	if f.dev == nil {
+func (s *Service) Tools() []tool.Tool {
+	if s.dev == nil {
 		return nil
 	}
 	return []tool.Tool{
-		newServoTool(f.dev, f.tracker),
-		newCaptureTool(f.dev),
-		newFaceTool(f.dev),
-		newLookTool(f.dev, f.frames, f.vision),
+		newServoTool(s.dev, s.tracker),
+		newCaptureTool(s.dev),
+		newFaceTool(s.dev),
+		newLookTool(s.dev, s.frames, s.vision),
 	}
 }
 
 // Pipeline returns the image processing pipeline (implements device.ImageHandler).
-func (f *Feature) Pipeline() *Pipeline { return f.pipeline }
+func (s *Service) Pipeline() *Pipeline { return s.pipeline }
 
 // Frames returns the FrameStore for registering HTTP handlers.
-func (f *Feature) Frames() *FrameStore { return f.frames }
+func (s *Service) Frames() *FrameStore { return s.frames }
 
 // ChangeDetector returns the change detector for API access.
-func (f *Feature) ChangeDetector() *ChangeDetector { return f.changes }
+func (s *Service) ChangeDetector() *ChangeDetector { return s.changes }
 
 // Tracker returns the object tracker for API access.
-func (f *Feature) Tracker() *ObjectTracker { return f.tracker }
+func (s *Service) Tracker() *ObjectTracker { return s.tracker }

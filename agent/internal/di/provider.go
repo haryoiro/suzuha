@@ -29,17 +29,17 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/behavior/action"
-	"github.com/haryoiro/suzuha/internal/feature/diary"
-	"github.com/haryoiro/suzuha/internal/feature/forget"
+	"github.com/haryoiro/suzuha/internal/capability/memory/summarize"
+	"github.com/haryoiro/suzuha/internal/capability/memory/forget"
 	"github.com/haryoiro/suzuha/internal/behavior/research"
-	"github.com/haryoiro/suzuha/internal/feature/topics"
+	"github.com/haryoiro/suzuha/internal/capability/conversation/boredom"
 	"github.com/haryoiro/suzuha/internal/behavior/video"
 	"github.com/haryoiro/suzuha/internal/capability/vision"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/mcp"
+	"github.com/haryoiro/suzuha/internal/capability/mcp"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
@@ -187,7 +187,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
-			diaryReader := &diaryReaderAdapter{store: diary.NewStore(db)}
+			diaryReader := &diaryReaderAdapter{store: summarize.NewStore(db)}
 
 			return agent.New(
 				agent.Config{
@@ -296,7 +296,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			// vision (デバイスブロックで作成されていれば)。
-			if vf, err := do.Invoke[*vision.Feature](i); err == nil {
+			if vf, err := do.Invoke[*vision.Service](i); err == nil {
 				for _, t := range vf.Tools() {
 					registry.Register(t)
 				}
@@ -317,10 +317,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			// Tasks — 各 behavior / capability の scheduler.CronTask を列挙。
 			tasks := []scheduler.CronTask{
 				&action.Task{},
-				&topics.Task{},
+				&boredom.Task{},
 				&research.Task{},
-				&diary.HourlyTask{},
-				&diary.DailyTask{},
+				&summarize.HourlyTask{},
+				&summarize.DailyTask{},
 				&forget.Task{Consolidator: do.MustInvoke[*capmemCon.Consolidator](i)},
 			}
 			return tasks, nil
@@ -356,7 +356,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			db := store.DB()
 			// 型が domain 経由で共有されるようになったので、feature の Store を
 			// そのまま admin.ActionStore / admin.DiaryStore として渡せる。
-			var ds admin.DiaryStore = diary.NewStore(db)
+			var ds admin.DiaryStore = summarize.NewStore(db)
 			var as admin.ActionStore = schedStore
 
 			return admin.NewServer(cfg.Admin, store, userStore, as, ds, mediaStore, adminLogger)
@@ -370,9 +370,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return gateway.New(do.MustInvoke[*slog.Logger](i)), nil
 		})
 
-		// Device Hub (ESP32 WebSocket + Web widget) and Vision feature.
+		// Device Hub (ESP32 WebSocket + Web widget) and Vision service.
 		do.Provide(i, provideDeviceHub)
-		do.Provide(i, provideVisionFeature)
+		do.Provide(i, provideVisionService)
 
 		// Control (internal) API — sub-handler ごとに DI 登録し、
 		// control.NewHandler が合成する。
@@ -535,9 +535,9 @@ func provideDeviceHub(i do.Injector) (*device.Hub, error) {
 	return device.NewHub(bus, ttsClient, sttClient, ownerID, ownerName, logger), nil
 }
 
-// provideVisionFeature は device.Hub を使う vision.Feature を構築する。
+// provideVisionService は device.Hub を使う vision.Service を構築する。
 // hub.SetImageHandler で vision pipeline に画像を流し込む配線も行う。
-func provideVisionFeature(i do.Injector) (*vision.Feature, error) {
+func provideVisionService(i do.Injector) (*vision.Service, error) {
 	cfg := do.MustInvoke[*config.Config](i)
 	bus := do.MustInvoke[*event.Bus](i)
 	logger := do.MustInvoke[*slog.Logger](i)
