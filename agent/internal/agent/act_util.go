@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/agnivade/levenshtein"
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -23,18 +24,9 @@ func isSimilarText(a, b string) bool {
 	}
 	dist := levenshtein.ComputeDistance(a, b)
 	maxLen := max(len([]rune(a)), len([]rune(b)))
-	return 1.0-float64(dist)/float64(maxLen) >= 0.95
+	return 1.0-float64(dist)/float64(maxLen) >= 0.85
 }
 
-// containsSkipTool returns true if the tool calls include skip_response.
-func containsSkipTool(calls []providers.ToolCall) bool {
-	for _, tc := range calls {
-		if tc.Function.Name == "skip_response" {
-			return true
-		}
-	}
-	return false
-}
 
 // trimMessagesToFit drops the oldest non-system messages (from the front,
 // after the first system message) so the total estimated tokens fit within
@@ -90,6 +82,29 @@ func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []l
 	return result
 }
 
+// assistantMessage は assistant ロールのメッセージを構築する。
+func assistantMessage(text, channel, channelName string, toolCalls []providers.ToolCall) llm.Message {
+	return llm.Message{
+		Role:        "assistant",
+		Content:     text,
+		Channel:     channel,
+		ChannelName: channelName,
+		Timestamp:   jtime.Now(),
+		ToolCalls:   toolCalls,
+	}
+}
+
+// toolResultMessage は tool ロールの結果メッセージを構築する。
+func toolResultMessage(content, channel, toolCallID string) llm.Message {
+	return llm.Message{
+		Role:       "tool",
+		Content:    content,
+		Channel:    channel,
+		ToolCallID: toolCallID,
+		Timestamp:  jtime.Now(),
+	}
+}
+
 // groupByChannel はメッセージをチャンネルごとにグルーピングし、
 // activeChannel を末尾に配置する。各チャンネル内の順序は維持される。
 // 他チャンネルは最終メッセージ時刻の古い順に並ぶ。
@@ -130,13 +145,16 @@ func groupByChannel(msgs []llm.Message, activeChannel string) []llm.Message {
 
 	for _, m := range channelMsgs {
 		ch := m.Channel
-		// Channel が空のメッセージ (assistant 応答, tool 結果) は
-		// 直前のチャンネルに帰属させる。
-		if ch == "" && len(groupOrder) > 0 {
-			ch = groupOrder[len(groupOrder)-1]
-		}
+		// system メッセージ (directive 等) は必ず activeChannel に寄せる。
+		// ツール応答の assistant/tool (Channel="") は直前チャンネルに帰属させる。
 		if ch == "" {
-			ch = activeChannel
+			if m.Role == "system" {
+				ch = activeChannel
+			} else if len(groupOrder) > 0 {
+				ch = groupOrder[len(groupOrder)-1]
+			} else {
+				ch = activeChannel
+			}
 		}
 
 		g, ok := groupMap[ch]

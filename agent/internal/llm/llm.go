@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
@@ -46,6 +47,11 @@ type Message struct {
 	// MediaKeys holds MediaStore keys for persisted media attachments.
 	// Used by the consolidator to attach media to extracted memories.
 	MediaKeys []string `json:"media_keys,omitempty"`
+
+	// Injected はこのメッセージがチャンネル履歴から注入された過去発言であることを示す。
+	// 保存 (SaveSnapshot), 会話ログ (logConversationTurn), 記憶抽出 (acquirer),
+	// Think ステート計算 (conversationState/episode/participants) の対象外とする。
+	Injected bool `json:"injected,omitempty"`
 }
 
 // Response wraps an LLM completion response.
@@ -542,7 +548,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 	var span trace.Span
 	if tracer != nil {
 		// Serialize messages for tracing (role + content only, skip images).
-		inputJSON := serializeMessagesForTrace(messages)
+		inputJSON := SerializeMessagesForTrace(messages)
 
 		ctx, span = tracer.Start(ctx, "llm.complete",
 			trace.WithSpanKind(trace.SpanKindClient),
@@ -605,7 +611,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 
 	// Record LLM response attributes to span.
 	if span != nil {
-		outputJSON := serializeResponseForTrace(r)
+		outputJSON := SerializeResponseForTrace(r)
 		span.SetAttributes(
 			attribute.Int("gen_ai.usage.prompt_tokens", r.Usage.PromptTokens),
 			attribute.Int("gen_ai.usage.completion_tokens", r.Usage.CompletionTokens),
@@ -725,16 +731,10 @@ func ConvertMessages(msgs []Message, visionCapable bool) []providers.Message {
 			seenSystem = true
 		}
 		// Embed message metadata so the LLM can identify channel context.
-		if m.Role == "user" && m.MessageID != "" {
-			ts := ""
-			if !m.Timestamp.IsZero() {
-				ts = m.Timestamp.Format("2006-01-02 15:04")
-			}
-			content = fmt.Sprintf("[time=%s server=%s channel=#%s channel_id=%s guild_id=%s message_id=%s platform=%s user_id=%s user=%s]\n%s",
-				ts, m.GuildName, m.ChannelName, m.Channel, m.GuildID, m.MessageID, m.Source, m.UserID, m.UserName, m.Content)
+		// assistant メッセージにはメタデータを付与しない — LLM がフォーマットを真似て出力に含めるため。
+		if prefix := userMessagePrefix(m); prefix != "" {
+			content = prefix + m.Content
 		}
-		// assistant メッセージにはメタデータを付与しない。
-		// LLM がフォーマットを真似て出力に含めてしまうため。
 
 		// Strip tool_calls from assistant messages if any response is missing.
 		var toolCalls []providers.ToolCall
@@ -963,13 +963,32 @@ func retryOnRateLimit(ctx context.Context, logger *slog.Logger, fn func() error)
 }
 
 
-// serializeMessagesForTrace converts messages to a JSON array for Langfuse input.
-// Images are excluded to keep the payload manageable.
-func serializeMessagesForTrace(messages []Message) string {
+// userMessagePrefix は user ロールのメッセージに付与するメタデータヘッダを返す。
+// MessageID が空なら空文字を返す。ConvertMessages と SerializeMessagesForTrace
+// の両方から使われ、LLM が実際に見る内容と Langfuse 可視化を一致させる。
+func userMessagePrefix(m Message) string {
+	if m.Role != "user" || m.MessageID == "" {
+		return ""
+	}
+	ts := ""
+	if !m.Timestamp.IsZero() {
+		// タイムゾーンの揺れを抑えるため設定されたロケーションに寄せる。
+		ts = jtime.In(m.Timestamp).Format("2006-01-02 15:04")
+	}
+	return fmt.Sprintf("[time=%s guild=%s guild_id=%s channel=#%s channel_id=%s message_id=%s platform=%s user_id=%s user=%s]\n",
+		ts, m.GuildName, m.GuildID, m.ChannelName, m.Channel, m.MessageID, m.Source, m.UserID, m.UserName)
+}
+
+// SerializeMessagesForTrace converts messages to a JSON array for Langfuse input.
+// Images are excluded to keep the payload manageable. user メッセージには
+// ConvertMessages と同じメタデータ prefix を付与する。Injected なメッセージは
+// Langfuse 上でのデバッグ用に `injected: true` を付ける。
+func SerializeMessagesForTrace(messages []Message) string {
 	type traceMsg struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-		Name    string `json:"name,omitempty"`
+		Role     string `json:"role"`
+		Content  string `json:"content"`
+		Name     string `json:"name,omitempty"`
+		Injected bool   `json:"injected,omitempty"`
 	}
 	out := make([]traceMsg, 0, len(messages))
 	for _, m := range messages {
@@ -977,18 +996,23 @@ func serializeMessagesForTrace(messages []Message) string {
 		if m.Role == "tool" {
 			name = m.ToolCallID
 		}
+		content := m.Content
+		if prefix := userMessagePrefix(m); prefix != "" {
+			content = prefix + m.Content
+		}
 		out = append(out, traceMsg{
-			Role:    m.Role,
-			Content: m.Content,
-			Name:    name,
+			Role:     m.Role,
+			Content:  content,
+			Name:     name,
+			Injected: m.Injected,
 		})
 	}
 	b, _ := json.Marshal(out)
 	return string(b)
 }
 
-// serializeResponseForTrace converts a Response to JSON for Langfuse output.
-func serializeResponseForTrace(r *Response) string {
+// SerializeResponseForTrace converts a Response to JSON for Langfuse output.
+func SerializeResponseForTrace(r *Response) string {
 	type traceToolCall struct {
 		Name string `json:"name"`
 		Args string `json:"arguments"`

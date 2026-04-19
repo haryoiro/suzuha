@@ -196,6 +196,15 @@ type Backend interface {
 	BackfillEmbeddings(ctx context.Context, batchSize int) (int, error)
 }
 
+// rrfK is the constant used in Reciprocal Rank Fusion scoring.
+const rrfK = 60
+
+// scoredID holds a memory ID with its vector distance from a KNN query.
+type scoredID struct {
+	id       string
+	distance float32
+}
+
 // ListOpts controls pagination and filtering for List.
 type ListOpts struct {
 	Offset   int

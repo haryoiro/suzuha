@@ -165,26 +165,14 @@ func (a *Agent) executeToolBatchParallel(ctx context.Context, batch []toolCallRe
 // applyToolResult はツール実行結果を agentCtx に追加する。
 func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Session, r toolCallResult, channel string) {
 	if r.tool == nil {
-		agentCtx.Add(llm.Message{
-			Role:       "tool",
-			Content:    fmt.Sprintf("error: %v", r.err),
-			Channel:    channel,
-			ToolCallID: r.tc.ID,
-			Timestamp:  jtime.Now(),
-		})
+		agentCtx.Add(toolResultMessage(fmt.Sprintf("error: %v", r.err), channel, r.tc.ID))
 		return
 	}
 
 	if r.err != nil {
 		a.logger.Error("ツールが失敗した",
 			"tool", r.tc.Function.Name, "error", r.err, "elapsed_ms", r.elapsed.Milliseconds())
-		agentCtx.Add(llm.Message{
-			Role:       "tool",
-			Content:    fmt.Sprintf("error: %v", r.err),
-			Channel:    channel,
-			ToolCallID: r.tc.ID,
-			Timestamp:  jtime.Now(),
-		})
+		agentCtx.Add(toolResultMessage(fmt.Sprintf("error: %v", r.err), channel, r.tc.ID))
 		return
 	}
 
@@ -208,13 +196,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 		"is_error", r.result.IsError,
 		"result", textutil.TruncateRunes(content, 200))
 
-	agentCtx.Add(llm.Message{
-		Role:       "tool",
-		Content:    content,
-		Channel:    channel,
-		ToolCallID: r.tc.ID,
-		Timestamp:  jtime.Now(),
-	})
+	agentCtx.Add(toolResultMessage(content, channel, r.tc.ID))
 
 	// Share python_exec output to Discord as a code block.
 	if channel != "" && r.tc.Function.Name == "python_exec" && content != "" {

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
@@ -76,12 +77,44 @@ func (c *Context) Add(msg llm.Message) {
 	c.messages = append(c.messages, msg)
 }
 
+// AddIfAbsent は MessageID ベースで dedup して追加する。
+// MessageID が空なら常に追加 (system/tool/assistant 等の ID を持たないメッセージ用)。
+// 既存 MessageID と衝突した場合は false を返す。
+func (c *Context) AddIfAbsent(msg llm.Message) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if msg.MessageID != "" {
+		for _, existing := range c.messages {
+			if existing.MessageID == msg.MessageID {
+				return false
+			}
+		}
+	}
+	c.messages = append(c.messages, msg)
+	return true
+}
+
 // Messages returns a copy of all messages.
 func (c *Context) Messages() []llm.Message {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out := make([]llm.Message, len(c.messages))
 	copy(out, c.messages)
+	return out
+}
+
+// PersistableMessages は永続化対象のメッセージを返す (Injected を除外)。
+// context_snapshot に保存すると再起動時に stale な履歴として復元されるのを防ぐ。
+func (c *Context) PersistableMessages() []llm.Message {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]llm.Message, 0, len(c.messages))
+	for _, m := range c.messages {
+		if m.Injected {
+			continue
+		}
+		out = append(out, m)
+	}
 	return out
 }
 
@@ -279,16 +312,24 @@ func (c *Context) ResetSeenChannels() {
 	c.seenChannels = make(map[string]bool)
 }
 
-// RemoveChannelHistory removes existing "[Recent history for channel=X]"
-// system messages for the given channel so they can be replaced with fresh ones.
+// RemoveChannelHistory は指定チャンネルの注入済み履歴を context から削除する。
+// Injected フラグが付いたメッセージを第一に対象とし、旧形式 ([Recent history for channel=X]
+// / [Recent related memories for channel=X] プリフィックスの system メッセージ) も
+// 移行互換で削除する。
 func (c *Context) RemoveChannelHistory(channelID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	prefix := "[Recent history for channel=" + channelID + "]"
+	legacyHist := "[Recent history for channel=" + channelID + "]"
+	legacyMem := "[Recent related memories for channel=" + channelID + "]"
 	filtered := c.messages[:0]
 	for _, m := range c.messages {
-		if m.Role == "system" && len(m.Content) >= len(prefix) && m.Content[:len(prefix)] == prefix {
+		if m.Injected && m.Channel == channelID {
 			continue
+		}
+		if m.Role == "system" {
+			if strings.HasPrefix(m.Content, legacyHist) || strings.HasPrefix(m.Content, legacyMem) {
+				continue
+			}
 		}
 		filtered = append(filtered, m)
 	}

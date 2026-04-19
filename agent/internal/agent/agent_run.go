@@ -80,9 +80,17 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 			}
 			batch := []event.Event{evt}
 
-			if drainWindow > 0 {
+			// Voice events: VAD の 800ms 沈黙終端の上に 1 秒の drain を載せる。
+			// 軽い息継ぎ・言い淀みをまたいだ連続発話を 1 ターンにまとめるため
+			// (チャットの drain と同じ発想だがチャットより短め)。
+			effDrain := drainWindow
+			if evt.Message.IsVoice {
+				effDrain = 1 * time.Second
+			}
+
+			if effDrain > 0 {
 				// Timed drain: wait for additional events within the window.
-				timer := time.NewTimer(drainWindow)
+				timer := time.NewTimer(effDrain)
 			drain:
 				for {
 					select {
@@ -92,7 +100,7 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 							break drain
 						}
 						batch = append(batch, e)
-						timer.Reset(drainWindow)
+						timer.Reset(effDrain)
 					case <-timer.C:
 						break drain
 					case <-ctx.Done():
@@ -101,8 +109,8 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 					}
 				}
 				timer.Stop()
-			} else if drainWindow == 0 {
-				// Non-blocking drain for zero drain window (device).
+			} else {
+				// Zero or negative drain window: non-blocking drain.
 			drainFast:
 				for {
 					select {
@@ -113,20 +121,6 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 						batch = append(batch, e)
 					default:
 						break drainFast
-					}
-				}
-			} else {
-				// Negative drain window (tests): non-blocking drain.
-			drainTest:
-				for {
-					select {
-					case e, ok := <-ch:
-						if !ok {
-							break drainTest
-						}
-						batch = append(batch, e)
-					default:
-						break drainTest
 					}
 				}
 			}
@@ -141,7 +135,17 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 
 			// After processing, catch up on any events that arrived during
 			// handleBatch (only for sources that don't skip catch-up).
-			if !dc.SkipCatchUpStale {
+			// voice バッチには catchUpStale を適用しない: VAD 単位の断片を
+			// 「古いから perceive-only」と切り捨てると連続発話の意図が壊れる。
+			// 溜まった voice event は次の runWorker 周回で drain と共に 1 バッチ化する。
+			batchHasVoice := false
+			for _, e := range batch {
+				if e.Message.IsVoice {
+					batchHasVoice = true
+					break
+				}
+			}
+			if !dc.SkipCatchUpStale && !batchHasVoice {
 				if latest := a.catchUpStaleFor(ctx, key, ch, drainWindow); len(latest) > 0 {
 					if err := a.handleBatchWith(ctx, key, latest); err != nil {
 						a.logger.Error("処理に失敗した", "error", err.Error(), "source_key", string(key))
@@ -227,13 +231,14 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	}
 
 	// 4. Act: LLM completion, tool loop, get response text.
-	// Voice sessions use streaming LLM → TTS for lower latency.
+	// 音声対応セッション (voice ready) はストリーミング LLM → TTS を使う。
 	// Use hookCtx so LLM/tool spans are children of the pipeline.turn trace.
 	var text string
 	var err error
-	if ds, ok := sess.(*DiscordSession); ok && ds.turnIsVoice && ds.voice != nil && ds.voice.IsConnected(ds.turnGuildID) {
-		// Voice streaming: actStreamWith handles both LLM streaming and voice response.
-		text, err = a.actStreamWith(hookCtx, agentCtx, ds, p, t)
+	streamed := false
+	if ss, ok := sess.(StreamingSession); ok && p.IsVoice && ss.IsVoiceReady() {
+		text, err = a.actStreamWith(hookCtx, agentCtx, ss, p, t)
+		streamed = true
 	} else {
 		text, err = a.ActWith(hookCtx, agentCtx, sess, p, t)
 	}
@@ -247,9 +252,8 @@ func (a *Agent) handleBatchWith(ctx context.Context, key SourceKey, batch []even
 	a.runHooksWithCtx(hookCtx, func(c context.Context, h PipelineHook) error { return h.AfterAct(c, p, t) })
 
 	// 5. Route response through the session.
-	// Voice streaming already sent the response in actStreamWith.
-	if ds, ok := sess.(*DiscordSession); ok && ds.turnIsVoice {
-		// Voice: response was already sent via RespondStream in actStreamWith.
+	// Streamed sessions already sent the response via RespondStream in actStreamWith.
+	if streamed {
 		if text != "" {
 			a.logger.Info("話した", "source_key", string(key), "length", len(text), "content", textutil.TruncateRunes(text, 200))
 		}

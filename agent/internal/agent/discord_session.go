@@ -122,3 +122,8 @@ func (s *DiscordSession) Typing(ctx context.Context) {
 func (s *DiscordSession) SetVoice(v chat.VoiceSpeaker) {
 	s.voice = v
 }
+
+// IsVoiceReady は現在のターンが VC で、かつ voice 接続が生きているかを返す。
+func (s *DiscordSession) IsVoiceReady() bool {
+	return s.turnIsVoice && s.voice != nil && s.turnGuildID != "" && s.voice.IsConnected(s.turnGuildID)
+}

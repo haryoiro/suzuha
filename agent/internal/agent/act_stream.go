@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"go.opentelemetry.io/otel/attribute"
@@ -17,7 +16,7 @@ import (
 // ツール呼び出しが発生した場合は非ストリーミングの completeWithToolsUsing にフォールバックする。
 //
 // 戻り値の string は agentCtx に追加済みのレスポンステキスト (ログ用)。
-func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess *DiscordSession, p *Perception, t *Thought) (string, error) {
+func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess StreamingSession, p *Perception, t *Thought) (string, error) {
 	ts := a.prepareTools(t.Directive)
 	rc := a.llm.For(llmRoleForPerception(p))
 	maxCtx := rc.MaxContextTokens()
@@ -30,13 +29,15 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess *Disc
 	// Tracing span.
 	var span trace.Span
 	if a.tracer != nil {
-		ctx, span = a.tracer.Start(ctx, "llm.stream",
+		ctx, span = a.tracer.Start(ctx, "llm.complete",
 			trace.WithSpanKind(trace.SpanKindClient),
 			trace.WithAttributes(
 				attribute.String("gen_ai.system", rc.ProviderName()),
 				attribute.String("gen_ai.request.model", rc.Model()),
 				attribute.Int("gen_ai.prompt.message_count", len(msgs)),
 				attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
+				attribute.String("gen_ai.input", llm.SerializeMessagesForTrace(msgs)),
+				attribute.Bool("gen_ai.stream", true),
 			),
 		)
 		defer span.End()
@@ -105,13 +106,23 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess *Disc
 
 	fullText := contentBuf.String()
 
-	// Tracing attributes.
-	if span != nil && finalChunk.Usage != nil {
+	if span != nil {
 		span.SetAttributes(
-			attribute.Int("gen_ai.usage.prompt_tokens", finalChunk.Usage.PromptTokens),
-			attribute.Int("gen_ai.usage.completion_tokens", finalChunk.Usage.CompletionTokens),
 			attribute.String("gen_ai.response.finish_reason", finalChunk.FinishReason),
+			attribute.Int("gen_ai.response.tool_call_count", len(finalChunk.ToolCalls)),
+			attribute.String("gen_ai.output", llm.SerializeResponseForTrace(&llm.Response{
+				Text:         fullText,
+				Reasoning:    reasoningBuf.String(),
+				ToolCalls:    finalChunk.ToolCalls,
+				FinishReason: finalChunk.FinishReason,
+			})),
 		)
+		if finalChunk.Usage != nil {
+			span.SetAttributes(
+				attribute.Int("gen_ai.usage.prompt_tokens", finalChunk.Usage.PromptTokens),
+				attribute.Int("gen_ai.usage.completion_tokens", finalChunk.Usage.CompletionTokens),
+			)
+		}
 	}
 
 	a.logger.Info("考えた (streaming)",
@@ -142,19 +153,13 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess *Disc
 		}
 
 		// completeWithToolsUsing の tool loop 部分を手動で実行。
-		return a.handleToolLoopFallback(ctx, agentCtx, sess, t, ts, rc, resp, fullText, p.Channel, p.LastMessage.ChannelName)
+		return a.handleToolLoopFallback(ctx, agentCtx, sess, t, ts, rc, resp, p.Channel, p.LastMessage.ChannelName)
 	}
 
 	// ツールなし: コンテキストに追加。
-	agentCtx.Add(llm.Message{
-		Role:        "assistant",
-		Content:     fullText,
-		Channel:     p.Channel,
-		ChannelName: p.LastMessage.ChannelName,
-		Timestamp:   jtime.Now(),
-	})
+	agentCtx.Add(assistantMessage(fullText, p.Channel, p.LastMessage.ChannelName, nil))
 
-	return a.filterResponse(&llm.Response{Text: fullText, ToolCalls: finalChunk.ToolCalls}, "", p.Channel), nil
+	return a.filterResponse(&llm.Response{Text: fullText, ToolCalls: finalChunk.ToolCalls}, p.Channel), nil
 }
 
 // handleToolLoopFallback はストリーミングで ToolCall を検出した後、
@@ -162,132 +167,40 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess *Disc
 func (a *Agent) handleToolLoopFallback(
 	ctx context.Context,
 	agentCtx *Context,
-	sess *DiscordSession,
+	sess Session,
 	t *Thought,
 	ts toolSet,
 	rc *llm.RoleClient,
 	firstResp *llm.Response,
-	intermediateText string,
 	channel, channelName string,
 ) (string, error) {
-	maxCtx := rc.MaxContextTokens()
-
-	// 最初のレスポンスをコンテキストに追加。
-	agentCtx.Add(llm.Message{
-		Role:        "assistant",
-		Content:     firstResp.Text,
-		Channel:     channel,
-		ChannelName: channelName,
-		Timestamp:   jtime.Now(),
-		ToolCalls:   firstResp.ToolCalls,
-	})
-
-	// skip_response チェック。
+	// skip_response と text を同時生成した場合は tool_calls を剥がして text を採用する。
 	if containsSkipTool(firstResp.ToolCalls) {
-		for _, tc := range firstResp.ToolCalls {
-			if tc.Function.Name == "skip_response" {
-				continue
-			}
-			if tool, ok := ts.toolMap[tc.Function.Name]; ok {
-				if _, err := tool.Execute(ctx, []byte(tc.Function.Arguments)); err != nil {
-					a.logger.Warn("skip中のツール失敗", "tool", tc.Function.Name, "error", err)
-				}
-			}
+		execSideEffectsOnSkip(ctx, ts.toolMap, firstResp.ToolCalls, a.logger)
+		if firstResp.Text != "" {
+			agentCtx.Add(assistantMessage(firstResp.Text, channel, channelName, nil))
+			return a.filterResponse(firstResp, channel), nil
 		}
 		return "", nil
 	}
 
-	// ツール実行。
+	agentCtx.Add(assistantMessage(firstResp.Text, channel, channelName, firstResp.ToolCalls))
+
 	allStopAfter := a.executeToolCalls(ctx, agentCtx, sess, ts.toolMap, firstResp.ToolCalls, channel, 0)
 	if allStopAfter {
-		return a.filterResponse(firstResp, intermediateText, channel), nil
+		return a.filterResponse(firstResp, channel), nil
 	}
 
-	// 残りのイテレーション (バッチモード)。
-	maxIter := 10
-	var lowProgressStreak int
-
-	for iter := 1; iter < maxIter; iter++ {
-		if channel != "" {
-			sess.Typing(ctx)
-		}
-
-		msgs := a.buildIterMessages(ctx, agentCtx, t, ts, maxCtx, channel, iter)
-		provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
-		provTools := llm.ConvertTools(ts.tools)
-
-		resp, err := rc.CompleteWithTools(ctx, provMsgs, provTools)
-		if err != nil {
-			return "", err
-		}
-
-		a.logger.Info("考えた",
-			"iteration", iter,
-			"finish_reason", resp.FinishReason,
-			"text_length", len(resp.Text),
-			"tool_calls", len(resp.ToolCalls),
-			"tokens_in", resp.Usage.PromptTokens,
-			"tokens_out", resp.Usage.CompletionTokens,
-			"content", textutil.TruncateRunes(resp.Text, 200))
-
-		if !resp.HasToolCalls() {
-			agentCtx.Add(llm.Message{
-				Role:        "assistant",
-				Content:     resp.Text,
-				Channel:     channel,
-				ChannelName: channelName,
-				Timestamp:   jtime.Now(),
-			})
-			return a.filterResponse(resp, intermediateText, channel), nil
-		}
-
-		if resp.Usage.CompletionTokens < 500 {
-			lowProgressStreak++
-		} else {
-			lowProgressStreak = 0
-		}
-		if lowProgressStreak >= 3 {
-			a.logger.Warn("ツールループの進捗が停滞、打ち切り",
-				"iteration", iter, "low_progress_streak", lowProgressStreak)
-			return a.filterResponse(resp, intermediateText, channel), nil
-		}
-
-		if containsSkipTool(resp.ToolCalls) {
-			for _, tc := range resp.ToolCalls {
-				if tc.Function.Name == "skip_response" {
-					continue
-				}
-				if tool, ok := ts.toolMap[tc.Function.Name]; ok {
-					if _, err := tool.Execute(ctx, []byte(tc.Function.Arguments)); err != nil {
-						a.logger.Warn("skip中のツール失敗", "tool", tc.Function.Name, "error", err)
-					}
-				}
-			}
-			return "", nil
-		}
-
-		agentCtx.Add(llm.Message{
-			Role:        "assistant",
-			Content:     resp.Text,
-			Channel:     channel,
-			ChannelName: channelName,
-			Timestamp:   jtime.Now(),
-			ToolCalls:   resp.ToolCalls,
-		})
-
-		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" {
-			if err := sess.Respond(ctx, stripped); err != nil {
-				a.logger.Warn("途中の発言に失敗", "error", err)
-			}
-			intermediateText = stripped
-		}
-
-		allStopAfter = a.executeToolCalls(ctx, agentCtx, sess, ts.toolMap, resp.ToolCalls, channel, iter)
-		if allStopAfter {
-			return a.filterResponse(resp, intermediateText, channel), nil
-		}
+	resp, err := a.continueToolLoop(ctx, agentCtx, sess, t, ts, rc, channel, channelName)
+	if err != nil {
+		return "", err
 	}
-
-	return "", fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
+	if resp == nil {
+		return "", nil
+	}
+	if !resp.HasToolCalls() {
+		agentCtx.Add(assistantMessage(resp.Text, channel, channelName, nil))
+	}
+	return a.filterResponse(resp, channel), nil
 }
 

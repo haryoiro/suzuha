@@ -84,7 +84,8 @@ type Agent struct {
 	lastResponse map[string]string
 }
 
-// isDuplicateResponse は直前の返答と同じ内容かを判定し、返答を記録する。
+// isDuplicateResponse は直前の返答と類似しているかを判定し、未判定なら返答を記録する。
+// 類似判定は isSimilarText (Levenshtein 0.85 以上) を使う。
 func (a *Agent) isDuplicateResponse(channel, text string) bool {
 	if channel == "" {
 		return false
@@ -95,8 +96,11 @@ func (a *Agent) isDuplicateResponse(channel, text string) bool {
 		a.lastResponse = make(map[string]string)
 	}
 	prev := a.lastResponse[channel]
+	if prev != "" && isSimilarText(prev, text) {
+		return true
+	}
 	a.lastResponse[channel] = text
-	return prev == text
+	return false
 }
 
 // broadcastExpression sends an expression change if a broadcaster is configured.

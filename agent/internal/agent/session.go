@@ -51,6 +51,18 @@ func deviceDirectiveConfig() DirectiveConfig {
 	}
 }
 
+// StreamingSession はストリーミング TTS に対応したセッション用の拡張 interface。
+// actStreamWith がこれを満たすセッションに対して sentence 単位のストリーミング応答を行う。
+type StreamingSession interface {
+	Session
+	// RespondStream は LLM がストリームで生成した sentence を逐次読み上げる。
+	// sentences チャネルは呼び出し側で close される。
+	RespondStream(ctx context.Context, sentences <-chan string) error
+	// IsVoiceReady はこのターンで実際に voice 出力できる状態かを返す
+	// (VC に接続中か、websocket クライアントがつないでいるか、等)。
+	IsVoiceReady() bool
+}
+
 // Session represents a single interaction session.
 // Each source (Discord, Device, CLI) implements this interface.
 type Session interface {

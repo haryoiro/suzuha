@@ -43,6 +43,10 @@ func conversationStateFrom(msgs []llm.Message, channel, botID string) convState 
 		if m.Channel != channel {
 			continue
 		}
+		if m.Injected {
+			// 注入された過去メッセージは「さっき喋った」判定に含めない。
+			continue
+		}
 		scanned++
 
 		if m.Role == "assistant" && m.UserID == botID {
@@ -175,6 +179,10 @@ func extractParticipants(msgs []llm.Message, botID string) []prompt.Participant 
 		if m.UserID == "" || m.UserID == botID || m.Role != "user" {
 			continue
 		}
+		if m.Injected {
+			// 注入された過去発言者は「現参加者」リストに入れない。
+			continue
+		}
 		count++
 		if !seen[m.UserID] {
 			seen[m.UserID] = true
@@ -201,7 +209,7 @@ func (a *Agent) resolveDirective(agentCtx *Context, p *Perception, dc DirectiveC
 			"※時刻や雰囲気の報告はしない（「静かな午後だ」「X時だ」等）。"
 	}
 	if p.DirectlyAddressed {
-		return "[RESPOND] あなた宛のメッ���ージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + noTimeReport
+		return "[RESPOND] あなた宛のメッセージです。必ず返答してください。※返答は1〜2行に収めて。長文禁止。" + noTimeReport
 	}
 
 	cs := conversationStateFrom(agentCtx.Messages(), p.Channel, a.botID)
@@ -215,8 +223,8 @@ func responseDirective(evt event.Event, botID string, cs convState, es episodeSi
 	}
 	const noEmoji = "※テキストに絵文字・顔文字は絶対に入れないで。"
 	const brevity = "※返答は1〜2行に収めて。長文禁止。"
-	const reactHint = "リアクションは本当に心が動いたときだけ discord_react で付けてよい。ほとんどの場合はリアクションなしで skip_response だけ呼べばOK。"
-	const skipDefault = "基本は skip_response ツールを呼んでスキップしてください。あなたが発言しなくても会話は成り立ちます���"
+	const reactHint = "心が動いたときだけ discord_react でリアクションしてよい。"
+	const skipDefault = "基本は skip_response ツールを呼んでスキップしてください。あなたが発言しなくても会話は成り立ちます。"
 
 	if cs.botLastSpokeAgo > 0 && cs.botLastSpokeAgo < convActiveWindow && cs.messagesSinceBotSpoke <= convActiveMaxMsgs {
 		return "[RESPOND] 直前まであなたが参加していた会話の続きです。返答してください。" + brevity + noEmoji + noTimeReport
@@ -224,20 +232,20 @@ func responseDirective(evt event.Event, botID string, cs convState, es episodeSi
 
 	if cs.botLastSpokeAgo > 0 && cs.botLastSpokeAgo < convRecentWindow && cs.messagesSinceBotSpoke <= convRecentMaxMsgs && cs.recentDistinctUsers == 1 {
 		return "[LISTEN] 最近この会話に参加していました。続ける価値があれば短く返してください。なければ skip_response を呼んで。" +
-			brevity + reactHint + noEmoji + noTimeReport
+			brevity + reactHint + noEmoji
 	}
 
 	if es.count >= 3 && es.hasRecent {
 		return "[LISTEN] 仲の良い人の会話です。気軽に返して。相槌だけの返答はしない。話すことがなければ skip_response。" +
-			brevity + noEmoji + noTimeReport
+			brevity + noEmoji
 	}
 	if es.count >= 1 {
 		return "[LISTEN] 知り合いの会話です。" + skipDefault +
 			"自分が詳しい話題や強い意見があるときだけ返して。" +
-			brevity + reactHint + noEmoji + noTimeReport
+			brevity + reactHint + noEmoji
 	}
 
 	return "[LISTEN] チャンネルの会話です。" + skipDefault +
 		"自分宛の話題か、本当に付け加える価値があるときだけ返して。" +
-		brevity + reactHint + noEmoji + noTimeReport
+		brevity + reactHint + noEmoji
 }

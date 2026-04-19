@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -155,12 +156,13 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 
 	// Bootstrap channel history if this is a new channel (unless SkipChannelHistory is set).
 	if !dc.SkipChannelHistory {
-		a.injectChannelHistoryWith(ctx, agentCtx, msg.Channel, msg.Content, msg.Source)
+		a.injectChannelHistoryWith(ctx, agentCtx, msg)
 	}
 
 	// Add to context (skip self_prompt — these are injected as ephemeral in Think).
+	// AddIfAbsent で注入済の MessageID と重複する場合は skip する。
 	if evt.Type != event.TypeSelfPrompt {
-		agentCtx.Add(msg)
+		agentCtx.AddIfAbsent(msg)
 	}
 
 	return msg
@@ -302,93 +304,157 @@ func extFromMimeType(mime string) string {
 }
 
 // injectChannelHistoryWith fetches recent messages for a channel not yet seen
-// in the context. Uses the discord_get_history tool if available,
-// falling back to recent memory search.
-func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context, channelID, messageContent, source string) {
+// in the context and appends them as individual Injected messages, so
+// ConvertMessages applies the same metadata prefix used for live messages.
+// Falls back to a recent-memory system block (also marked Injected) when the
+// history tool is unavailable or returns empty.
+func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context, trigger llm.Message) {
+	channelID := trigger.Channel
 	if channelID == "" {
 		return
 	}
-	if agentCtx.HasChannelHistory(channelID) {
+	// コンテンツベースのゲート: 既にそのチャンネルの user/assistant メッセージが
+	// context にあるなら (再起動後の snapshot 復元も含む)、注入しない。
+	// seenChannels は in-memory flag で再起動で消えるため、過去は注入重複の元だった。
+	if agentCtx.HasMessagesForChannel(channelID) {
 		return
 	}
 	// Remove stale history (e.g. from DB restore / async compact) before injecting fresh one.
 	agentCtx.RemoveChannelHistory(channelID)
 	agentCtx.MarkChannelSeen(channelID)
 
-	var content string
-	if histTool, ok := a.tools.Get("discord_get_history"); ok {
-		input, _ := json.Marshal(map[string]any{
-			"channel_id": channelID,
-			"limit":      10,
-		})
-		result, err := histTool.Execute(ctx, input)
-		if err != nil {
-			a.logger.Warn("会話の振り返りに失敗", "channel", channelID, "error", err)
-		} else if result != nil && !result.IsError && len(result.Content) > 0 && result.Content[0].Text != "" {
-			content = a.formatChannelHistory(ctx, channelID, result.Content[0].Text, source)
-		}
+	if a.injectDiscordHistory(ctx, agentCtx, trigger) {
+		return
 	}
-
-	if content == "" && a.memory != nil {
-		since := time.Now().Add(-3 * 24 * time.Hour)
-		memories, err := a.memory.SearchRecent(ctx, messageContent, 5, since)
-		if err != nil {
-			a.logger.Debug("関連する記憶が見つからなかった", "error", err)
-		}
-		if len(memories) > 0 {
-			var b strings.Builder
-			fmt.Fprintf(&b, "[Recent related memories for channel=%s]\n", channelID)
-			for _, m := range memories {
-				fmt.Fprintf(&b, "- [%s] %s\n", m.Type, m.Content)
-			}
-			content = b.String()
-		}
-	}
-
-	if content != "" {
-		agentCtx.Add(llm.Message{
-			Role:      "system",
-			Content:   content,
-			Channel:  channelID,
-			Timestamp: jtime.Now(),
-		})
-		a.logger.Info("最近の会話を振り返った", "channel", channelID, "length", len(content))
-	}
+	a.injectMemoryFallback(ctx, agentCtx, trigger)
 }
 
-// formatChannelHistory parses the history tool's JSON output and resolves
-// author names via the user store.
-func (a *Agent) formatChannelHistory(ctx context.Context, channelID, rawJSON, source string) string {
+// injectDiscordHistory は discord_get_history ツールで取得した履歴を
+// 個別メッセージとして注入する。成功時 true を返す。
+func (a *Agent) injectDiscordHistory(ctx context.Context, agentCtx *Context, trigger llm.Message) bool {
+	histTool, ok := a.tools.Get("discord_get_history")
+	if !ok {
+		return false
+	}
+	input, _ := json.Marshal(map[string]any{
+		"channel_id": trigger.Channel,
+		"limit":      10,
+	})
+	result, err := histTool.Execute(ctx, input)
+	if err != nil {
+		a.logger.Warn("会話の振り返りに失敗", "channel", trigger.Channel, "error", err)
+		return false
+	}
+	if result == nil || result.IsError || len(result.Content) == 0 || result.Content[0].Text == "" {
+		return false
+	}
+
 	type histMsg struct {
+		ID       string `json:"id"`
 		AuthorID string `json:"author_id"`
 		Author   string `json:"author"`
 		Content  string `json:"content"`
 		Time     string `json:"time"`
 	}
-	var msgs []histMsg
-	if err := json.Unmarshal([]byte(rawJSON), &msgs); err != nil {
-		return fmt.Sprintf("[Recent history for channel=%s]\n%s", channelID, rawJSON)
+	var items []histMsg
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &items); err != nil {
+		a.logger.Warn("履歴の JSON パースに失敗", "channel", trigger.Channel, "error", err)
+		return false
+	}
+	if len(items) == 0 {
+		return false
 	}
 
-	var b strings.Builder
-	fmt.Fprintf(&b, "[Recent history for channel=%s]\n", channelID)
-	for _, m := range msgs {
-		name := m.Author
-		if m.AuthorID == a.botID {
+	parsed := make([]struct {
+		h  histMsg
+		ts time.Time
+	}, 0, len(items))
+	for _, h := range items {
+		ts, err := time.Parse(time.RFC3339, h.Time)
+		if err != nil {
+			// 旧フォーマット互換: 時刻のみなら今日の日付を当てる (近似)。
+			if t2, err2 := time.ParseInLocation("15:04:05", h.Time, jtime.Location()); err2 == nil {
+				now := jtime.Now()
+				ts = time.Date(now.Year(), now.Month(), now.Day(), t2.Hour(), t2.Minute(), t2.Second(), 0, jtime.Location())
+			}
+		}
+		ts = jtime.In(ts) // Discord は UTC で返すので JST に寄せる
+		parsed = append(parsed, struct {
+			h  histMsg
+			ts time.Time
+		}{h, ts})
+	}
+	sort.Slice(parsed, func(i, j int) bool { return parsed[i].ts.Before(parsed[j].ts) })
+
+	var injected int
+	for _, p := range parsed {
+		if p.h.ID == trigger.MessageID {
+			// trigger はこの後 AddIfAbsent で追加されるので注入はしない。
+			continue
+		}
+		name := p.h.Author
+		role := "user"
+		if p.h.AuthorID == a.botID {
+			role = "assistant"
 			if a.users != nil {
-				if u, err := a.users.Resolve(ctx, source, m.AuthorID, m.Author); err == nil && u.DisplayName != "" {
+				if u, err := a.users.Resolve(ctx, trigger.Source, p.h.AuthorID, p.h.Author); err == nil && u.DisplayName != "" {
 					name = u.DisplayName
 				}
 			}
-			name += " (self)"
-		} else if a.users != nil && m.AuthorID != "" {
-			if u, err := a.users.Resolve(ctx, source, m.AuthorID, m.Author); err == nil && u.DisplayName != "" {
+		} else if a.users != nil && p.h.AuthorID != "" {
+			if u, err := a.users.Resolve(ctx, trigger.Source, p.h.AuthorID, p.h.Author); err == nil && u.DisplayName != "" {
 				name = u.DisplayName
 			}
 		}
-		fmt.Fprintf(&b, "[%s] %s: %s\n", m.Time, name, m.Content)
+		msg := llm.Message{
+			Role:        role,
+			Content:     p.h.Content,
+			UserID:      p.h.AuthorID,
+			UserName:    name,
+			Source:      trigger.Source,
+			Channel:     trigger.Channel,
+			ChannelName: trigger.ChannelName,
+			GuildID:     trigger.GuildID,
+			GuildName:   trigger.GuildName,
+			MessageID:   p.h.ID,
+			Timestamp:   p.ts,
+			Injected:    true,
+		}
+		if agentCtx.AddIfAbsent(msg) {
+			injected++
+		}
 	}
-	return b.String()
+	a.logger.Info("最近の会話を振り返った", "channel", trigger.Channel, "count", injected)
+	return injected > 0
+}
+
+// injectMemoryFallback は discord_get_history が使えない時に
+// 記憶検索で関連メモを注入する (system ロール、Injected=true)。
+func (a *Agent) injectMemoryFallback(ctx context.Context, agentCtx *Context, trigger llm.Message) {
+	if a.memory == nil {
+		return
+	}
+	since := time.Now().Add(-3 * 24 * time.Hour)
+	memories, err := a.memory.SearchRecent(ctx, trigger.Content, 5, since)
+	if err != nil {
+		a.logger.Debug("関連する記憶が見つからなかった", "error", err)
+	}
+	if len(memories) == 0 {
+		return
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "[Recent related memories for channel=%s]\n", trigger.Channel)
+	for _, m := range memories {
+		fmt.Fprintf(&b, "- [%s] %s\n", m.Type, m.Content)
+	}
+	agentCtx.Add(llm.Message{
+		Role:      "system",
+		Content:   b.String(),
+		Channel:   trigger.Channel,
+		Timestamp: jtime.Now(),
+		Injected:  true,
+	})
+	a.logger.Info("関連記憶を差し込んだ", "channel", trigger.Channel, "count", len(memories))
 }
 
 // annotateVideoURLs はメッセージ中の動画 URL を検知し、メタデータで enrich する。

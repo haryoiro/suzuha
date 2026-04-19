@@ -14,9 +14,14 @@ import (
 // filterOutInjectedHistory は Compact に渡すメッセージから
 // injectChannelHistoryWith で注入されたチャンネル履歴を除外する。
 // これにより Compact → クリア → 再注入 の重複抽出ループを防ぐ。
+// 新形式 (Injected flag) と旧形式 (system prefix) の両対応で、旧 snapshot
+// の自然消滅を待つ。
 func filterOutInjectedHistory(msgs []llm.Message) []llm.Message {
 	filtered := make([]llm.Message, 0, len(msgs))
 	for _, m := range msgs {
+		if m.Injected {
+			continue
+		}
 		if m.Role == "system" && (strings.HasPrefix(m.Content, "[Recent history for channel=") ||
 			strings.HasPrefix(m.Content, "[Recent related memories for channel=")) {
 			continue
@@ -151,6 +156,9 @@ func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, star
 		if msg.Role == "system" {
 			continue
 		}
+		if msg.Injected {
+			continue
+		}
 
 		var toolCallsStr string
 		if len(msg.ToolCalls) > 0 {
@@ -183,7 +191,7 @@ func (a *Agent) persistContext(ctx context.Context, agentCtx *Context, sourceKey
 	if a.convStore == nil {
 		return
 	}
-	if err := a.convStore.SaveSnapshot(ctx, string(sourceKey), agentCtx.Messages()); err != nil {
+	if err := a.convStore.SaveSnapshot(ctx, string(sourceKey), agentCtx.PersistableMessages()); err != nil {
 		a.logger.Warn("記憶の保存に失敗", "error", err)
 	}
 }

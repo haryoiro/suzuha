@@ -2,11 +2,9 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -14,24 +12,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// skipResponseTool is a virtual tool that signals the LLM wants to skip responding.
-// It is NOT registered in the global tool.Registry — it is injected per-call
-// into completeWithTools only when the directive allows skipping.
-type skipResponseTool struct{}
-
-func (skipResponseTool) Name() string    { return "skip_response" }
-func (skipResponseTool) ReadOnly() bool { return true }
-func (skipResponseTool) Description() string {
-	return "この会話に返答しないときに呼ぶ。重要: テキストを返すなら絶対にこのツールを呼ばないこと（テキストとskip_responseの同時使用は禁止）。discord_react と一緒に呼んでもよい。"
-}
-func (skipResponseTool) InputSchema() json.RawMessage {
-	return json.RawMessage(`{"type":"object","properties":{"reason":{"type":"string","description":"スキップ理由（ログ用）"}},"required":[]}`)
-}
-func (skipResponseTool) Execute(_ context.Context, input json.RawMessage) (*tool.ToolResult, error) {
-	return tool.StopResult("skipped"), nil
-}
-
-var _ tool.Tool = skipResponseTool{}
 
 // Act is the backward-compatible wrapper that calls ActWith with the discord context
 // and session, then routes the response through the discord session.
@@ -63,7 +43,7 @@ func llmRoleForPerception(p *Perception) string {
 // the caller is responsible for sending the response via Session.Respond().
 func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p *Perception, t *Thought) (string, error) {
 	llmRole := llmRoleForPerception(p)
-	resp, intermediateText, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel, p.LastMessage.ChannelName, llmRole)
+	resp, err := a.completeWithToolsUsing(ctx, agentCtx, sess, t, p.Channel, p.LastMessage.ChannelName, llmRole)
 	if err != nil {
 		return "", fmt.Errorf("agent: 補完に失敗: %w", err)
 	}
@@ -72,34 +52,25 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 	// When the response has tool calls, the assistant message was already added
 	// inside completeWithToolsUsing (before executing the tools).
 	if !resp.HasToolCalls() {
-		agentCtx.Add(llm.Message{
-			Role:        "assistant",
-			Content:     resp.Text,
-			Channel:     p.Channel,
-			ChannelName: p.LastMessage.ChannelName,
-			Timestamp:   jtime.Now(),
-		})
+		agentCtx.Add(assistantMessage(resp.Text, p.Channel, p.LastMessage.ChannelName, nil))
 	}
 
-	return a.filterResponse(resp, intermediateText, p.Channel), nil
+	return a.filterResponse(resp, p.Channel), nil
 }
 
 // filterResponse はレスポンスを検査し、送信すべきテキストを返す。
-// skip_response / silent / dedup のいずれかに該当する場合は空文字を返す。
-func (a *Agent) filterResponse(resp *llm.Response, intermediateText, channel string) string {
+// silent / dedup のいずれかに該当する場合は空文字を返す。
+// skip_response は text が空のときだけ沈黙として扱う (text 共存時は text 優先)。
+func (a *Agent) filterResponse(resp *llm.Response, channel string) string {
 	text := strings.TrimSpace(llm.StripDirectiveTags(resp.Text))
+	skip := containsSkipTool(resp.ToolCalls)
 	switch {
 	case text == "":
-		a.logger.Debug("何も思いつかなかった")
-		return ""
-	case containsSkipTool(resp.ToolCalls):
-		a.logger.Info("黙った (skip_response)",
-			"had_text", text != "")
-		return ""
-	case intermediateText != "" && isSimilarText(intermediateText, text):
-		a.logger.Info("同じこと言いそうなので黙った",
-			"intermediate_length", len(intermediateText),
-			"final_length", len(text))
+		if skip {
+			a.logger.Info("黙った (skip_response)")
+		} else {
+			a.logger.Debug("何も思いつかなかった")
+		}
 		return ""
 	case llm.IsSilentResponse(text):
 		a.logger.Info("黙った (サイレント)",
@@ -110,6 +81,10 @@ func (a *Agent) filterResponse(resp *llm.Response, intermediateText, channel str
 			"channel", channel, "length", len(text))
 		return ""
 	default:
+		if skip {
+			a.logger.Warn("skip_response と text を同時生成、text を優先",
+				"text_len", len(text))
+		}
 		return text
 	}
 }
@@ -174,22 +149,109 @@ func (a *Agent) buildIterMessages(
 	return msgs
 }
 
-// completeWithToolsUsing runs the LLM and executes tool calls in a loop,
-// using the given agent context and session for typing/intermediate responses.
-// llmRole determines which LLM provider/model to use (e.g. "conversation", "voice").
-func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName, llmRole string) (*llm.Response, string, error) {
+// completeWithToolsUsing は LLM 補完 + ツールループを実行する。
+// 初回 (iter=0) のトレーシングとキャリブレーションを行い、
+// ツール呼び出しがあれば continueToolLoop に委譲する。
+func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName, llmRole string) (*llm.Response, error) {
 	ts := a.prepareTools(t.Directive)
 	rc := a.llm.For(llmRole)
+
+	msgs := a.buildIterMessages(ctx, agentCtx, t, ts, rc.MaxContextTokens(), channel, 0)
+	provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
+	provTools := llm.ConvertTools(ts.tools)
+
+	var span trace.Span
+	if a.tracer != nil {
+		ctx, span = a.tracer.Start(ctx, "llm.complete",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("gen_ai.system", rc.ProviderName()),
+				attribute.String("gen_ai.request.model", rc.Model()),
+				attribute.Int("gen_ai.prompt.message_count", len(msgs)),
+				attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
+				attribute.String("gen_ai.input", llm.SerializeMessagesForTrace(msgs)),
+			),
+		)
+		defer span.End()
+	}
+
+	resp, err := rc.CompleteWithTools(ctx, provMsgs, provTools)
+	if err != nil {
+		if span != nil {
+			span.RecordError(err)
+		}
+		return nil, err
+	}
+
+	if span != nil {
+		span.SetAttributes(
+			attribute.Int("gen_ai.usage.prompt_tokens", resp.Usage.PromptTokens),
+			attribute.Int("gen_ai.usage.completion_tokens", resp.Usage.CompletionTokens),
+			attribute.String("gen_ai.response.finish_reason", resp.FinishReason),
+			attribute.Int("gen_ai.response.tool_call_count", len(resp.ToolCalls)),
+			attribute.String("gen_ai.output", llm.SerializeResponseForTrace(resp)),
+		)
+	}
+
+	a.logger.Info("考えた",
+		"iteration", 0,
+		"finish_reason", resp.FinishReason,
+		"text_length", len(resp.Text),
+		"tool_calls", len(resp.ToolCalls),
+		"tokens_in", resp.Usage.PromptTokens,
+		"tokens_out", resp.Usage.CompletionTokens,
+		"content", textutil.TruncateRunes(resp.Text, 200))
+
+	if resp.Usage.PromptTokens > 0 {
+		agentCtx.CalibrateTokens(resp.Usage.PromptTokens)
+		a.logger.Debug("トークン計算を補正",
+			"actual", resp.Usage.PromptTokens,
+			"estimated", agentCtx.EstimatedTokens(),
+			"ratio", fmt.Sprintf("%.2f", agentCtx.TokenCalibration()))
+	}
+
+	if !resp.HasToolCalls() {
+		return resp, nil
+	}
+
+	if containsSkipTool(resp.ToolCalls) {
+		execSideEffectsOnSkip(ctx, ts.toolMap, resp.ToolCalls, a.logger)
+		// skip_response と text を同時生成したケース: text を発言として採用し、
+		// tool_calls を剥がして context に記録する (filterResponse が text を返す)。
+		if resp.Text != "" {
+			agentCtx.Add(assistantMessage(resp.Text, channel, channelName, nil))
+		}
+		return resp, nil
+	}
+
+	agentCtx.Add(assistantMessage(resp.Text, channel, channelName, resp.ToolCalls))
+
+	allStopAfter := a.executeToolCalls(ctx, agentCtx, sess, ts.toolMap, resp.ToolCalls, channel, 0)
+	if allStopAfter {
+		a.logger.Info("ツールが完了した", "iteration", 0)
+		return resp, nil
+	}
+
+	return a.continueToolLoop(ctx, agentCtx, sess, t, ts, rc, channel, channelName)
+}
+
+// continueToolLoop はツールループのイテレーション 1 以降を実行する。
+// completeWithToolsUsing と handleToolLoopFallback の両方から使われる。
+func (a *Agent) continueToolLoop(
+	ctx context.Context,
+	agentCtx *Context,
+	sess Session,
+	t *Thought,
+	ts toolSet,
+	rc *llm.RoleClient,
+	channel, channelName string,
+) (*llm.Response, error) {
 	maxCtx := rc.MaxContextTokens()
+	const maxIter = 10
+	var lowProgressStreak int
 
-	maxIter := 10
-	var intermediateText string
-	var lowProgressStreak int // 連続して出力が少ない回数 (diminishing returns 検知用)
-
-	for iter := range maxIter {
-		// Send typing indicator only on subsequent iterations (tool loops),
-		// not on the first call where we don't yet know if we'll respond.
-		if iter > 0 && channel != "" {
+	for iter := 1; iter < maxIter; iter++ {
+		if channel != "" {
 			if ds, ok := sess.(*DiscordSession); ok {
 				ds.Typing(ctx)
 			}
@@ -199,35 +261,9 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 		provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
 		provTools := llm.ConvertTools(ts.tools)
 
-		var span trace.Span
-		if a.tracer != nil {
-			ctx, span = a.tracer.Start(ctx, "llm.complete",
-				trace.WithSpanKind(trace.SpanKindClient),
-				trace.WithAttributes(
-					attribute.String("gen_ai.system", rc.ProviderName()),
-					attribute.String("gen_ai.request.model", rc.Model()),
-					attribute.Int("gen_ai.prompt.message_count", len(msgs)),
-					attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
-				),
-			)
-			defer span.End()
-		}
-
 		resp, err := rc.CompleteWithTools(ctx, provMsgs, provTools)
 		if err != nil {
-			if span != nil {
-				span.RecordError(err)
-			}
-			return nil, intermediateText, err
-		}
-
-		if span != nil {
-			span.SetAttributes(
-				attribute.Int("gen_ai.usage.prompt_tokens", resp.Usage.PromptTokens),
-				attribute.Int("gen_ai.usage.completion_tokens", resp.Usage.CompletionTokens),
-				attribute.String("gen_ai.response.finish_reason", resp.FinishReason),
-				attribute.Int("gen_ai.response.tool_call_count", len(resp.ToolCalls)),
-			)
+			return nil, err
 		}
 
 		a.logger.Info("考えた",
@@ -239,21 +275,10 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			"tokens_out", resp.Usage.CompletionTokens,
 			"content", textutil.TruncateRunes(resp.Text, 200))
 
-		// Calibrate token estimator using actual prompt tokens from the provider.
-		if iter == 0 && resp.Usage.PromptTokens > 0 {
-			agentCtx.CalibrateTokens(resp.Usage.PromptTokens)
-			a.logger.Debug("トークン計算を補正",
-				"actual", resp.Usage.PromptTokens,
-				"estimated", agentCtx.EstimatedTokens(),
-				"ratio", fmt.Sprintf("%.2f", agentCtx.TokenCalibration()))
-		}
-
 		if !resp.HasToolCalls() {
-			return resp, intermediateText, nil
+			return resp, nil
 		}
 
-		// Diminishing returns detection: 出力トークンが少ない iteration が
-		// 3 回以上続いたらツールループを打ち切る (空回り防止)。
 		if resp.Usage.CompletionTokens < 500 {
 			lowProgressStreak++
 		} else {
@@ -262,51 +287,25 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 		if lowProgressStreak >= 3 {
 			a.logger.Warn("ツールループの進捗が停滞、打ち切り",
 				"iteration", iter, "low_progress_streak", lowProgressStreak)
-			return resp, intermediateText, nil
+			return resp, nil
 		}
 
-		// skip_response が含まれる場合、コンテキストに何も残さない。
-		// 副作用ツール (discord_react 等) だけ実行して即終了。
 		if containsSkipTool(resp.ToolCalls) {
-			for _, tc := range resp.ToolCalls {
-				if tc.Function.Name == "skip_response" {
-					continue
-				}
-				if t, ok := ts.toolMap[tc.Function.Name]; ok {
-					if _, err := t.Execute(ctx, json.RawMessage(tc.Function.Arguments)); err != nil {
-						a.logger.Warn("skip中のツール失敗", "tool", tc.Function.Name, "error", err)
-					}
-				}
+			execSideEffectsOnSkip(ctx, ts.toolMap, resp.ToolCalls, a.logger)
+			if resp.Text != "" {
+				agentCtx.Add(assistantMessage(resp.Text, channel, channelName, nil))
 			}
-			return resp, intermediateText, nil
+			return resp, nil
 		}
 
-		agentCtx.Add(llm.Message{
-			Role:        "assistant",
-			Content:     resp.Text,
-			Channel:     channel,
-			ChannelName: channelName,
-			Timestamp:   jtime.Now(),
-			ToolCalls:   resp.ToolCalls,
-		})
-
-		// Send intermediate text if the LLM returned text alongside tool calls.
-		if stripped := llm.StripDirectiveTags(resp.Text); stripped != "" && channel != "" {
-			a.logger.Info("途中で話した",
-				"channel", channel, "length", len(stripped))
-			if err := sess.Respond(ctx, stripped); err != nil {
-				a.logger.Warn("途中の発言に失敗", "error", err)
-			}
-			intermediateText = stripped
-		}
+		agentCtx.Add(assistantMessage(resp.Text, channel, channelName, resp.ToolCalls))
 
 		allStopAfter := a.executeToolCalls(ctx, agentCtx, sess, ts.toolMap, resp.ToolCalls, channel, iter)
-
 		if allStopAfter {
 			a.logger.Info("ツールが完了した", "iteration", iter)
-			return resp, intermediateText, nil
+			return resp, nil
 		}
 	}
 
-	return nil, intermediateText, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
+	return nil, fmt.Errorf("agent: ツールループが %d 回の反復を超過しました", maxIter)
 }
