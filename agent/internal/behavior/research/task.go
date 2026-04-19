@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 )
 
 type taskConfig struct {

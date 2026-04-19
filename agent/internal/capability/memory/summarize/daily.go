@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/scheduler"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
@@ -81,7 +81,7 @@ func (t *DailyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ js
 	return nil
 }
 
-func summarizeDay(ctx context.Context, llmClient *llm.Client, systemPrompt string, dateStr string, digests []Entry) (string, error) {
+func summarizeDay(ctx context.Context, llmClient portllm.Client, systemPrompt string, dateStr string, digests []Entry) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("以下は今日1日の時間ごとの記録です。1日を振り返って日記を書いてください。\n")
