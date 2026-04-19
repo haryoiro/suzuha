@@ -5,7 +5,6 @@ import (
 	"math"
 	"sync"
 
-	"github.com/haryoiro/suzuha/external/detect"
 )
 
 // servoCommander sends servo commands to a physical device.
@@ -47,7 +46,7 @@ func labelPriority(label string) int {
 }
 
 // targetPoint returns the point to aim at for a given detection.
-func targetPoint(d detect.Detection) (float64, float64) {
+func targetPoint(d Detection) (float64, float64) {
 	if d.Label == "body" {
 		cx := float64(d.BBox[0]+d.BBox[2]) / 2.0
 		top := float64(d.BBox[1])
@@ -193,7 +192,7 @@ func (t *ObjectTracker) ApplyPartial(p TrackerPatch) {
 }
 
 // Feed processes a new set of YOLO detections.
-func (t *ObjectTracker) Feed(detections []detect.Detection) {
+func (t *ObjectTracker) Feed(detections []Detection) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -202,7 +201,7 @@ func (t *ObjectTracker) Feed(detections []detect.Detection) {
 	}
 
 	// Step 1: Filter detections
-	var relevant []detect.Detection
+	var relevant []Detection
 	for _, d := range detections {
 		if d.Confidence < t.cfg.MinConfidence {
 			continue
@@ -355,7 +354,7 @@ func (t *ObjectTracker) Feed(detections []detect.Detection) {
 	}()
 }
 
-func (t *ObjectTracker) updateMatched(obj *trackedObject, d detect.Detection) {
+func (t *ObjectTracker) updateMatched(obj *trackedObject, d Detection) {
 	obj.bbox = d.BBox
 	obj.confidence = d.Confidence
 	obj.label = d.Label

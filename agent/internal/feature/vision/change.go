@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/external/detect"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 )
@@ -54,7 +53,7 @@ func (cd *ChangeDetector) Enabled() bool {
 
 // Update compares new detections with previous state and publishes
 // an event if something changed. Returns true if an event was published.
-func (cd *ChangeDetector) Update(detections []detect.Detection) bool {
+func (cd *ChangeDetector) Update(detections []Detection) bool {
 	cd.mu.Lock()
 	defer cd.mu.Unlock()
 
@@ -97,7 +96,7 @@ func (cd *ChangeDetector) Update(detections []detect.Detection) bool {
 	return true
 }
 
-func summarize(detections []detect.Detection) map[string]int {
+func summarize(detections []Detection) map[string]int {
 	m := make(map[string]int)
 	for _, d := range detections {
 		if d.Confidence >= 0.4 {

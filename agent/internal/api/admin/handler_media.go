@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/external/embedding"
+	"github.com/haryoiro/suzuha/internal/adapter/embedder"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 

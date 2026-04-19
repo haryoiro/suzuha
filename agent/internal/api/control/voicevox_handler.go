@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-faster/jx"
-	"github.com/haryoiro/suzuha/external/tts"
+	"github.com/haryoiro/suzuha/internal/adapter/tts"
 	"github.com/haryoiro/suzuha/internal/adapter/discord"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/config"

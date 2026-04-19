@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/external/embedding"
+	"github.com/haryoiro/suzuha/internal/adapter/embedder"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pgvector/pgvector-go"

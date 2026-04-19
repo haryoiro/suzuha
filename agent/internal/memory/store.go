@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/embedding"
+	"github.com/haryoiro/suzuha/internal/adapter/embedder"
 )
 
 // Part は embedding.Part の型エイリアス。domain レイヤーが external/embedding を直接 import しなくて済むようにする。

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/internal/adapter/transcript"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 

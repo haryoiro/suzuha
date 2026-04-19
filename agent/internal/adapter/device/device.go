@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/stt"
-	"github.com/haryoiro/suzuha/external/tts"
+	"github.com/haryoiro/suzuha/internal/adapter/stt"
+	"github.com/haryoiro/suzuha/internal/adapter/tts"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/voice"
 )

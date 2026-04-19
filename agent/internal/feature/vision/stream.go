@@ -7,12 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/detect"
 )
 
 // DetectionEvent is sent to SSE subscribers.
 type DetectionEvent struct {
-	Detections  []detect.Detection `json:"detections"`
+	Detections  []Detection `json:"detections"`
 	InferenceMs float64            `json:"inference_ms"`
 	Timestamp   int64              `json:"timestamp"`
 	FrameWidth  int                `json:"frame_width"`
@@ -24,7 +23,7 @@ type DetectionEvent struct {
 type FrameStore struct {
 	mu          sync.RWMutex
 	frame       []byte
-	detections  []detect.Detection
+	detections  []Detection
 	inferenceMs float64
 	updatedAt   time.Time
 	frameWidth  int
@@ -51,7 +50,7 @@ func (fs *FrameStore) UpdateFrame(jpeg []byte) {
 }
 
 // UpdateDetections stores detection results and notifies subscribers.
-func (fs *FrameStore) UpdateDetections(result *detect.DetectionResult, width, height int) {
+func (fs *FrameStore) UpdateDetections(result *DetectionResult, width, height int) {
 	fs.mu.Lock()
 	fs.detections = result.Detections
 	fs.inferenceMs = result.InferenceMs

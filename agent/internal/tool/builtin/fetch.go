@@ -10,7 +10,7 @@ import (
 	"time"
 
 	readability "codeberg.org/readeck/go-readability/v2"
-	"github.com/haryoiro/suzuha/external/twitter"
+	"github.com/haryoiro/suzuha/internal/adapter/twitter"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 

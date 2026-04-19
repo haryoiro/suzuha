@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/haryoiro/suzuha/external/stt"
-	"github.com/haryoiro/suzuha/external/tts"
+	"github.com/haryoiro/suzuha/internal/adapter/stt"
+	"github.com/haryoiro/suzuha/internal/adapter/tts"
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
