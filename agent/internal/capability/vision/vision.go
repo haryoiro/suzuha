@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 

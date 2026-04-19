@@ -10,7 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // Pipeline bridges voice input/output with the agent's text pipeline.

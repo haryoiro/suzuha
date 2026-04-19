@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 func TestTimedDrain(t *testing.T) {

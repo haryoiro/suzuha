@@ -26,7 +26,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/channel/device"
 	"github.com/haryoiro/suzuha/internal/channel/web"
 	"github.com/haryoiro/suzuha/internal/di"
-	"github.com/haryoiro/suzuha/internal/gateway"
+	"github.com/haryoiro/suzuha/internal/runtime/gateway"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/capability/mcp"

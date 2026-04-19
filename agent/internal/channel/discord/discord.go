@@ -8,7 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/port/chat"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/capability/voice"
 )
 

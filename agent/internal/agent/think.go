@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 

@@ -9,7 +9,7 @@ import (
 
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"

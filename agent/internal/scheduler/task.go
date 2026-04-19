@@ -8,7 +8,7 @@ import (
 	"time"
 
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"

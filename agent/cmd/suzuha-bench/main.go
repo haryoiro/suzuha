@@ -28,7 +28,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"

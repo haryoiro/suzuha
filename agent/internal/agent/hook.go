@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // PipelineHook allows external components to observe and react to pipeline stages.

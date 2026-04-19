@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 func TestPerceive(t *testing.T) {
