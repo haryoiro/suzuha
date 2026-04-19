@@ -175,7 +175,7 @@ capability / behavior package 内で **1 ファイル = 1 責務**。癒着の�
 
 | 性質 | 置き場 | 例 |
 |---|---|---|
-| 複数 package から参照される Entity / Value Object | `domain/<name>/` | `domain/diary.Entry`（admin API と behavior/diary の両方で使う） |
+| 複数 package から参照される Entity / Value Object | `domain/<name>/` | `domain/action.ScheduledAction`（admin API と behavior/action の両方で使う） |
 | 1 package 内に閉じる中間構造 | その package 内 | `behavior/research/` 内部の検索パラメータ構造体 |
 | enum 相当（型 + 定数） | 参照範囲次第。複数から使うなら domain/ | `domain/action.ActionStatus` |
 
@@ -193,7 +193,6 @@ capability / behavior package 内で **1 ファイル = 1 責務**。癒着の�
 agent/
 ├── cmd/
 │   ├── suzuha-agent/
-│   ├── suzuha-admin/
 │   ├── suzuha-bench/
 │   └── suzuha-synth/
 │
@@ -289,7 +288,8 @@ agent/
     │   ├── vad/                  # VoiceActivityDetector
     │   ├── vision/               # FrameProcessor（将来切る場合のみ、保留扱い）
     │   └── transcript/           # VideoTranscriptFetcher
-    │   （location は廃止）
+    │   （location は廃止。search は 1-consumer のため port なし、behavior/research/ 内部）
+    │   （detect/yolo も 1-consumer のため port なし、capability/vision/ 内部）
     │
     ├── adapter/                  # port 実装（外部 SDK / 永続化 / webhook）
     │   │
@@ -300,16 +300,17 @@ agent/
     │   │   └── gemini/
     │   ├── embedder/{gemini,openai}/
     │   ├── tts/{voicevox,sbv2}/
-    │   ├── stt/whisper/
+    │   ├── stt/{deepgram,whisper}/
     │   ├── vad/
     │   ├── transcript/
-    │   ├── twitter/
+    │   └── twitter/              # 複数 consumer（agent TweetFetcher + builtin/fetch）ゆえ adapter 化
+    │   （detect は capability/vision/ 内部、search は behavior/research/ 内部に吸収）
     │   │
     │   │ ── 永続化（SQL 等）──
     │   └── store/
     │       ├── memory/           # memory.Store の SQL 実装 + migrations/
+    │       │                     # diary_entries schema もここに統合（旧 feature/diary）
     │       ├── conversation/     # ChannelSettings / ChannelActivity の SQL 実装
-    │       ├── diary/
     │       ├── research/
     │       ├── user/
     │       └── action/
@@ -324,84 +325,104 @@ agent/
 
 capability と behavior は **同じファイル命名規則に従う**。違いは「port を公開するか」だけ。
 
-### 4.1 behavior の標準形（例：`behavior/diary/`）
+### 4.1 behavior の標準形（例：`behavior/action/`）
 
 ```
-behavior/diary/
-├── diary.go              # 公開型（Entry, Period）
-├── write.go              # 純ロジック：日記を書く
-├── query.go              # 純ロジック：期間で取得
-├── store.go              # interface Store { SaveEntry, ListEntriesInRange, ... }
+behavior/action/
+├── action.go             # 公開型（Action, ActionStatus, ListOpts）
+├── schedule.go           # 純ロジック：Action を組み立てて検証
+├── query.go              # 純ロジック：status やチャンネルで抽出
+├── store.go              # interface Store { Create, List, Update, Delete }
 ├── postgres.go           # SQL 実装（database/sql はここだけ）
-├── task.go               # scheduler.Task 実装 shim
-└── diary_test.go         # fake Store + fake LLM でテスト
+├── task.go               # scheduler.Task 実装 shim（cron で期限到来を拾う）
+├── tool_schedule.go      # LLM tool: 予約を入れる
+└── action_test.go        # fake Store + fake LLM でテスト
 ```
 
 コード例：
 
 ```go
-// behavior/diary/diary.go
-package diary
+// behavior/action/action.go
+package action
 
-type Entry struct {
+type ActionStatus string
+
+const (
+    StatusPending  ActionStatus = "pending"
+    StatusRunning  ActionStatus = "running"
+    StatusDone     ActionStatus = "done"
+    StatusFailed   ActionStatus = "failed"
+)
+
+type Action struct {
     ID          string
-    Kind        string
+    ChannelID   string
     Content     string
-    PeriodStart time.Time
-    PeriodEnd   time.Time
+    ScheduledAt time.Time
+    Status      ActionStatus
 }
-
-type Period struct{ Start, End time.Time }
 
 // 公開 API。他 package はここだけ触れる
-func CurrentPeriod(now time.Time) Period { ... }
+func Due(a Action, now time.Time) bool { return !a.ScheduledAt.After(now) }
 ```
 
 ```go
-// behavior/diary/write.go — 純ロジック、I/O なし
-func Write(ctx context.Context, s Store, llmCli llm.Client, p Period) error {
-    existing, err := s.ListEntriesInRange(ctx, p.Start, p.End)
+// behavior/action/schedule.go — 純ロジック、I/O なし
+func Schedule(ctx context.Context, s Store, a Action) error {
+    if a.Content == "" {
+        return errors.New("content is empty")
+    }
     // ...
-    return s.SaveEntry(ctx, Entry{...})
+    return s.Create(ctx, &a)
 }
 ```
 
 ```go
-// behavior/diary/store.go — consumer-side interface
+// behavior/action/store.go — consumer-side interface
 type Store interface {
-    SaveEntry(ctx context.Context, e Entry) error
-    ListEntriesInRange(ctx context.Context, from, to time.Time) ([]Entry, error)
+    Create(ctx context.Context, a *Action) error
+    List(ctx context.Context, opts ListOpts) ([]Action, error)
+    Update(ctx context.Context, id string, fields UpdateFields) error
+    Delete(ctx context.Context, id string) error
 }
 ```
 
 ```go
-// behavior/diary/postgres.go — 唯一 database/sql を触る
+// behavior/action/postgres.go — 唯一 database/sql を触る
 type Postgres struct{ db *sql.DB }
 
-func (p *Postgres) SaveEntry(ctx context.Context, e Entry) error {
-    _, err := p.db.ExecContext(ctx, "INSERT INTO diary_entries ...")
+func (p *Postgres) Create(ctx context.Context, a *Action) error {
+    _, err := p.db.ExecContext(ctx, "INSERT INTO actions ...")
     return err
 }
 ```
 
 ```go
-// behavior/diary/task.go — Task interface 実装 shim、50 行以下
-package diary
+// behavior/action/task.go — Task interface 実装 shim、50 行以下
+package action
 
 type Task struct {
     store  Store
-    llm    llm.Client
+    notify Notifier
     logger *slog.Logger
 }
 
-func NewTask(s Store, c llm.Client, l *slog.Logger) *Task {
-    return &Task{store: s, llm: c, logger: l}
+func NewTask(s Store, n Notifier, l *slog.Logger) *Task {
+    return &Task{store: s, notify: n, logger: l}
 }
 
-func (t *Task) Name() string { return "diary" }
+func (t *Task) Name() string { return "action" }
 
 func (t *Task) Run(ctx context.Context) error {
-    return Write(ctx, t.store, t.llm, CurrentPeriod(time.Now()))
+    pending, err := t.store.List(ctx, ListOpts{Status: string(StatusPending)})
+    if err != nil { return err }
+    now := time.Now()
+    for _, a := range pending {
+        if Due(a, now) {
+            // 期限到来: 通知して status を更新
+        }
+    }
+    return nil
 }
 ```
 
@@ -512,7 +533,7 @@ behavior/video/
 ### 5.3 capability / behavior 間の依存ガイドライン
 
 - **capability は他 capability を port 経由でしか使えない**：memory が llm を使うなら `port/llm` を import（`capability/llm` は直接触らない）
-- **behavior は capability を port 経由でしか使えない**：diary が memory を使うなら `port/memory` を import
+- **behavior は capability を port 経由でしか使えない**：action が memory を使うなら `port/memory` を import
 - **共有したい型があれば `domain/` に昇格**
 - **sibling 間の直接依存は一切禁止**
 
@@ -554,7 +575,7 @@ adapter/embedder/gemini/     → Embedder 実装
 port を公開しない。shim を通じて scheduler / tool registry に登録されるのみ：
 
 ```
-behavior/diary/               → task.go が scheduler.Task を満たす
+behavior/action/              → task.go が scheduler.Task を満たす
 ```
 
 他から直接呼ばれないなら port は不要。runtime は `port/scheduler.Task` 経由で task.go を呼ぶだけ。
@@ -599,7 +620,7 @@ capability/vision/
 - sibling（他の channel / behavior / capability）から直接 import してはならない。tool registry 経由で呼ぶ
 
 behavior と channel と capability の区別：
-- **behavior/**：プロトコル非依存の自律行動（diary / research 等）
+- **behavior/**：プロトコル非依存の自律行動（action / research / video 等）
 - **channel/**：特定プロトコル固有の入出力 + そのプロトコル固有 Tool
 - **capability/**：共有能力本体 + その能力を直接公開する Tool
 
@@ -660,7 +681,7 @@ capability / behavior は以下を満たす設計にする：
 
 | 現在 | 目標 | 備考 |
 |---|---|---|
-| `external/` | 廃止 | 内容は `adapter/` へ |
+| `external/` | 廃止 | 7 package の移行先は個別判断：<br>・transcript / embedder / tts / stt / twitter → `adapter/` 配下（複数 consumer あり or 汎用）<br>・detect（YOLO）→ `capability/vision/` 内部（1-consumer）<br>・search → `behavior/research/` 内部（1-consumer） |
 | `internal/adapter/{cli,device,discord}/` | **移動** → `internal/channel/{cli,device,discord}/` | プロトコル adapter は channel/ に |
 | 新設 `internal/adapter/` | cross-cutting 実装用（llm/tts/store 等） | 旧 adapter との用途違いに注意（新設） |
 | `internal/admin/` | `internal/api/admin/` | HTTP サーフェスとして（既に現状で進行中） |

@@ -188,12 +188,14 @@ consumer-side interface を `port/` に集約し、Hexagonal の契約層を可�
 1. `agent/internal/adapter/` 配下にカテゴリ別サブディレクトリを作成：
    - `adapter/llm/`、`adapter/embedder/`、`adapter/tts/`、`adapter/stt/`、`adapter/vad/`、`adapter/transcript/`、`adapter/twitter/`
    - `adapter/store/` は Phase 5-8 で capability 移行と同時に中身を入れる（本 Phase では空箱）
-2. 外部 SDK wrapper を移動：
-   - `external/transcript/` → `adapter/transcript/`
-   - `external/embedding/` → `adapter/embedder/<vendor>/`
-   - `external/tts/` → `adapter/tts/<vendor>/`
-   - `external/stt/` → `adapter/stt/<vendor>/`
-   - `external/twitter/` → `adapter/twitter/`
+2. 外部 SDK wrapper を移動（**consumer 数で移動先を分岐**）：
+   - `external/transcript/` → `adapter/transcript/`（複数 consumer）
+   - `external/embedding/` → `adapter/embedder/<vendor>/`（複数 vendor、memory が使用）
+   - `external/tts/` → `adapter/tts/<vendor>/`（複数 vendor、voice が使用）
+   - `external/stt/` → `adapter/stt/<vendor>/`（複数 vendor、voice が使用）
+   - `external/twitter/` → `adapter/twitter/`（2 consumer：agent TweetFetcher + builtin/fetch）
+   - `external/detect/` → **`capability/vision/yolo.go`** に内包（vision 専用、port 不要）
+   - `external/search/` → **`behavior/research/searxng.go` + `wikipedia.go`** に内包（research 専用、port 不要）
 3. `port/` に薄い port を定義：
    - `port/embedder/`、`port/tts/`、`port/stt/`、`port/vad/`、`port/transcript/`
 4. 各 adapter/ が port を実装する形に改める
