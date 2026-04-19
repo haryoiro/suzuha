@@ -45,6 +45,12 @@ type UserGuild struct {
 	LastSeenAt  time.Time `json:"last_seen_at"`
 }
 
+// BotRegistrar は起動後に判明する bot の platform user ID を登録する。
+// Discord 接続後に自分の ID を通知する用途のみで、query 系の Store とは分離する。
+type BotRegistrar interface {
+	AddBotID(platformUserID string)
+}
+
 // Store is the user storage interface.
 type Store interface {
 	// Resolve looks up an internal user by platform + platform_user_id.

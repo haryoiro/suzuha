@@ -9,9 +9,21 @@ import (
 
 // Package registers user store providers into the DI injector.
 func Package(i do.Injector) {
-	do.Provide(i, func(i do.Injector) (*PostgresStore, error) {
+	do.Provide(i, func(i do.Injector) (*DBStore, error) {
 		db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
 		cfg := do.MustInvoke[*config.Config](i)
-		return NewPostgresStore(db, cfg.Discord.BotID), nil
+		return NewDBStore(db, cfg.Discord.BotID), nil
+	})
+
+	do.Provide(i, func(i do.Injector) (Store, error) {
+		return do.MustInvoke[*DBStore](i), nil
+	})
+
+	do.Provide(i, func(i do.Injector) (AdminStore, error) {
+		return do.MustInvoke[*DBStore](i), nil
+	})
+
+	do.Provide(i, func(i do.Injector) (BotRegistrar, error) {
+		return do.MustInvoke[*DBStore](i), nil
 	})
 }

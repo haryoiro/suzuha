@@ -13,12 +13,12 @@ func pgDSN() string {
 	return "postgres://suzuha:suzuha@suzuha-db:5432/suzuha?sslmode=disable"
 }
 
-func newTestPGStore(t *testing.T) *PostgresStore {
+func newTestPGStore(t *testing.T) *DBStore {
 	t.Helper()
 	dsn := pgDSN()
-	store, err := NewPostgresStore(dsn, nil, true, nil)
+	store, err := NewDBStore(dsn, nil, true, nil)
 	if err != nil {
-		t.Fatalf("NewPostgresStore: %v", err)
+		t.Fatalf("NewDBStore: %v", err)
 	}
 	t.Cleanup(func() {
 		store.truncateAll(context.Background())

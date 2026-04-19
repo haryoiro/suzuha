@@ -15,8 +15,8 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
-// PostgresStore は ParadeDB (PostgreSQL + pgvector + pg_search) を使った Store 実装。
-type PostgresStore struct {
+// DBStore は ParadeDB (PostgreSQL + pgvector + pg_search) を使った Store 実装。
+type DBStore struct {
 	db         *sql.DB
 	embedder   embedding.Embedder
 	mediaStore MediaStore
@@ -25,8 +25,8 @@ type PostgresStore struct {
 	embedSig   chan struct{}
 }
 
-// NewPostgresStore は ParadeDB に接続し、マイグレーションを実行する。
-func NewPostgresStore(dsn string, embedder embedding.Embedder, runMigrations bool, logger *slog.Logger) (*PostgresStore, error) {
+// NewDBStore は ParadeDB に接続し、マイグレーションを実行する。
+func NewDBStore(dsn string, embedder embedding.Embedder, runMigrations bool, logger *slog.Logger) (*DBStore, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -48,7 +48,7 @@ func NewPostgresStore(dsn string, embedder embedding.Embedder, runMigrations boo
 		}
 	}
 
-	return &PostgresStore{
+	return &DBStore{
 		db:       db,
 		embedder: embedder,
 		logger:   logger,
@@ -56,15 +56,15 @@ func NewPostgresStore(dsn string, embedder embedding.Embedder, runMigrations boo
 	}, nil
 }
 
-func (s *PostgresStore) SetMediaStore(ms MediaStore) { s.mediaStore = ms }
-func (s *PostgresStore) SetOnSave(fn func())         { s.onSave = fn }
+func (s *DBStore) SetMediaStore(ms MediaStore) { s.mediaStore = ms }
+func (s *DBStore) SetOnSave(fn func())         { s.onSave = fn }
 
-func (s *PostgresStore) DB() *sql.DB { return s.db }
+func (s *DBStore) DB() *sql.DB { return s.db }
 
-func (s *PostgresStore) Close() error { return s.db.Close() }
+func (s *DBStore) Close() error { return s.db.Close() }
 
 // truncateAll はテスト用に全データを削除する。
-func (s *PostgresStore) truncateAll(ctx context.Context) {
+func (s *DBStore) truncateAll(ctx context.Context) {
 	s.db.ExecContext(ctx, "TRUNCATE memories CASCADE")
 }
 
@@ -109,7 +109,7 @@ func scanPGMem(row interface{ Scan(dest ...any) error }) (Memory, error) {
 	return m, nil
 }
 
-func (s *PostgresStore) initMemFields(mem *Memory) {
+func (s *DBStore) initMemFields(mem *Memory) {
 	if mem.ID == "" {
 		mem.ID = uuid.NewString()
 	}
@@ -131,7 +131,7 @@ func jsonOrNull(v any) sql.NullString {
 	return sql.NullString{String: string(data), Valid: true}
 }
 
-func (s *PostgresStore) Save(ctx context.Context, mem *Memory) error {
+func (s *DBStore) Save(ctx context.Context, mem *Memory) error {
 	s.initMemFields(mem)
 
 	meta := mem.Metadata
@@ -171,7 +171,7 @@ func (s *PostgresStore) Save(ctx context.Context, mem *Memory) error {
 	return nil
 }
 
-func (s *PostgresStore) notifyEmbedWorker() {
+func (s *DBStore) notifyEmbedWorker() {
 	select {
 	case s.embedSig <- struct{}{}:
 	default:
@@ -179,7 +179,7 @@ func (s *PostgresStore) notifyEmbedWorker() {
 }
 
 // SaveRaw は embedding 処理なしでメモリを保存する。
-func (s *PostgresStore) SaveRaw(ctx context.Context, mem *Memory) error {
+func (s *DBStore) SaveRaw(ctx context.Context, mem *Memory) error {
 	s.initMemFields(mem)
 	meta := mem.Metadata
 	if len(mem.Attachments) > 0 {
@@ -203,41 +203,41 @@ func (s *PostgresStore) SaveRaw(ctx context.Context, mem *Memory) error {
 	return err
 }
 
-func (s *PostgresStore) ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error) {
+func (s *DBStore) ListByUser(ctx context.Context, userID string, limit int) ([]Memory, error) {
 	q := fmt.Sprintf(
 		`SELECT %s FROM memories WHERE type = 'user' AND metadata->>'user_id' = $1
 		 ORDER BY updated_at DESC LIMIT $2`, pgMemColumns)
 	return s.queryMems(ctx, q, userID, limit)
 }
 
-func (s *PostgresStore) ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]Memory, error) {
+func (s *DBStore) ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]Memory, error) {
 	q := fmt.Sprintf(
 		`SELECT %s FROM memories WHERE type = 'episode' AND persons ? $1
 		 ORDER BY updated_at DESC LIMIT $2`, pgMemColumns)
 	return s.queryMems(ctx, q, userID, limit)
 }
 
-func (s *PostgresStore) ListByType(ctx context.Context, memType MemoryType, limit int) ([]Memory, error) {
+func (s *DBStore) ListByType(ctx context.Context, memType MemoryType, limit int) ([]Memory, error) {
 	q := fmt.Sprintf(
 		`SELECT %s FROM memories WHERE type = $1 ORDER BY updated_at DESC LIMIT $2`, pgMemColumns)
 	return s.queryMems(ctx, q, string(memType), limit)
 }
 
-func (s *PostgresStore) ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error) {
+func (s *DBStore) ListRecentByType(ctx context.Context, memType MemoryType, since time.Time, limit int) ([]Memory, error) {
 	q := fmt.Sprintf(
 		`SELECT %s FROM memories WHERE type = $1 AND created_at >= $2
 		 ORDER BY created_at DESC LIMIT $3`, pgMemColumns)
 	return s.queryMems(ctx, q, string(memType), since, limit)
 }
 
-func (s *PostgresStore) ListRecent(ctx context.Context, since time.Time, limit int) ([]Memory, error) {
+func (s *DBStore) ListRecent(ctx context.Context, since time.Time, limit int) ([]Memory, error) {
 	q := fmt.Sprintf(
 		`SELECT %s FROM memories WHERE created_at >= $1
 		 ORDER BY created_at DESC LIMIT $2`, pgMemColumns)
 	return s.queryMems(ctx, q, since, limit)
 }
 
-func (s *PostgresStore) queryMems(ctx context.Context, query string, args ...any) ([]Memory, error) {
+func (s *DBStore) queryMems(ctx context.Context, query string, args ...any) ([]Memory, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

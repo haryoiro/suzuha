@@ -12,24 +12,24 @@ import (
 
 // Search は BM25 (pg_search) でテキスト検索する。
 // embedder がある場合はベクトル検索も行い RRF でマージする。
-func (s *PostgresStore) Search(ctx context.Context, query string, limit int) ([]Memory, error) {
+func (s *DBStore) Search(ctx context.Context, query string, limit int) ([]Memory, error) {
 	return s.searchInternal(ctx, query, "", limit, time.Time{})
 }
 
-func (s *PostgresStore) SearchWithContext(ctx context.Context, query string, limit int, filter SymbolicFilter) ([]Memory, error) {
+func (s *DBStore) SearchWithContext(ctx context.Context, query string, limit int, filter SymbolicFilter) ([]Memory, error) {
 	// TODO(haryoiro): Symbolic filter 対応
 	return s.searchInternal(ctx, query, "", limit, time.Time{})
 }
 
-func (s *PostgresStore) SearchByType(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error) {
+func (s *DBStore) SearchByType(ctx context.Context, query string, memType MemoryType, limit int) ([]Memory, error) {
 	return s.searchInternal(ctx, query, memType, limit, time.Time{})
 }
 
-func (s *PostgresStore) SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]Memory, error) {
+func (s *DBStore) SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]Memory, error) {
 	return s.searchInternal(ctx, query, "", limit, since)
 }
 
-func (s *PostgresStore) searchInternal(ctx context.Context, query string, memType MemoryType, limit int, since time.Time) ([]Memory, error) {
+func (s *DBStore) searchInternal(ctx context.Context, query string, memType MemoryType, limit int, since time.Time) ([]Memory, error) {
 	// BM25 検索
 	var wheres []string
 	var args []any
@@ -73,7 +73,7 @@ func (s *PostgresStore) searchInternal(ctx context.Context, query string, memTyp
 	return results, rows.Err()
 }
 
-func (s *PostgresStore) SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]Memory, error) {
+func (s *DBStore) SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]Memory, error) {
 	if s.embedder == nil {
 		return nil, nil
 	}
@@ -84,7 +84,7 @@ func (s *PostgresStore) SearchByParts(ctx context.Context, parts []embedding.Par
 	return s.searchVec(ctx, emb, "", limit)
 }
 
-func (s *PostgresStore) searchVec(ctx context.Context, emb []float32, memType MemoryType, limit int) ([]Memory, error) {
+func (s *DBStore) searchVec(ctx context.Context, emb []float32, memType MemoryType, limit int) ([]Memory, error) {
 	var wheres []string
 	var args []any
 	argN := 1
@@ -126,7 +126,7 @@ func (s *PostgresStore) searchVec(ctx context.Context, emb []float32, memType Me
 	return results, rows.Err()
 }
 
-func (s *PostgresStore) IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, []float32, error) {
+func (s *DBStore) IsDuplicate(ctx context.Context, content string, memType MemoryType) (string, []float32, error) {
 	// BM25 exact match check
 	var dupID string
 	err := s.db.QueryRowContext(ctx,
@@ -162,7 +162,7 @@ func (s *PostgresStore) IsDuplicate(ctx context.Context, content string, memType
 	return "", emb, nil
 }
 
-func (s *PostgresStore) IsDuplicateBatch(ctx context.Context, candidates []DupCandidate) ([]DupResult, error) {
+func (s *DBStore) IsDuplicateBatch(ctx context.Context, candidates []DupCandidate) ([]DupResult, error) {
 	results := make([]DupResult, len(candidates))
 	for i, c := range candidates {
 		dupID, emb, err := s.IsDuplicate(ctx, c.Content, c.Type)

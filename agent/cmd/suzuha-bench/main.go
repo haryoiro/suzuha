@@ -167,14 +167,14 @@ func run(cfgPath, scenarioDir, snapshotPath, benchDBURL, identityPath, outputPat
 // buildAgent は本番と同等の DI で Agent を構築する (DB のみベンチ用)。
 func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Logger) (*agent.Agent, memory.Backend, error) {
 	// Memory Store (ParadeDB)
-	store, err := memory.NewPostgresStore(dbURL, nil, true, logger)
+	store, err := memory.NewDBStore(dbURL, nil, true, logger)
 	if err != nil {
-		return nil, nil, fmt.Errorf("PostgresStore 構築に失敗: %w", err)
+		return nil, nil, fmt.Errorf("memory store 構築に失敗: %w", err)
 	}
 
 	db := store.DB()
 	convStore := conversation.NewStore(db)
-	userStore := user.NewPostgresStore(db)
+	userStore := user.NewDBStore(db)
 
 	// LLM Client (本番と同じ設定)
 	embCfg := llm.EmbeddingConfig{

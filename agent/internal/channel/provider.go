@@ -19,7 +19,7 @@ func Package(i do.Injector) {
 		}
 		return s, nil
 	})
-	do.Provide(i, func(i do.Injector) (*PostgresActivityStore, error) {
+	do.Provide(i, func(i do.Injector) (*DBActivityStore, error) {
 		db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
 		return NewActivityStore(db), nil
 	})

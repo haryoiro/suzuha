@@ -13,7 +13,7 @@ import (
 )
 
 // Get は ID で単一のメモリを取得する。
-func (s *PostgresStore) Get(ctx context.Context, id string) (*Memory, error) {
+func (s *DBStore) Get(ctx context.Context, id string) (*Memory, error) {
 	q := fmt.Sprintf(`SELECT %s FROM memories WHERE id = $1`, pgMemColumns)
 	m, err := scanPGMem(s.db.QueryRowContext(ctx, q, id))
 	if err == sql.ErrNoRows {
@@ -26,7 +26,7 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (*Memory, error) {
 }
 
 // List はフィルタ・ページネーション付きでメモリ一覧を返す。
-func (s *PostgresStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, error) {
+func (s *DBStore) List(ctx context.Context, opts ListOpts) ([]Memory, int, error) {
 	var wheres []string
 	var args []any
 	argN := 1
@@ -72,7 +72,7 @@ func (s *PostgresStore) List(ctx context.Context, opts ListOpts) ([]Memory, int,
 }
 
 // Update は既存のメモリを更新する。
-func (s *PostgresStore) Update(ctx context.Context, mem *Memory) error {
+func (s *DBStore) Update(ctx context.Context, mem *Memory) error {
 	mem.UpdatedAt = jtime.Now()
 
 	meta := mem.Metadata
@@ -95,13 +95,13 @@ func (s *PostgresStore) Update(ctx context.Context, mem *Memory) error {
 }
 
 // Delete は ID でメモリを削除する。
-func (s *PostgresStore) Delete(ctx context.Context, id string) error {
+func (s *DBStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM memories WHERE id = $1`, id)
 	return err
 }
 
 // DeleteBatch は複数 ID のメモリを一括削除し、削除件数を返す。
-func (s *PostgresStore) DeleteBatch(ctx context.Context, ids []string) (int, error) {
+func (s *DBStore) DeleteBatch(ctx context.Context, ids []string) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
@@ -122,7 +122,7 @@ func (s *PostgresStore) DeleteBatch(ctx context.Context, ids []string) (int, err
 }
 
 // VecStats は全メモリ数と embedding 済み件数を返す。
-func (s *PostgresStore) VecStats(ctx context.Context) (total, embedded int, err error) {
+func (s *DBStore) VecStats(ctx context.Context) (total, embedded int, err error) {
 	err = s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*), COUNT(embedding) FROM memories`,
 	).Scan(&total, &embedded)
@@ -130,13 +130,13 @@ func (s *PostgresStore) VecStats(ctx context.Context) (total, embedded int, err 
 }
 
 // ListEmbeddedMemories は embedding が付与されたメモリ一覧を返す。
-func (s *PostgresStore) ListEmbeddedMemories(ctx context.Context) ([]Memory, error) {
+func (s *DBStore) ListEmbeddedMemories(ctx context.Context) ([]Memory, error) {
 	q := fmt.Sprintf(`SELECT %s FROM memories WHERE embedding IS NOT NULL ORDER BY type, created_at`, pgMemColumns)
 	return s.queryMems(ctx, q)
 }
 
 // ListAllEmbeddings は全メモリの ID と embedding ベクトルを返す。
-func (s *PostgresStore) ListAllEmbeddings(ctx context.Context) (map[string][]float32, error) {
+func (s *DBStore) ListAllEmbeddings(ctx context.Context) (map[string][]float32, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, embedding FROM memories WHERE embedding IS NOT NULL`)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func (s *PostgresStore) ListAllEmbeddings(ctx context.Context) (map[string][]flo
 }
 
 // FindDuplicates は embedding の近さで重複グループを検出する。
-func (s *PostgresStore) FindDuplicates(ctx context.Context, k int, threshold float64) ([]DuplicateGroup, error) {
+func (s *DBStore) FindDuplicates(ctx context.Context, k int, threshold float64) ([]DuplicateGroup, error) {
 	// pgvector で全ペアの distance を計算し、threshold 以下をグルーピング
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m1.id, m2.id, m1.embedding <=> m2.embedding AS dist
@@ -204,7 +204,7 @@ func (s *PostgresStore) FindDuplicates(ctx context.Context, k int, threshold flo
 	return groups, nil
 }
 
-func (s *PostgresStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[string]Memory, error) {
+func (s *DBStore) loadMemoriesByIDs(ctx context.Context, ids []string) (map[string]Memory, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -235,7 +235,7 @@ func (s *PostgresStore) loadMemoriesByIDs(ctx context.Context, ids []string) (ma
 }
 
 // BackfillEmbeddings は embedding が未設定のメモリにベクトルを付与する。
-func (s *PostgresStore) BackfillEmbeddings(ctx context.Context, batchSize int) (int, error) {
+func (s *DBStore) BackfillEmbeddings(ctx context.Context, batchSize int) (int, error) {
 	if s.embedder == nil {
 		return 0, nil
 	}
@@ -296,7 +296,7 @@ func (s *PostgresStore) BackfillEmbeddings(ctx context.Context, batchSize int) (
 }
 
 // RunEmbeddingWorker はバックグラウンドで embedding 未設定のメモリを処理する。
-func (s *PostgresStore) RunEmbeddingWorker(ctx context.Context) {
+func (s *DBStore) RunEmbeddingWorker(ctx context.Context) {
 	const batchSize = 20
 	const pollInterval = 30 * time.Second
 	const maxBackoff = 10 * time.Minute
