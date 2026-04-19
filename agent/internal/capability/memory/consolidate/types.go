@@ -3,6 +3,7 @@ package consolidate
 import (
 	"context"
 
+	"github.com/haryoiro/suzuha/internal/domain/memo"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
@@ -13,17 +14,11 @@ type Completer interface {
 	CompleteRaw(ctx context.Context, msgs []llm.RawMessage) (*llm.Response, error)
 }
 
-// ConsolidateOpts は1回の統合実行を制御するオプション。
-type ConsolidateOpts struct {
-	SimilarityThreshold float64 `json:"similarity_threshold"`
-	MaxGroupSize        int     `json:"max_group_size"`
-	MaxGroupsPerLLMCall int     `json:"max_groups_per_llm_call"`
-	DryRun              bool    `json:"dry_run"`
-}
-
-// ConsolidateResult は統合中に行われた処理の結果を報告する。
-type ConsolidateResult struct {
-	Groups       int
-	TotalDeleted int
-	TotalMerged  int
-}
+// ConsolidateOpts / ConsolidateResult は domain/memo への型エイリアス。
+// consolidate サブ package 内部のシグネチャで短縮名を使うため。
+// forget サブ package は capability sibling 経由を避けて直接 domain/memo を
+// import する。
+type (
+	ConsolidateOpts   = memo.ConsolidateOpts
+	ConsolidateResult = memo.ConsolidateResult
+)

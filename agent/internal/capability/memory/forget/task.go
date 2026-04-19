@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"time"
 
-	consol "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
+	"github.com/haryoiro/suzuha/internal/domain/memo"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
 
 // Consolidator は forget が必要とする統合機能を定義する (consumer-side interface)。
+// capability sibling (consolidate) を直接 import せず、共有型は domain/memo 経由。
 type Consolidator interface {
-	Consolidate(ctx context.Context, opts *consol.ConsolidateOpts) (*consol.ConsolidateResult, error)
+	Consolidate(ctx context.Context, opts *memo.ConsolidateOpts) (*memo.ConsolidateResult, error)
 }
 
 // Task は scheduler.CronTask を実装する薄いアダプタで、
@@ -31,7 +32,7 @@ func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error {
 
 func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
 	// ConsolidateOpts を直接 unmarshal する（json タグ付き）。
-	opts := consol.ConsolidateOpts{
+	opts := memo.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,

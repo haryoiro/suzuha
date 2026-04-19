@@ -8,7 +8,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/twitter"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
-	"github.com/haryoiro/suzuha/internal/feature/diary"
+	"github.com/haryoiro/suzuha/internal/capability/memory/summarize"
 )
 
 // videoMetaAdapter は transcript.MetadataFetcher を agent.VideoMetadataFetcher に適合させる。
@@ -45,9 +45,9 @@ func (a *tweetFetcherAdapter) Fetch(ctx context.Context, url string) (*agent.Twe
 	return &agent.TweetPreview{AuthorID: t.AuthorID, Text: t.Text}, nil
 }
 
-// diaryReaderAdapter は diary.Store を prompt.DiaryReader に適合させる。
+// diaryReaderAdapter は summarize.Store を prompt.DiaryReader に適合させる。
 type diaryReaderAdapter struct {
-	store *diary.Store
+	store *summarize.Store
 }
 
 func (a *diaryReaderAdapter) ListByKind(ctx context.Context, kind string, since time.Time, limit int) ([]prompt.DiaryEntry, error) {

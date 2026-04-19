@@ -29,10 +29,10 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/behavior/action"
-	"github.com/haryoiro/suzuha/internal/feature/diary"
-	"github.com/haryoiro/suzuha/internal/feature/forget"
+	"github.com/haryoiro/suzuha/internal/capability/memory/summarize"
+	"github.com/haryoiro/suzuha/internal/capability/memory/forget"
 	"github.com/haryoiro/suzuha/internal/behavior/research"
-	"github.com/haryoiro/suzuha/internal/feature/topics"
+	"github.com/haryoiro/suzuha/internal/capability/conversation/boredom"
 	"github.com/haryoiro/suzuha/internal/behavior/video"
 	"github.com/haryoiro/suzuha/internal/capability/vision"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
@@ -187,7 +187,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
-			diaryReader := &diaryReaderAdapter{store: diary.NewStore(db)}
+			diaryReader := &diaryReaderAdapter{store: summarize.NewStore(db)}
 
 			return agent.New(
 				agent.Config{
@@ -317,10 +317,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			// Tasks — 各 behavior / capability の scheduler.CronTask を列挙。
 			tasks := []scheduler.CronTask{
 				&action.Task{},
-				&topics.Task{},
+				&boredom.Task{},
 				&research.Task{},
-				&diary.HourlyTask{},
-				&diary.DailyTask{},
+				&summarize.HourlyTask{},
+				&summarize.DailyTask{},
 				&forget.Task{Consolidator: do.MustInvoke[*capmemCon.Consolidator](i)},
 			}
 			return tasks, nil
@@ -356,7 +356,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			db := store.DB()
 			// 型が domain 経由で共有されるようになったので、feature の Store を
 			// そのまま admin.ActionStore / admin.DiaryStore として渡せる。
-			var ds admin.DiaryStore = diary.NewStore(db)
+			var ds admin.DiaryStore = summarize.NewStore(db)
 			var as admin.ActionStore = schedStore
 
 			return admin.NewServer(cfg.Admin, store, userStore, as, ds, mediaStore, adminLogger)
