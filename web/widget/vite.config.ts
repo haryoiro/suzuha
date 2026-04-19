@@ -1,12 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import basicSsl from "@vitejs/plugin-basic-ssl";
 
+// HTTPS はオフ: cloudflared が TLS 終端、localhost は browser が secure origin 扱い。
+// basicSsl を入れると cloudflared が origin へ繋げなくなる。
 const apiTarget = process.env.API_URL ?? "http://localhost:9090";
 const wsTarget = apiTarget.replace(/^http/, "ws");
 
 export default defineConfig({
-  plugins: [react(), basicSsl()],
+  plugins: [react()],
   server: {
     port: 5174,
     host: true,

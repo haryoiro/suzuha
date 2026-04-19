@@ -1,4 +1,41 @@
+/* Nothing-inspired design tokens */
+:root {
+  --bg: #000;
+  --fg-primary: #fff;
+  --fg-secondary: rgba(255, 255, 255, 0.56);
+  --fg-tertiary: rgba(255, 255, 255, 0.32);
+  --fg-dim: rgba(255, 255, 255, 0.12);
+  --accent-red: #d71921;
+  --accent-user: #fff;
+  --accent-bot: rgba(255, 255, 255, 0.72);
+}
+
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(255, 68, 68, 0); }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes nonoBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* Dot matrix background motif (subtle identity cue) */
+.dot-matrix {
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.18) 1px,
+    transparent 1.5px
+  );
+  background-size: 14px 14px;
 }

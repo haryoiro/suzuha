@@ -767,6 +767,10 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
 			ag.AgentContextFor(agent.SourceKeyDevice), hub, logger,
 		))
+		// Web widget session も同じ Hub を speaker として使う (kind="web" で filter される)。
+		ag.SetSession(agent.SourceKeyWeb, agent.NewWebSession(
+			ag.AgentContextFor(agent.SourceKeyWeb), hub, logger,
+		))
 		gw.Register(device.NewSource(hub))
 
 		mux.HandleFunc("GET /internal/device/vision", func(w http.ResponseWriter, r *http.Request) {

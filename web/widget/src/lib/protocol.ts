@@ -4,6 +4,7 @@ export const FRAME_IMAGE = 0x02; // JPEG           (ESP32 -> Server)
 export const FRAME_COMMAND = 0x03; // JSON         (Server -> Client)
 export const FRAME_STATUS = 0x04; // JSON          (Client -> Server)
 export const FRAME_TTS = 0x05; // PCM 24kHz mono   (Server -> Client)
+export const FRAME_TTS_END = 0x06; // empty body    (Server -> Client): ストリーム終端マーカー
 
 export interface DecodedFrame {
   type: number;
