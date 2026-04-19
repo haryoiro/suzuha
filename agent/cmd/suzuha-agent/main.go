@@ -33,7 +33,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
-	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/samber/do/v2"
 )
@@ -159,7 +158,7 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 
 	dc.OnReady(func(s *discordgo.Session) {
 		// Register Discord-specific tools.
-		for _, t := range builtin.NewDiscordTools(s) {
+		for _, t := range discord.NewDiscordTools(s) {
 			registry.Register(t)
 		}
 		logger.Info("discord tools registered")

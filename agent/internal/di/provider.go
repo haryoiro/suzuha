@@ -40,6 +40,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/capability/mcp"
+	memcap "github.com/haryoiro/suzuha/internal/capability/memory"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
@@ -47,7 +48,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
-	"github.com/haryoiro/suzuha/internal/tool/builtin"
+	"github.com/haryoiro/suzuha/internal/behavior/builtin"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	userStore "github.com/haryoiro/suzuha/internal/adapter/store/user"
 	"github.com/samber/do/v2"
@@ -247,14 +248,14 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			db := store.DB()
 
 			// builtin tools.
-			registry.Register(builtin.NewFetch())
+			registry.Register(research.NewFetch())
 			registry.Register(builtin.NewPythonExec())
 			registry.Register(builtin.NewUpdateUserProfile(userStore, func(userID, newName string) {
 				ag.AgentContext().UpdateUserName(userID, newName)
 			}))
-			registry.Register(builtin.NewMemoCreate(store))
-			registry.Register(builtin.NewMemoSearch(store))
-			registry.Register(builtin.NewMemoUpdate(store))
+			registry.Register(memcap.NewMemoCreate(store))
+			registry.Register(memcap.NewMemoSearch(store))
+			registry.Register(memcap.NewMemoUpdate(store))
 
 			// action (scheduled_actions) — setup + tools + task.
 			actionStore := action.NewStore(db)
