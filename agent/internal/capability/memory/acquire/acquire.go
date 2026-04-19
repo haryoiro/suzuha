@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
@@ -28,9 +29,9 @@ func NewAcquirer(llm portllm.Completer, store memory.Store, cfg Config, logger *
 }
 
 // Acquire は指定されたメッセージから長期メモリを抽出する。
-func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResult, error) {
+func (a *Acquirer) Acquire(ctx context.Context, req *portmem.AcquireRequest) (*portmem.AcquireResult, error) {
 	if len(req.Messages) == 0 {
-		return &AcquireResult{}, nil
+		return &portmem.AcquireResult{}, nil
 	}
 
 	memories, err := a.extract(ctx, req.Messages)
@@ -47,7 +48,7 @@ func (a *Acquirer) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireRe
 		a.logger.Warn("acquire: バッチ重複チェックに失敗", "error", dupErr)
 	}
 
-	result := &AcquireResult{}
+	result := &portmem.AcquireResult{}
 	for i := range memories {
 		mem := &memories[i]
 		if dupResults != nil && dupResults[i].DupID != "" {
@@ -189,8 +190,8 @@ func mimeFromKey(key string) string {
 	}
 }
 
-func parseLegacyCompactResponse(text string) *AcquireResult {
-	result := &AcquireResult{}
+func parseLegacyCompactResponse(text string) *portmem.AcquireResult {
+	result := &portmem.AcquireResult{}
 	lines := strings.Split(text, "\n")
 	inMemories := false
 	for _, line := range lines {

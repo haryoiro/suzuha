@@ -18,6 +18,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/port/chat"
@@ -189,6 +190,16 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
 			diaryReader := &diaryReaderAdapter{store: summarize.NewStore(db)}
+			memBackend := do.MustInvoke[memory.Backend](i)
+			userStore := do.MustInvoke[user.Store](i)
+
+			providers := []prompt.Provider{
+				&prompt.DiaryProvider{Reader: diaryReader, Logger: logger},
+				&prompt.MemoryProvider{Memory: memBackend, Logger: logger},
+				&prompt.ProfileProvider{Users: userStore, Memory: memBackend, BotID: cfg.Discord.BotID, Logger: logger},
+				&prompt.ChannelProvider{},
+				prompt.SelfPromptProvider{},
+			}
 
 			return agent.New(
 				agent.Config{
@@ -200,12 +211,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				regs,
 				do.MustInvoke[*llm.Client](i),
 				do.MustInvoke[*toolreg.Registry](i),
-				do.MustInvoke[memory.Backend](i),
-				do.MustInvoke[user.Store](i),
+				memBackend,
+				userStore,
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[*capmemAcq.Acquirer](i),
-				conversation.NewStore(db),
-				diaryReader,
+				conversation.NewDBStore(db),
+				providers,
 				channelSettings,
 				logger,
 			), nil

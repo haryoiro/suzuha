@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/domain/memo"
 	"github.com/haryoiro/suzuha/internal/llm"
-	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
 
 // trackingAcquirer records whether Acquire was called and what was passed.
@@ -16,12 +16,12 @@ type trackingAcquirer struct {
 	messages []llm.Message
 }
 
-func (c *trackingAcquirer) Acquire(_ context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error) {
+func (c *trackingAcquirer) Acquire(_ context.Context, req *portmem.AcquireRequest) (*portmem.AcquireResult, error) {
 	c.called = true
 	c.messages = req.Messages
-	return &acq.AcquireResult{
-		Memories: []memory.Memory{
-			{Type: memory.MemoryTypeWorld, Content: "extracted"},
+	return &portmem.AcquireResult{
+		Memories: []memo.Memory{
+			{Type: memo.MemoryTypeWorld, Content: "extracted"},
 		},
 	}, nil
 }
@@ -31,10 +31,10 @@ type slowAcquirer struct {
 	callCount int
 }
 
-func (c *slowAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.AcquireResult, error) {
+func (c *slowAcquirer) Acquire(_ context.Context, _ *portmem.AcquireRequest) (*portmem.AcquireResult, error) {
 	c.callCount++
 	time.Sleep(c.delay)
-	return &acq.AcquireResult{}, nil
+	return &portmem.AcquireResult{}, nil
 }
 
 func TestDoCompactWith(t *testing.T) {

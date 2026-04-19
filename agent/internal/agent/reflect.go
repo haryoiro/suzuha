@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/llm"
-	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
 
 // filterOutInjectedHistory は Compact に渡すメッセージから
@@ -90,7 +90,7 @@ func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey 
 	// 注入されたチャンネル履歴は除外する（再注入で重複抽出されるのを防ぐ）。
 	if a.acquirer != nil {
 		filtered := filterOutInjectedHistory(msgs)
-		_, err := a.acquirer.Acquire(ctx, &acq.AcquireRequest{
+		_, err := a.acquirer.Acquire(ctx, &portmem.AcquireRequest{
 			Messages: filtered,
 		})
 		if err != nil {
@@ -167,7 +167,7 @@ func (a *Agent) logConversationTurn(ctx context.Context, agentCtx *Context, star
 			}
 		}
 
-		err := a.convStore.LogTurn(ctx, conversation.TurnEntry{
+		err := a.convStore.LogTurn(ctx, portconv.TurnEntry{
 			TurnID:     turnID,
 			ChannelID:  channel,
 			Role:       msg.Role,

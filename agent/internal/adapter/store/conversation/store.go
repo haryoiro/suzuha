@@ -8,24 +8,10 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/llm"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 )
 
-// TurnEntry は conversation_logs の 1 行を表す。
-type TurnEntry struct {
-	TurnID     string
-	ChannelID  string
-	Role       string
-	Content    string
-	UserID     string
-	UserName   string
-	MessageID  string
-	ToolCalls  string
-	ToolCallID string
-	SourceKey  string
-	Timestamp  time.Time
-}
-
-// LogRow は conversation_logs から読み出した行。
+// LogRow は conversation_logs から読み出した行 (adapter 内部の値型)。
 type LogRow struct {
 	SourceKey string
 	ChannelID string
@@ -35,18 +21,18 @@ type LogRow struct {
 	Timestamp time.Time
 }
 
-// Store は会話ログ、コンテキストスナップショット、チャンネル活動の永続化を担う。
-type Store struct {
+// DBStore は port/conversation.Store の SQL 実装。
+type DBStore struct {
 	db *sql.DB
 }
 
-// NewStore は会話ストアを作成する。
-func NewStore(db *sql.DB) *Store {
-	return &Store{db: db}
+// NewDBStore は DBStore を生成する。
+func NewDBStore(db *sql.DB) *DBStore {
+	return &DBStore{db: db}
 }
 
 // LogTurn は会話ターンの 1 メッセージを記録する。
-func (s *Store) LogTurn(ctx context.Context, entry TurnEntry) error {
+func (s *DBStore) LogTurn(ctx context.Context, entry portconv.TurnEntry) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO conversation_logs (turn_id, channel_id, role, content, user_id, user_name, message_id, tool_calls, tool_call_id, timestamp, source_key)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -59,7 +45,7 @@ func (s *Store) LogTurn(ctx context.Context, entry TurnEntry) error {
 }
 
 // ListLogs は指定期間の会話ログを返す。
-func (s *Store) ListLogs(ctx context.Context, from, to time.Time) ([]LogRow, error) {
+func (s *DBStore) ListLogs(ctx context.Context, from, to time.Time) ([]LogRow, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT source_key, channel_id, role, COALESCE(user_name, ''), content, timestamp
 		 FROM conversation_logs
@@ -85,7 +71,7 @@ func (s *Store) ListLogs(ctx context.Context, from, to time.Time) ([]LogRow, err
 }
 
 // RecentAssistantMessages は最新の assistant メッセージを返す。
-func (s *Store) RecentAssistantMessages(ctx context.Context, limit int) ([]string, error) {
+func (s *DBStore) RecentAssistantMessages(ctx context.Context, limit int) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT content FROM conversation_logs
 		 WHERE role = 'assistant' AND content != ''
@@ -107,7 +93,7 @@ func (s *Store) RecentAssistantMessages(ctx context.Context, limit int) ([]strin
 }
 
 // TrackActivity はチャンネルの最終ユーザーメッセージ時刻を記録する。
-func (s *Store) TrackActivity(ctx context.Context, channelID string, at time.Time) error {
+func (s *DBStore) TrackActivity(ctx context.Context, channelID string, at time.Time) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO channel_activity (channel_id, last_user_message_at) VALUES ($1, $2)
 		 ON CONFLICT(channel_id) DO UPDATE SET last_user_message_at = EXCLUDED.last_user_message_at`,
@@ -116,7 +102,7 @@ func (s *Store) TrackActivity(ctx context.Context, channelID string, at time.Tim
 }
 
 // SaveSnapshot はコンテキストスナップショットを保存する。
-func (s *Store) SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error {
+func (s *DBStore) SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error {
 	data, err := json.Marshal(messages)
 	if err != nil {
 		return fmt.Errorf("conversation: snapshot marshal に失敗: %w", err)
@@ -129,7 +115,7 @@ func (s *Store) SaveSnapshot(ctx context.Context, sourceKey string, messages []l
 }
 
 // LoadSnapshot はコンテキストスナップショットを復元する。
-func (s *Store) LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error) {
+func (s *DBStore) LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error) {
 	var data string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT messages FROM context_snapshot WHERE source_key = $1`, sourceKey,
@@ -148,7 +134,7 @@ func (s *Store) LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Messa
 }
 
 // DeleteChannel はチャンネルに関連する全データを削除する。
-func (s *Store) DeleteChannel(ctx context.Context, channelID string) error {
+func (s *DBStore) DeleteChannel(ctx context.Context, channelID string) error {
 	tables := []string{"channel_settings", "channel_activity", "conversation_logs", "user_guild_channels"}
 	for _, table := range tables {
 		if _, err := s.db.ExecContext(ctx,

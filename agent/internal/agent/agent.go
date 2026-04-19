@@ -8,12 +8,10 @@ import (
 	"time"
 
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
-	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/haryoiro/suzuha/internal/port/user"
@@ -26,7 +24,7 @@ const DefaultDrainWindow = 3 * time.Second
 
 // acquirer は agent が必要とするメモリ獲得機能を定義する (consumer-side interface)。
 type acquirer interface {
-	Acquire(ctx context.Context, req *acq.AcquireRequest) (*acq.AcquireResult, error)
+	Acquire(ctx context.Context, req *portmem.AcquireRequest) (*portmem.AcquireResult, error)
 }
 
 // VideoInfo は動画のメタデータを保持する。
@@ -55,7 +53,7 @@ type TweetFetcher interface {
 
 // conversationStore は会話ログとコンテキストスナップショットの永続化を担う (consumer-side interface)。
 type conversationStore interface {
-	LogTurn(ctx context.Context, entry conversation.TurnEntry) error
+	LogTurn(ctx context.Context, entry portconv.TurnEntry) error
 	TrackActivity(ctx context.Context, channelID string, at time.Time) error
 	SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error
 	LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error)
@@ -70,13 +68,13 @@ type Agent struct {
 	sessions  map[SourceKey]Session
 	llm       *llm.Client
 	tools     *toolreg.Registry
-	memory    memory.Store
+	memory    portmem.Memory
 	users     user.Store
 	bus       *event.Bus
 	acquirer  acquirer
 	convStore       conversationStore
 	channelSettings portconv.SettingsStore
-	mediaStore      memory.MediaStore
+	mediaStore      portmem.Media
 	videoMeta       VideoMetadataFetcher
 	tweetFetcher    TweetFetcher
 	videoURLExtract func(string) []string
@@ -186,12 +184,12 @@ func New(
 	registrations []SourceRegistration,
 	llmClient *llm.Client,
 	tools *toolreg.Registry,
-	memStore memory.Store,
+	memStore portmem.Memory,
 	userStore user.Store,
 	bus *event.Bus,
 	acq acquirer,
 	convStore conversationStore,
-	diaryReader prompt.DiaryReader,
+	providers []prompt.Provider,
 	channelSettings portconv.SettingsStore,
 	logger *slog.Logger,
 ) *Agent {
@@ -247,7 +245,7 @@ func New(
 		contextWindowPct: cfg.ContextWindowPct,
 		drainWindow:      dw,
 		maxContextTokens: cfg.MaxContextTokens,
-		contextProviders: buildProviders(memStore, diaryReader, userStore, cfg.BotID, logger),
+		contextProviders: providers,
 	}
 }
 
@@ -307,7 +305,7 @@ func (a *Agent) SetTweetFetcher(f TweetFetcher, extractURLs func(string) []strin
 	a.tweetURLExtract = extractURLs
 }
 
-func (a *Agent) SetMediaStore(s memory.MediaStore) {
+func (a *Agent) SetMediaStore(s portmem.Media) {
 	a.mediaStore = s
 	for _, p := range a.contextProviders {
 		if mp, ok := p.(*prompt.MemoryProvider); ok {
@@ -318,22 +316,6 @@ func (a *Agent) SetMediaStore(s memory.MediaStore) {
 
 func (a *Agent) SetTracer(t trace.Tracer) {
 	a.tracer = t
-}
-
-func buildProviders(
-	memStore memory.Store,
-	diaryReader prompt.DiaryReader,
-	userStore user.Store,
-	botID string,
-	logger *slog.Logger,
-) []prompt.Provider {
-	return []prompt.Provider{
-		&prompt.DiaryProvider{Reader: diaryReader, Logger: logger},
-		&prompt.MemoryProvider{Memory: memStore, Logger: logger},
-		&prompt.ProfileProvider{Users: userStore, Memory: memStore, BotID: botID, Logger: logger},
-		&prompt.ChannelProvider{},
-		prompt.SelfPromptProvider{},
-	}
 }
 
 // LastBackground returns the most recently injected background messages.
