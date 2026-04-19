@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # depguard の違反一覧を .depguard-baseline.txt に snapshot する。
-# 各 Phase 終了時に実行して、違反が増えていないことを確認する。
+# strict モード運用の下では出力が常に空 (0 行) であることを期待する。
+# 出力行が 0 でなければ回帰として扱い、CI でも同様に失敗させる。
 #
-# 違反数が前回から減っていれば OK、増えていれば差分を調査する。
-# Phase 12 で depguard を厳格モードに切り替えて本ファイルを廃止する。
+# (アーキテクチャ移行中は baseline モード、完了後は strict モードに切り替わる運用)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -1,4 +1,9 @@
 // Package observe provides logging, metrics, and observability utilities.
+//
+// 本 package は **framework 対象外の cross-cutting util** として扱う。
+// 副作用 (log 出力 / metric 発行) を持つため domain / port / adapter の
+// 層ルールに縛られず、どの層からでも import 可。`.golangci.yml` depguard の
+// `adapter-only-port` 等のルールでも観点外として例外扱いしている。
 package observe
 
 import (
