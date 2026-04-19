@@ -296,7 +296,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			// vision (デバイスブロックで作成されていれば)。
-			if vf, err := do.Invoke[*vision.Feature](i); err == nil {
+			if vf, err := do.Invoke[*vision.Service](i); err == nil {
 				for _, t := range vf.Tools() {
 					registry.Register(t)
 				}
@@ -370,9 +370,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			return gateway.New(do.MustInvoke[*slog.Logger](i)), nil
 		})
 
-		// Device Hub (ESP32 WebSocket + Web widget) and Vision feature.
+		// Device Hub (ESP32 WebSocket + Web widget) and Vision service.
 		do.Provide(i, provideDeviceHub)
-		do.Provide(i, provideVisionFeature)
+		do.Provide(i, provideVisionService)
 
 		// Control (internal) API — sub-handler ごとに DI 登録し、
 		// control.NewHandler が合成する。
@@ -535,9 +535,9 @@ func provideDeviceHub(i do.Injector) (*device.Hub, error) {
 	return device.NewHub(bus, ttsClient, sttClient, ownerID, ownerName, logger), nil
 }
 
-// provideVisionFeature は device.Hub を使う vision.Feature を構築する。
+// provideVisionService は device.Hub を使う vision.Service を構築する。
 // hub.SetImageHandler で vision pipeline に画像を流し込む配線も行う。
-func provideVisionFeature(i do.Injector) (*vision.Feature, error) {
+func provideVisionService(i do.Injector) (*vision.Service, error) {
 	cfg := do.MustInvoke[*config.Config](i)
 	bus := do.MustInvoke[*event.Bus](i)
 	logger := do.MustInvoke[*slog.Logger](i)

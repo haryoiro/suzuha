@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/domain/memo"
+	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 // --- モック ---
@@ -59,7 +60,7 @@ func (m *mockSaveStore) Save(_ context.Context, mem *memory.Memory) error {
 
 func TestConsolidate_NilAdmin(t *testing.T) {
 	c := &Consolidator{logger: slog.Default()}
-	_, err := c.Consolidate(context.Background(), &ConsolidateOpts{})
+	_, err := c.Consolidate(context.Background(), &memo.ConsolidateOpts{})
 	if err == nil {
 		t.Error("AdminStore nil でエラーを期待")
 	}
@@ -72,7 +73,7 @@ func TestConsolidate_SingleEntry(t *testing.T) {
 		},
 	}
 	c := &Consolidator{admin: admin, logger: slog.Default()}
-	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{SimilarityThreshold: 0.3, MaxGroupSize: 8})
+	result, err := c.Consolidate(context.Background(), &memo.ConsolidateOpts{SimilarityThreshold: 0.3, MaxGroupSize: 8})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func TestConsolidate_KeepAction(t *testing.T) {
 	}
 	c := &Consolidator{llm: mc, store: store, admin: admin, logger: slog.Default()}
 
-	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
+	result, err := c.Consolidate(context.Background(), &memo.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -136,7 +137,7 @@ func TestConsolidate_MergeAction(t *testing.T) {
 	}
 	c := &Consolidator{llm: mc, store: store, admin: admin, logger: slog.Default()}
 
-	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
+	result, err := c.Consolidate(context.Background(), &memo.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -173,7 +174,7 @@ func TestConsolidate_DryRun(t *testing.T) {
 	}
 	c := &Consolidator{llm: mc, store: store, admin: admin, logger: slog.Default()}
 
-	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
+	result, err := c.Consolidate(context.Background(), &memo.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,
@@ -205,7 +206,7 @@ func TestConsolidate_LLMError(t *testing.T) {
 	mc := &mockCompleter{err: context.DeadlineExceeded}
 	c := &Consolidator{llm: mc, store: &mockSaveStore{}, admin: admin, logger: slog.Default()}
 
-	result, err := c.Consolidate(context.Background(), &ConsolidateOpts{
+	result, err := c.Consolidate(context.Background(), &memo.ConsolidateOpts{
 		SimilarityThreshold: 0.3,
 		MaxGroupSize:        8,
 		MaxGroupsPerLLMCall: 5,

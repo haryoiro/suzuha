@@ -6,25 +6,26 @@ import (
 	"log/slog"
 	"time"
 
-
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/domain/memo"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 )
 
 // Consolidator は既存メモリの重複排除・マージを実行する。
 type Consolidator struct {
-	llm    Completer
+	llm    portllm.Completer
 	admin  memory.AdminStore
 	store  memory.Store
 	logger *slog.Logger
 }
 
 // NewConsolidator は Consolidator を作成する。
-func NewConsolidator(llm Completer, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
+func NewConsolidator(llm portllm.Completer, admin memory.AdminStore, store memory.Store, logger *slog.Logger) *Consolidator {
 	return &Consolidator{llm: llm, admin: admin, store: store, logger: logger}
 }
 
 // Consolidate はメモリの重複排除と統合パイプラインを実行する。
-func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (*ConsolidateResult, error) {
+func (c *Consolidator) Consolidate(ctx context.Context, opts *memo.ConsolidateOpts) (*memo.ConsolidateResult, error) {
 	if c.admin == nil {
 		return nil, fmt.Errorf("consolidate: AdminStore が未設定、実行不可")
 	}
@@ -40,7 +41,7 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 	entries := memoriesToEntries(memories)
 	if len(entries) < 2 {
 		c.logger.Info("consolidate: 重複排除に必要な記憶数が不足", "count", len(entries))
-		return &ConsolidateResult{}, nil
+		return &memo.ConsolidateResult{}, nil
 	}
 	c.logger.Info("consolidate: 記憶を読み込み完了", "count", len(entries))
 
@@ -52,7 +53,7 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 	groups := buildSimilarityGroups(entries, embeddings, opts.SimilarityThreshold, opts.MaxGroupSize)
 	if len(groups) == 0 {
 		c.logger.Info("consolidate: 重複グループは見つかりませんでした")
-		return &ConsolidateResult{}, nil
+		return &memo.ConsolidateResult{}, nil
 	}
 	c.logger.Info("consolidate: 重複グループを検出", "groups", len(groups))
 
@@ -108,7 +109,7 @@ func (c *Consolidator) Consolidate(ctx context.Context, opts *ConsolidateOpts) (
 		"deleted", totalDeleted,
 		"merged", totalMerged)
 
-	return &ConsolidateResult{
+	return &memo.ConsolidateResult{
 		Groups:       len(groups),
 		TotalDeleted: totalDeleted,
 		TotalMerged:  totalMerged,

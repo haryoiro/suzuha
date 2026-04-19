@@ -17,7 +17,7 @@ import (
 // 必要なハンドラは RequestMiddleware で ctx に注入したものを取り出す。
 type RawHandler struct {
 	logRing *observe.RingBuffer
-	vision  *vision.Feature
+	vision  *vision.Service
 	logger  *slog.Logger
 }
 
@@ -25,7 +25,7 @@ type RawHandler struct {
 func NewRawHandler(i do.Injector) (gen.RawHandler, error) {
 	return &RawHandler{
 		logRing: do.MustInvoke[*observe.RingBuffer](i),
-		vision:  do.MustInvoke[*vision.Feature](i),
+		vision:  do.MustInvoke[*vision.Service](i),
 		logger:  do.MustInvoke[*slog.Logger](i),
 	}, nil
 }

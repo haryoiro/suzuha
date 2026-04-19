@@ -2168,7 +2168,7 @@ func (s *Server) handleLLMStatusRequest(args [0]string, argsEscaped bool, w http
 
 // handleRawStreamsDeviceDetectionsRequest handles RawStreams_deviceDetections operation.
 //
-// YOLO 検出結果の SSE ストリーム。vision.Feature.Frames() から配信。.
+// YOLO 検出結果の SSE ストリーム。vision.Service.Frames() から配信。.
 //
 // GET /internal/device/detections
 func (s *Server) handleRawStreamsDeviceDetectionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
