@@ -14,7 +14,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/port/tool"
-	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

@@ -91,6 +91,23 @@ linters:
           - pkg: 'github.com/haryoiro/suzuha/internal/runtime'
             desc: 'adapter は runtime を import しない'
 
+        # runtime は capability / behavior / channel / api / adapter を知らない
+        runtime-only-port:
+          list-mode: lax
+          files:
+          - '**/agent/internal/runtime/**'
+          deny:
+          - pkg: 'github.com/haryoiro/suzuha/internal/capability'
+            desc: 'runtime は capability を import しない (port 経由のみ)'
+          - pkg: 'github.com/haryoiro/suzuha/internal/behavior'
+            desc: 'runtime は behavior を import しない'
+          - pkg: 'github.com/haryoiro/suzuha/internal/channel'
+            desc: 'runtime は channel を import しない'
+          - pkg: 'github.com/haryoiro/suzuha/internal/api'
+            desc: 'runtime は api を import しない'
+          - pkg: 'github.com/haryoiro/suzuha/internal/adapter'
+            desc: 'runtime は adapter を import しない'
+
         # feature/X は 他 feature/Y を import 禁止 (現行 layout の暫定ルール、
         # Phase 8d で behavior/ に移動したら behavior-siblings が引き継ぐ)
         feature-siblings:

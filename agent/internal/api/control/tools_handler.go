@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/samber/do/v2"
 )
 

@@ -1,4 +1,4 @@
-package tool
+package toolregistry
 
 import "github.com/samber/do/v2"
 

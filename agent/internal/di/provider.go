@@ -46,7 +46,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	toolreg "github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	userStore "github.com/haryoiro/suzuha/internal/adapter/store/user"
