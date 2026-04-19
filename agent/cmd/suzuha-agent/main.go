@@ -29,7 +29,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/mcp"
+	"github.com/haryoiro/suzuha/internal/capability/mcp"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	toolreg "github.com/haryoiro/suzuha/internal/tool"

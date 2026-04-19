@@ -39,7 +39,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/mcp"
+	"github.com/haryoiro/suzuha/internal/capability/mcp"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
