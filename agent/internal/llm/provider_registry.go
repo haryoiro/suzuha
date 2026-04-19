@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"slices"
 	"sync"
 
+	domain "github.com/haryoiro/suzuha/internal/domain/llm"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	anyllm "github.com/mozilla-ai/any-llm-go"
@@ -17,35 +17,12 @@ import (
 	"github.com/mozilla-ai/any-llm-go/providers/openai"
 )
 
-// ProviderEntry はプロバイダ接続情報。
-type ProviderEntry struct {
-	Name    string `json:"name"`
-	Type    string `json:"type"`              // "openai", "zhipu", "gemini", "qwen"
-	APIKey  string `json:"api_key,omitempty"` // メモリ上は平文
-	APIBase string `json:"api_base"`
-	Source  string `json:"source"` // "seed" or "user"
-}
-
-// ModelInfo はモデルカタログのエントリ。
-type ModelInfo struct {
-	ProviderName string   `json:"provider_name"`
-	ModelID      string   `json:"model_id"`
-	Capabilities []string `json:"capabilities"` // ["text"], ["text","vision"]
-	MaxContext   int      `json:"max_context"`
-	Source       string   `json:"source"` // "static", "api", "user"
-}
-
-// HasCapability はモデルが指定の capability を持つか返す。
-func (m *ModelInfo) HasCapability(cap string) bool {
-	return slices.Contains(m.Capabilities, cap)
-}
-
-// RoleAssignment はロールへのプロバイダ/モデル割り当て。
-type RoleAssignment struct {
-	Role         string `json:"role"`
-	ProviderName string `json:"provider_name"`
-	ModelID      string `json:"model_id"`
-}
+// domain/llm への型エイリアス。既存の `llm.ProviderEntry` 等の参照を温存する。
+type (
+	ProviderEntry  = domain.ProviderEntry
+	ModelInfo      = domain.ModelInfo
+	RoleAssignment = domain.RoleAssignment
+)
 
 // RoleSpec は Client.SwapRole に渡す解決済みのロール仕様。
 type RoleSpec struct {
