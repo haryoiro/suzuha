@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 )
 
 // Session は CLI (stdin/stdout) の agent.Session 実装。

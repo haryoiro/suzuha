@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/go-faster/jx"
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/samber/do/v2"

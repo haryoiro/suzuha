@@ -12,7 +12,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
-	"github.com/haryoiro/suzuha/internal/agent/prompt"
+	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"go.opentelemetry.io/otel/trace"

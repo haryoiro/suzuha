@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
 	"github.com/haryoiro/suzuha/internal/port/chat"
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
