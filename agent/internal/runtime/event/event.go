@@ -33,8 +33,8 @@ const (
 // Event is the common schema for all events from all sources.
 type Event struct {
 	ID        string         `json:"id"`
-	Source    string         `json:"source"`    // "discord" | "cli" | "internal"
-	Type      string         `json:"type"`      // "message" | "self_prompt"
+	Source    string         `json:"source"` // "discord" | "cli" | "internal"
+	Type      string         `json:"type"`   // "message" | "self_prompt"
 	Message   MessagePayload `json:"message"`
 	Timestamp time.Time      `json:"timestamp"`
 }

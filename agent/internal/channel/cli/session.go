@@ -26,10 +26,10 @@ func NewSession(agentCtx *agent.Context, out io.Writer, logger *slog.Logger) *Se
 	}
 }
 
-func (s *Session) Source() agent.SourceKey      { return agent.SourceKeyCLI }
-func (s *Session) Context() *agent.Context      { return s.agentCtx }
-func (s *Session) PersistKey() string           { return "cli" }
-func (s *Session) BeginTurn(*agent.Perception)  {}
+func (s *Session) Source() agent.SourceKey     { return agent.SourceKeyCLI }
+func (s *Session) Context() *agent.Context     { return s.agentCtx }
+func (s *Session) PersistKey() string          { return "cli" }
+func (s *Session) BeginTurn(*agent.Perception) {}
 
 // DirectiveConfig は CLI 固有のパイプライン設定を返す。
 func (s *Session) DirectiveConfig() agent.DirectiveConfig {

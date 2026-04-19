@@ -22,7 +22,7 @@ func NewPythonExec() *PythonExec {
 	return &PythonExec{timeout: 30 * time.Second}
 }
 
-func (p *PythonExec) Name() string    { return "python_exec" }
+func (p *PythonExec) Name() string   { return "python_exec" }
 func (p *PythonExec) ReadOnly() bool { return false }
 
 func (p *PythonExec) Description() string {

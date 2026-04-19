@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
@@ -109,7 +110,7 @@ func runGenerate(cfgPath string, count int, outputPath string) error {
 
 	saved := 0
 	for i, scenario := range scenarios {
-		resp, err := client.Complete(ctx, []llm.Message{
+		resp, err := client.Complete(ctx, []message.Message{
 			{Role: "system", Content: systemPrompt, Timestamp: time.Now()},
 			{Role: "user", Content: scenario, Timestamp: time.Now()},
 		}, nil)
@@ -422,7 +423,7 @@ func generateScenarios(ctx context.Context, client *llm.Client, count int) ([]st
 - 番号も付けない
 - 1行に1つだけ`, perCategory, strings.Join(categories, "\n"))
 
-	resp, err := client.Complete(ctx, []llm.Message{
+	resp, err := client.Complete(ctx, []message.Message{
 		{Role: "user", Content: prompt, Timestamp: time.Now()},
 	}, nil)
 	if err != nil {
@@ -523,4 +524,3 @@ func (c *langfuseClient) createDatasetItemRaw(ctx context.Context, datasetName s
 	}
 	return nil
 }
-

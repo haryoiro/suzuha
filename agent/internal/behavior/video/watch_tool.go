@@ -23,7 +23,7 @@ func NewWatchTool(fetcher transcript.Fetcher, logger *slog.Logger) tool.Tool {
 	return &watchTool{fetcher: fetcher, logger: logger}
 }
 
-func (t *watchTool) Name() string    { return "video_watch" }
+func (t *watchTool) Name() string   { return "video_watch" }
 func (t *watchTool) ReadOnly() bool { return true }
 
 func (t *watchTool) Description() string {

@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	portmem "github.com/haryoiro/suzuha/internal/port/memory"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
 
 // Acquirer は会話コンテキストから長期メモリを抽出する。
@@ -67,7 +68,7 @@ func (a *Acquirer) Acquire(ctx context.Context, req *portmem.AcquireRequest) (*p
 	return result, nil
 }
 
-func (a *Acquirer) extract(ctx context.Context, msgs []llm.Message) ([]memory.Memory, error) {
+func (a *Acquirer) extract(ctx context.Context, msgs []message.Message) ([]memory.Memory, error) {
 	existing := a.fetchRecentMemories(ctx)
 	systemPrompt := buildSystemPrompt(a.config.Rules)
 	userPrompt := buildCompactPrompt(msgs, existing)
@@ -110,7 +111,7 @@ func (a *Acquirer) fetchRecentMemories(ctx context.Context) []memory.Memory {
 	return mems
 }
 
-func collectMediaKeysByIndex(msgs []llm.Message) map[int][]string {
+func collectMediaKeysByIndex(msgs []message.Message) map[int][]string {
 	result := make(map[int][]string)
 	for i, m := range msgs {
 		if len(m.MediaKeys) > 0 {

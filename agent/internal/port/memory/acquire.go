@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 )
 
 // AcquireRequest は会話から記憶を抽出するためのリクエスト。
 type AcquireRequest struct {
-	Messages []llm.Message
+	Messages []message.Message
 }
 
 // AcquireResult は抽出された記憶を返す結果。

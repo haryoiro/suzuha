@@ -14,14 +14,14 @@ type openaiMeta struct{}
 
 // knownOpenAIModels は OpenAI のよく使われるモデルの静的メタデータ。
 var knownOpenAIModels = map[string]ModelInfo{
-	"gpt-4.1":            {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},
-	"gpt-4.1-mini":       {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},
-	"gpt-4.1-nano":       {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},
-	"gpt-4o":             {Capabilities: []string{"text", "vision"}, MaxContext: 128000},
-	"gpt-4o-mini":        {Capabilities: []string{"text", "vision"}, MaxContext: 128000},
-	"o3":                 {Capabilities: []string{"text", "vision"}, MaxContext: 200000},
-	"o3-mini":            {Capabilities: []string{"text"}, MaxContext: 200000},
-	"o4-mini":            {Capabilities: []string{"text", "vision"}, MaxContext: 200000},
+	"gpt-4.1":      {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},
+	"gpt-4.1-mini": {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},
+	"gpt-4.1-nano": {Capabilities: []string{"text", "vision"}, MaxContext: 1047576},
+	"gpt-4o":       {Capabilities: []string{"text", "vision"}, MaxContext: 128000},
+	"gpt-4o-mini":  {Capabilities: []string{"text", "vision"}, MaxContext: 128000},
+	"o3":           {Capabilities: []string{"text", "vision"}, MaxContext: 200000},
+	"o3-mini":      {Capabilities: []string{"text"}, MaxContext: 200000},
+	"o4-mini":      {Capabilities: []string{"text", "vision"}, MaxContext: 200000},
 }
 
 func (m *openaiMeta) ListModels(ctx context.Context, apiKey, apiBase string) ([]ModelInfo, error) {

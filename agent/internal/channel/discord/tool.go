@@ -18,7 +18,7 @@ type discordTool struct {
 	fn       func(*discordgo.Session, context.Context, json.RawMessage) (*tool.ToolResult, error)
 }
 
-func (d *discordTool) Name() string                { return d.name }
+func (d *discordTool) Name() string                 { return d.name }
 func (d *discordTool) Description() string          { return d.desc }
 func (d *discordTool) InputSchema() json.RawMessage { return d.schema }
 func (d *discordTool) ReadOnly() bool               { return d.readOnly }

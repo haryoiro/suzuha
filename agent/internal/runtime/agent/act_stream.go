@@ -203,4 +203,3 @@ func (a *Agent) handleToolLoopFallback(
 	}
 	return a.filterResponse(resp, channel), nil
 }
-

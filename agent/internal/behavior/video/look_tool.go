@@ -26,7 +26,7 @@ func NewLookTool(extractor transcript.FrameExtractor, llmClient *llm.Client, log
 	return &lookTool{extractor: extractor, llmClient: llmClient, logger: logger}
 }
 
-func (t *lookTool) Name() string    { return "video_look" }
+func (t *lookTool) Name() string   { return "video_look" }
 func (t *lookTool) ReadOnly() bool { return true }
 
 func (t *lookTool) Description() string {

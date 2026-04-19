@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/haryoiro/suzuha/internal/channel/device"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/capability/vision"
+	"github.com/haryoiro/suzuha/internal/channel/device"
 	"github.com/samber/do/v2"
 )
 

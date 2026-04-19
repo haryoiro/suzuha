@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
 
 // trackingAcquirer records whether Acquire was called and what was passed.
 type trackingAcquirer struct {
 	called   bool
-	messages []llm.Message
+	messages []message.Message
 }
 
 func (c *trackingAcquirer) Acquire(_ context.Context, req *portmem.AcquireRequest) (*portmem.AcquireResult, error) {
@@ -44,7 +44,7 @@ func TestDoCompactWith(t *testing.T) {
 		agentCtx := ag.contexts[SourceKeyDiscord]
 
 		for i := 0; i < 10; i++ {
-			agentCtx.Add(llm.Message{Role: "user", Content: "msg"})
+			agentCtx.Add(message.Message{Role: "user", Content: "msg"})
 		}
 		if got := len(agentCtx.Messages()); got != 10 {
 			t.Fatalf("setup: expected 10 messages, got %d", got)
@@ -64,13 +64,13 @@ func TestDoCompactWith(t *testing.T) {
 		agentCtx := ag.contexts[SourceKeyDiscord]
 
 		for i := 0; i < 10; i++ {
-			agentCtx.Add(llm.Message{Role: "user", Content: "old"})
+			agentCtx.Add(message.Message{Role: "user", Content: "old"})
 		}
 
 		snapshot := agentCtx.Messages()
 
-		agentCtx.Add(llm.Message{Role: "user", Content: "new1"})
-		agentCtx.Add(llm.Message{Role: "user", Content: "new2"})
+		agentCtx.Add(message.Message{Role: "user", Content: "new1"})
+		agentCtx.Add(message.Message{Role: "user", Content: "new2"})
 
 		ag.doCompactWith(ctx, agentCtx, SourceKeyDiscord, snapshot, true)
 
@@ -93,7 +93,7 @@ func TestDoCompactWith(t *testing.T) {
 			t.Fatal("setup: channel should be seen")
 		}
 
-		agentCtx.Add(llm.Message{Role: "user", Content: "msg"})
+		agentCtx.Add(message.Message{Role: "user", Content: "msg"})
 		msgs := agentCtx.Messages()
 		ag.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 
@@ -112,7 +112,7 @@ func TestDoCompactWith(t *testing.T) {
 			t.Fatal("setup: user should be injected")
 		}
 
-		agentCtx.Add(llm.Message{Role: "user", Content: "msg"})
+		agentCtx.Add(message.Message{Role: "user", Content: "msg"})
 		msgs := agentCtx.Messages()
 		ag.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
 
@@ -129,8 +129,8 @@ func TestDoCompactWith(t *testing.T) {
 		ctx := context.Background()
 		agentCtx := ag.contexts[SourceKeyDiscord]
 
-		agentCtx.Add(llm.Message{Role: "user", Content: "hello"})
-		agentCtx.Add(llm.Message{Role: "assistant", Content: "hi"})
+		agentCtx.Add(message.Message{Role: "user", Content: "hello"})
+		agentCtx.Add(message.Message{Role: "assistant", Content: "hi"})
 		msgs := agentCtx.Messages()
 
 		ag.doCompactWith(ctx, agentCtx, SourceKeyDiscord, msgs, false)
@@ -154,7 +154,7 @@ func TestDoCompactWith(t *testing.T) {
 		agentCtx := ag.contexts[SourceKeyDiscord]
 
 		for i := 0; i < 5; i++ {
-			agentCtx.Add(llm.Message{Role: "user", Content: "msg"})
+			agentCtx.Add(message.Message{Role: "user", Content: "msg"})
 		}
 		msgs := agentCtx.Messages()
 
@@ -175,7 +175,7 @@ func TestCompactAsyncFor(t *testing.T) {
 		agentCtx := ag.contexts[SourceKeyDiscord]
 
 		for i := 0; i < 5; i++ {
-			agentCtx.Add(llm.Message{Role: "user", Content: "msg"})
+			agentCtx.Add(message.Message{Role: "user", Content: "msg"})
 		}
 
 		ag.compactAsyncFor(context.Background(), agentCtx, SourceKeyDiscord)

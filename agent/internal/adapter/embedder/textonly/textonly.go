@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 // TextEmbedClient is the interface for text-only embedding API clients.
@@ -53,7 +53,9 @@ func (e *TextOnlyEmbedder) EmbedBatch(ctx context.Context, inputs [][]embedding.
 	return results, nil
 }
 
-func (e *TextOnlyEmbedder) Dimensions() int                  { return e.dims }
-func (e *TextOnlyEmbedder) Modalities() []embedding.Modality { return []embedding.Modality{embedding.ModalityText} }
+func (e *TextOnlyEmbedder) Dimensions() int { return e.dims }
+func (e *TextOnlyEmbedder) Modalities() []embedding.Modality {
+	return []embedding.Modality{embedding.ModalityText}
+}
 
 var _ embedding.Embedder = (*TextOnlyEmbedder)(nil)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
 	userdom "github.com/haryoiro/suzuha/internal/domain/user"
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
@@ -149,18 +149,24 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 	_ = mc // mock chat は respond 経路で参照させない — 必要なら respondFn に差し替える
 	regs := []SourceRegistration{
 		{
-			Key:        SourceKeyDiscord,
-			NewSession: func(agentCtx *Context) Session { return &testSession{agentCtx: agentCtx, src: SourceKeyDiscord, persistKey: "discord", drainWindow: DefaultDrainWindow} },
+			Key: SourceKeyDiscord,
+			NewSession: func(agentCtx *Context) Session {
+				return &testSession{agentCtx: agentCtx, src: SourceKeyDiscord, persistKey: "discord", drainWindow: DefaultDrainWindow}
+			},
 			PersistKey: "discord",
 		},
 		{
-			Key:        SourceKeyDevice,
-			NewSession: func(agentCtx *Context) Session { return &testSession{agentCtx: agentCtx, src: SourceKeyDevice, persistKey: "device"} },
+			Key: SourceKeyDevice,
+			NewSession: func(agentCtx *Context) Session {
+				return &testSession{agentCtx: agentCtx, src: SourceKeyDevice, persistKey: "device"}
+			},
 			PersistKey: "device",
 		},
 		{
-			Key:        SourceKeyWeb,
-			NewSession: func(agentCtx *Context) Session { return &testSession{agentCtx: agentCtx, src: SourceKeyWeb, persistKey: "web"} },
+			Key: SourceKeyWeb,
+			NewSession: func(agentCtx *Context) Session {
+				return &testSession{agentCtx: agentCtx, src: SourceKeyWeb, persistKey: "web"}
+			},
 			PersistKey: "web",
 		},
 	}

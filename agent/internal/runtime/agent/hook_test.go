@@ -56,7 +56,7 @@ func (h *errorHook) AfterPerceive(_ context.Context, _ []event.Event, _ *Percept
 }
 func (h *errorHook) AfterThink(_ context.Context, _ *Perception, _ *Thought) error { return nil }
 func (h *errorHook) AfterAct(_ context.Context, _ *Perception, _ *Thought) error   { return nil }
-func (h *errorHook) AfterReflect(_ context.Context, _ *Perception) error            { return nil }
+func (h *errorHook) AfterReflect(_ context.Context, _ *Perception) error           { return nil }
 
 func TestHooks(t *testing.T) {
 	t.Run("AfterPerceive is called", func(t *testing.T) {

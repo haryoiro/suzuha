@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 // ChannelProvider はチャンネル情報をプロンプトブロックとして提供する。
@@ -17,14 +17,14 @@ func (ChannelProvider) ProvideContext(_ context.Context, req Request) Block {
 
 	if req.Source == "discord" && req.Channel != "" {
 		if summary := buildOtherChannels(req.Messages, req.Channel); summary != "" {
-			block.Background = append(block.Background, llm.Message{
+			block.Background = append(block.Background, message.Message{
 				Role: "system", Content: summary, Timestamp: jtime.Now(),
 			})
 		}
 	}
 
 	if req.IsHome {
-		block.Foreground = append(block.Foreground, llm.Message{
+		block.Foreground = append(block.Foreground, message.Message{
 			Role: "system", Content: "ここは自分の住処チャンネルです。リラックスして自由に話して。",
 			Timestamp: jtime.Now(),
 		})
@@ -33,7 +33,7 @@ func (ChannelProvider) ProvideContext(_ context.Context, req Request) Block {
 	return block
 }
 
-func buildOtherChannels(msgs []llm.Message, currentChannel string) string {
+func buildOtherChannels(msgs []message.Message, currentChannel string) string {
 	type chInfo struct {
 		name   string
 		isDM   bool

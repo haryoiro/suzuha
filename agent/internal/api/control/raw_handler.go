@@ -4,12 +4,13 @@ import (
 	"context"
 	"net/http"
 
+	"log/slog"
+
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/capability/vision"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/ogen-go/ogen/middleware"
 	"github.com/samber/do/v2"
-	"log/slog"
 )
 
 // RawHandler は SSE / binary / stream 系 (x-ogen-raw-response) を実装する。

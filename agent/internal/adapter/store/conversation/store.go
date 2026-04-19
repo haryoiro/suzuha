@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 )
 
@@ -102,7 +102,7 @@ func (s *DBStore) TrackActivity(ctx context.Context, channelID string, at time.T
 }
 
 // SaveSnapshot はコンテキストスナップショットを保存する。
-func (s *DBStore) SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error {
+func (s *DBStore) SaveSnapshot(ctx context.Context, sourceKey string, messages []message.Message) error {
 	data, err := json.Marshal(messages)
 	if err != nil {
 		return fmt.Errorf("conversation: snapshot marshal に失敗: %w", err)
@@ -115,7 +115,7 @@ func (s *DBStore) SaveSnapshot(ctx context.Context, sourceKey string, messages [
 }
 
 // LoadSnapshot はコンテキストスナップショットを復元する。
-func (s *DBStore) LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error) {
+func (s *DBStore) LoadSnapshot(ctx context.Context, sourceKey string) ([]message.Message, error) {
 	var data string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT messages FROM context_snapshot WHERE source_key = $1`, sourceKey,
@@ -126,7 +126,7 @@ func (s *DBStore) LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Mes
 	if err != nil {
 		return nil, fmt.Errorf("conversation: snapshot load に失敗: %w", err)
 	}
-	var msgs []llm.Message
+	var msgs []message.Message
 	if err := json.Unmarshal([]byte(data), &msgs); err != nil {
 		return nil, fmt.Errorf("conversation: snapshot unmarshal に失敗: %w", err)
 	}

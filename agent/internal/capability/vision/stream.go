@@ -6,16 +6,15 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
 )
 
 // DetectionEvent is sent to SSE subscribers.
 type DetectionEvent struct {
 	Detections  []Detection `json:"detections"`
-	InferenceMs float64            `json:"inference_ms"`
-	Timestamp   int64              `json:"timestamp"`
-	FrameWidth  int                `json:"frame_width"`
-	FrameHeight int                `json:"frame_height"`
+	InferenceMs float64     `json:"inference_ms"`
+	Timestamp   int64       `json:"timestamp"`
+	FrameWidth  int         `json:"frame_width"`
+	FrameHeight int         `json:"frame_height"`
 }
 
 // FrameStore holds the latest camera frame and detection results,

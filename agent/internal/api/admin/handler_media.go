@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 const maxUploadSize = 20 * 1024 * 1024 // 20 MB

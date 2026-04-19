@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 // Store は long-term memory の主 storage interface。

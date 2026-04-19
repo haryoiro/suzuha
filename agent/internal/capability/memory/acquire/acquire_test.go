@@ -3,8 +3,8 @@ package acquire
 import (
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 )
 
 // --- JSON parser tests ---
@@ -192,7 +192,7 @@ func TestBuildSystemPrompt_NoRules(t *testing.T) {
 }
 
 func TestBuildCompactPrompt_WithExistingMemories(t *testing.T) {
-	msgs := []llm.Message{
+	msgs := []message.Message{
 		{Role: "user", Content: "hello", UserID: "123", Source: "discord", UserName: "test"},
 	}
 	existing := []memory.Memory{
@@ -205,7 +205,7 @@ func TestBuildCompactPrompt_WithExistingMemories(t *testing.T) {
 }
 
 func TestBuildCompactPrompt_NoExistingMemories(t *testing.T) {
-	msgs := []llm.Message{
+	msgs := []message.Message{
 		{Role: "user", Content: "hello"},
 	}
 	prompt := buildCompactPrompt(msgs, nil)

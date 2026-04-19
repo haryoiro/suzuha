@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 // DiaryEntry は日記エントリの最小表現 (consumer-side type)。
@@ -51,7 +51,7 @@ func (p *DiaryProvider) ProvideContext(ctx context.Context, _ Request) Block {
 		fmt.Fprintf(&sb, "- [%s] %s\n", jtime.In(e.PeriodStart).Format("2006-01-02 15:00"), e.Content)
 	}
 
-	return Block{Background: []llm.Message{{
+	return Block{Background: []message.Message{{
 		Role: "system", Content: sb.String(), Timestamp: jtime.Now(),
 	}}}
 }

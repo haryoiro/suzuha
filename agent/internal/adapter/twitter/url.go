@@ -7,9 +7,9 @@ import (
 )
 
 var twitterHosts = map[string]bool{
-	"x.com":          true,
-	"www.x.com":      true,
-	"twitter.com":    true,
+	"x.com":           true,
+	"www.x.com":       true,
+	"twitter.com":     true,
 	"www.twitter.com": true,
 }
 

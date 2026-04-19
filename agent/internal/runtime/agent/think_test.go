@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
-	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 func TestConversationState(t *testing.T) {
@@ -15,7 +15,7 @@ func TestConversationState(t *testing.T) {
 		ch := "ch1"
 
 		for i := 0; i < 5; i++ {
-			ag.AgentContext().Add(llm.Message{
+			ag.AgentContext().Add(message.Message{
 				Role: "user", UserID: "user1", Channel: ch,
 				Timestamp: time.Now().Add(-time.Duration(5-i) * time.Minute),
 			})
@@ -32,15 +32,15 @@ func TestConversationState(t *testing.T) {
 		ag := newTestAgent()
 		ch := "ch1"
 
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "assistant", UserID: "bot123", Channel: ch,
 			Timestamp: time.Now().Add(-30 * time.Second),
 		})
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "user", UserID: "user1", Channel: ch,
 			Timestamp: time.Now().Add(-20 * time.Second),
 		})
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "user", UserID: "user1", Channel: ch,
 			Timestamp: time.Now().Add(-10 * time.Second),
 		})
@@ -61,15 +61,15 @@ func TestConversationState(t *testing.T) {
 		ag := newTestAgent()
 		ch := "ch1"
 
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "assistant", UserID: "bot123", Channel: ch,
 			Timestamp: time.Now().Add(-60 * time.Second),
 		})
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "user", UserID: "user1", Channel: ch,
 			Timestamp: time.Now().Add(-30 * time.Second),
 		})
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "user", UserID: "user2", Channel: ch,
 			Timestamp: time.Now().Add(-20 * time.Second),
 		})
@@ -83,11 +83,11 @@ func TestConversationState(t *testing.T) {
 	t.Run("different channel", func(t *testing.T) {
 		ag := newTestAgent()
 
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "assistant", UserID: "bot123", Channel: "ch1",
 			Timestamp: time.Now().Add(-30 * time.Second),
 		})
-		ag.AgentContext().Add(llm.Message{
+		ag.AgentContext().Add(message.Message{
 			Role: "user", UserID: "user1", Channel: "ch2",
 			Timestamp: time.Now().Add(-10 * time.Second),
 		})

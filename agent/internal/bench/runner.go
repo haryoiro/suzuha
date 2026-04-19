@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/haryoiro/suzuha/internal/runtime/event"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // BenchAgent はベンチマークが Agent に求める振る舞いを定義する (consumer-side interface)。
@@ -20,8 +20,8 @@ type BenchAgent interface {
 
 // BenchContext はベンチマークがコンテキスト操作に求める振る舞いを定義する (consumer-side interface)。
 type BenchContext interface {
-	ReplaceAll(msgs []llm.Message)
-	Add(msg llm.Message)
+	ReplaceAll(msgs []message.Message)
+	Add(msg message.Message)
 }
 
 // SessionSetup はベンチマーク初期化時に Agent のセッションとコンテキストを設定するコールバック。
@@ -122,7 +122,7 @@ func (r *Runner) injectLogs(logs []InjectLog) {
 		if channel == "" {
 			channel = "bench-channel"
 		}
-		msg := llm.Message{
+		msg := message.Message{
 			Role:      l.Role,
 			UserName:  l.UserName,
 			Content:   l.Content,

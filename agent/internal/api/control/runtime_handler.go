@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/samber/do/v2"
 )
 

@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/port/tool"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // Service は物体検出・追跡・変化通知を提供する vision capability。

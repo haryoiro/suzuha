@@ -8,8 +8,8 @@ package memory
 import (
 	"context"
 
-	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"github.com/haryoiro/suzuha/internal/domain/memo"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 // embedder 入力型の再エクスポート (SearchByParts 等で使う)。

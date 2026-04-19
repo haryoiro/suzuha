@@ -37,10 +37,10 @@ func (m *geminiMeta) ListModels(ctx context.Context, apiKey, _ string) ([]ModelI
 
 	var result struct {
 		Models []struct {
-			Name                     string   `json:"name"`
-			DisplayName              string   `json:"displayName"`
-			InputTokenLimit          int      `json:"inputTokenLimit"`
-			OutputTokenLimit         int      `json:"outputTokenLimit"`
+			Name                       string   `json:"name"`
+			DisplayName                string   `json:"displayName"`
+			InputTokenLimit            int      `json:"inputTokenLimit"`
+			OutputTokenLimit           int      `json:"outputTokenLimit"`
 			SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
 		} `json:"models"`
 	}
@@ -73,8 +73,8 @@ func (m *geminiMeta) ListModels(ctx context.Context, apiKey, _ string) ([]ModelI
 		models = append(models, ModelInfo{
 			ModelID:      modelID,
 			Capabilities: caps,
-			MaxContext:    gm.InputTokenLimit,
-			Source:        "api",
+			MaxContext:   gm.InputTokenLimit,
+			Source:       "api",
 		})
 	}
 	return models, nil

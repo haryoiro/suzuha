@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
-
 
 // Act is the backward-compatible wrapper that calls ActWith with the discord context
 // and session, then routes the response through the discord session.
@@ -120,8 +120,8 @@ func (a *Agent) buildIterMessages(
 	maxCtx int,
 	channel string,
 	iter int,
-) []llm.Message {
-	var msgs []llm.Message
+) []message.Message {
+	var msgs []message.Message
 	if iter == 0 {
 		msgs = t.BuildMessages(agentCtx.SystemPrompt(), agentCtx.Messages())
 	} else {

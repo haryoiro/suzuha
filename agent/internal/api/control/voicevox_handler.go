@@ -7,18 +7,18 @@ import (
 
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
-	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/capability/voice"
+	"github.com/haryoiro/suzuha/internal/channel/discord"
+	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/samber/do/v2"
 )
 
 // VoicevoxHandler は VOICEVOX グループ (speakers / speaker) を実装する。
 type VoicevoxHandler struct {
-	client    *tts.VoicevoxClient  // nil: voicevox 未設定
-	cfg       *config.TTSProvider  // 話者 ID 変更を config に反映
-	pipeline  *voice.Pipeline      // runtime の話者切り替え用 (nil 可)
+	client   *tts.VoicevoxClient // nil: voicevox 未設定
+	cfg      *config.TTSProvider // 話者 ID 変更を config に反映
+	pipeline *voice.Pipeline     // runtime の話者切り替え用 (nil 可)
 }
 
 // NewVoicevoxHandler は DI injector から voicevox 関連依存を組み立てる。

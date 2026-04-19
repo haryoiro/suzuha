@@ -13,18 +13,18 @@ var youtubePatterns = []*regexp.Regexp{
 
 // yt-dlp が対応する動画サイトの URL パターン (主要なもの)。
 var videoPlatformHosts = map[string]bool{
-	"www.youtube.com":    true,
-	"youtube.com":        true,
-	"youtu.be":           true,
-	"www.nicovideo.jp":   true,
-	"nicovideo.jp":       true,
-	"www.twitch.tv":      true,
-	"twitch.tv":          true,
-	"clips.twitch.tv":    true,
-	"www.bilibili.com":   true,
-	"bilibili.com":       true,
+	"www.youtube.com":     true,
+	"youtube.com":         true,
+	"youtu.be":            true,
+	"www.nicovideo.jp":    true,
+	"nicovideo.jp":        true,
+	"www.twitch.tv":       true,
+	"twitch.tv":           true,
+	"clips.twitch.tv":     true,
+	"www.bilibili.com":    true,
+	"bilibili.com":        true,
 	"www.dailymotion.com": true,
-	"vimeo.com":          true,
+	"vimeo.com":           true,
 }
 
 // ExtractYouTubeID は URL から YouTube の video ID を抽出する。

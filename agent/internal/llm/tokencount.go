@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	tiktoken "github.com/pkoukk/tiktoken-go"
 )
@@ -76,7 +77,7 @@ func NewTokenCounter(providerType, model string, logger *slog.Logger) TokenCount
 
 // CountMessages はメッセージ列のトークン数を合計する。
 // メッセージごとに role overhead (+4) を加算する。
-func CountMessages(counter TokenCounter, msgs []Message) int {
+func CountMessages(counter TokenCounter, msgs []message.Message) int {
 	total := 0
 	for _, m := range msgs {
 		total += counter(m.Content) + 4

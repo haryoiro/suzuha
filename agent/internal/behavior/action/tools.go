@@ -24,7 +24,7 @@ func NewCreateTool(store *Store) *CreateTool {
 	return &CreateTool{store: store}
 }
 
-func (t *CreateTool) Name() string    { return "schedule_create" }
+func (t *CreateTool) Name() string   { return "schedule_create" }
 func (t *CreateTool) ReadOnly() bool { return false }
 
 func (t *CreateTool) Description() string {
@@ -148,7 +148,7 @@ func NewListTool(store *Store) *ListTool {
 	return &ListTool{store: store}
 }
 
-func (t *ListTool) Name() string    { return "schedule_list" }
+func (t *ListTool) Name() string   { return "schedule_list" }
 func (t *ListTool) ReadOnly() bool { return true }
 
 func (t *ListTool) Description() string {
@@ -216,7 +216,7 @@ func NewCancelTool(store *Store) *CancelTool {
 	return &CancelTool{store: store}
 }
 
-func (t *CancelTool) Name() string    { return "schedule_cancel" }
+func (t *CancelTool) Name() string   { return "schedule_cancel" }
 func (t *CancelTool) ReadOnly() bool { return false }
 
 func (t *CancelTool) Description() string {

@@ -31,11 +31,11 @@ type JobStatus struct {
 
 // jobMeta holds the mapping between a cron entry ID and job metadata.
 type jobMeta struct {
-	entryID cron.EntryID
-	name    string
-	task    string
+	entryID  cron.EntryID
+	name     string
+	task     string
 	cronExpr string
-	config  map[string]any
+	config   map[string]any
 }
 
 // Scheduler manages periodic CronTask execution in the Consolidator process.

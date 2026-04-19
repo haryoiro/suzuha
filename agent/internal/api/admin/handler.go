@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/api/admin/gen"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/api/admin/gen"
 	"github.com/haryoiro/suzuha/internal/port/user"
 )
 

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/internal/api/admin/gen"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/api/admin/gen"
 )
 
 func (h *AdminHandler) ForgetGroups(ctx context.Context, params gen.ForgetGroupsParams) (*gen.ForgetGroupsOK, error) {
