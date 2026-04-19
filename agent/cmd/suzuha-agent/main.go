@@ -244,24 +244,10 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		return
 	}
 
-	mux := http.NewServeMux()
-	mux.Handle("/internal/logs", observe.LogHandler(logRing))
-	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
-	// Ogen-backed control API (段階的に /internal/* を移行中).
-	mux.Handle("POST /internal/reload-channel-settings", controlOgen)
-	mux.Handle("GET /internal/identity", controlOgen)
-	mux.Handle("GET /internal/context", controlOgen)
-	mux.Handle("POST /internal/compact", controlOgen)
-	mux.Handle("POST /internal/reload-prompt", controlOgen)
-	mux.Handle("GET /internal/scheduler/jobs", controlOgen)
-	mux.Handle("POST /internal/trigger/{task}", controlOgen)
-
-	// LLM provider / model / role management (3層分離).
-	llmClient := do.MustInvoke[*llm.Client](injector)
+	// DB-backed state の起動時復元 (handler が使う前に済ませる)。
 	llmDB := do.MustInvokeNamed[*sql.DB](injector, "shared-db")
+	llmClient := do.MustInvoke[*llm.Client](injector)
 	providerRegistry := do.MustInvoke[*llm.ProviderRegistry](injector)
-
-	// Restore role assignments from DB on startup.
 	if assignments, err := providerRegistry.Assignments(context.Background()); err == nil {
 		for _, a := range assignments {
 			spec, err := providerRegistry.BuildRoleSpec(context.Background(), a.ProviderName, a.ModelID)
@@ -274,18 +260,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 			logger.Info("LLMロールを復元", "role", a.Role, "provider", a.ProviderName, "model", a.ModelID)
 		}
 	}
-
-	// LLM management (control API).
-	mux.Handle("GET /internal/llm", controlOgen)
-	mux.Handle("GET /internal/llm/providers", controlOgen)
-	mux.Handle("GET /internal/llm/models", controlOgen)
-	mux.Handle("POST /internal/llm/models", controlOgen)
-	mux.Handle("POST /internal/llm/models/refresh", controlOgen)
-	mux.Handle("GET /internal/llm/roles", controlOgen)
-	mux.Handle("PUT /internal/llm/roles/{role}", controlOgen)
-
-	// Playground: chat with LLM using current context snapshot (read-only).
-	// Tool registry: restore disabled set on startup, then delegate to control API.
 	registry := do.MustInvoke[*tool.Registry](injector)
 	if names, err := tool.LoadDisabled(context.Background(), llmDB); err != nil {
 		logger.Warn("disabled tools の復元に失敗", "error", err)
@@ -294,32 +268,21 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		logger.Info("restored disabled tools", "count", len(names))
 	}
 
-	mux.Handle("GET /internal/tools", controlOgen)
-	mux.Handle("PUT /internal/tools/{name}/enabled", controlOgen)
-	mux.Handle("POST /internal/tools/{name}/execute", controlOgen)
-
-	// VOICEVOX speaker management (control API).
-	if cfg.Voice.Enabled {
-		mux.Handle("GET /internal/voicevox/speakers", controlOgen)
-		mux.Handle("GET /internal/voicevox/speaker", controlOgen)
-		mux.Handle("PUT /internal/voicevox/speaker", controlOgen)
-	}
-
-	// Physical device (ESP32 + Web widget). Hub と vision は DI で構築済み。
-	// WS/binary/SSE 系は raw handler、JSON 系は control API に委譲する。
+	// ogen-backed control API はすべての /internal/* を内側で routing する。
+	// 例外 (SSE/WS/binary/custom auth) は個別パスで raw handler を登録し、
+	// ServeMux のより具体的なパターンが先に拾う (Go 1.22+ の routing 仕様)。
 	hub := do.MustInvoke[*device.Hub](injector)
 	visionFeature := do.MustInvoke[*vision.Feature](injector)
-	mux.HandleFunc("GET /ws/device", hub.Handler())
-	mux.HandleFunc("GET /ws/web", hub.WebHandler())
+	mux := http.NewServeMux()
+	mux.Handle("/internal/", controlOgen)
+	mux.Handle("/internal/logs", observe.LogHandler(logRing))
+	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
 	mux.HandleFunc("GET /internal/device/frame", visionFeature.Frames().FrameHandler())
 	mux.HandleFunc("GET /internal/device/detections", visionFeature.Frames().DetectionStreamHandler())
-	mux.Handle("GET /internal/device/vision", controlOgen)
-	mux.Handle("PUT /internal/device/vision", controlOgen)
-	mux.Handle("POST /internal/device/servo", controlOgen)
-	mux.Handle("PUT /internal/device/volume", controlOgen)
-	mux.Handle("GET /internal/device/tracker", controlOgen)
-	mux.Handle("PUT /internal/device/tracker", controlOgen)
+	mux.HandleFunc("GET /ws/device", hub.Handler())
+	mux.HandleFunc("GET /ws/web", hub.WebHandler())
 
+	// Physical device session / gateway 配線。
 	ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
 		ag.AgentContextFor(agent.SourceKeyDevice), hub, logger,
 	))
@@ -334,13 +297,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	hub.StartCaptureLoop(captureCtx, 333)
 	logger.Info("デバイス接続口を開いた")
 
-	// Overland location tracking endpoint.
+	// Overland location tracking (token 認証付き raw handler)。
 	locStore := do.MustInvoke[*location.Store](injector)
 	if locStore != nil {
-		// overland は token ベースの認証付き raw handler のまま。
 		locHandler := location.NewHandler(locStore, cfg.Location.Token, logger)
 		mux.Handle("POST /internal/overland", locHandler)
-		mux.Handle("POST /internal/reload-location-settings", controlOgen)
 		logger.Info("overland location endpoint enabled")
 	}
 
