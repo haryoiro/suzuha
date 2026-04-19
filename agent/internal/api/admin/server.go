@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
-	"github.com/haryoiro/suzuha/internal/api/admin/handler"
 	"github.com/haryoiro/suzuha/internal/api/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -29,28 +28,15 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 
 	adminHandler := NewAdminHandler(store, userStore, schedStore, diaryStore, locStore, mediaStore, agentBase, cfg.PromptDir, logger)
 
-	ogenServer, err := gen.NewServer(adminHandler)
+	// RequestMiddleware で raw *http.Request を ctx に載せ、
+	// SSE / multipart / binary 系の RawHandler で取り出せるようにする。
+	ogenServer, err := gen.NewServer(adminHandler, gen.WithMiddleware(RequestMiddleware))
 	if err != nil {
 		return nil, fmt.Errorf("admin: ogen サーバーの作成に失敗: %w", err)
 	}
 
 	mux := http.NewServeMux()
-
-	// Mount ogen server for /api/ routes.
 	mux.Handle("/api/", ogenServer)
-
-	// SSE log streaming (binary/streaming, not in OpenAPI spec).
-	logH := handler.NewLogHandler(cfg.AgentLogs, "", logger)
-	mux.HandleFunc("GET /api/logs/stream", logH.Stream)
-
-	// Device binary/SSE proxy (not in OpenAPI spec).
-	mux.HandleFunc("GET /api/device/frame", adminHandler.proxyDeviceFrame)
-	mux.HandleFunc("GET /api/device/detections", adminHandler.proxyDeviceDetections)
-
-	// Media serve, upload, and image search (binary/multipart, not in OpenAPI spec).
-	mux.HandleFunc("GET /api/media/", adminHandler.serveMedia)
-	mux.HandleFunc("POST /api/memories/{id}/media", adminHandler.uploadMedia)
-	mux.HandleFunc("POST /api/memories/search-image", adminHandler.searchByImage)
 
 	// SPA static files.
 	staticDir := cfg.StaticDir

@@ -20,6 +20,7 @@ import "./routes/diary.tsp";
 import "./routes/scheduler.tsp";
 import "./routes/device.tsp";
 import "./routes/voicevox.tsp";
+import "./routes/streams.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;

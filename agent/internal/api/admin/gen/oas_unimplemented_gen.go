@@ -4,6 +4,7 @@ package gen
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/go-faster/jx"
 	ht "github.com/ogen-go/ogen/http"
@@ -13,6 +14,61 @@ import (
 type UnimplementedHandler struct{}
 
 var _ Handler = UnimplementedHandler{}
+var _ RawHandler = UnimplementedHandler{}
+
+// AdminRawStreamsDeviceDetections implements AdminRawStreams_deviceDetections operation.
+//
+// YOLO 検出結果の SSE ストリーム (agent をプロキシ)。.
+//
+// GET /api/device/detections
+func (UnimplementedHandler) AdminRawStreamsDeviceDetections(ctx context.Context, w http.ResponseWriter) error {
+	return ht.ErrNotImplemented
+}
+
+// AdminRawStreamsDeviceFrame implements AdminRawStreams_deviceFrame operation.
+//
+// デバイスカメラの JPEG フレーム (agent をプロキシ)。.
+//
+// GET /api/device/frame
+func (UnimplementedHandler) AdminRawStreamsDeviceFrame(ctx context.Context, w http.ResponseWriter) error {
+	return ht.ErrNotImplemented
+}
+
+// AdminRawStreamsLogsStream implements AdminRawStreams_logsStream operation.
+//
+// 内部ログの SSE ストリーム (agent の /internal/logs をプロキシ)。.
+//
+// GET /api/logs/stream
+func (UnimplementedHandler) AdminRawStreamsLogsStream(ctx context.Context, w http.ResponseWriter) error {
+	return ht.ErrNotImplemented
+}
+
+// AdminRawStreamsSearchByImage implements AdminRawStreams_searchByImage operation.
+//
+// 画像類似検索 (multipart/form-data で画像を受け取る)。.
+//
+// POST /api/memories/search-image
+func (UnimplementedHandler) AdminRawStreamsSearchByImage(ctx context.Context, w http.ResponseWriter) error {
+	return ht.ErrNotImplemented
+}
+
+// AdminRawStreamsServeMedia implements AdminRawStreams_serveMedia operation.
+//
+// メディアを取得 (パス以下の media を配信、Content-Type は動的)。.
+//
+// GET /api/media/{path}
+func (UnimplementedHandler) AdminRawStreamsServeMedia(ctx context.Context, params AdminRawStreamsServeMediaParams, w http.ResponseWriter) error {
+	return ht.ErrNotImplemented
+}
+
+// AdminRawStreamsUploadMedia implements AdminRawStreams_uploadMedia operation.
+//
+// メモリに画像をアップロード (multipart/form-data)。.
+//
+// POST /api/memories/{id}/media
+func (UnimplementedHandler) AdminRawStreamsUploadMedia(ctx context.Context, params AdminRawStreamsUploadMediaParams, w http.ResponseWriter) error {
+	return ht.ErrNotImplemented
+}
 
 // AgentCompact implements Agent_compact operation.
 //

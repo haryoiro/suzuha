@@ -4,12 +4,14 @@ package gen
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/go-faster/jx"
 )
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	RawHandler
 	// AgentCompact implements Agent_compact operation.
 	//
 	// POST /api/agent/compact
@@ -292,6 +294,48 @@ type Handler interface {
 	//
 	// GET /api/voicevox/speakers
 	VoicevoxSpeakers(ctx context.Context) (jx.Raw, error)
+}
+
+// RawHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Raw
+type RawHandler interface {
+	// AdminRawStreamsDeviceDetections implements AdminRawStreams_deviceDetections operation.
+	//
+	// YOLO 検出結果の SSE ストリーム (agent をプロキシ)。.
+	//
+	// GET /api/device/detections
+	AdminRawStreamsDeviceDetections(ctx context.Context, w http.ResponseWriter) error
+	// AdminRawStreamsDeviceFrame implements AdminRawStreams_deviceFrame operation.
+	//
+	// デバイスカメラの JPEG フレーム (agent をプロキシ)。.
+	//
+	// GET /api/device/frame
+	AdminRawStreamsDeviceFrame(ctx context.Context, w http.ResponseWriter) error
+	// AdminRawStreamsLogsStream implements AdminRawStreams_logsStream operation.
+	//
+	// 内部ログの SSE ストリーム (agent の /internal/logs をプロキシ)。.
+	//
+	// GET /api/logs/stream
+	AdminRawStreamsLogsStream(ctx context.Context, w http.ResponseWriter) error
+	// AdminRawStreamsSearchByImage implements AdminRawStreams_searchByImage operation.
+	//
+	// 画像類似検索 (multipart/form-data で画像を受け取る)。.
+	//
+	// POST /api/memories/search-image
+	AdminRawStreamsSearchByImage(ctx context.Context, w http.ResponseWriter) error
+	// AdminRawStreamsServeMedia implements AdminRawStreams_serveMedia operation.
+	//
+	// メディアを取得 (パス以下の media を配信、Content-Type は動的)。.
+	//
+	// GET /api/media/{path}
+	AdminRawStreamsServeMedia(ctx context.Context, params AdminRawStreamsServeMediaParams, w http.ResponseWriter) error
+	// AdminRawStreamsUploadMedia implements AdminRawStreams_uploadMedia operation.
+	//
+	// メモリに画像をアップロード (multipart/form-data)。.
+	//
+	// POST /api/memories/{id}/media
+	AdminRawStreamsUploadMedia(ctx context.Context, params AdminRawStreamsUploadMediaParams, w http.ResponseWriter) error
 }
 
 // Server implements http server based on OpenAPI v3 specification and

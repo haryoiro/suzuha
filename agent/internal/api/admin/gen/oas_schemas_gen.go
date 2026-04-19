@@ -4,10 +4,173 @@ package gen
 
 import (
 	"io"
+	"net/http"
 
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
 )
+
+type AdminRawStreamsDeviceDetectionsOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s AdminRawStreamsDeviceDetectionsOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// AdminRawStreamsDeviceDetectionsOKRawTextEventStream represents raw HTTP response for AdminRawStreamsDeviceDetections text/event-stream.
+type AdminRawStreamsDeviceDetectionsOKRawTextEventStream struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *AdminRawStreamsDeviceDetectionsOKRawTextEventStream) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *AdminRawStreamsDeviceDetectionsOKRawTextEventStream) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*AdminRawStreamsDeviceDetectionsOKRawTextEventStream) adminRawStreamsDeviceDetectionsRes() {}
+
+type AdminRawStreamsDeviceFrameOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s AdminRawStreamsDeviceFrameOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// AdminRawStreamsDeviceFrameOKRawImageJpeg represents raw HTTP response for AdminRawStreamsDeviceFrame image/jpeg.
+type AdminRawStreamsDeviceFrameOKRawImageJpeg struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *AdminRawStreamsDeviceFrameOKRawImageJpeg) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *AdminRawStreamsDeviceFrameOKRawImageJpeg) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*AdminRawStreamsDeviceFrameOKRawImageJpeg) adminRawStreamsDeviceFrameRes() {}
+
+type AdminRawStreamsLogsStreamOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s AdminRawStreamsLogsStreamOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// AdminRawStreamsLogsStreamOKRawTextEventStream represents raw HTTP response for AdminRawStreamsLogsStream text/event-stream.
+type AdminRawStreamsLogsStreamOKRawTextEventStream struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *AdminRawStreamsLogsStreamOKRawTextEventStream) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *AdminRawStreamsLogsStreamOKRawTextEventStream) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*AdminRawStreamsLogsStreamOKRawTextEventStream) adminRawStreamsLogsStreamRes() {}
+
+type AdminRawStreamsSearchByImageOKApplicationJSON string
+
+// AdminRawStreamsSearchByImageOKRawApplicationJSON represents raw HTTP response for AdminRawStreamsSearchByImage application/json.
+type AdminRawStreamsSearchByImageOKRawApplicationJSON struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *AdminRawStreamsSearchByImageOKRawApplicationJSON) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *AdminRawStreamsSearchByImageOKRawApplicationJSON) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*AdminRawStreamsSearchByImageOKRawApplicationJSON) adminRawStreamsSearchByImageRes() {}
+
+type AdminRawStreamsServeMediaOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s AdminRawStreamsServeMediaOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// AdminRawStreamsServeMediaOKRawApplicationOctetStream represents raw HTTP response for AdminRawStreamsServeMedia application/octet-stream.
+type AdminRawStreamsServeMediaOKRawApplicationOctetStream struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *AdminRawStreamsServeMediaOKRawApplicationOctetStream) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *AdminRawStreamsServeMediaOKRawApplicationOctetStream) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*AdminRawStreamsServeMediaOKRawApplicationOctetStream) adminRawStreamsServeMediaRes() {}
+
+type AdminRawStreamsUploadMediaOKApplicationJSON string
+
+// AdminRawStreamsUploadMediaOKRawApplicationJSON represents raw HTTP response for AdminRawStreamsUploadMedia application/json.
+type AdminRawStreamsUploadMediaOKRawApplicationJSON struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *AdminRawStreamsUploadMediaOKRawApplicationJSON) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *AdminRawStreamsUploadMediaOKRawApplicationJSON) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*AdminRawStreamsUploadMediaOKRawApplicationJSON) adminRawStreamsUploadMediaRes() {}
 
 // Ref: #/components/schemas/BoredomStatus
 type BoredomStatus struct {

@@ -12,6 +12,48 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+func encodeAdminRawStreamsDeviceDetectionsResponse(response AdminRawStreamsDeviceDetectionsRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeAdminRawStreamsDeviceFrameResponse(response AdminRawStreamsDeviceFrameRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeAdminRawStreamsLogsStreamResponse(response AdminRawStreamsLogsStreamRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeAdminRawStreamsSearchByImageResponse(response AdminRawStreamsSearchByImageRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeAdminRawStreamsServeMediaResponse(response AdminRawStreamsServeMediaRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
+func encodeAdminRawStreamsUploadMediaResponse(response AdminRawStreamsUploadMediaRes, w http.ResponseWriter, span trace.Span) error {
+	switch response := response.(type) {
+	default:
+		return errors.Errorf("unexpected response type: %T", response)
+	}
+}
+
 func encodeAgentCompactResponse(response jx.Raw, w http.ResponseWriter, span trace.Span) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)

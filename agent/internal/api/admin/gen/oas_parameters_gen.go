@@ -14,6 +14,136 @@ import (
 	"github.com/ogen-go/ogen/validate"
 )
 
+// AdminRawStreamsServeMediaParams is parameters of AdminRawStreams_serveMedia operation.
+type AdminRawStreamsServeMediaParams struct {
+	Path string
+}
+
+func unpackAdminRawStreamsServeMediaParams(packed middleware.Parameters) (params AdminRawStreamsServeMediaParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "path",
+			In:   "path",
+		}
+		params.Path = packed[key].(string)
+	}
+	return params
+}
+
+func decodeAdminRawStreamsServeMediaParams(args [1]string, argsEscaped bool, r *http.Request) (params AdminRawStreamsServeMediaParams, _ error) {
+	// Decode path: path.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "path",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Path = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "path",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// AdminRawStreamsUploadMediaParams is parameters of AdminRawStreams_uploadMedia operation.
+type AdminRawStreamsUploadMediaParams struct {
+	ID string
+}
+
+func unpackAdminRawStreamsUploadMediaParams(packed middleware.Parameters) (params AdminRawStreamsUploadMediaParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeAdminRawStreamsUploadMediaParams(args [1]string, argsEscaped bool, r *http.Request) (params AdminRawStreamsUploadMediaParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // ChannelSettingsDeleteParams is parameters of ChannelSettings_delete operation.
 type ChannelSettingsDeleteParams struct {
 	ChannelId string

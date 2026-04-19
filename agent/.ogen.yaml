@@ -1,11 +1,15 @@
 parser:
   allow_remote: false
 
+# ignore_not_implemented: ["all"] で UnimplementedHandler を生成。
+# client / encoders は suzuha では使わないので disable_all で切る。
+# ogen/otel は必須 (middleware で参照している)。
 generator:
   features:
     enable:
       - "paths/server"
       - "ogen/otel"
+      - "ogen/unimplemented"
     disable_all: true
   ignore_not_implemented:
     - "all"

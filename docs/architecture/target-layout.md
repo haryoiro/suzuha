@@ -227,8 +227,9 @@ agent/
     │
     ├── port/                     # cross-cutting 契約（interface のみ）
     │   ├── scheduler/            # Task
-    │   ├── tool/                 # Tool
-    │   ├── chat/                 # Sender
+    │   ├── tool/                 # Tool, ReadOnlyTool, ToolResult, Content（現行 internal/tool/ の interface 群を移動）
+    │   ├── chat/                 # Sender, Interface, Replier, IDSender, Typer, VoiceSpeaker（現行 internal/chat/ を port 化）
+    │   ├── user/                 # Store, AdminStore, BotRegistrar（現行 internal/user/ の interface 群）
     │   ├── llm/                  # Client（capability/llm の公開 API）
     │   │                         # 注：現行 *llm.Client は concrete struct。interface 抽出が要
     │   ├── memory/               # Memory（capability/memory の公開 API）
@@ -538,6 +539,12 @@ behavior と channel の違い：
 | `internal/admin/` | `internal/api/admin/` | HTTP サーフェスとして |
 | `agent/{cli,device,discord,web}_session.go` | **移動**：各 `channel/<name>/session.go` へ | Session は入出力プロトコル固有なので channel/ に属する |
 | web 入力経路（現状 hub 経由で散在） | `channel/web/` に集約 | 他 adapter と揃える（source.go / session.go を揃える） |
+| `internal/chat/` | **そのまま `port/chat/` に移動** | 既に interface のみの package。Go 慣習に沿った consumer-side interface として完成済み |
+| `internal/tool/tool.go` (interfaces) | `port/tool/` へ | Tool, ReadOnlyTool, ToolResult, Content を port 化 |
+| `internal/tool/registry.go` (Registry) | `runtime/toolregistry/` へ | 実装は runtime に残す |
+| `internal/user/user.go` の Entity 群 | `domain/user/` に移動 | User / PlatformLink / UserGuild 等 7 型 |
+| `internal/user/user.go` の interface 群 | `port/user/` へ | Store / AdminStore / BotRegistrar |
+| `internal/user/store.go` | `driver/store/user/` へ | DBStore 実装（SQL） |
 | `scheduler.Feature` interface | **廃止** | behavior は `task.go` / `tool_*.go` で個別に port/scheduler.Task / port/tool.Tool を満たす。DI で登録 |
 | `Feature.Setup(ctx, *sql.DB)` | **廃止** | schema migration は `driver/store/<name>/migrations/` or 専用 migration tool に分離 |
 | `api/admin/store.go` の shadow 型 | **廃止** | `Action` / `ActionListOpts` / `ActionUpdateFields` / `DiaryEntry` / `Location` / `UserLocation` / `DeviceMapping` / `Place` の 8 型全て `domain/<name>/` に一本化 |
