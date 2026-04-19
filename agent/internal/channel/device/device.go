@@ -10,7 +10,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/voice"
+	"github.com/haryoiro/suzuha/internal/capability/voice"
 )
 
 // Frame type constants matching firmware/main/config.h.
