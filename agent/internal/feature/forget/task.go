@@ -9,10 +9,15 @@ import (
 	"github.com/haryoiro/suzuha/internal/scheduler"
 )
 
+// Consolidator は forget が必要とする統合機能を定義する (consumer-side interface)。
+type Consolidator interface {
+	Consolidate(ctx context.Context, opts *consol.ConsolidateOpts) (*consol.ConsolidateResult, error)
+}
+
 // Task は scheduler.CronTask を実装する薄いアダプタで、
-// 実際の重複排除・統合ロジックは consolidator インターフェースに委譲する。
+// 実際の重複排除・統合ロジックは Consolidator インターフェースに委譲する。
 type Task struct {
-	consolidator consolidator
+	Consolidator Consolidator
 }
 
 var _ scheduler.CronTask = (*Task)(nil)
@@ -37,7 +42,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 		}
 	}
 
-	result, err := t.consolidator.Consolidate(ctx, &opts)
+	result, err := t.Consolidator.Consolidate(ctx, &opts)
 	if err != nil {
 		return err
 	}

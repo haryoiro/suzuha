@@ -1,17 +1,15 @@
 package vision
 
 import (
-	"context"
-	"database/sql"
 	"log/slog"
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// Feature は物体検出・追跡・変化通知を提供する。
+// Feature は物体検出・追跡・変化通知を提供する capability。
+// pipeline (hot path) + tools (LLM 公開) + SSE 配信用の Frames を集約する。
 type Feature struct {
 	frames   *FrameStore
 	changes  *ChangeDetector
@@ -45,10 +43,7 @@ func New(bus *event.Bus, yoloURL, defaultChannel string, servo servoCommander, d
 	}
 }
 
-func (f *Feature) Name() string                             { return "vision" }
-func (f *Feature) Setup(_ context.Context, _ *sql.DB) error { return nil }
-func (f *Feature) Tasks() []scheduler.CronTask              { return nil }
-
+// Tools は LLM に公開するツール群を返す。dev が nil なら空。
 func (f *Feature) Tools() []tool.Tool {
 	if f.dev == nil {
 		return nil
@@ -72,5 +67,3 @@ func (f *Feature) ChangeDetector() *ChangeDetector { return f.changes }
 
 // Tracker returns the object tracker for API access.
 func (f *Feature) Tracker() *ObjectTracker { return f.tracker }
-
-var _ scheduler.Feature = (*Feature)(nil)

@@ -69,7 +69,7 @@ func run() error {
 
 	chatIface := do.MustInvoke[chat.Interface](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
-	_ = do.MustInvoke[[]scheduler.Feature](injector) // triggers feature setup + tool/hook registration
+	_ = do.MustInvoke[[]scheduler.CronTask](injector) // triggers tool registration + task list build
 
 	sched := do.MustInvoke[*scheduler.Scheduler](injector)
 	if sched != nil {

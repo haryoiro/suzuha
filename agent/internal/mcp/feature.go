@@ -6,70 +6,46 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
-// Feature implements scheduler.Feature for the MCP Apps system.
-type Feature struct {
-	mcpMgr   *Manager
-	registry *RegistryClient
-	logger   *slog.Logger
-	store    *AppStore
+// BootstrapStore は mcpapps ストアを生成して Setup を実行する。
+func BootstrapStore(ctx context.Context, db *sql.DB) (*AppStore, error) {
+	store := NewAppStore(db)
+	if err := store.Setup(ctx); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
-var _ scheduler.Feature = (*Feature)(nil)
-
-// NewFeature creates a new MCP apps Feature.
-func NewFeature(mcpMgr *Manager, logger *slog.Logger) *Feature {
-	return &Feature{
-		mcpMgr:   mcpMgr,
-		registry: NewRegistryClient(),
-		logger:   logger,
-	}
-}
-
-func (f *Feature) Name() string { return "mcpapps" }
-
-func (f *Feature) Setup(_ context.Context, db *sql.DB) error {
-	f.store = NewAppStore(db)
-
-	ctx := context.Background()
-	if err := f.store.Setup(ctx); err != nil {
-		return err
-	}
-
-	// Auto-reconnect enabled apps from DB.
-	apps, err := f.store.ListEnabled(ctx)
+// ReconnectEnabled は有効化されている App を MCP マネージャに再接続する。
+// 起動時に 1 回呼ぶ想定。
+func ReconnectEnabled(ctx context.Context, mgr *Manager, store *AppStore, logger *slog.Logger) {
+	apps, err := store.ListEnabled(ctx)
 	if err != nil {
-		f.logger.Warn("mcpapps: 有効なアプリの一覧取得に失敗", "error", err)
-		return nil
+		logger.Warn("mcpapps: 有効なアプリの一覧取得に失敗", "error", err)
+		return
 	}
-
 	for _, app := range apps {
 		srv := app.ToToolServer()
 		connectCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		toolNames, err := f.mcpMgr.ConnectServer(connectCtx, srv)
+		toolNames, err := mgr.ConnectServer(connectCtx, srv)
 		cancel()
 		if err != nil {
-			f.logger.Warn("mcpapps: 再接続失敗", "app", app.Name, "error", err)
+			logger.Warn("mcpapps: 再接続失敗", "app", app.Name, "error", err)
 			continue
 		}
-		f.logger.Info("mcpapps: 再接続完了", "app", app.Name, "tools", len(toolNames))
+		logger.Info("mcpapps: 再接続完了", "app", app.Name, "tools", len(toolNames))
 	}
-
-	return nil
 }
 
-func (f *Feature) Tools() []tool.Tool {
+// NewTools は mcpapps 用のエージェントツール群を返す。
+func NewTools(mgr *Manager, store *AppStore, logger *slog.Logger) []tool.Tool {
+	registry := NewRegistryClient()
 	return []tool.Tool{
-		NewSearchTool(f.registry),
-		NewInstallTool(f.store, f.mcpMgr, f.registry, f.logger),
-		NewUninstallTool(f.store, f.mcpMgr),
-		NewListAppsTool(f.store, f.mcpMgr),
+		NewSearchTool(registry),
+		NewInstallTool(store, mgr, registry, logger),
+		NewUninstallTool(store, mgr),
+		NewListAppsTool(store, mgr),
 	}
-}
-
-func (f *Feature) Tasks() []scheduler.CronTask {
-	return nil
 }
