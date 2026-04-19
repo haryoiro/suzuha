@@ -44,6 +44,8 @@ type Session struct {
 	encoderMu sync.Mutex
 	encoder   *opus.Encoder
 	speaking  bool // BeginSpeaking で true、EndSpeaking で false
+	// daveReady は DAVE epoch 収束済みフラグ (初回の BeginSpeaking でのみ長めに待つ)。
+	daveReady bool
 
 	// discordgo event handler cleanup functions.
 	cleanupHandlers []func()
@@ -76,9 +78,26 @@ func (s *Session) Join(ctx context.Context) error {
 	s.decoder = dec
 
 	// Create Opus encoder (48kHz, stereo) for sending audio.
-	enc, err := opus.NewEncoder(48000, 2, opus.AppVoIP)
+	// AppAudio: 音楽と音声の両方に向いた広帯域プリセット (AppVoIP は電話品質で narrowband 寄り)。
+	enc, err := opus.NewEncoder(48000, 2, opus.AppAudio)
 	if err != nil {
 		return fmt.Errorf("voice: Opusエンコーダ作成失敗: %w", err)
+	}
+	// Discord の VC は最大 96kbps (非 Boost) / 128kbps (Boost) を受ける。
+	if err := enc.SetBitrate(96000); err != nil {
+		return fmt.Errorf("voice: Bitrate 設定失敗: %w", err)
+	}
+	if err := enc.SetMaxBandwidth(opus.Fullband); err != nil {
+		return fmt.Errorf("voice: MaxBandwidth 設定失敗: %w", err)
+	}
+	if err := enc.SetComplexity(10); err != nil {
+		return fmt.Errorf("voice: Complexity 設定失敗: %w", err)
+	}
+	if err := enc.SetInBandFEC(true); err != nil {
+		return fmt.Errorf("voice: InBandFEC 設定失敗: %w", err)
+	}
+	if err := enc.SetPacketLossPerc(5); err != nil {
+		return fmt.Errorf("voice: PacketLossPerc 設定失敗: %w", err)
 	}
 	s.encoder = enc
 
@@ -183,16 +202,21 @@ func (s *Session) BeginSpeaking() error {
 		return err
 	}
 
-	// DAVE epoch convergence 待ち: 他クライアントが MLS epoch を処理する時間を確保。
-	time.Sleep(2 * time.Second)
+	// DAVE epoch convergence 待ちは接続後初回のみ (他クライアントが MLS epoch を処理する時間)。
+	// 以降の発話では省略してレイテンシを削る。
+	if !s.daveReady {
+		time.Sleep(2 * time.Second)
+		s.daveReady = true
+	}
 
 	ctx := context.Background()
 	if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
 		s.logger.Warn("話し始めの合図に失敗", "error", err)
 	}
 
+	// 無音プリアンブルは短めで十分 (初期 15 フレーム=300ms → 5 フレーム=100ms)。
 	udp := s.conn.UDP()
-	for range 15 {
+	for range 5 {
 		if _, err := udp.Write(silenceFrame); err != nil {
 			s.logger.Warn("無音の送信に失敗", "error", err)
 		}
@@ -205,6 +229,7 @@ func (s *Session) BeginSpeaking() error {
 
 // SendPCMChunk は BeginSpeaking 済みの状態で PCM チャンクを Opus エンコードして送信する。
 // PCM は 16-bit LE, stereo, 48kHz。BeginSpeaking が先に呼ばれていること。
+// Discord は 50Hz (20ms フレーム) 固定なので ticker で正確にペーシングする。
 func (s *Session) SendPCMChunk(pcm []byte) error {
 	if !s.speaking {
 		return fmt.Errorf("voice: BeginSpeaking が呼ばれていません")
@@ -215,6 +240,9 @@ func (s *Session) SendPCMChunk(pcm []byte) error {
 	totalFrames := len(pcm) / opusFrameBytes
 	s.logger.Debug("音声を送り始める", "pcm_bytes", len(pcm),
 		"frames", totalFrames, "duration_ms", totalFrames*20)
+
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
 
 	var sentFrames int
 	for offset := 0; offset+opusFrameBytes <= len(pcm); offset += opusFrameBytes {
@@ -245,7 +273,10 @@ func (s *Session) SendPCMChunk(pcm []byte) error {
 		}
 
 		sentFrames++
-		time.Sleep(20 * time.Millisecond)
+		// 最後のフレームは ticker を待たずに即終了 (次の SendPCMChunk にバトンタッチ)。
+		if offset+opusFrameBytes < len(pcm) {
+			<-ticker.C
+		}
 	}
 
 	s.logger.Debug("音声を送り終わった", "sent", sentFrames, "total", totalFrames)

@@ -166,52 +166,76 @@ func (p *Pipeline) SpeakText(ctx context.Context, guildID, text string) error {
 }
 
 // SpeakStream は文チャネルから逐次 TTS → 音声送信する。
-// DAVE 待機は 1 回だけ行い、各文を TTS で合成して順次送信する。
+// TTS 合成と音声送信を並行させ、BeginSpeaking の準備時間も TTS と重ねる:
+//
+//	[synth N]─────→[send N]
+//	          └→[synth N+1]─→[send N+1]
+//	[BeginSpeaking] (並行準備)
 func (p *Pipeline) SpeakStream(ctx context.Context, guildID string, sentences <-chan string) error {
 	p.mu.Lock()
 	sess, ok := p.sessions[guildID]
 	p.mu.Unlock()
 	if !ok {
-		// drain channel to prevent goroutine leak
 		for range sentences {
 		}
 		return fmt.Errorf("voice: ギルド %s のセッションが見つかりません", guildID)
 	}
 
-	if err := sess.BeginSpeaking(); err != nil {
-		for range sentences {
+	synthCtx, cancelSynth := context.WithCancel(ctx)
+	defer cancelSynth()
+
+	// 1 文先行合成: send 中に次の文を用意する。
+	pcmQueue := make(chan []byte, 1)
+
+	go func() {
+		defer close(pcmQueue)
+		for sentence := range sentences {
+			if synthCtx.Err() != nil {
+				for range sentences {
+				}
+				return
+			}
+			pcm, sampleRate, err := p.tts.Synthesize(synthCtx, sentence)
+			if err != nil {
+				p.logger.Warn("ストリーミング TTS 失敗、スキップ", "error", err, "sentence", sentence)
+				continue
+			}
+			if len(pcm) == 0 {
+				continue
+			}
+			pcm48k := ResamplePCM(pcm, sampleRate, 48000)
+			stereo := monoToStereo(pcm48k)
+			select {
+			case pcmQueue <- stereo:
+			case <-synthCtx.Done():
+				for range sentences {
+				}
+				return
+			}
 		}
+	}()
+
+	// BeginSpeaking は TTS 合成と並行で走らせる (DAVE 待機と無音プリアンブルを合成時間に隠す)。
+	if err := sess.BeginSpeaking(); err != nil {
+		cancelSynth()
+		go func() {
+			for range pcmQueue {
+			}
+		}()
 		return fmt.Errorf("voice: speaking 開始失敗: %w", err)
 	}
 	defer sess.EndSpeaking()
 
-	for sentence := range sentences {
-		if ctx.Err() != nil {
-			for range sentences {
-			}
-			return ctx.Err()
-		}
-
-		pcm, sampleRate, err := p.tts.Synthesize(ctx, sentence)
-		if err != nil {
-			p.logger.Warn("ストリーミング TTS 失敗、スキップ", "error", err, "sentence", sentence)
-			continue
-		}
-		if len(pcm) == 0 {
-			continue
-		}
-
-		pcm48k := ResamplePCM(pcm, sampleRate, 48000)
-		stereo := monoToStereo(pcm48k)
-
+	for stereo := range pcmQueue {
 		if err := sess.SendPCMChunk(stereo); err != nil {
-			// drain remaining sentences to prevent goroutine leak in caller.
-			for range sentences {
-			}
+			cancelSynth()
+			go func() {
+				for range pcmQueue {
+				}
+			}()
 			return fmt.Errorf("voice: PCM チャンク送信失敗: %w", err)
 		}
 	}
-
 	return nil
 }
 
