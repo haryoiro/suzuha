@@ -97,7 +97,7 @@ func (f *YtDlpFetcher) FetchMetadata(ctx context.Context, rawURL string) (VideoI
 	return VideoInfo{Title: meta.Title, Duration: meta.Duration}, nil
 }
 
-// findAndParseVTT は yt-dlp が保存した VTT ファイルを読んでパ��スする。
+// findAndParseVTT は yt-dlp が保存した VTT ファイルを読んでパースする。
 func (f *YtDlpFetcher) findAndParseVTT(ctx context.Context, rawURL string, langs []string) ([]Line, error) {
 	// video ID を取得して VTT ファイルパスを推測
 	cmd := exec.CommandContext(ctx, f.bin, "--print", "id", rawURL)

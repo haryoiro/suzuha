@@ -13,13 +13,13 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 	guildID := params.GuildID.Or("")
 
 	query := `
-		SELECT ugc.channel_id, ugc.channel_name, ugc.guild_id,
-		       COALESCE(g.name, '') AS guild_name,
+		SELECT ugc.channel_id, MAX(ugc.channel_name) AS channel_name, ugc.guild_id,
+		       COALESCE(MAX(g.name), '') AS guild_name,
 		       COUNT(DISTINCT ugc.user_id) AS user_count,
-		       COALESCE(cs.mode, 'active') AS mode,
-		       COALESCE(cs.home, false) AS home,
-		       ca.last_user_message_at,
-		       cs.updated_at AS settings_updated_at
+		       COALESCE(MAX(cs.mode), 'active') AS mode,
+		       COALESCE(BOOL_OR(cs.home), false) AS home,
+		       MAX(ca.last_user_message_at) AS last_user_message_at,
+		       MAX(cs.updated_at) AS settings_updated_at
 		FROM user_guild_channels ugc
 		LEFT JOIN guilds g ON g.id = ugc.guild_id
 		LEFT JOIN channel_settings cs ON cs.channel_id = ugc.channel_id
@@ -29,10 +29,10 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 	var err error
 	if guildID != "" {
 		query += ` WHERE ugc.guild_id = $1`
-		query += ` GROUP BY ugc.channel_id ORDER BY guild_name, ugc.channel_name`
+		query += ` GROUP BY ugc.channel_id, ugc.guild_id ORDER BY guild_name, channel_name`
 		rows, err = h.db.QueryContext(ctx, query, guildID)
 	} else {
-		query += ` GROUP BY ugc.channel_id ORDER BY guild_name, ugc.channel_name`
+		query += ` GROUP BY ugc.channel_id, ugc.guild_id ORDER BY guild_name, channel_name`
 		rows, err = h.db.QueryContext(ctx, query)
 	}
 	if err != nil {
@@ -44,7 +44,7 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 	for rows.Next() {
 		var e api.ChannelSetting
 		var mode string
-		var lastMsg, settingsUpdated sql.NullString
+		var lastMsg, settingsUpdated sql.NullTime
 		if err := rows.Scan(&e.ChannelID, &e.ChannelName, &e.GuildID, &e.GuildName,
 			&e.UserCount, &mode, &e.Home, &lastMsg, &settingsUpdated); err != nil {
 			h.logger.Error("チャンネル設定のスキャンに失敗", "error", err.Error())
@@ -52,10 +52,10 @@ func (h *AdminHandler) ChannelSettingsList(ctx context.Context, params api.Chann
 		}
 		e.Mode = api.ChannelSettingMode(mode)
 		if lastMsg.Valid {
-			e.LastUserMessageAt = api.NewOptString(lastMsg.String)
+			e.LastUserMessageAt = api.NewOptString(lastMsg.Time.Format("2006-01-02 15:04:05"))
 		}
 		if settingsUpdated.Valid {
-			e.SettingsUpdatedAt = api.NewOptString(settingsUpdated.String)
+			e.SettingsUpdatedAt = api.NewOptString(settingsUpdated.Time.Format("2006-01-02 15:04:05"))
 		}
 		entries = append(entries, e)
 	}

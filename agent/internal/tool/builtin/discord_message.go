@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/tool"
@@ -117,7 +118,7 @@ func newDiscordGetHistory(s *discordgo.Session) tool.Tool {
 					AuthorID: m.Author.ID,
 					Author:   m.Author.Username,
 					Content:  m.Content,
-					Time:     m.Timestamp.Format("15:04:05"),
+					Time:     m.Timestamp.Format(time.RFC3339),
 				}
 			}
 			b, _ := json.Marshal(out)

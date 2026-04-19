@@ -195,6 +195,9 @@ func (t *MemoUpdate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	if err != nil {
 		return tool.ErrorResult("メモが見つからない: " + err.Error()), nil
 	}
+	if existing == nil {
+		return tool.ErrorResult("メモが見つからない: " + in.ID), nil
+	}
 	if existing.Type != memory.MemoryTypeMemo {
 		return tool.ErrorResult("指定されたIDはメモではない"), nil
 	}

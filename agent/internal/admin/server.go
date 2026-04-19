@@ -81,7 +81,6 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	// Wrap with middleware.
 	h := middleware.Logging(logger, mux)
 	h = middleware.CORS(h)
-	h = middleware.BasicAuth(cfg.Auth.Username, cfg.Auth.Password, h)
 
 	return &Server{handler: h, cfg: cfg, logger: logger}, nil
 }

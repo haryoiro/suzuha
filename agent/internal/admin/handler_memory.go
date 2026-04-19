@@ -74,6 +74,7 @@ func (h *AdminHandler) MemoriesList(ctx context.Context, params api.MemoriesList
 
 	memories, total, err := h.memStore.List(ctx, opts)
 	if err != nil {
+		h.logger.Error("memories list に失敗", "error", err)
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -104,6 +105,9 @@ func (h *AdminHandler) MemoriesCreate(ctx context.Context, req *api.CreateMemory
 func (h *AdminHandler) MemoriesGet(ctx context.Context, params api.MemoriesGetParams) (*api.MemoriesGetOK, error) {
 	mem, err := h.memStore.Get(ctx, params.ID)
 	if err != nil {
+		return nil, fmt.Errorf("not found")
+	}
+	if mem == nil {
 		return nil, fmt.Errorf("not found")
 	}
 	return &api.MemoriesGetOK{Data: memToAPI(*mem)}, nil

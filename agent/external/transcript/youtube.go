@@ -67,7 +67,7 @@ func (f *YouTubeFetcher) Fetch(ctx context.Context, rawURL string, langs []strin
 }
 
 // FetchMetadata は YouTube のメタデータだけを取得する。
-// 実際には字幕を取得してタイトルと長さだけ返す (軽量取得 API がない��め)。
+// 実際には字幕を取得してタイトルと長さだけ返す (軽量取得 API がないため)。
 func (f *YouTubeFetcher) FetchMetadata(ctx context.Context, rawURL string) (VideoInfo, error) {
 	info, _, err := f.Fetch(ctx, rawURL, []string{"ja", "en"})
 	if err != nil {
