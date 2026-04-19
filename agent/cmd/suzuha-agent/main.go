@@ -240,7 +240,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	logger := do.MustInvoke[*slog.Logger](injector)
 	logRing := do.MustInvoke[*observe.RingBuffer](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
-	sched := do.MustInvoke[*scheduler.Scheduler](injector)
 
 	controlHandler := do.MustInvoke[*control.Handler](injector)
 	controlOgen, err := control.NewOgenHandler(controlHandler)
@@ -258,64 +257,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	mux.Handle("GET /internal/context", controlOgen)
 	mux.Handle("POST /internal/compact", controlOgen)
 	mux.Handle("POST /internal/reload-prompt", controlOgen)
-	mux.HandleFunc("GET /internal/scheduler/jobs", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if sched == nil {
-			json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]any{"data": sched.ListJobs()})
-	})
-	mux.HandleFunc("POST /internal/trigger/{task}", func(w http.ResponseWriter, r *http.Request) {
-		if sched == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "scheduler not enabled"})
-			return
-		}
-
-		taskName := r.PathValue("task")
-		var reqBody struct {
-			Config map[string]any `json:"config"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-			http.Error(w, `{"ok":false,"error":"invalid JSON"}`, http.StatusBadRequest)
-			return
-		}
-
-		var taskCfg json.RawMessage
-		if reqBody.Config != nil {
-			var err error
-			taskCfg, err = json.Marshal(reqBody.Config)
-			if err != nil {
-				logger.Error("trigger: config marshal に失敗", "task", taskName, "error", err)
-				http.Error(w, `{"ok":false,"error":"config marshal failed"}`, http.StatusInternalServerError)
-				return
-			}
-		} else {
-			for _, j := range cfg.Consolidator.Scheduler.Jobs {
-				if j.Task == taskName {
-					var err error
-					taskCfg, err = json.Marshal(j.Config)
-					if err != nil {
-						logger.Error("trigger: job config marshal に失敗", "task", taskName, "error", err)
-						http.Error(w, `{"ok":false,"error":"config marshal failed"}`, http.StatusInternalServerError)
-						return
-					}
-					break
-				}
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := sched.TriggerTask(r.Context(), taskName, taskCfg); err != nil {
-			logger.Error("trigger: task failed", "task", taskName, "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]any{"ok": true})
-	})
+	mux.Handle("GET /internal/scheduler/jobs", controlOgen)
+	mux.Handle("POST /internal/trigger/{task}", controlOgen)
 
 	// LLM provider / model / role management (3層分離).
 	llmClient := do.MustInvoke[*llm.Client](injector)

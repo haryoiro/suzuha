@@ -2,6 +2,10 @@
 
 package gen
 
+import (
+	"github.com/go-faster/jx"
+)
+
 // Ref: #/components/schemas/AgentContext
 type AgentContext struct {
 	Messages        []ContextMessage `json:"messages"`
@@ -220,6 +224,52 @@ func (s *OkResponse) SetOk(val bool) {
 	s.Ok = val
 }
 
+// NewOptSchedulerJobConfig returns new OptSchedulerJobConfig with value set to v.
+func NewOptSchedulerJobConfig(v SchedulerJobConfig) OptSchedulerJobConfig {
+	return OptSchedulerJobConfig{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptSchedulerJobConfig is optional SchedulerJobConfig.
+type OptSchedulerJobConfig struct {
+	Value SchedulerJobConfig
+	Set   bool
+}
+
+// IsSet returns true if OptSchedulerJobConfig was set.
+func (o OptSchedulerJobConfig) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptSchedulerJobConfig) Reset() {
+	var v SchedulerJobConfig
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptSchedulerJobConfig) SetTo(v SchedulerJobConfig) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptSchedulerJobConfig) Get() (v SchedulerJobConfig, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptSchedulerJobConfig) Or(d SchedulerJobConfig) SchedulerJobConfig {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptString returns new OptString with value set to v.
 func NewOptString(v string) OptString {
 	return OptString{
@@ -266,6 +316,52 @@ func (o OptString) Or(d string) string {
 	return d
 }
 
+// NewOptTriggerRequestConfig returns new OptTriggerRequestConfig with value set to v.
+func NewOptTriggerRequestConfig(v TriggerRequestConfig) OptTriggerRequestConfig {
+	return OptTriggerRequestConfig{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptTriggerRequestConfig is optional TriggerRequestConfig.
+type OptTriggerRequestConfig struct {
+	Value TriggerRequestConfig
+	Set   bool
+}
+
+// IsSet returns true if OptTriggerRequestConfig was set.
+func (o OptTriggerRequestConfig) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptTriggerRequestConfig) Reset() {
+	var v TriggerRequestConfig
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptTriggerRequestConfig) SetTo(v TriggerRequestConfig) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptTriggerRequestConfig) Get() (v TriggerRequestConfig, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptTriggerRequestConfig) Or(d TriggerRequestConfig) TriggerRequestConfig {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // Ref: #/components/schemas/ReloadPromptResponse
 type ReloadPromptResponse struct {
 	Ok     bool  `json:"ok"`
@@ -290,4 +386,152 @@ func (s *ReloadPromptResponse) SetOk(val bool) {
 // SetLength sets the value of Length.
 func (s *ReloadPromptResponse) SetLength(val int32) {
 	s.Length = val
+}
+
+// Ref: #/components/schemas/SchedulerJob
+type SchedulerJob struct {
+	Name   string                `json:"name"`
+	Task   string                `json:"task"`
+	Cron   string                `json:"cron"`
+	Config OptSchedulerJobConfig `json:"config"`
+	Prev   string                `json:"prev"`
+	Next   string                `json:"next"`
+}
+
+// GetName returns the value of Name.
+func (s *SchedulerJob) GetName() string {
+	return s.Name
+}
+
+// GetTask returns the value of Task.
+func (s *SchedulerJob) GetTask() string {
+	return s.Task
+}
+
+// GetCron returns the value of Cron.
+func (s *SchedulerJob) GetCron() string {
+	return s.Cron
+}
+
+// GetConfig returns the value of Config.
+func (s *SchedulerJob) GetConfig() OptSchedulerJobConfig {
+	return s.Config
+}
+
+// GetPrev returns the value of Prev.
+func (s *SchedulerJob) GetPrev() string {
+	return s.Prev
+}
+
+// GetNext returns the value of Next.
+func (s *SchedulerJob) GetNext() string {
+	return s.Next
+}
+
+// SetName sets the value of Name.
+func (s *SchedulerJob) SetName(val string) {
+	s.Name = val
+}
+
+// SetTask sets the value of Task.
+func (s *SchedulerJob) SetTask(val string) {
+	s.Task = val
+}
+
+// SetCron sets the value of Cron.
+func (s *SchedulerJob) SetCron(val string) {
+	s.Cron = val
+}
+
+// SetConfig sets the value of Config.
+func (s *SchedulerJob) SetConfig(val OptSchedulerJobConfig) {
+	s.Config = val
+}
+
+// SetPrev sets the value of Prev.
+func (s *SchedulerJob) SetPrev(val string) {
+	s.Prev = val
+}
+
+// SetNext sets the value of Next.
+func (s *SchedulerJob) SetNext(val string) {
+	s.Next = val
+}
+
+type SchedulerJobConfig map[string]jx.Raw
+
+func (s *SchedulerJobConfig) init() SchedulerJobConfig {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/SchedulerJobsResponse
+type SchedulerJobsResponse struct {
+	Data []SchedulerJob `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SchedulerJobsResponse) GetData() []SchedulerJob {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SchedulerJobsResponse) SetData(val []SchedulerJob) {
+	s.Data = val
+}
+
+// Ref: #/components/schemas/TriggerRequest
+type TriggerRequest struct {
+	Config OptTriggerRequestConfig `json:"config"`
+}
+
+// GetConfig returns the value of Config.
+func (s *TriggerRequest) GetConfig() OptTriggerRequestConfig {
+	return s.Config
+}
+
+// SetConfig sets the value of Config.
+func (s *TriggerRequest) SetConfig(val OptTriggerRequestConfig) {
+	s.Config = val
+}
+
+type TriggerRequestConfig map[string]jx.Raw
+
+func (s *TriggerRequestConfig) init() TriggerRequestConfig {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/TriggerResponse
+type TriggerResponse struct {
+	Ok    bool      `json:"ok"`
+	Error OptString `json:"error"`
+}
+
+// GetOk returns the value of Ok.
+func (s *TriggerResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetError returns the value of Error.
+func (s *TriggerResponse) GetError() OptString {
+	return s.Error
+}
+
+// SetOk sets the value of Ok.
+func (s *TriggerResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetError sets the value of Error.
+func (s *TriggerResponse) SetError(val OptString) {
+	s.Error = val
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-faster/errors"
+	"github.com/ogen-go/ogen/conv"
 	ht "github.com/ogen-go/ogen/http"
 	"github.com/ogen-go/ogen/otelogen"
 	"github.com/ogen-go/ogen/uri"
@@ -56,6 +57,19 @@ type Invoker interface {
 	//
 	// POST /internal/reload-prompt
 	RuntimeReloadPrompt(ctx context.Context) (*ReloadPromptResponse, error)
+	// SchedulerJobs invokes Scheduler_jobs operation.
+	//
+	// 登録済み scheduler ジョブとその次回/前回実行時刻を返す。.
+	//
+	// GET /internal/scheduler/jobs
+	SchedulerJobs(ctx context.Context) (*SchedulerJobsResponse, error)
+	// SchedulerTrigger invokes Scheduler_trigger operation.
+	//
+	// 指定タスクを即時実行する。config 未指定時は設定済みジョブの default
+	// を使う。.
+	//
+	// POST /internal/trigger/{task}
+	SchedulerTrigger(ctx context.Context, request *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
 }
 
 // Client implements OAS client.
@@ -460,6 +474,176 @@ func (c *Client) sendRuntimeReloadPrompt(ctx context.Context) (res *ReloadPrompt
 
 	stage = "DecodeResponse"
 	result, err := decodeRuntimeReloadPromptResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// SchedulerJobs invokes Scheduler_jobs operation.
+//
+// 登録済み scheduler ジョブとその次回/前回実行時刻を返す。.
+//
+// GET /internal/scheduler/jobs
+func (c *Client) SchedulerJobs(ctx context.Context) (*SchedulerJobsResponse, error) {
+	res, err := c.sendSchedulerJobs(ctx)
+	return res, err
+}
+
+func (c *Client) sendSchedulerJobs(ctx context.Context) (res *SchedulerJobsResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Scheduler_jobs"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/scheduler/jobs"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, SchedulerJobsOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/scheduler/jobs"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeSchedulerJobsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// SchedulerTrigger invokes Scheduler_trigger operation.
+//
+// 指定タスクを即時実行する。config 未指定時は設定済みジョブの default
+// を使う。.
+//
+// POST /internal/trigger/{task}
+func (c *Client) SchedulerTrigger(ctx context.Context, request *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error) {
+	res, err := c.sendSchedulerTrigger(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendSchedulerTrigger(ctx context.Context, request *TriggerRequest, params SchedulerTriggerParams) (res *TriggerResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Scheduler_trigger"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/internal/trigger/{task}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, SchedulerTriggerOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/internal/trigger/"
+	{
+		// Encode "task" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "task",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Task))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeSchedulerTriggerRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeSchedulerTriggerResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

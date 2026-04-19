@@ -38,6 +38,19 @@ type Handler interface {
 	//
 	// POST /internal/reload-prompt
 	RuntimeReloadPrompt(ctx context.Context) (*ReloadPromptResponse, error)
+	// SchedulerJobs implements Scheduler_jobs operation.
+	//
+	// 登録済み scheduler ジョブとその次回/前回実行時刻を返す。.
+	//
+	// GET /internal/scheduler/jobs
+	SchedulerJobs(ctx context.Context) (*SchedulerJobsResponse, error)
+	// SchedulerTrigger implements Scheduler_trigger operation.
+	//
+	// 指定タスクを即時実行する。config 未指定時は設定済みジョブの default
+	// を使う。.
+	//
+	// POST /internal/trigger/{task}
+	SchedulerTrigger(ctx context.Context, req *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

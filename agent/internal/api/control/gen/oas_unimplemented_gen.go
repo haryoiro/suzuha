@@ -57,3 +57,22 @@ func (UnimplementedHandler) RuntimeReloadChannelSettings(ctx context.Context) (r
 func (UnimplementedHandler) RuntimeReloadPrompt(ctx context.Context) (r *ReloadPromptResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
+
+// SchedulerJobs implements Scheduler_jobs operation.
+//
+// 登録済み scheduler ジョブとその次回/前回実行時刻を返す。.
+//
+// GET /internal/scheduler/jobs
+func (UnimplementedHandler) SchedulerJobs(ctx context.Context) (r *SchedulerJobsResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// SchedulerTrigger implements Scheduler_trigger operation.
+//
+// 指定タスクを即時実行する。config 未指定時は設定済みジョブの default
+// を使う。.
+//
+// POST /internal/trigger/{task}
+func (UnimplementedHandler) SchedulerTrigger(ctx context.Context, req *TriggerRequest, params SchedulerTriggerParams) (r *TriggerResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}

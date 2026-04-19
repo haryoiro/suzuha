@@ -11,4 +11,6 @@ const (
 	RuntimeCompactOperation               OperationName = "RuntimeCompact"
 	RuntimeReloadChannelSettingsOperation OperationName = "RuntimeReloadChannelSettings"
 	RuntimeReloadPromptOperation          OperationName = "RuntimeReloadPrompt"
+	SchedulerJobsOperation                OperationName = "SchedulerJobs"
+	SchedulerTriggerOperation             OperationName = "SchedulerTrigger"
 )

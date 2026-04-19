@@ -2,13 +2,16 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/user"
 )
 
@@ -19,17 +22,20 @@ type Handler struct {
 	agent        *agent.Agent
 	channelStore *channel.Store
 	userStore    user.Store
+	scheduler    *scheduler.Scheduler
 	promptDir    string
 	configDir    string
 }
 
 // NewHandler は Control API のハンドラを生成する。
 // promptDir と configDir は reload-prompt で使う。
-func NewHandler(ag *agent.Agent, channelStore *channel.Store, userStore user.Store, promptDir, configDir string) *Handler {
+// sched が nil のときは scheduler 系 endpoint は空レスポンスを返す。
+func NewHandler(ag *agent.Agent, channelStore *channel.Store, userStore user.Store, sched *scheduler.Scheduler, promptDir, configDir string) *Handler {
 	return &Handler{
 		agent:        ag,
 		channelStore: channelStore,
 		userStore:    userStore,
+		scheduler:    sched,
 		promptDir:    promptDir,
 		configDir:    configDir,
 	}
@@ -68,6 +74,49 @@ func (h *Handler) RuntimeReloadPrompt(ctx context.Context) (*gen.ReloadPromptRes
 	}, nil
 }
 
+// SchedulerJobs implements GET /internal/scheduler/jobs.
+func (h *Handler) SchedulerJobs(ctx context.Context) (*gen.SchedulerJobsResponse, error) {
+	if h.scheduler == nil {
+		return &gen.SchedulerJobsResponse{Data: []gen.SchedulerJob{}}, nil
+	}
+	jobs := h.scheduler.ListJobs()
+	data := make([]gen.SchedulerJob, len(jobs))
+	for i, j := range jobs {
+		data[i] = gen.SchedulerJob{
+			Name: j.Name,
+			Task: j.Task,
+			Cron: j.Cron,
+			Prev: j.Prev.Format(time.RFC3339),
+			Next: j.Next.Format(time.RFC3339),
+		}
+		if j.Config != nil {
+			data[i].Config = gen.NewOptSchedulerJobConfig(toJxMap(j.Config))
+		}
+	}
+	return &gen.SchedulerJobsResponse{Data: data}, nil
+}
+
+// SchedulerTrigger implements POST /internal/trigger/{task}.
+func (h *Handler) SchedulerTrigger(ctx context.Context, req *gen.TriggerRequest, params gen.SchedulerTriggerParams) (*gen.TriggerResponse, error) {
+	if h.scheduler == nil {
+		msg := "scheduler not enabled"
+		return &gen.TriggerResponse{Ok: false, Error: gen.NewOptString(msg)}, nil
+	}
+	var cfg json.RawMessage
+	if req != nil && req.Config.Set {
+		// Ogen generates OptTriggerRequestConfig wrapping map[string]jx.Raw. Serialize to JSON.
+		b, err := json.Marshal(req.Config.Value)
+		if err != nil {
+			return &gen.TriggerResponse{Ok: false, Error: gen.NewOptString("config marshal failed")}, nil
+		}
+		cfg = b
+	}
+	if err := h.scheduler.TriggerTask(ctx, params.Task, cfg); err != nil {
+		return &gen.TriggerResponse{Ok: false, Error: gen.NewOptString(err.Error())}, nil
+	}
+	return &gen.TriggerResponse{Ok: true}, nil
+}
+
 // AgentOpsIdentity implements GET /internal/identity.
 func (h *Handler) AgentOpsIdentity(ctx context.Context) (*gen.Identity, error) {
 	botPlatformID := h.agent.BotID()
@@ -99,6 +148,20 @@ func (h *Handler) AgentOpsGetContext(ctx context.Context) (*gen.AgentContext, er
 		Background:      toContextMessages(h.agent.LastBackground()),
 		Foreground:      toContextMessages(h.agent.LastForeground()),
 	}, nil
+}
+
+// toJxMap は map[string]any を ogen の map[string]jx.Raw に変換する。
+// Marshal 失敗時はその key をスキップ。
+func toJxMap(m map[string]any) gen.SchedulerJobConfig {
+	out := make(gen.SchedulerJobConfig, len(m))
+	for k, v := range m {
+		b, err := json.Marshal(v)
+		if err != nil {
+			continue
+		}
+		out[k] = jx.Raw(b)
+	}
+	return out
 }
 
 func toContextMessages(msgs []llm.Message) []gen.ContextMessage {

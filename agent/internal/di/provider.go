@@ -365,8 +365,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			ag := do.MustInvoke[*agent.Agent](i)
 			channelStore := do.MustInvoke[*channel.Store](i)
 			userStore := do.MustInvoke[user.Store](i)
+			sched := do.MustInvoke[*scheduler.Scheduler](i)
 			cfgPath := do.MustInvokeNamed[string](i, "config-path")
-			return control.NewHandler(ag, channelStore, userStore, cfg.Agent.PromptDir, filepath.Dir(cfgPath)), nil
+			return control.NewHandler(ag, channelStore, userStore, sched, cfg.Agent.PromptDir, filepath.Dir(cfgPath)), nil
 		})
 	}
 }

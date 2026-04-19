@@ -180,11 +180,25 @@ func (s *Scheduler) ListJobs() []JobStatus {
 }
 
 // TriggerTask executes a registered task immediately by name.
-// cfg is optional task-specific config (JSON); if nil, the task's default config is used.
+// cfg is optional task-specific config (JSON); if nil, falls back to the
+// configured job's default config for any job whose task matches taskName.
 func (s *Scheduler) TriggerTask(ctx context.Context, taskName string, cfg json.RawMessage) error {
 	task, ok := s.registry.Get(taskName)
 	if !ok {
 		return fmt.Errorf("不明なタスク: %s", taskName)
+	}
+	if cfg == nil {
+		// 設定済みジョブの default config を拾う。
+		s.mu.Lock()
+		for _, m := range s.jobs {
+			if m.task == taskName && m.config != nil {
+				if b, err := json.Marshal(m.config); err == nil {
+					cfg = b
+				}
+				break
+			}
+		}
+		s.mu.Unlock()
 	}
 	s.logger.Info("scheduler: 手動トリガー", "task", taskName)
 	return task.Execute(ctx, s.cc, cfg)
