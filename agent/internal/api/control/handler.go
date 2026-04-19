@@ -3,9 +3,11 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/go-faster/jx"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/channel"
@@ -13,31 +15,50 @@ import (
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
 	"github.com/haryoiro/suzuha/internal/user"
+	"github.com/haryoiro/suzuha/internal/voice"
 )
 
 // Handler は control API の ogen Handler 実装。
 // 各メソッドは gen が定義する interface を満たす。
 type Handler struct {
 	gen.UnimplementedHandler
-	agent        *agent.Agent
-	channelStore *channel.Store
-	userStore    user.Store
-	scheduler    *scheduler.Scheduler
-	promptDir    string
-	configDir    string
+	agent         *agent.Agent
+	channelStore  *channel.Store
+	userStore     user.Store
+	scheduler     *scheduler.Scheduler
+	voicevox      *tts.VoicevoxClient
+	voicevoxCfg   *config.TTSProvider // 話者 ID 変更を config に反映するため
+	voicePipeline *voice.Pipeline     // runtime の話者切り替え用 (nil 可)
+	promptDir     string
+	configDir     string
+}
+
+// Config は Handler のコンストラクタ引数。
+// 依存が多いので struct literal で渡す。nil 可なフィールドは nil 可と明記。
+type Config struct {
+	Agent         *agent.Agent
+	ChannelStore  *channel.Store
+	UserStore     user.Store
+	Scheduler     *scheduler.Scheduler  // nil: scheduler endpoint は空で返す
+	Voicevox      *tts.VoicevoxClient   // nil: voicevox endpoint は 503
+	VoicevoxCfg   *config.TTSProvider   // nil: voicevox endpoint は 503
+	VoicePipeline *voice.Pipeline       // nil: runtime 話者切替をスキップ
+	PromptDir     string
+	ConfigDir     string
 }
 
 // NewHandler は Control API のハンドラを生成する。
-// promptDir と configDir は reload-prompt で使う。
-// sched が nil のときは scheduler 系 endpoint は空レスポンスを返す。
-func NewHandler(ag *agent.Agent, channelStore *channel.Store, userStore user.Store, sched *scheduler.Scheduler, promptDir, configDir string) *Handler {
+func NewHandler(cfg Config) *Handler {
 	return &Handler{
-		agent:        ag,
-		channelStore: channelStore,
-		userStore:    userStore,
-		scheduler:    sched,
-		promptDir:    promptDir,
-		configDir:    configDir,
+		agent:         cfg.Agent,
+		channelStore:  cfg.ChannelStore,
+		userStore:     cfg.UserStore,
+		scheduler:     cfg.Scheduler,
+		voicevox:      cfg.Voicevox,
+		voicevoxCfg:   cfg.VoicevoxCfg,
+		voicePipeline: cfg.VoicePipeline,
+		promptDir:     cfg.PromptDir,
+		configDir:     cfg.ConfigDir,
 	}
 }
 
@@ -148,6 +169,51 @@ func (h *Handler) AgentOpsGetContext(ctx context.Context) (*gen.AgentContext, er
 		Background:      toContextMessages(h.agent.LastBackground()),
 		Foreground:      toContextMessages(h.agent.LastForeground()),
 	}, nil
+}
+
+// VoicevoxSpeakers implements GET /internal/voicevox/speakers.
+func (h *Handler) VoicevoxSpeakers(ctx context.Context) ([]gen.VoicevoxSpeakersOKItem, error) {
+	if h.voicevox == nil {
+		return nil, fmt.Errorf("voicevox not configured")
+	}
+	raw, err := h.voicevox.ListSpeakers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, err
+	}
+	out := make([]gen.VoicevoxSpeakersOKItem, len(items))
+	for i, item := range items {
+		m := make(gen.VoicevoxSpeakersOKItem, len(item))
+		for k, v := range item {
+			m[k] = jx.Raw(v)
+		}
+		out[i] = m
+	}
+	return out, nil
+}
+
+// VoicevoxGetSpeaker implements GET /internal/voicevox/speaker.
+func (h *Handler) VoicevoxGetSpeaker(ctx context.Context) (*gen.VoicevoxSpeaker, error) {
+	if h.voicevoxCfg == nil {
+		return nil, fmt.Errorf("voicevox not configured")
+	}
+	return &gen.VoicevoxSpeaker{SpeakerID: int32(h.voicevoxCfg.SpeakerID)}, nil
+}
+
+// VoicevoxSetSpeaker implements PUT /internal/voicevox/speaker.
+func (h *Handler) VoicevoxSetSpeaker(ctx context.Context, req *gen.SetSpeakerRequest) (*gen.OkResponse, error) {
+	if h.voicevoxCfg == nil {
+		return nil, fmt.Errorf("voicevox not configured")
+	}
+	id := int(req.SpeakerID)
+	h.voicevoxCfg.SpeakerID = id
+	if h.voicePipeline != nil {
+		h.voicePipeline.SetSpeakerID(id)
+	}
+	return &gen.OkResponse{Ok: true}, nil
 }
 
 // toJxMap は map[string]any を ogen の map[string]jx.Raw に変換する。

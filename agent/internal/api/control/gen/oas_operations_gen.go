@@ -13,4 +13,7 @@ const (
 	RuntimeReloadPromptOperation          OperationName = "RuntimeReloadPrompt"
 	SchedulerJobsOperation                OperationName = "SchedulerJobs"
 	SchedulerTriggerOperation             OperationName = "SchedulerTrigger"
+	VoicevoxGetSpeakerOperation           OperationName = "VoicevoxGetSpeaker"
+	VoicevoxSetSpeakerOperation           OperationName = "VoicevoxSetSpeaker"
+	VoicevoxSpeakersOperation             OperationName = "VoicevoxSpeakers"
 )

@@ -52,6 +52,29 @@ func (v *VoicevoxClient) BaseURL() string {
 	return v.baseURL
 }
 
+// ListSpeakers fetches /speakers from the VOICEVOX engine and returns raw JSON.
+// 返却 JSON は voicevox のレスポンスをそのまま。構造は engine バージョンに依存。
+func (v *VoicevoxClient) ListSpeakers(ctx context.Context) (json.RawMessage, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.baseURL+"/speakers", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := v.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("tts/voicevox: /speakers 到達失敗: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("tts/voicevox: /speakers ステータス %d: %s", resp.StatusCode, string(body))
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(body), nil
+}
+
 // Synthesize generates speech audio from text via VOICEVOX's two-step API:
 // 1. audio_query: text -> synthesis parameters
 // 2. synthesis: parameters -> WAV audio

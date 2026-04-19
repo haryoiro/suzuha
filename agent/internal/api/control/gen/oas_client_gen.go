@@ -70,6 +70,25 @@ type Invoker interface {
 	//
 	// POST /internal/trigger/{task}
 	SchedulerTrigger(ctx context.Context, request *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
+	// VoicevoxGetSpeaker invokes Voicevox_getSpeaker operation.
+	//
+	// 現在設定されている話者 ID を返す。.
+	//
+	// GET /internal/voicevox/speaker
+	VoicevoxGetSpeaker(ctx context.Context) (*VoicevoxSpeaker, error)
+	// VoicevoxSetSpeaker invokes Voicevox_setSpeaker operation.
+	//
+	// 話者 ID を変更する (runtime + config mutation)。.
+	//
+	// PUT /internal/voicevox/speaker
+	VoicevoxSetSpeaker(ctx context.Context, request *SetSpeakerRequest) (*OkResponse, error)
+	// VoicevoxSpeakers invokes Voicevox_speakers operation.
+	//
+	// VOICEVOX engine の /speakers をプロキシして話者一覧を返す。
+	// レスポンスは engine そのままの JSON。.
+	//
+	// GET /internal/voicevox/speakers
+	VoicevoxSpeakers(ctx context.Context) ([]VoicevoxSpeakersOKItem, error)
 }
 
 // Client implements OAS client.
@@ -644,6 +663,232 @@ func (c *Client) sendSchedulerTrigger(ctx context.Context, request *TriggerReque
 
 	stage = "DecodeResponse"
 	result, err := decodeSchedulerTriggerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// VoicevoxGetSpeaker invokes Voicevox_getSpeaker operation.
+//
+// 現在設定されている話者 ID を返す。.
+//
+// GET /internal/voicevox/speaker
+func (c *Client) VoicevoxGetSpeaker(ctx context.Context) (*VoicevoxSpeaker, error) {
+	res, err := c.sendVoicevoxGetSpeaker(ctx)
+	return res, err
+}
+
+func (c *Client) sendVoicevoxGetSpeaker(ctx context.Context) (res *VoicevoxSpeaker, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Voicevox_getSpeaker"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/voicevox/speaker"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, VoicevoxGetSpeakerOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/voicevox/speaker"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeVoicevoxGetSpeakerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// VoicevoxSetSpeaker invokes Voicevox_setSpeaker operation.
+//
+// 話者 ID を変更する (runtime + config mutation)。.
+//
+// PUT /internal/voicevox/speaker
+func (c *Client) VoicevoxSetSpeaker(ctx context.Context, request *SetSpeakerRequest) (*OkResponse, error) {
+	res, err := c.sendVoicevoxSetSpeaker(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendVoicevoxSetSpeaker(ctx context.Context, request *SetSpeakerRequest) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Voicevox_setSpeaker"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/internal/voicevox/speaker"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, VoicevoxSetSpeakerOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/voicevox/speaker"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeVoicevoxSetSpeakerRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeVoicevoxSetSpeakerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// VoicevoxSpeakers invokes Voicevox_speakers operation.
+//
+// VOICEVOX engine の /speakers をプロキシして話者一覧を返す。
+// レスポンスは engine そのままの JSON。.
+//
+// GET /internal/voicevox/speakers
+func (c *Client) VoicevoxSpeakers(ctx context.Context) ([]VoicevoxSpeakersOKItem, error) {
+	res, err := c.sendVoicevoxSpeakers(ctx)
+	return res, err
+}
+
+func (c *Client) sendVoicevoxSpeakers(ctx context.Context) (res []VoicevoxSpeakersOKItem, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Voicevox_speakers"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/voicevox/speakers"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, VoicevoxSpeakersOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/voicevox/speakers"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeVoicevoxSpeakersResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

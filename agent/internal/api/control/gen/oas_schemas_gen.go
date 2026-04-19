@@ -484,6 +484,21 @@ func (s *SchedulerJobsResponse) SetData(val []SchedulerJob) {
 	s.Data = val
 }
 
+// Ref: #/components/schemas/SetSpeakerRequest
+type SetSpeakerRequest struct {
+	SpeakerID int32 `json:"speaker_id"`
+}
+
+// GetSpeakerID returns the value of SpeakerID.
+func (s *SetSpeakerRequest) GetSpeakerID() int32 {
+	return s.SpeakerID
+}
+
+// SetSpeakerID sets the value of SpeakerID.
+func (s *SetSpeakerRequest) SetSpeakerID(val int32) {
+	s.SpeakerID = val
+}
+
 // Ref: #/components/schemas/TriggerRequest
 type TriggerRequest struct {
 	Config OptTriggerRequestConfig `json:"config"`
@@ -534,4 +549,30 @@ func (s *TriggerResponse) SetOk(val bool) {
 // SetError sets the value of Error.
 func (s *TriggerResponse) SetError(val OptString) {
 	s.Error = val
+}
+
+// Ref: #/components/schemas/VoicevoxSpeaker
+type VoicevoxSpeaker struct {
+	SpeakerID int32 `json:"speaker_id"`
+}
+
+// GetSpeakerID returns the value of SpeakerID.
+func (s *VoicevoxSpeaker) GetSpeakerID() int32 {
+	return s.SpeakerID
+}
+
+// SetSpeakerID sets the value of SpeakerID.
+func (s *VoicevoxSpeaker) SetSpeakerID(val int32) {
+	s.SpeakerID = val
+}
+
+type VoicevoxSpeakersOKItem map[string]jx.Raw
+
+func (s *VoicevoxSpeakersOKItem) init() VoicevoxSpeakersOKItem {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
 }

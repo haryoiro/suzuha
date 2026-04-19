@@ -14,6 +14,9 @@ var (
 	rn11AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
+	rn12AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
 )
 
 func (s *Server) cutPrefix(path string) (string, bool) {
@@ -279,6 +282,59 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 
 					return
+				}
+
+			case 'v': // Prefix: "voicevox/speaker"
+
+				if l := len("voicevox/speaker"); len(elem) >= l && elem[0:l] == "voicevox/speaker" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					switch r.Method {
+					case "GET":
+						s.handleVoicevoxGetSpeakerRequest([0]string{}, elemIsEscaped, w, r)
+					case "PUT":
+						s.handleVoicevoxSetSpeakerRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET,PUT",
+							allowedHeaders: rn12AllowedHeaders,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+				switch elem[0] {
+				case 's': // Prefix: "s"
+
+					if l := len("s"); len(elem) >= l && elem[0:l] == "s" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleVoicevoxSpeakersRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				}
 
 			}
@@ -591,6 +647,66 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					default:
 						return
 					}
+				}
+
+			case 'v': // Prefix: "voicevox/speaker"
+
+				if l := len("voicevox/speaker"); len(elem) >= l && elem[0:l] == "voicevox/speaker" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					switch method {
+					case "GET":
+						r.name = VoicevoxGetSpeakerOperation
+						r.summary = ""
+						r.operationID = "Voicevox_getSpeaker"
+						r.operationGroup = ""
+						r.pathPattern = "/internal/voicevox/speaker"
+						r.args = args
+						r.count = 0
+						return r, true
+					case "PUT":
+						r.name = VoicevoxSetSpeakerOperation
+						r.summary = ""
+						r.operationID = "Voicevox_setSpeaker"
+						r.operationGroup = ""
+						r.pathPattern = "/internal/voicevox/speaker"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+				switch elem[0] {
+				case 's': // Prefix: "s"
+
+					if l := len("s"); len(elem) >= l && elem[0:l] == "s" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = VoicevoxSpeakersOperation
+							r.summary = ""
+							r.operationID = "Voicevox_speakers"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/voicevox/speakers"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				}
 
 			}

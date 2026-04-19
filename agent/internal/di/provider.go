@@ -11,6 +11,7 @@ import (
 
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/external/twitter"
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
@@ -42,6 +43,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/voice"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -367,7 +369,36 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			userStore := do.MustInvoke[user.Store](i)
 			sched := do.MustInvoke[*scheduler.Scheduler](i)
 			cfgPath := do.MustInvokeNamed[string](i, "config-path")
-			return control.NewHandler(ag, channelStore, userStore, sched, cfg.Agent.PromptDir, filepath.Dir(cfgPath)), nil
+
+			// Voicevox 関連: 設定から voicevox エントリを探し、あれば client を作る。
+			var vvClient *tts.VoicevoxClient
+			var vvCfg *config.TTSProvider
+			for idx := range cfg.Voice.TTS {
+				if cfg.Voice.TTS[idx].Provider == "voicevox" {
+					vvCfg = &cfg.Voice.TTS[idx]
+					if vvCfg.URL != "" {
+						vvClient = tts.NewVoicevox(vvCfg.URL, vvCfg.SpeakerID)
+					}
+					break
+				}
+			}
+			// Discord 接続済みなら runtime 切り替え用の voice pipeline も渡す。
+			var vp *voice.Pipeline
+			if dc, err := do.Invoke[*discord.Chat](i); err == nil && dc != nil {
+				vp = dc.VoicePipeline()
+			}
+
+			return control.NewHandler(control.Config{
+				Agent:         ag,
+				ChannelStore:  channelStore,
+				UserStore:     userStore,
+				Scheduler:     sched,
+				Voicevox:      vvClient,
+				VoicevoxCfg:   vvCfg,
+				VoicePipeline: vp,
+				PromptDir:     cfg.Agent.PromptDir,
+				ConfigDir:     filepath.Dir(cfgPath),
+			}), nil
 		})
 	}
 }

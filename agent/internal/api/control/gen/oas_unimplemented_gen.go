@@ -76,3 +76,31 @@ func (UnimplementedHandler) SchedulerJobs(ctx context.Context) (r *SchedulerJobs
 func (UnimplementedHandler) SchedulerTrigger(ctx context.Context, req *TriggerRequest, params SchedulerTriggerParams) (r *TriggerResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
+
+// VoicevoxGetSpeaker implements Voicevox_getSpeaker operation.
+//
+// 現在設定されている話者 ID を返す。.
+//
+// GET /internal/voicevox/speaker
+func (UnimplementedHandler) VoicevoxGetSpeaker(ctx context.Context) (r *VoicevoxSpeaker, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// VoicevoxSetSpeaker implements Voicevox_setSpeaker operation.
+//
+// 話者 ID を変更する (runtime + config mutation)。.
+//
+// PUT /internal/voicevox/speaker
+func (UnimplementedHandler) VoicevoxSetSpeaker(ctx context.Context, req *SetSpeakerRequest) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// VoicevoxSpeakers implements Voicevox_speakers operation.
+//
+// VOICEVOX engine の /speakers をプロキシして話者一覧を返す。
+// レスポンスは engine そのままの JSON。.
+//
+// GET /internal/voicevox/speakers
+func (UnimplementedHandler) VoicevoxSpeakers(ctx context.Context) (r []VoicevoxSpeakersOKItem, _ error) {
+	return r, ht.ErrNotImplemented
+}

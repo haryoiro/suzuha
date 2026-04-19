@@ -51,6 +51,25 @@ type Handler interface {
 	//
 	// POST /internal/trigger/{task}
 	SchedulerTrigger(ctx context.Context, req *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
+	// VoicevoxGetSpeaker implements Voicevox_getSpeaker operation.
+	//
+	// 現在設定されている話者 ID を返す。.
+	//
+	// GET /internal/voicevox/speaker
+	VoicevoxGetSpeaker(ctx context.Context) (*VoicevoxSpeaker, error)
+	// VoicevoxSetSpeaker implements Voicevox_setSpeaker operation.
+	//
+	// 話者 ID を変更する (runtime + config mutation)。.
+	//
+	// PUT /internal/voicevox/speaker
+	VoicevoxSetSpeaker(ctx context.Context, req *SetSpeakerRequest) (*OkResponse, error)
+	// VoicevoxSpeakers implements Voicevox_speakers operation.
+	//
+	// VOICEVOX engine の /speakers をプロキシして話者一覧を返す。
+	// レスポンスは engine そのままの JSON。.
+	//
+	// GET /internal/voicevox/speakers
+	VoicevoxSpeakers(ctx context.Context) ([]VoicevoxSpeakersOKItem, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

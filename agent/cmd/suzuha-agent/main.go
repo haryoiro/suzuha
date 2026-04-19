@@ -546,49 +546,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		})
 	})
 
-	// VOICEVOX speaker management (find voicevox config from TTS providers).
-	var voicevoxCfg *config.TTSProvider
-	for i := range cfg.Voice.TTS {
-		if cfg.Voice.TTS[i].Provider == "voicevox" {
-			voicevoxCfg = &cfg.Voice.TTS[i]
-			break
-		}
-	}
-	if cfg.Voice.Enabled && voicevoxCfg != nil && voicevoxCfg.URL != "" {
-		voicevoxURL := voicevoxCfg.URL
-		mux.HandleFunc("GET /internal/voicevox/speakers", func(w http.ResponseWriter, r *http.Request) {
-			resp, err := http.Get(voicevoxURL + "/speakers")
-			if err != nil {
-				http.Error(w, `{"error":"voicevox unreachable"}`, http.StatusBadGateway)
-				return
-			}
-			defer resp.Body.Close()
-			w.Header().Set("Content-Type", "application/json")
-			io.Copy(w, resp.Body)
-		})
-		mux.HandleFunc("GET /internal/voicevox/speaker", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"speaker_id": voicevoxCfg.SpeakerID})
-		})
-		mux.HandleFunc("PUT /internal/voicevox/speaker", func(w http.ResponseWriter, r *http.Request) {
-			var body struct {
-				SpeakerID int `json:"speaker_id"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
-				return
-			}
-			voicevoxCfg.SpeakerID = body.SpeakerID
-			dc := do.MustInvoke[*discord.Chat](injector)
-			if dc != nil {
-				if vp := dc.VoicePipeline(); vp != nil {
-					vp.SetSpeakerID(body.SpeakerID)
-				}
-			}
-			logger.Info("voicevox: speaker変更", "speaker_id", body.SpeakerID)
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"ok":true}`)
-		})
+	// VOICEVOX speaker management (control API).
+	if cfg.Voice.Enabled {
+		mux.Handle("GET /internal/voicevox/speakers", controlOgen)
+		mux.Handle("GET /internal/voicevox/speaker", controlOgen)
+		mux.Handle("PUT /internal/voicevox/speaker", controlOgen)
 	}
 
 	// Physical device (ESP32) WebSocket endpoint.
