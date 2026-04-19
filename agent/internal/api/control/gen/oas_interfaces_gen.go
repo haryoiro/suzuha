@@ -12,7 +12,3 @@ type RawStreamsDeviceFrameRes interface {
 type RawStreamsLogsRes interface {
 	rawStreamsLogsRes()
 }
-
-type RawStreamsOverlandRes interface {
-	rawStreamsOverlandRes()
-}

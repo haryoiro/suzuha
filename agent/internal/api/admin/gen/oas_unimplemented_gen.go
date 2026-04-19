@@ -303,62 +303,6 @@ func (UnimplementedHandler) LLMRolesUpdate(ctx context.Context, req *LLMRoleUpda
 	return r, ht.ErrNotImplemented
 }
 
-// LocationCreatePlace implements Location_createPlace operation.
-//
-// POST /api/location/places
-func (UnimplementedHandler) LocationCreatePlace(ctx context.Context, req *CreatePlaceRequest) (r *OkResponse, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// LocationDeleteDevice implements Location_deleteDevice operation.
-//
-// DELETE /api/location/devices/{id}
-func (UnimplementedHandler) LocationDeleteDevice(ctx context.Context, params LocationDeleteDeviceParams) error {
-	return ht.ErrNotImplemented
-}
-
-// LocationDeletePlace implements Location_deletePlace operation.
-//
-// DELETE /api/location/places/{id}
-func (UnimplementedHandler) LocationDeletePlace(ctx context.Context, params LocationDeletePlaceParams) error {
-	return ht.ErrNotImplemented
-}
-
-// LocationListDevices implements Location_listDevices operation.
-//
-// GET /api/location/devices
-func (UnimplementedHandler) LocationListDevices(ctx context.Context) (r *LocationListDevicesOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// LocationListPlaces implements Location_listPlaces operation.
-//
-// GET /api/location/places
-func (UnimplementedHandler) LocationListPlaces(ctx context.Context) (r *LocationListPlacesOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// LocationUpdateDevice implements Location_updateDevice operation.
-//
-// PUT /api/location/devices/{id}
-func (UnimplementedHandler) LocationUpdateDevice(ctx context.Context, req *UpdateDeviceRequest, params LocationUpdateDeviceParams) (r *OkResponse, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// LocationUpdatePlace implements Location_updatePlace operation.
-//
-// PUT /api/location/places/{id}
-func (UnimplementedHandler) LocationUpdatePlace(ctx context.Context, req *UpdatePlaceRequest, params LocationUpdatePlaceParams) (r *OkResponse, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// LocationUserLocation implements Location_userLocation operation.
-//
-// GET /api/location/{userId}
-func (UnimplementedHandler) LocationUserLocation(ctx context.Context, params LocationUserLocationParams) (r *LocationUserLocationOK, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
 // MemoriesCreate implements Memories_create operation.
 //
 // POST /api/memories

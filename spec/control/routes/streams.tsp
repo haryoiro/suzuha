@@ -56,18 +56,4 @@ interface RawStreams {
   @extension("x-ogen-operation-group", "Raw")
   @extension("x-ogen-raw-response", true)
   op deviceFrame(): JPEGBody;
-
-  /**
-   * Overland モバイルアプリからの GPS データ POST (Bearer token 認証)。
-   * ペイロードが巨大な JSON 配列なので raw で受けてそのまま location.Handler に委譲する。
-   */
-  @route("overland")
-  @post
-  @extension("x-ogen-operation-group", "Raw")
-  @extension("x-ogen-raw-response", true)
-  op overland(): {
-    @header contentType: "application/json";
-
-    @body body: string;
-  };
 }

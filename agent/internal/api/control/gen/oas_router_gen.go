@@ -29,16 +29,16 @@ var (
 	rn12AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn39AllowedHeaders = map[string]string{
+	rn37AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn36AllowedHeaders = map[string]string{
+	rn34AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn32AllowedHeaders = map[string]string{
+	rn30AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn40AllowedHeaders = map[string]string{
+	rn38AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 )
@@ -609,31 +609,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				}
 
-			case 'o': // Prefix: "overland"
-
-				if l := len("overland"); len(elem) >= l && elem[0:l] == "overland" {
-					elem = elem[l:]
-				} else {
-					break
-				}
-
-				if len(elem) == 0 {
-					// Leaf node.
-					switch r.Method {
-					case "POST":
-						s.handleRawStreamsOverlandRequest([0]string{}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "POST",
-							allowedHeaders: nil,
-							acceptPost:     "",
-							acceptPatch:    "",
-						})
-					}
-
-					return
-				}
-
 			case 'r': // Prefix: "reload-"
 
 				if l := len("reload-"); len(elem) >= l && elem[0:l] == "reload-" {
@@ -659,31 +634,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						switch r.Method {
 						case "POST":
 							s.handleRuntimeReloadChannelSettingsRequest([0]string{}, elemIsEscaped, w, r)
-						default:
-							s.notAllowed(w, r, notAllowedParams{
-								allowedMethods: "POST",
-								allowedHeaders: nil,
-								acceptPost:     "",
-								acceptPatch:    "",
-							})
-						}
-
-						return
-					}
-
-				case 'l': // Prefix: "location-settings"
-
-					if l := len("location-settings"); len(elem) >= l && elem[0:l] == "location-settings" {
-						elem = elem[l:]
-					} else {
-						break
-					}
-
-					if len(elem) == 0 {
-						// Leaf node.
-						switch r.Method {
-						case "POST":
-							s.handleRuntimeReloadLocationSettingsRequest([0]string{}, elemIsEscaped, w, r)
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
@@ -835,7 +785,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "PUT",
-											allowedHeaders: rn39AllowedHeaders,
+											allowedHeaders: rn37AllowedHeaders,
 											acceptPost:     "",
 											acceptPatch:    "",
 										})
@@ -862,7 +812,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 									default:
 										s.notAllowed(w, r, notAllowedParams{
 											allowedMethods: "POST",
-											allowedHeaders: rn36AllowedHeaders,
+											allowedHeaders: rn34AllowedHeaders,
 											acceptPost:     "application/json",
 											acceptPatch:    "",
 										})
@@ -904,7 +854,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "POST",
-								allowedHeaders: rn32AllowedHeaders,
+								allowedHeaders: rn30AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -932,7 +882,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PUT",
-							allowedHeaders: rn40AllowedHeaders,
+							allowedHeaders: rn38AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -1602,31 +1552,6 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 				}
 
-			case 'o': // Prefix: "overland"
-
-				if l := len("overland"); len(elem) >= l && elem[0:l] == "overland" {
-					elem = elem[l:]
-				} else {
-					break
-				}
-
-				if len(elem) == 0 {
-					// Leaf node.
-					switch method {
-					case "POST":
-						r.name = RawStreamsOverlandOperation
-						r.summary = ""
-						r.operationID = "RawStreams_overland"
-						r.operationGroup = "Raw"
-						r.pathPattern = "/internal/overland"
-						r.args = args
-						r.count = 0
-						return r, true
-					default:
-						return
-					}
-				}
-
 			case 'r': // Prefix: "reload-"
 
 				if l := len("reload-"); len(elem) >= l && elem[0:l] == "reload-" {
@@ -1656,31 +1581,6 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.operationID = "Runtime_reloadChannelSettings"
 							r.operationGroup = "Runtime"
 							r.pathPattern = "/internal/reload-channel-settings"
-							r.args = args
-							r.count = 0
-							return r, true
-						default:
-							return
-						}
-					}
-
-				case 'l': // Prefix: "location-settings"
-
-					if l := len("location-settings"); len(elem) >= l && elem[0:l] == "location-settings" {
-						elem = elem[l:]
-					} else {
-						break
-					}
-
-					if len(elem) == 0 {
-						// Leaf node.
-						switch method {
-						case "POST":
-							r.name = RuntimeReloadLocationSettingsOperation
-							r.summary = ""
-							r.operationID = "Runtime_reloadLocationSettings"
-							r.operationGroup = "Runtime"
-							r.pathPattern = "/internal/reload-location-settings"
 							r.args = args
 							r.count = 0
 							return r, true

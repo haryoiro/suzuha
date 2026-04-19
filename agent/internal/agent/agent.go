@@ -76,7 +76,6 @@ type Agent struct {
 	acquirer  acquirer
 	convStore       conversationStore
 	channelSettings *channelpkg.Store
-	locationStore   prompt.LocationSnippetBuilder
 	mediaStore      memory.MediaStore
 	videoMeta       VideoMetadataFetcher
 	tweetFetcher    TweetFetcher
@@ -301,16 +300,6 @@ func (a *Agent) GetSession(key SourceKey) Session {
 	return a.sessions[key]
 }
 
-// SetLocationStore は位置情報ストアを設定する。
-func (a *Agent) SetLocationStore(s prompt.LocationSnippetBuilder) {
-	a.locationStore = s
-	for _, p := range a.contextProviders {
-		if lp, ok := p.(*prompt.LocationProvider); ok {
-			lp.Store = s
-		}
-	}
-}
-
 // SetVideoMeta は動画メタデータフェッチャーと URL 抽出関数を設定する。
 func (a *Agent) SetVideoMeta(m VideoMetadataFetcher, extractURLs func(string) []string) {
 	a.videoMeta = m
@@ -346,7 +335,6 @@ func buildProviders(
 	return []prompt.Provider{
 		&prompt.DiaryProvider{Reader: diaryReader, Logger: logger},
 		&prompt.MemoryProvider{Memory: memStore, Logger: logger},
-		&prompt.LocationProvider{},
 		&prompt.ProfileProvider{Users: userStore, Memory: memStore, BotID: botID, Logger: logger},
 		&prompt.ChannelProvider{},
 		prompt.SelfPromptProvider{},

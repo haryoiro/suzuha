@@ -25,7 +25,6 @@ type Config struct {
 	Consolidator Consolidator `yaml:"consolidator"`
 	Observe      Observe      `yaml:"observe"`
 	Admin        Admin        `yaml:"admin"`
-	Location      Location     `yaml:"location"`
 	Langfuse      Langfuse     `yaml:"langfuse"`
 	EncryptionKey string       `yaml:"-"` // SUZUHA_ENCRYPTION_KEY 環境変数から設定 (hex 64文字 = 32byte)
 }
@@ -38,12 +37,6 @@ type Langfuse struct {
 	SecretKey string `yaml:"secret_key"` // Langfuse project secret key
 }
 
-
-// Location configures the Overland GPS tracking integration.
-type Location struct {
-	Enabled bool   `yaml:"enabled"`
-	Token   string `yaml:"token"`
-}
 
 // LLM configures the language model provider.
 type LLM struct {
@@ -296,9 +289,6 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("DISCORD_TOKEN"); v != "" {
 		c.Discord.Token = v
-	}
-	if v := os.Getenv("OVERLAND_TOKEN"); v != "" {
-		c.Location.Token = v
 	}
 	if v := os.Getenv("LANGFUSE_PUBLIC_KEY"); v != "" {
 		c.Langfuse.PublicKey = v

@@ -156,14 +156,6 @@ type RawHandler interface {
 	//
 	// GET /internal/logs
 	RawStreamsLogs(ctx context.Context, w http.ResponseWriter) error
-	// RawStreamsOverland implements RawStreams_overland operation.
-	//
-	// Overland モバイルアプリからの GPS データ POST (Bearer token 認証)。
-	// ペイロードが巨大な JSON 配列なので raw で受けてそのまま location.Handler
-	// に委譲する。.
-	//
-	// POST /internal/overland
-	RawStreamsOverland(ctx context.Context, w http.ResponseWriter) error
 }
 
 // RuntimeHandler handles operations described by OpenAPI v3 specification.
@@ -182,12 +174,6 @@ type RuntimeHandler interface {
 	//
 	// POST /internal/reload-channel-settings
 	RuntimeReloadChannelSettings(ctx context.Context) (*OkResponse, error)
-	// RuntimeReloadLocationSettings implements Runtime_reloadLocationSettings operation.
-	//
-	// Location 設定 (locations / places / devices) を DB から再読み込み。.
-	//
-	// POST /internal/reload-location-settings
-	RuntimeReloadLocationSettings(ctx context.Context) (*OkResponse, error)
 	// RuntimeReloadPrompt implements Runtime_reloadPrompt operation.
 	//
 	// ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。.

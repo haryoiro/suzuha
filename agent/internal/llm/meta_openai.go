@@ -25,6 +25,10 @@ var knownOpenAIModels = map[string]ModelInfo{
 }
 
 func (m *openaiMeta) ListModels(ctx context.Context, apiKey, apiBase string) ([]ModelInfo, error) {
+	// API キー未設定時は /v1/models を叩かず静的カタログを返す。
+	if apiKey == "" {
+		return staticOpenAIModels(), nil
+	}
 	if apiBase == "" {
 		apiBase = "https://api.openai.com/v1"
 	}
@@ -32,20 +36,20 @@ func (m *openaiMeta) ListModels(ctx context.Context, apiKey, apiBase string) ([]
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/models", nil)
 	if err != nil {
-		return nil, err
+		return staticOpenAIModels(), nil
 	}
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("openai: モデル一覧の取得に失敗: %w", err)
+		// ネットワーク不達等では静的カタログにフォールバックする
+		// (admin UI で Select の value が描画されない問題を避けるため)。
+		return staticOpenAIModels(), nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("openai: モデル一覧 API がステータス %d を返しました", resp.StatusCode)
+		return staticOpenAIModels(), nil
 	}
 
 	var result struct {
@@ -72,4 +76,19 @@ func (m *openaiMeta) ListModels(ctx context.Context, apiKey, apiBase string) ([]
 		models = append(models, info)
 	}
 	return models, nil
+}
+
+// staticOpenAIModels は knownOpenAIModels を ModelInfo スライスに展開する。
+// API 不達時のフォールバック用。
+func staticOpenAIModels() []ModelInfo {
+	out := make([]ModelInfo, 0, len(knownOpenAIModels))
+	for id, info := range knownOpenAIModels {
+		out = append(out, ModelInfo{
+			ModelID:      id,
+			Capabilities: info.Capabilities,
+			MaxContext:   info.MaxContext,
+			Source:       "static",
+		})
+	}
+	return out
 }

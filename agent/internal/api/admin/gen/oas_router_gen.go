@@ -41,43 +41,34 @@ var (
 	rn54AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn59AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn56AllowedHeaders = map[string]string{
-		"POST": "Content-Type",
-	}
-	rn61AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn64AllowedHeaders = map[string]string{
+	rn55AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
 	rn11AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
+	rn61AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn63AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
+	rn65AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
 	rn70AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn72AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn74AllowedHeaders = map[string]string{
+	rn76AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn79AllowedHeaders = map[string]string{
+	rn73AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn85AllowedHeaders = map[string]string{
+	rn78AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
-	rn82AllowedHeaders = map[string]string{
-		"POST": "Content-Type",
-	}
-	rn87AllowedHeaders = map[string]string{
-		"PUT": "Content-Type",
-	}
-	rn92AllowedHeaders = map[string]string{
+	rn83AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 )
@@ -1107,220 +1098,29 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 					}
 
-				case 'o': // Prefix: "o"
+				case 'o': // Prefix: "ogs/stream"
 
-					if l := len("o"); len(elem) >= l && elem[0:l] == "o" {
+					if l := len("ogs/stream"); len(elem) >= l && elem[0:l] == "ogs/stream" {
 						elem = elem[l:]
 					} else {
 						break
 					}
 
 					if len(elem) == 0 {
-						break
-					}
-					switch elem[0] {
-					case 'c': // Prefix: "cation/"
-
-						if l := len("cation/"); len(elem) >= l && elem[0:l] == "cation/" {
-							elem = elem[l:]
-						} else {
-							break
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleAdminRawStreamsLogsStreamRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
 						}
 
-						if len(elem) == 0 {
-							break
-						}
-						switch elem[0] {
-						case 'd': // Prefix: "devices"
-							origElem := elem
-							if l := len("devices"); len(elem) >= l && elem[0:l] == "devices" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								switch r.Method {
-								case "GET":
-									s.handleLocationListDevicesRequest([0]string{}, elemIsEscaped, w, r)
-								default:
-									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "GET",
-										allowedHeaders: nil,
-										acceptPost:     "",
-										acceptPatch:    "",
-									})
-								}
-
-								return
-							}
-							switch elem[0] {
-							case '/': // Prefix: "/"
-
-								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
-									elem = elem[l:]
-								} else {
-									break
-								}
-
-								// Param: "id"
-								// Leaf parameter, slashes are prohibited
-								idx := strings.IndexByte(elem, '/')
-								if idx >= 0 {
-									break
-								}
-								args[0] = elem
-								elem = ""
-
-								if len(elem) == 0 {
-									// Leaf node.
-									switch r.Method {
-									case "DELETE":
-										s.handleLocationDeleteDeviceRequest([1]string{
-											args[0],
-										}, elemIsEscaped, w, r)
-									case "PUT":
-										s.handleLocationUpdateDeviceRequest([1]string{
-											args[0],
-										}, elemIsEscaped, w, r)
-									default:
-										s.notAllowed(w, r, notAllowedParams{
-											allowedMethods: "DELETE,PUT",
-											allowedHeaders: rn59AllowedHeaders,
-											acceptPost:     "",
-											acceptPatch:    "",
-										})
-									}
-
-									return
-								}
-
-							}
-
-							elem = origElem
-						case 'p': // Prefix: "places"
-							origElem := elem
-							if l := len("places"); len(elem) >= l && elem[0:l] == "places" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								switch r.Method {
-								case "GET":
-									s.handleLocationListPlacesRequest([0]string{}, elemIsEscaped, w, r)
-								case "POST":
-									s.handleLocationCreatePlaceRequest([0]string{}, elemIsEscaped, w, r)
-								default:
-									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "GET,POST",
-										allowedHeaders: rn56AllowedHeaders,
-										acceptPost:     "application/json",
-										acceptPatch:    "",
-									})
-								}
-
-								return
-							}
-							switch elem[0] {
-							case '/': // Prefix: "/"
-
-								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
-									elem = elem[l:]
-								} else {
-									break
-								}
-
-								// Param: "id"
-								// Leaf parameter, slashes are prohibited
-								idx := strings.IndexByte(elem, '/')
-								if idx >= 0 {
-									break
-								}
-								args[0] = elem
-								elem = ""
-
-								if len(elem) == 0 {
-									// Leaf node.
-									switch r.Method {
-									case "DELETE":
-										s.handleLocationDeletePlaceRequest([1]string{
-											args[0],
-										}, elemIsEscaped, w, r)
-									case "PUT":
-										s.handleLocationUpdatePlaceRequest([1]string{
-											args[0],
-										}, elemIsEscaped, w, r)
-									default:
-										s.notAllowed(w, r, notAllowedParams{
-											allowedMethods: "DELETE,PUT",
-											allowedHeaders: rn61AllowedHeaders,
-											acceptPost:     "",
-											acceptPatch:    "",
-										})
-									}
-
-									return
-								}
-
-							}
-
-							elem = origElem
-						}
-						// Param: "userId"
-						// Leaf parameter, slashes are prohibited
-						idx := strings.IndexByte(elem, '/')
-						if idx >= 0 {
-							break
-						}
-						args[0] = elem
-						elem = ""
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleLocationUserLocationRequest([1]string{
-									args[0],
-								}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
-					case 'g': // Prefix: "gs/stream"
-
-						if l := len("gs/stream"); len(elem) >= l && elem[0:l] == "gs/stream" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch r.Method {
-							case "GET":
-								s.handleAdminRawStreamsLogsStreamRequest([0]string{}, elemIsEscaped, w, r)
-							default:
-								s.notAllowed(w, r, notAllowedParams{
-									allowedMethods: "GET",
-									allowedHeaders: nil,
-									acceptPost:     "",
-									acceptPatch:    "",
-								})
-							}
-
-							return
-						}
-
+						return
 					}
 
 				}
@@ -1390,7 +1190,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,POST",
-								allowedHeaders: rn64AllowedHeaders,
+								allowedHeaders: rn55AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -1664,7 +1464,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PUT",
-								allowedHeaders: rn70AllowedHeaders,
+								allowedHeaders: rn61AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -1704,7 +1504,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,POST",
-								allowedHeaders: rn72AllowedHeaders,
+								allowedHeaders: rn63AllowedHeaders,
 								acceptPost:     "application/json",
 								acceptPatch:    "",
 							})
@@ -1744,7 +1544,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "DELETE,PUT",
-									allowedHeaders: rn74AllowedHeaders,
+									allowedHeaders: rn65AllowedHeaders,
 									acceptPost:     "",
 									acceptPatch:    "",
 								})
@@ -1819,7 +1619,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							default:
 								s.notAllowed(w, r, notAllowedParams{
 									allowedMethods: "POST",
-									allowedHeaders: rn79AllowedHeaders,
+									allowedHeaders: rn70AllowedHeaders,
 									acceptPost:     "application/json",
 									acceptPatch:    "",
 								})
@@ -1907,7 +1707,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "PUT",
-										allowedHeaders: rn85AllowedHeaders,
+										allowedHeaders: rn76AllowedHeaders,
 										acceptPost:     "",
 										acceptPatch:    "",
 									})
@@ -1934,7 +1734,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								default:
 									s.notAllowed(w, r, notAllowedParams{
 										allowedMethods: "POST",
-										allowedHeaders: rn82AllowedHeaders,
+										allowedHeaders: rn73AllowedHeaders,
 										acceptPost:     "application/json",
 										acceptPatch:    "",
 									})
@@ -2003,7 +1803,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						default:
 							s.notAllowed(w, r, notAllowedParams{
 								allowedMethods: "GET,PUT",
-								allowedHeaders: rn87AllowedHeaders,
+								allowedHeaders: rn78AllowedHeaders,
 								acceptPost:     "",
 								acceptPatch:    "",
 							})
@@ -2101,7 +1901,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PUT",
-							allowedHeaders: rn92AllowedHeaders,
+							allowedHeaders: rn83AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -3229,231 +3029,29 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 					}
 
-				case 'o': // Prefix: "o"
+				case 'o': // Prefix: "ogs/stream"
 
-					if l := len("o"); len(elem) >= l && elem[0:l] == "o" {
+					if l := len("ogs/stream"); len(elem) >= l && elem[0:l] == "ogs/stream" {
 						elem = elem[l:]
 					} else {
 						break
 					}
 
 					if len(elem) == 0 {
-						break
-					}
-					switch elem[0] {
-					case 'c': // Prefix: "cation/"
-
-						if l := len("cation/"); len(elem) >= l && elem[0:l] == "cation/" {
-							elem = elem[l:]
-						} else {
-							break
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = AdminRawStreamsLogsStreamOperation
+							r.summary = ""
+							r.operationID = "AdminRawStreams_logsStream"
+							r.operationGroup = "Raw"
+							r.pathPattern = "/api/logs/stream"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
 						}
-
-						if len(elem) == 0 {
-							break
-						}
-						switch elem[0] {
-						case 'd': // Prefix: "devices"
-							origElem := elem
-							if l := len("devices"); len(elem) >= l && elem[0:l] == "devices" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								switch method {
-								case "GET":
-									r.name = LocationListDevicesOperation
-									r.summary = ""
-									r.operationID = "Location_listDevices"
-									r.operationGroup = ""
-									r.pathPattern = "/api/location/devices"
-									r.args = args
-									r.count = 0
-									return r, true
-								default:
-									return
-								}
-							}
-							switch elem[0] {
-							case '/': // Prefix: "/"
-
-								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
-									elem = elem[l:]
-								} else {
-									break
-								}
-
-								// Param: "id"
-								// Leaf parameter, slashes are prohibited
-								idx := strings.IndexByte(elem, '/')
-								if idx >= 0 {
-									break
-								}
-								args[0] = elem
-								elem = ""
-
-								if len(elem) == 0 {
-									// Leaf node.
-									switch method {
-									case "DELETE":
-										r.name = LocationDeleteDeviceOperation
-										r.summary = ""
-										r.operationID = "Location_deleteDevice"
-										r.operationGroup = ""
-										r.pathPattern = "/api/location/devices/{id}"
-										r.args = args
-										r.count = 1
-										return r, true
-									case "PUT":
-										r.name = LocationUpdateDeviceOperation
-										r.summary = ""
-										r.operationID = "Location_updateDevice"
-										r.operationGroup = ""
-										r.pathPattern = "/api/location/devices/{id}"
-										r.args = args
-										r.count = 1
-										return r, true
-									default:
-										return
-									}
-								}
-
-							}
-
-							elem = origElem
-						case 'p': // Prefix: "places"
-							origElem := elem
-							if l := len("places"); len(elem) >= l && elem[0:l] == "places" {
-								elem = elem[l:]
-							} else {
-								break
-							}
-
-							if len(elem) == 0 {
-								switch method {
-								case "GET":
-									r.name = LocationListPlacesOperation
-									r.summary = ""
-									r.operationID = "Location_listPlaces"
-									r.operationGroup = ""
-									r.pathPattern = "/api/location/places"
-									r.args = args
-									r.count = 0
-									return r, true
-								case "POST":
-									r.name = LocationCreatePlaceOperation
-									r.summary = ""
-									r.operationID = "Location_createPlace"
-									r.operationGroup = ""
-									r.pathPattern = "/api/location/places"
-									r.args = args
-									r.count = 0
-									return r, true
-								default:
-									return
-								}
-							}
-							switch elem[0] {
-							case '/': // Prefix: "/"
-
-								if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
-									elem = elem[l:]
-								} else {
-									break
-								}
-
-								// Param: "id"
-								// Leaf parameter, slashes are prohibited
-								idx := strings.IndexByte(elem, '/')
-								if idx >= 0 {
-									break
-								}
-								args[0] = elem
-								elem = ""
-
-								if len(elem) == 0 {
-									// Leaf node.
-									switch method {
-									case "DELETE":
-										r.name = LocationDeletePlaceOperation
-										r.summary = ""
-										r.operationID = "Location_deletePlace"
-										r.operationGroup = ""
-										r.pathPattern = "/api/location/places/{id}"
-										r.args = args
-										r.count = 1
-										return r, true
-									case "PUT":
-										r.name = LocationUpdatePlaceOperation
-										r.summary = ""
-										r.operationID = "Location_updatePlace"
-										r.operationGroup = ""
-										r.pathPattern = "/api/location/places/{id}"
-										r.args = args
-										r.count = 1
-										return r, true
-									default:
-										return
-									}
-								}
-
-							}
-
-							elem = origElem
-						}
-						// Param: "userId"
-						// Leaf parameter, slashes are prohibited
-						idx := strings.IndexByte(elem, '/')
-						if idx >= 0 {
-							break
-						}
-						args[0] = elem
-						elem = ""
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = LocationUserLocationOperation
-								r.summary = ""
-								r.operationID = "Location_userLocation"
-								r.operationGroup = ""
-								r.pathPattern = "/api/location/{userId}"
-								r.args = args
-								r.count = 1
-								return r, true
-							default:
-								return
-							}
-						}
-
-					case 'g': // Prefix: "gs/stream"
-
-						if l := len("gs/stream"); len(elem) >= l && elem[0:l] == "gs/stream" {
-							elem = elem[l:]
-						} else {
-							break
-						}
-
-						if len(elem) == 0 {
-							// Leaf node.
-							switch method {
-							case "GET":
-								r.name = AdminRawStreamsLogsStreamOperation
-								r.summary = ""
-								r.operationID = "AdminRawStreams_logsStream"
-								r.operationGroup = "Raw"
-								r.pathPattern = "/api/logs/stream"
-								r.args = args
-								r.count = 0
-								return r, true
-							default:
-								return
-							}
-						}
-
 					}
 
 				}
