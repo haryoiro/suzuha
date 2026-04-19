@@ -44,9 +44,9 @@ import (
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	"github.com/haryoiro/suzuha/internal/scheduler/notification"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
-	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/haryoiro/suzuha/internal/behavior/builtin"
 	"github.com/haryoiro/suzuha/internal/port/user"
@@ -445,7 +445,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	activityStore := convcap.NewActivityStore(store.DB())
 	mediaStore := do.MustInvoke[memory.MediaStore](i)
 	cc := &scheduler.CronContext{
-		LLM:             llmClient,
+		LLM:             llmClient.AsPortClient(),
 		Memory:          store,
 		Notifier:        notifier,
 		DB:              store.DB(),

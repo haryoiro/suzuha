@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
-	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 )
 
 // Consolidator は forget が必要とする統合機能を定義する (consumer-side interface)。

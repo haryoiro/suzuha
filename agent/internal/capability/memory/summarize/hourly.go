@@ -9,9 +9,9 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	"github.com/haryoiro/suzuha/internal/scheduler"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
@@ -215,7 +215,7 @@ func sectionHeading(sk sectionKey) string {
 	}
 }
 
-func summarizeHour(ctx context.Context, llmClient *llm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []Entry) (string, error) {
+func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []Entry) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("以下はこの1時間の出来事です。日記の一節として主観的に2〜3文で要約してください。\n")

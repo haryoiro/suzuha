@@ -8,11 +8,11 @@ import (
 	"time"
 
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
-	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	"github.com/haryoiro/suzuha/internal/scheduler/notification"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler/notification"
 )
 
 // CronTask is a pluggable periodic job, analogous to tool.Tool for agent tools.
@@ -35,27 +35,25 @@ type CronTask interface {
 	Execute(ctx context.Context, cc *CronContext, cfg json.RawMessage) error
 }
 
-// CronContext provides shared services and environment to all CronTask implementations.
+// CronContext は全 CronTask 実装に共有サービスと環境を渡すコンテナ。
 type CronContext struct {
 	// Services
-	LLM      *llm.Client
-	Memory   memory.Store
-	Notifier notification.Notifier // Unified notifier (Send + Reply).
-	DB       *sql.DB               // Keep for backward compat; prefer typed stores.
+	LLM      portllm.Client
+	Memory   portmem.Memory
+	Notifier notification.Notifier
+	DB       *sql.DB // Keep for backward compat; prefer typed stores.
 	Logger   *slog.Logger
 
-	// Typed stores — prefer these over raw DB.
-	Users           user.Store             // User operations (resolve, affinity, etc.).
-	ChannelActivity portconv.ActivityStore // Channel activity reads.
-	MemoryAdmin     memory.AdminStore      // Admin-level memory operations (batch delete, etc.).
-
-	// Media storage
-	MediaStore memory.MediaStore // Binary media storage (images, audio). May be nil.
+	// Typed stores
+	Users           user.Store
+	ChannelActivity portconv.ActivityStore
+	MemoryAdmin     portmem.Management
+	MediaStore      portmem.Media
 
 	// Event injection
-	Bus *event.Bus // Agent event bus for publishing self-prompt events. May be nil.
+	Bus *event.Bus
 
 	// Environment
-	Timezone     *time.Location // Scheduler-level timezone. Nil defaults to UTC.
-	SystemPrompt string         // Loaded from IDENTITY.md + SOUL.md. Empty if not configured.
+	Timezone     *time.Location
+	SystemPrompt string
 }

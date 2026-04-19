@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/samber/do/v2"
 )
 
