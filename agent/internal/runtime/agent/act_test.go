@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 )
 
 func TestGroupByChannel(t *testing.T) {
 	t.Run("active channel comes last", func(t *testing.T) {
 		now := time.Now()
-		msgs := []llm.Message{
+		msgs := []message.Message{
 			{Role: "system", Content: "system prompt"},
 			{Role: "user", Content: "A1", Channel: "ch-a", Timestamp: now},
 			{Role: "user", Content: "B1", Channel: "ch-b", Timestamp: now.Add(1 * time.Second)},
@@ -52,7 +52,7 @@ func TestGroupByChannel(t *testing.T) {
 
 	t.Run("others sorted by recency", func(t *testing.T) {
 		now := time.Now()
-		msgs := []llm.Message{
+		msgs := []message.Message{
 			{Role: "system", Content: "sys"},
 			{Role: "user", Content: "C1", Channel: "ch-c", Timestamp: now},
 			{Role: "user", Content: "B1", Channel: "ch-b", Timestamp: now.Add(2 * time.Second)},
@@ -81,7 +81,7 @@ func TestGroupByChannel(t *testing.T) {
 
 	t.Run("assistant message inherits channel", func(t *testing.T) {
 		now := time.Now()
-		msgs := []llm.Message{
+		msgs := []message.Message{
 			{Role: "system", Content: "sys"},
 			{Role: "user", Content: "hello", Channel: "ch-a", Timestamp: now},
 			{Role: "assistant", Content: "hi", Channel: "", Timestamp: now.Add(1 * time.Second)},
@@ -108,7 +108,7 @@ func TestGroupByChannel(t *testing.T) {
 	})
 
 	t.Run("empty channel", func(t *testing.T) {
-		msgs := []llm.Message{
+		msgs := []message.Message{
 			{Role: "user", Content: "msg1"},
 			{Role: "user", Content: "msg2"},
 		}
@@ -120,7 +120,7 @@ func TestGroupByChannel(t *testing.T) {
 
 	t.Run("single channel", func(t *testing.T) {
 		now := time.Now()
-		msgs := []llm.Message{
+		msgs := []message.Message{
 			{Role: "system", Content: "sys"},
 			{Role: "user", Content: "a", Channel: "ch-a", Timestamp: now},
 			{Role: "user", Content: "b", Channel: "ch-a", Timestamp: now.Add(time.Second)},
@@ -134,7 +134,7 @@ func TestGroupByChannel(t *testing.T) {
 
 	t.Run("directive system at end", func(t *testing.T) {
 		now := time.Now()
-		msgs := []llm.Message{
+		msgs := []message.Message{
 			{Role: "system", Content: "prompt"},
 			{Role: "user", Content: "B", Channel: "ch-b", Timestamp: now},
 			{Role: "user", Content: "A", Channel: "ch-a", Timestamp: now.Add(time.Second)},

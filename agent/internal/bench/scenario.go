@@ -35,8 +35,8 @@ type TestCase struct {
 
 // Turn はマルチターン会話の 1 ターン。
 type Turn struct {
-	Prompt string `yaml:"prompt"`            // 固定プロンプト (空の場合は claude -p で生成)
-	Goal   string `yaml:"goal"`              // このターンの目標/評価基準
+	Prompt string `yaml:"prompt"` // 固定プロンプト (空の場合は claude -p で生成)
+	Goal   string `yaml:"goal"`   // このターンの目標/評価基準
 }
 
 // Result は 1 テストケースの実行結果。

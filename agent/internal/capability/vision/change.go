@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // ChangeDetector tracks YOLO detection state and publishes events

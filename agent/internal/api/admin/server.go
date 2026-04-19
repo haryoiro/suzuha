@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
 	"github.com/haryoiro/suzuha/internal/api/admin/middleware"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
 )
 

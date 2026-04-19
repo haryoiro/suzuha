@@ -12,28 +12,28 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
-	"github.com/haryoiro/suzuha/internal/port/chat"
-	"github.com/haryoiro/suzuha/internal/channel/cli"
-	"github.com/haryoiro/suzuha/internal/channel/discord"
-	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/channel/device"
-	"github.com/haryoiro/suzuha/internal/channel/web"
-	"github.com/haryoiro/suzuha/internal/di"
-	"github.com/haryoiro/suzuha/internal/runtime/gateway"
-	"github.com/haryoiro/suzuha/internal/observe/langfuse"
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/capability/mcp"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/channel/cli"
+	"github.com/haryoiro/suzuha/internal/channel/device"
+	"github.com/haryoiro/suzuha/internal/channel/discord"
+	"github.com/haryoiro/suzuha/internal/channel/web"
+	"github.com/haryoiro/suzuha/internal/config"
+	"github.com/haryoiro/suzuha/internal/di"
+	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/observe/langfuse"
+	"github.com/haryoiro/suzuha/internal/port/chat"
+	"github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/gateway"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
-	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/samber/do/v2"
 )
 
@@ -163,7 +163,6 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 		}
 		logger.Info("discord tools registered")
 
-
 		// Voice chat setup.
 		if cfg.Voice.Enabled {
 			sttConfigs := make([]stt.STTProviderConfig, len(cfg.Voice.STT))
@@ -287,7 +286,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	defer captureCancel()
 	hub.StartCaptureLoop(captureCtx, 333)
 	logger.Info("デバイス接続口を開いた")
-
 
 	logger.Info("internal server starting", "addr", cfg.Observe.InternalAddr)
 	if err := http.ListenAndServe(cfg.Observe.InternalAddr, mux); err != nil {

@@ -17,8 +17,10 @@ type Task struct{}
 
 var _ scheduler.CronTask = (*Task)(nil)
 
-func (t *Task) Name() string        { return "schedule" }
-func (t *Task) Description() string { return "期限到来のスケジュールメッセージを送信" }
+func (t *Task) Name() string { return "schedule" }
+func (t *Task) Description() string {
+	return "期限到来のスケジュールメッセージを送信"
+}
 
 func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
 

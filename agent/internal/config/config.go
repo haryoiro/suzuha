@@ -12,19 +12,19 @@ import (
 
 // Config is the top-level application configuration.
 type Config struct {
-	Timezone     string       `yaml:"timezone"` // IANA timezone (e.g. "Asia/Tokyo"). Defaults to UTC.
-	LLM          LLM          `yaml:"llm"`
-	Embedding    Embedding    `yaml:"embedding"`
-	Vision       Vision       `yaml:"vision"`
-	Discord      Discord      `yaml:"discord"`
-	Voice        Voice        `yaml:"voice"`
-	ToolServers  []ToolServer `yaml:"tool_servers"`
-	Triggers     []Trigger    `yaml:"triggers"`
-	Memory       Memory       `yaml:"memory"`
-	Agent        Agent        `yaml:"agent"`
-	Consolidator Consolidator `yaml:"consolidator"`
-	Observe      Observe      `yaml:"observe"`
-	Admin        Admin        `yaml:"admin"`
+	Timezone      string       `yaml:"timezone"` // IANA timezone (e.g. "Asia/Tokyo"). Defaults to UTC.
+	LLM           LLM          `yaml:"llm"`
+	Embedding     Embedding    `yaml:"embedding"`
+	Vision        Vision       `yaml:"vision"`
+	Discord       Discord      `yaml:"discord"`
+	Voice         Voice        `yaml:"voice"`
+	ToolServers   []ToolServer `yaml:"tool_servers"`
+	Triggers      []Trigger    `yaml:"triggers"`
+	Memory        Memory       `yaml:"memory"`
+	Agent         Agent        `yaml:"agent"`
+	Consolidator  Consolidator `yaml:"consolidator"`
+	Observe       Observe      `yaml:"observe"`
+	Admin         Admin        `yaml:"admin"`
 	Langfuse      Langfuse     `yaml:"langfuse"`
 	EncryptionKey string       `yaml:"-"` // SUZUHA_ENCRYPTION_KEY 環境変数から設定 (hex 64文字 = 32byte)
 }
@@ -36,7 +36,6 @@ type Langfuse struct {
 	PublicKey string `yaml:"public_key"` // Langfuse project public key
 	SecretKey string `yaml:"secret_key"` // Langfuse project secret key
 }
-
 
 // LLM configures the language model provider.
 type LLM struct {
@@ -54,7 +53,7 @@ type LLM struct {
 // Model selection is done separately via role assignments.
 type LLMProvider struct {
 	Name    string `yaml:"name"`
-	Type    string `yaml:"type"`     // "openai", "zhipu", "gemini", "qwen"
+	Type    string `yaml:"type"` // "openai", "zhipu", "gemini", "qwen"
 	APIKey  string `yaml:"api_key"`
 	APIBase string `yaml:"api_base"`
 }
@@ -195,7 +194,7 @@ type CronJob struct {
 
 // Observe configures observability.
 type Observe struct {
-	LogLevel    string `yaml:"log_level"`    // "debug", "info", "warn", "error"
+	LogLevel     string `yaml:"log_level"`     // "debug", "info", "warn", "error"
 	InternalAddr string `yaml:"internal_addr"` // e.g. ":9090"
 }
 

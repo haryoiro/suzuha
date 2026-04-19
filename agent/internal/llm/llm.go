@@ -11,49 +11,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	llmerrors "github.com/mozilla-ai/any-llm-go/errors"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"github.com/mozilla-ai/any-llm-go/providers/gemini"
 	"github.com/mozilla-ai/any-llm-go/providers/openai"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
-
-// Message is suzuha's internal message format with channel/user context.
-type Message struct {
-	Role       string    `json:"role"` // "user", "assistant", "system", "tool"
-	Content    string    `json:"content"`
-	UserID     string    `json:"user_id,omitempty"`
-	UserName   string    `json:"user_name,omitempty"`
-	Source      string    `json:"source,omitempty"` // "discord", "cli"
-	Channel     string    `json:"channel,omitempty"`
-	ChannelName string    `json:"channel_name,omitempty"`
-	GuildID     string    `json:"guild_id,omitempty"`
-	GuildName   string    `json:"guild_name,omitempty"`
-	MessageID   string    `json:"message_id,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
-	ToolCallID string    `json:"tool_call_id,omitempty"`
-
-	// ToolCalls is set when the assistant wants to invoke tools.
-	ToolCalls []providers.ToolCall `json:"tool_calls,omitempty"`
-	// ImageURLs holds image URLs attached to this message.
-	// When the active LLM is vision-capable, these are sent as multimodal content parts.
-	ImageURLs []string `json:"image_urls,omitempty"`
-
-	// MediaKeys holds MediaStore keys for persisted media attachments.
-	// Used by the consolidator to attach media to extracted memories.
-	MediaKeys []string `json:"media_keys,omitempty"`
-
-	// Injected はこのメッセージがチャンネル履歴から注入された過去発言であることを示す。
-	// 保存 (SaveSnapshot), 会話ログ (logConversationTurn), 記憶抽出 (acquirer),
-	// Think ステート計算 (conversationState/episode/participants) の対象外とする。
-	Injected bool `json:"injected,omitempty"`
-}
 
 // Response / RawMessage は port/llm の正準定義への型エイリアス。
 // 既存呼び出し側 (`llm.Response` / `llm.RawMessage`) を温存する。
@@ -105,7 +75,6 @@ func StripDirectiveTags(text string) string {
 	}
 	return strings.TrimSpace(text)
 }
-
 
 // IsSilentResponse returns true if the LLM chose not to respond
 // (empty text or contains [SKIP]).
@@ -490,7 +459,7 @@ func (c *Client) MaxContextTokens() int {
 // 後方互換シム: conversation ロールを使用する。
 // Deprecated: Complete はメッセージ/ツール変換と tracing を内包している。
 // 新規コードは ConvertMessages/ConvertTools + RoleClient.CompleteWithTools を使用すること。
-func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.Tool) (*Response, error) {
+func (c *Client) Complete(ctx context.Context, messages []message.Message, tools []tool.Tool) (*Response, error) {
 	c.mu.RLock()
 	rp := c.roles["conversation"]
 	prov := rp.provider
@@ -598,7 +567,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []tool.
 // because some models (e.g. Qwen3.5) only allow a single system message at the start.
 // Orphaned tool messages and unmatched tool_calls are sanitized to satisfy
 // strict providers like OpenAI.
-func ConvertMessages(msgs []Message, visionCapable bool) []providers.Message {
+func ConvertMessages(msgs []message.Message, visionCapable bool) []providers.Message {
 	// Collect tool_call IDs that have assistant requests and tool responses.
 	assistantToolCalls := make(map[string]bool)
 	toolResponses := make(map[string]bool)
@@ -850,11 +819,10 @@ func retryOnRateLimit(ctx context.Context, logger *slog.Logger, fn func() error)
 	return err
 }
 
-
 // userMessagePrefix は user ロールのメッセージに付与するメタデータヘッダを返す。
 // MessageID が空なら空文字を返す。ConvertMessages と SerializeMessagesForTrace
 // の両方から使われ、LLM が実際に見る内容と Langfuse 可視化を一致させる。
-func userMessagePrefix(m Message) string {
+func userMessagePrefix(m message.Message) string {
 	if m.Role != "user" || m.MessageID == "" {
 		return ""
 	}
@@ -871,7 +839,7 @@ func userMessagePrefix(m Message) string {
 // Images are excluded to keep the payload manageable. user メッセージには
 // ConvertMessages と同じメタデータ prefix を付与する。Injected なメッセージは
 // Langfuse 上でのデバッグ用に `injected: true` を付ける。
-func SerializeMessagesForTrace(messages []Message) string {
+func SerializeMessagesForTrace(messages []message.Message) string {
 	type traceMsg struct {
 		Role     string `json:"role"`
 		Content  string `json:"content"`

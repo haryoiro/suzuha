@@ -3,11 +3,11 @@ package control
 import (
 	"context"
 
-	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/runtime/gateway"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/gateway"
 	"github.com/samber/do/v2"
 )
 
@@ -79,7 +79,7 @@ func (h *AgentHandler) AgentOpsGatewayStatus(ctx context.Context) ([]gen.Gateway
 	return out, nil
 }
 
-func toContextMessages(msgs []llm.Message) []gen.ContextMessage {
+func toContextMessages(msgs []message.Message) []gen.ContextMessage {
 	out := make([]gen.ContextMessage, len(msgs))
 	for i, m := range msgs {
 		out[i] = gen.ContextMessage{

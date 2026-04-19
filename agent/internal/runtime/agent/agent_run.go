@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )

@@ -9,9 +9,9 @@ type Tweet struct {
 	ID         string   `json:"id"`
 	Text       string   `json:"text"`
 	AuthorName string   `json:"author_name"`
-	AuthorID   string   `json:"author_id"`   // @screen_name
-	Images     []string `json:"images"`      // 画像 URL
-	VideoURL   string   `json:"video_url"`   // 動画 URL (あれば)
+	AuthorID   string   `json:"author_id"` // @screen_name
+	Images     []string `json:"images"`    // 画像 URL
+	VideoURL   string   `json:"video_url"` // 動画 URL (あれば)
 	CreatedAt  string   `json:"created_at"`
 	Likes      int      `json:"likes"`
 	Retweets   int      `json:"retweets"`

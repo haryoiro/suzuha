@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"sync"
 
-	domain "github.com/haryoiro/suzuha/internal/domain/llm"
 	"github.com/haryoiro/suzuha/internal/config"
+	domain "github.com/haryoiro/suzuha/internal/domain/llm"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers"

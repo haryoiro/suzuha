@@ -7,14 +7,15 @@ import (
 	"sync"
 	"time"
 
-	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
-	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
-	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"github.com/haryoiro/suzuha/internal/port/user"
+	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
+	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -55,31 +56,31 @@ type TweetFetcher interface {
 type conversationStore interface {
 	LogTurn(ctx context.Context, entry portconv.TurnEntry) error
 	TrackActivity(ctx context.Context, channelID string, at time.Time) error
-	SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error
-	LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error)
+	SaveSnapshot(ctx context.Context, sourceKey string, messages []message.Message) error
+	LoadSnapshot(ctx context.Context, sourceKey string) ([]message.Message, error)
 	DeleteChannel(ctx context.Context, channelID string) error
 }
 
 // Agent is the main event loop that processes events, calls the LLM,
 // executes tools, and sends responses.
 type Agent struct {
-	contexts  map[SourceKey]*Context
-	compactMu map[SourceKey]*sync.Mutex
-	sessions  map[SourceKey]Session
-	llm       *llm.Client
-	tools     *toolreg.Registry
-	memory    portmem.Memory
-	users     user.Store
-	bus       *event.Bus
-	acquirer  acquirer
-	convStore       conversationStore
-	channelSettings portconv.SettingsStore
-	mediaStore      portmem.Media
-	videoMeta       VideoMetadataFetcher
-	tweetFetcher    TweetFetcher
-	videoURLExtract func(string) []string
-	tweetURLExtract func(string) []string
-	logger          *slog.Logger
+	contexts         map[SourceKey]*Context
+	compactMu        map[SourceKey]*sync.Mutex
+	sessions         map[SourceKey]Session
+	llm              *llm.Client
+	tools            *toolreg.Registry
+	memory           portmem.Memory
+	users            user.Store
+	bus              *event.Bus
+	acquirer         acquirer
+	convStore        conversationStore
+	channelSettings  portconv.SettingsStore
+	mediaStore       portmem.Media
+	videoMeta        VideoMetadataFetcher
+	tweetFetcher     TweetFetcher
+	videoURLExtract  func(string) []string
+	tweetURLExtract  func(string) []string
+	logger           *slog.Logger
 	contextProviders []prompt.Provider
 	hooks            []PipelineHook
 	tracer           trace.Tracer
@@ -93,9 +94,9 @@ type Agent struct {
 	// ExpressionBroadcaster is called to broadcast expression changes to device/web clients.
 	ExpressionBroadcaster func(expression int)
 
-	lastEphemeralMu  sync.RWMutex
-	lastBackground   []llm.Message
-	lastForeground   []llm.Message
+	lastEphemeralMu sync.RWMutex
+	lastBackground  []message.Message
+	lastForeground  []message.Message
 
 	// lastResponseMu protects lastResponse.
 	lastResponseMu sync.Mutex
@@ -134,14 +135,14 @@ func (a *Agent) broadcastExpression(expression int) {
 type Config struct {
 	SystemPrompt     string
 	BotID            string
-	ContextWindowPct float64       // trigger compaction at this ratio (e.g. 0.8)
+	ContextWindowPct float64 // trigger compaction at this ratio (e.g. 0.8)
 	MaxContextTokens int
 	DrainWindow      time.Duration // batch window; 0 = use DefaultDrainWindow, negative = non-blocking (tests)
 }
 
 // Perception is the output of the Perceive stage.
 type Perception struct {
-	LastMessage       llm.Message
+	LastMessage       message.Message
 	LastEvent         event.Event
 	Channel           string
 	IsDM              bool
@@ -153,18 +154,18 @@ type Perception struct {
 
 // Thought は Think ステージの出力で、LLM に渡す補助コンテキストを保持する。
 type Thought struct {
-	Background []llm.Message // 会話の前に置く前提知識（記憶・プロフ・日記）
-	Foreground []llm.Message // 会話の後に置く状況・指示（self-prompt, home旗）
+	Background []message.Message // 会話の前に置く前提知識（記憶・プロフ・日記）
+	Foreground []message.Message // 会話の後に置く状況・指示（self-prompt, home旗）
 	Directive  string
 	ListenMode bool
 }
 
 // BuildMessages はシステムプロンプトと会話履歴を組み合わせて LLM に渡すメッセージ列を構築する。
-func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message) []llm.Message {
+func (t *Thought) BuildMessages(systemPrompt string, conversation []message.Message) []message.Message {
 	now := jtime.Now()
-	var msgs []llm.Message
+	var msgs []message.Message
 	if systemPrompt != "" {
-		msgs = append(msgs, llm.Message{
+		msgs = append(msgs, message.Message{
 			Role:    "system",
 			Content: systemPrompt + fmt.Sprintf("\n\n[現在時刻: %s]", now.Format("2006-01-02 15:04:05 (Mon)")),
 		})
@@ -173,7 +174,7 @@ func (t *Thought) BuildMessages(systemPrompt string, conversation []llm.Message)
 	msgs = append(msgs, conversation...)
 	msgs = append(msgs, t.Foreground...)
 	if t.Directive != "" {
-		msgs = append(msgs, llm.Message{Role: "system", Content: t.Directive, Timestamp: now})
+		msgs = append(msgs, message.Message{Role: "system", Content: t.Directive, Timestamp: now})
 	}
 	return msgs
 }
@@ -319,19 +320,19 @@ func (a *Agent) SetTracer(t trace.Tracer) {
 }
 
 // LastBackground returns the most recently injected background messages.
-func (a *Agent) LastBackground() []llm.Message {
+func (a *Agent) LastBackground() []message.Message {
 	a.lastEphemeralMu.RLock()
 	defer a.lastEphemeralMu.RUnlock()
-	out := make([]llm.Message, len(a.lastBackground))
+	out := make([]message.Message, len(a.lastBackground))
 	copy(out, a.lastBackground)
 	return out
 }
 
 // LastForeground returns the most recently injected foreground messages.
-func (a *Agent) LastForeground() []llm.Message {
+func (a *Agent) LastForeground() []message.Message {
 	a.lastEphemeralMu.RLock()
 	defer a.lastEphemeralMu.RUnlock()
-	out := make([]llm.Message, len(a.lastForeground))
+	out := make([]message.Message, len(a.lastForeground))
 	copy(out, a.lastForeground)
 	return out
 }

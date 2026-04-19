@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 )
 
 func TestChannelProvider_ProvideContext(t *testing.T) {
@@ -25,7 +25,7 @@ func TestChannelProvider_ProvideContext(t *testing.T) {
 			Request{
 				Source:  "discord",
 				Channel: "ch1",
-				Messages: []llm.Message{
+				Messages: []message.Message{
 					{Role: "user", Channel: "ch1", Content: "hello"},
 				},
 			},
@@ -36,7 +36,7 @@ func TestChannelProvider_ProvideContext(t *testing.T) {
 			Request{
 				Source:  "discord",
 				Channel: "ch1",
-				Messages: []llm.Message{
+				Messages: []message.Message{
 					{Role: "user", Channel: "ch2", ChannelName: "general", GuildID: "g1", Content: "hello"},
 				},
 			},
@@ -53,7 +53,7 @@ func TestChannelProvider_ProvideContext(t *testing.T) {
 				Source:  "discord",
 				Channel: "ch1",
 				IsHome:  true,
-				Messages: []llm.Message{
+				Messages: []message.Message{
 					{Role: "user", Channel: "ch2", ChannelName: "random", GuildID: "g1", Content: "hey"},
 				},
 			},
@@ -77,7 +77,7 @@ func TestChannelProvider_ProvideContext(t *testing.T) {
 func TestBuildOtherChannels(t *testing.T) {
 	tests := []struct {
 		name           string
-		msgs           []llm.Message
+		msgs           []message.Message
 		currentChannel string
 		wantEmpty      bool
 		wantContains   []string
@@ -91,7 +91,7 @@ func TestBuildOtherChannels(t *testing.T) {
 		},
 		{
 			"only current channel messages",
-			[]llm.Message{
+			[]message.Message{
 				{Role: "user", Channel: "ch1", Content: "hello"},
 			},
 			"ch1",
@@ -100,7 +100,7 @@ func TestBuildOtherChannels(t *testing.T) {
 		},
 		{
 			"system messages excluded",
-			[]llm.Message{
+			[]message.Message{
 				{Role: "system", Channel: "ch2", Content: "prompt"},
 			},
 			"ch1",
@@ -109,7 +109,7 @@ func TestBuildOtherChannels(t *testing.T) {
 		},
 		{
 			"guild channel listed",
-			[]llm.Message{
+			[]message.Message{
 				{Role: "user", Channel: "ch2", ChannelName: "general", GuildID: "g1", Content: "hey"},
 			},
 			"ch1",
@@ -118,7 +118,7 @@ func TestBuildOtherChannels(t *testing.T) {
 		},
 		{
 			"DM channel listed",
-			[]llm.Message{
+			[]message.Message{
 				{Role: "user", Channel: "dm1", UserID: "u1", Content: "hi"},
 			},
 			"ch1",
@@ -127,7 +127,7 @@ func TestBuildOtherChannels(t *testing.T) {
 		},
 		{
 			"messages with empty channel skipped",
-			[]llm.Message{
+			[]message.Message{
 				{Role: "user", Channel: "", Content: "orphan"},
 			},
 			"ch1",

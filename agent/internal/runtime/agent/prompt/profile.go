@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
 )
@@ -70,9 +70,9 @@ func (p *ProfileProvider) ProvideContext(ctx context.Context, req Request) Block
 
 	slices.SortFunc(results, func(a, b indexedMsg) int { return a.index - b.index })
 
-	out := make([]llm.Message, 0, len(results))
+	out := make([]message.Message, 0, len(results))
 	for _, r := range results {
-		out = append(out, llm.Message{Role: "system", Content: r.content, Timestamp: jtime.Now()})
+		out = append(out, message.Message{Role: "system", Content: r.content, Timestamp: jtime.Now()})
 	}
 	return Block{Background: out}
 }

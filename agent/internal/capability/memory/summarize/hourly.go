@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
@@ -285,4 +285,3 @@ func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt s
 	}
 	return strings.TrimSpace(resp.Text), nil
 }
-

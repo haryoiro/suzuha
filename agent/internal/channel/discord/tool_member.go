@@ -121,7 +121,7 @@ func newDiscordListMembers(s *discordgo.Session) tool.Tool {
 		session:  s,
 		name:     "discord_list_members",
 		readOnly: true,
-		desc:    "サーバーのメンバー一覧を見る（最大100人）。",
+		desc:     "サーバーのメンバー一覧を見る（最大100人）。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -235,7 +235,7 @@ func newDiscordListRoles(s *discordgo.Session) tool.Tool {
 		session:  s,
 		name:     "discord_list_roles",
 		readOnly: true,
-		desc:    "サーバーのロール一覧を見る。",
+		desc:     "サーバーのロール一覧を見る。",
 		schema: json.RawMessage(`{
 			"type": "object",
 			"properties": {

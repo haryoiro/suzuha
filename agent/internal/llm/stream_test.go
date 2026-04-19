@@ -103,8 +103,8 @@ func TestPartialTagSuffix(t *testing.T) {
 		{"abc<thi", "<think>", "<thi"},
 		{"abc<", "<think>", "<"},
 		{"abc<think", "<think>", "<think"},
-		{"abc<think>", "<think>", ""},    // full match, not partial
-		{"abcdef", "<think>", ""},         // no match
+		{"abc<think>", "<think>", ""}, // full match, not partial
+		{"abcdef", "<think>", ""},     // no match
 		{"abc</thi", "</think>", "</thi"},
 		{"abc</", "</think>", "</"},
 	}

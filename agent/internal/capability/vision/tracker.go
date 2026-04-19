@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"math"
 	"sync"
-
 )
 
 // servoCommander sends servo commands to a physical device.

@@ -25,11 +25,11 @@ func NewSession(agentCtx *agent.Context, speaker Speaker, logger *slog.Logger) *
 	}
 }
 
-func (s *Session) Source() agent.SourceKey              { return agent.SourceKeyDevice }
-func (s *Session) Context() *agent.Context              { return s.agentCtx }
-func (s *Session) PersistKey() string                   { return "device" }
+func (s *Session) Source() agent.SourceKey                { return agent.SourceKeyDevice }
+func (s *Session) Context() *agent.Context                { return s.agentCtx }
+func (s *Session) PersistKey() string                     { return "device" }
 func (s *Session) DirectiveConfig() agent.DirectiveConfig { return agent.DeviceDirectiveConfig() }
-func (s *Session) BeginTurn(*agent.Perception)          {} // no turn context needed
+func (s *Session) BeginTurn(*agent.Perception)            {} // no turn context needed
 
 func (s *Session) Respond(ctx context.Context, text string) error {
 	if s.speaker == nil {

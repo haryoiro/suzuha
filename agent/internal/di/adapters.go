@@ -6,9 +6,9 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/transcript"
 	"github.com/haryoiro/suzuha/internal/adapter/twitter"
+	"github.com/haryoiro/suzuha/internal/capability/memory/summarize"
 	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
-	"github.com/haryoiro/suzuha/internal/capability/memory/summarize"
 )
 
 // videoMetaAdapter は transcript.MetadataFetcher を agent.VideoMetadataFetcher に適合させる。

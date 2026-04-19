@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
 
@@ -136,7 +136,7 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 	}
 
 	if len(attachedImages) > 0 {
-		return Block{Background: []llm.Message{{
+		return Block{Background: []message.Message{{
 			Role:      "user",
 			Content:   "[記憶 (画像付き)]\n" + textContent,
 			ImageURLs: attachedImages,
@@ -144,7 +144,7 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 		}}}
 	}
 
-	return Block{Background: []llm.Message{{
+	return Block{Background: []message.Message{{
 		Role:      "system",
 		Content:   textContent,
 		Timestamp: jtime.Now(),

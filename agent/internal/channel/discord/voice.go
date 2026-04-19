@@ -9,8 +9,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
-	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/haryoiro/suzuha/internal/capability/voice"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // VoicePipeline returns the voice pipeline, creating it if necessary.

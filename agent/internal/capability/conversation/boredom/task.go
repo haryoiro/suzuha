@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/runtime/event"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	user "github.com/haryoiro/suzuha/internal/domain/user"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
-	user "github.com/haryoiro/suzuha/internal/domain/user"
 )
 
 const (
@@ -400,4 +400,3 @@ func findHomeChannel(ctx context.Context, db *sql.DB) string {
 	}
 	return channelID
 }
-

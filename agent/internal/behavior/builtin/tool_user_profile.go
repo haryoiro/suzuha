@@ -14,8 +14,8 @@ type ContextUpdater func(userID, newName string)
 
 // UpdateUserProfile allows the LLM to update a user's display name.
 type UpdateUserProfile struct {
-	users     user.Store
-	onUpdate  ContextUpdater
+	users    user.Store
+	onUpdate ContextUpdater
 }
 
 // NewUpdateUserProfile creates the tool with a user store and an optional callback
@@ -24,7 +24,7 @@ func NewUpdateUserProfile(users user.Store, onUpdate ContextUpdater) *UpdateUser
 	return &UpdateUserProfile{users: users, onUpdate: onUpdate}
 }
 
-func (u *UpdateUserProfile) Name() string    { return "update_user_profile" }
+func (u *UpdateUserProfile) Name() string   { return "update_user_profile" }
 func (u *UpdateUserProfile) ReadOnly() bool { return false }
 
 func (u *UpdateUserProfile) Description() string {

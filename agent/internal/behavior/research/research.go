@@ -114,4 +114,3 @@ func formatSources(query string, sources []source) string {
 
 	return sb.String()
 }
-

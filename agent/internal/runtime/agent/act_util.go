@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/agnivade/levenshtein"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
@@ -27,11 +27,10 @@ func isSimilarText(a, b string) bool {
 	return 1.0-float64(dist)/float64(maxLen) >= 0.85
 }
 
-
 // trimMessagesToFit drops the oldest non-system messages (from the front,
 // after the first system message) so the total estimated tokens fit within
 // maxTokens, leaving room for tool definitions and a generation budget.
-func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []llm.Message {
+func trimMessagesToFit(msgs []message.Message, tools []tool.Tool, maxTokens int) []message.Message {
 	if maxTokens <= 0 {
 		return msgs
 	}
@@ -76,15 +75,15 @@ func trimMessagesToFit(msgs []llm.Message, tools []tool.Tool, maxTokens int) []l
 	for leading < len(msgs) && msgs[leading].Role == "system" {
 		leading++
 	}
-	result := make([]llm.Message, 0, leading+(len(msgs)-trimStart))
+	result := make([]message.Message, 0, leading+(len(msgs)-trimStart))
 	result = append(result, msgs[:leading]...)
 	result = append(result, msgs[trimStart:]...)
 	return result
 }
 
 // assistantMessage は assistant ロールのメッセージを構築する。
-func assistantMessage(text, channel, channelName string, toolCalls []providers.ToolCall) llm.Message {
-	return llm.Message{
+func assistantMessage(text, channel, channelName string, toolCalls []providers.ToolCall) message.Message {
+	return message.Message{
 		Role:        "assistant",
 		Content:     text,
 		Channel:     channel,
@@ -95,8 +94,8 @@ func assistantMessage(text, channel, channelName string, toolCalls []providers.T
 }
 
 // toolResultMessage は tool ロールの結果メッセージを構築する。
-func toolResultMessage(content, channel, toolCallID string) llm.Message {
-	return llm.Message{
+func toolResultMessage(content, channel, toolCallID string) message.Message {
+	return message.Message{
 		Role:       "tool",
 		Content:    content,
 		Channel:    channel,
@@ -109,14 +108,14 @@ func toolResultMessage(content, channel, toolCallID string) llm.Message {
 // activeChannel を末尾に配置する。各チャンネル内の順序は維持される。
 // 他チャンネルは最終メッセージ時刻の古い順に並ぶ。
 // system/tool ロールのメッセージは先頭にそのまま残す。
-func groupByChannel(msgs []llm.Message, activeChannel string) []llm.Message {
+func groupByChannel(msgs []message.Message, activeChannel string) []message.Message {
 	if activeChannel == "" || len(msgs) == 0 {
 		return msgs
 	}
 
 	// system/tool メッセージ (先頭部分) とチャンネル付きメッセージを分離する。
-	var head []llm.Message
-	var channelMsgs []llm.Message
+	var head []message.Message
+	var channelMsgs []message.Message
 	inHead := true
 	for _, m := range msgs {
 		// 先頭の system メッセージ群はそのまま維持。
@@ -137,7 +136,7 @@ func groupByChannel(msgs []llm.Message, activeChannel string) []llm.Message {
 	// チャンネルごとにグルーピング (出現順を維持)。
 	type channelGroup struct {
 		channel string
-		msgs    []llm.Message
+		msgs    []message.Message
 		lastTS  time.Time
 	}
 	groupMap := make(map[string]*channelGroup)
@@ -185,7 +184,7 @@ func groupByChannel(msgs []llm.Message, activeChannel string) []llm.Message {
 	})
 
 	// 結合: head → 他チャンネル (古い順) → 現チャンネル
-	result := make([]llm.Message, 0, len(msgs))
+	result := make([]message.Message, 0, len(msgs))
 	result = append(result, head...)
 	for _, g := range others {
 		result = append(result, g.msgs...)
@@ -196,4 +195,3 @@ func groupByChannel(msgs []llm.Message, activeChannel string) []llm.Message {
 
 	return result
 }
-

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 )
 
 // TurnEntry は会話ターンの 1 行を表す値オブジェクト。
@@ -28,7 +28,7 @@ type TurnEntry struct {
 type Store interface {
 	LogTurn(ctx context.Context, entry TurnEntry) error
 	TrackActivity(ctx context.Context, channelID string, at time.Time) error
-	SaveSnapshot(ctx context.Context, sourceKey string, messages []llm.Message) error
-	LoadSnapshot(ctx context.Context, sourceKey string) ([]llm.Message, error)
+	SaveSnapshot(ctx context.Context, sourceKey string, messages []message.Message) error
+	LoadSnapshot(ctx context.Context, sourceKey string) ([]message.Message, error)
 	DeleteChannel(ctx context.Context, channelID string) error
 }

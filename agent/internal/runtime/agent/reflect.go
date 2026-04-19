@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
@@ -16,8 +16,8 @@ import (
 // これにより Compact → クリア → 再注入 の重複抽出ループを防ぐ。
 // 新形式 (Injected flag) と旧形式 (system prefix) の両対応で、旧 snapshot
 // の自然消滅を待つ。
-func filterOutInjectedHistory(msgs []llm.Message) []llm.Message {
-	filtered := make([]llm.Message, 0, len(msgs))
+func filterOutInjectedHistory(msgs []message.Message) []message.Message {
+	filtered := make([]message.Message, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Injected {
 			continue
@@ -83,7 +83,7 @@ func (a *Agent) compact(ctx context.Context) {
 // messages. The next turn will re-inject recent channel history via
 // injectChannelHistoryWith, so no messages need to be kept.
 // If async is true, messages appended during compaction are preserved.
-func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey, msgs []llm.Message, async bool) {
+func (a *Agent) doCompactWith(ctx context.Context, agentCtx *Context, sourceKey SourceKey, msgs []message.Message, async bool) {
 	n := len(msgs)
 
 	// Extract long-term memories via acquirer (best-effort).

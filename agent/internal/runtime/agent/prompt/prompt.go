@@ -3,7 +3,7 @@ package prompt
 import (
 	"context"
 
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 )
 
 // Request は LLM への会話リクエストに必要な情報をまとめる。
@@ -14,7 +14,7 @@ type Request struct {
 	EventType    string
 	Channel      string
 	BotID        string
-	Messages     []llm.Message
+	Messages     []message.Message
 	Participants []Participant
 	// self-prompt など、Foreground に載せるテキスト
 	EventContent string
@@ -29,8 +29,8 @@ type Participant struct {
 
 // Block はプロンプトの背景情報とフォアグラウンド情報をまとめる。
 type Block struct {
-	Background []llm.Message
-	Foreground []llm.Message
+	Background []message.Message
+	Foreground []message.Message
 }
 
 // Provider はコンテキスト情報をプロンプトブロックとして提供する。

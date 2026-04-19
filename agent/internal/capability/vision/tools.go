@@ -36,9 +36,11 @@ func newServoTool(dev deviceCommander, tracker *ObjectTracker) tool.Tool {
 	return &servoTool{dev: dev, tracker: tracker}
 }
 
-func (t *servoTool) Name() string        { return "body_turn_head" }
-func (t *servoTool) ReadOnly() bool      { return false }
-func (t *servoTool) Description() string { return "首を動かす。pan=左右(0-180,90が正面), tilt=上下(0-180,90が正面)" }
+func (t *servoTool) Name() string   { return "body_turn_head" }
+func (t *servoTool) ReadOnly() bool { return false }
+func (t *servoTool) Description() string {
+	return "首を動かす。pan=左右(0-180,90が正面), tilt=上下(0-180,90が正面)"
+}
 func (t *servoTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
@@ -88,9 +90,11 @@ func newCaptureTool(dev deviceCommander) tool.Tool {
 	return &captureTool{dev: dev}
 }
 
-func (t *captureTool) Name() string        { return "body_blink" }
-func (t *captureTool) ReadOnly() bool      { return false }
-func (t *captureTool) Description() string { return "まばたきして視界のスナップショットを保存する。" }
+func (t *captureTool) Name() string   { return "body_blink" }
+func (t *captureTool) ReadOnly() bool { return false }
+func (t *captureTool) Description() string {
+	return "まばたきして視界のスナップショットを保存する。"
+}
 func (t *captureTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{"type": "object", "properties": {}}`)
 }
@@ -117,9 +121,11 @@ func newFaceTool(dev deviceCommander) tool.Tool {
 	return &faceTool{dev: dev}
 }
 
-func (t *faceTool) Name() string        { return "body_expression" }
-func (t *faceTool) ReadOnly() bool      { return false }
-func (t *faceTool) Description() string { return "自分の表情を変える。0=通常, 1=嬉しい, 2=悲しい, 3=驚き, 4=怒り, 5=眠い, 6=考え中, 7=喋り中" }
+func (t *faceTool) Name() string   { return "body_expression" }
+func (t *faceTool) ReadOnly() bool { return false }
+func (t *faceTool) Description() string {
+	return "自分の表情を変える。0=通常, 1=嬉しい, 2=悲しい, 3=驚き, 4=怒り, 5=眠い, 6=考え中, 7=喋り中"
+}
 func (t *faceTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
@@ -165,7 +171,7 @@ func newLookTool(dev deviceCommander, frames *FrameStore, vision VisionDescriber
 	return &lookTool{dev: dev, frames: frames, vision: vision}
 }
 
-func (t *lookTool) Name() string    { return "body_look" }
+func (t *lookTool) Name() string   { return "body_look" }
 func (t *lookTool) ReadOnly() bool { return true }
 func (t *lookTool) Description() string {
 	return "自分の目で見る。今この瞬間、視界に何が映っているかを認識する。"

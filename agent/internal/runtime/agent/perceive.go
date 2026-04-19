@@ -17,10 +17,10 @@ import (
 	"golang.org/x/image/webp"
 
 	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // Perceive is the backward-compatible wrapper that calls PerceiveWith
@@ -53,7 +53,7 @@ func (a *Agent) PerceiveWith(ctx context.Context, agentCtx *Context, batch []eve
 
 	// Ingest all events into context.
 	turnStartIdx := agentCtx.Len()
-	var lastMsg llm.Message
+	var lastMsg message.Message
 	var lastEvt event.Event
 	var directlyAddressed bool
 	for _, evt := range batch {
@@ -83,7 +83,7 @@ func (a *Agent) PerceiveWith(ctx context.Context, agentCtx *Context, batch []eve
 
 // ingestEventWith processes a single event: resolves the user, adds the message
 // to the given context, and injects channel history. It does NOT trigger LLM completion.
-func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt event.Event, dc DirectiveConfig) llm.Message {
+func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt event.Event, dc DirectiveConfig) message.Message {
 	msg := eventToMessage(evt)
 
 	a.logger.Info("聞こえた",
@@ -169,14 +169,14 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 	return msg
 }
 
-// eventToMessage converts an event to an llm.Message.
-func eventToMessage(evt event.Event) llm.Message {
+// eventToMessage converts an event to an message.Message.
+func eventToMessage(evt event.Event) message.Message {
 	m := evt.Message
 	role := "user"
 	if evt.Source == event.SourceInternal {
 		role = "system"
 	}
-	return llm.Message{
+	return message.Message{
 		Role:        role,
 		Content:     m.Content,
 		UserID:      m.UserID,
@@ -309,7 +309,7 @@ func extFromMimeType(mime string) string {
 // ConvertMessages applies the same metadata prefix used for live messages.
 // Falls back to a recent-memory system block (also marked Injected) when the
 // history tool is unavailable or returns empty.
-func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context, trigger llm.Message) {
+func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context, trigger message.Message) {
 	channelID := trigger.Channel
 	if channelID == "" {
 		return
@@ -332,7 +332,7 @@ func (a *Agent) injectChannelHistoryWith(ctx context.Context, agentCtx *Context,
 
 // injectDiscordHistory は discord_get_history ツールで取得した履歴を
 // 個別メッセージとして注入する。成功時 true を返す。
-func (a *Agent) injectDiscordHistory(ctx context.Context, agentCtx *Context, trigger llm.Message) bool {
+func (a *Agent) injectDiscordHistory(ctx context.Context, agentCtx *Context, trigger message.Message) bool {
 	histTool, ok := a.tools.Get("discord_get_history")
 	if !ok {
 		return false
@@ -407,7 +407,7 @@ func (a *Agent) injectDiscordHistory(ctx context.Context, agentCtx *Context, tri
 				name = u.DisplayName
 			}
 		}
-		msg := llm.Message{
+		msg := message.Message{
 			Role:        role,
 			Content:     p.h.Content,
 			UserID:      p.h.AuthorID,
@@ -431,7 +431,7 @@ func (a *Agent) injectDiscordHistory(ctx context.Context, agentCtx *Context, tri
 
 // injectMemoryFallback は discord_get_history が使えない時に
 // 記憶検索で関連メモを注入する (system ロール、Injected=true)。
-func (a *Agent) injectMemoryFallback(ctx context.Context, agentCtx *Context, trigger llm.Message) {
+func (a *Agent) injectMemoryFallback(ctx context.Context, agentCtx *Context, trigger message.Message) {
 	if a.memory == nil {
 		return
 	}
@@ -448,7 +448,7 @@ func (a *Agent) injectMemoryFallback(ctx context.Context, agentCtx *Context, tri
 	for _, m := range memories {
 		fmt.Fprintf(&b, "- [%s] %s\n", m.Type, m.Content)
 	}
-	agentCtx.Add(llm.Message{
+	agentCtx.Add(message.Message{
 		Role:      "system",
 		Content:   b.String(),
 		Channel:   trigger.Channel,

@@ -9,8 +9,8 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/capability/voice"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 )
 
 // Frame type constants matching firmware/main/config.h.
@@ -62,8 +62,8 @@ type Hub struct {
 // Call SetImageHandler after creation to wire the vision pipeline.
 func NewHub(bus *event.Bus, ttsClient tts.TTS, sttClient stt.STT, ownerID, ownerName string, logger *slog.Logger) *Hub {
 	espVAD := voice.NewVAD()
-	espVAD.SpeechThreshold = 100          // match device energy threshold
-	espVAD.SilenceDuration = time.Second  // ~10 chunks of 100ms
+	espVAD.SpeechThreshold = 100         // match device energy threshold
+	espVAD.SilenceDuration = time.Second // ~10 chunks of 100ms
 	espVAD.MinSpeechDuration = 2 * time.Second
 	espVAD.MaxSpeechDuration = 10 * time.Second
 

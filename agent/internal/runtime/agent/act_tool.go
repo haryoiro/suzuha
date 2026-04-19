@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"go.opentelemetry.io/otel/attribute"
@@ -207,7 +207,7 @@ func (a *Agent) applyToolResult(ctx context.Context, agentCtx *Context, sess Ses
 
 	// If the tool returned images, inject them as a user message.
 	if len(r.result.ImageURLs) > 0 {
-		agentCtx.Add(llm.Message{
+		agentCtx.Add(message.Message{
 			Role:      "user",
 			Content:   content,
 			ImageURLs: r.result.ImageURLs,

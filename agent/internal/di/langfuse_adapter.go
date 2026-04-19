@@ -3,9 +3,9 @@ package di
 import (
 	"context"
 
+	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
-	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 )
 
 // langfuseAdapter は langfuse.Hook を agent.PipelineHook に適合させるアダプタ。

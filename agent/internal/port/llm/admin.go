@@ -2,7 +2,7 @@
 //
 // 現状 port 化しているのは Admin (ProviderRegistry 管理) のみ。
 // agent pipeline が使う Client interface (Complete / Embed / DescribeImage 等) は
-// `llm.Message` が providers.ToolCall を含むため、外部 SDK 型を domain に
+// `message.Message` が providers.ToolCall を含むため、外部 SDK 型を domain に
 // 落とし込む段取りを終えてから追加予定。
 package llm
 

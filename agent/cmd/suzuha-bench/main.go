@@ -23,16 +23,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/runtime/agent"
+	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
+	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	user "github.com/haryoiro/suzuha/internal/adapter/store/user"
 	"github.com/haryoiro/suzuha/internal/bench"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/event"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
-	user "github.com/haryoiro/suzuha/internal/adapter/store/user"
 )
 
 func main() {

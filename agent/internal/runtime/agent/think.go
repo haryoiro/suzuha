@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
 	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
+	"github.com/haryoiro/suzuha/internal/domain/message"
+	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
-	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 const (
@@ -31,7 +31,7 @@ func (a *Agent) conversationState(channel string) convState {
 	return conversationStateFrom(a.contexts[SourceKeyDiscord].Messages(), channel, a.botID)
 }
 
-func conversationStateFrom(msgs []llm.Message, channel, botID string) convState {
+func conversationStateFrom(msgs []message.Message, channel, botID string) convState {
 	now := time.Now()
 	cs := convState{botLastSpokeAgo: -1}
 
@@ -117,7 +117,7 @@ func (a *Agent) ThinkWith(ctx context.Context, agentCtx *Context, p *Perception,
 
 	blocks := a.collectContext(ctx, req)
 
-	var bg, fg []llm.Message
+	var bg, fg []message.Message
 	for _, b := range blocks {
 		bg = append(bg, b.Background...)
 		fg = append(fg, b.Foreground...)
@@ -170,7 +170,7 @@ func (a *Agent) collectContext(ctx context.Context, req prompt.Request) []prompt
 	return blocks
 }
 
-func extractParticipants(msgs []llm.Message, botID string) []prompt.Participant {
+func extractParticipants(msgs []message.Message, botID string) []prompt.Participant {
 	seen := make(map[string]bool)
 	var out []prompt.Participant
 	count := 0

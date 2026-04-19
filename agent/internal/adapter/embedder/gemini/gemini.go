@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 	"google.golang.org/genai"
 )
 
@@ -93,8 +93,10 @@ func (e *GeminiEmbedder) EmbedBatch(ctx context.Context, inputs [][]embedding.Pa
 	return results, nil
 }
 
-func (e *GeminiEmbedder) Dimensions() int        { return e.dims }
-func (e *GeminiEmbedder) Modalities() []embedding.Modality { return []embedding.Modality{embedding.ModalityText, embedding.ModalityImage} }
+func (e *GeminiEmbedder) Dimensions() int { return e.dims }
+func (e *GeminiEmbedder) Modalities() []embedding.Modality {
+	return []embedding.Modality{embedding.ModalityText, embedding.ModalityImage}
+}
 
 // partsToContent converts embedding Parts to a genai.Content.
 // Role is intentionally left empty — the embedding API does not require it,

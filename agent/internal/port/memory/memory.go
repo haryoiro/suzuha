@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 // Memory は agent pipeline が使う主 API。

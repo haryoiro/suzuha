@@ -3,7 +3,7 @@ package prompt
 import (
 	"testing"
 
-	"github.com/haryoiro/suzuha/internal/port/embedder"
+	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 func TestParseDataURI(t *testing.T) {

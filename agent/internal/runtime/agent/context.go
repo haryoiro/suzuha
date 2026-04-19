@@ -4,8 +4,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 // Context manages the short-term message history (in-memory).
@@ -13,8 +13,8 @@ import (
 // so it is never affected by compaction or truncation.
 type Context struct {
 	mu            sync.RWMutex
-	messages      []llm.Message
-	systemPrompt  string          // pinned system prompt, immune to compaction
+	messages      []message.Message
+	systemPrompt  string // pinned system prompt, immune to compaction
 	maxTokens     int
 	injectedUsers map[string]bool // tracks which user IDs have had profiles injected
 	seenChannels  map[string]bool // tracks channels with bootstrapped history
@@ -56,12 +56,12 @@ func (c *Context) SystemPrompt() string {
 
 // MessagesWithSystem returns the system prompt (as the first message)
 // followed by all conversation messages. Used when calling the LLM.
-func (c *Context) MessagesWithSystem() []llm.Message {
+func (c *Context) MessagesWithSystem() []message.Message {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	out := make([]llm.Message, 0, 1+len(c.messages))
+	out := make([]message.Message, 0, 1+len(c.messages))
 	if c.systemPrompt != "" {
-		out = append(out, llm.Message{
+		out = append(out, message.Message{
 			Role:    "system",
 			Content: c.systemPrompt,
 		})
@@ -71,7 +71,7 @@ func (c *Context) MessagesWithSystem() []llm.Message {
 }
 
 // Add appends a message to the context.
-func (c *Context) Add(msg llm.Message) {
+func (c *Context) Add(msg message.Message) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.messages = append(c.messages, msg)
@@ -80,7 +80,7 @@ func (c *Context) Add(msg llm.Message) {
 // AddIfAbsent は MessageID ベースで dedup して追加する。
 // MessageID が空なら常に追加 (system/tool/assistant 等の ID を持たないメッセージ用)。
 // 既存 MessageID と衝突した場合は false を返す。
-func (c *Context) AddIfAbsent(msg llm.Message) bool {
+func (c *Context) AddIfAbsent(msg message.Message) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if msg.MessageID != "" {
@@ -95,20 +95,20 @@ func (c *Context) AddIfAbsent(msg llm.Message) bool {
 }
 
 // Messages returns a copy of all messages.
-func (c *Context) Messages() []llm.Message {
+func (c *Context) Messages() []message.Message {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	out := make([]llm.Message, len(c.messages))
+	out := make([]message.Message, len(c.messages))
 	copy(out, c.messages)
 	return out
 }
 
 // PersistableMessages は永続化対象のメッセージを返す (Injected を除外)。
 // context_snapshot に保存すると再起動時に stale な履歴として復元されるのを防ぐ。
-func (c *Context) PersistableMessages() []llm.Message {
+func (c *Context) PersistableMessages() []message.Message {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	out := make([]llm.Message, 0, len(c.messages))
+	out := make([]message.Message, 0, len(c.messages))
 	for _, m := range c.messages {
 		if m.Injected {
 			continue
@@ -237,7 +237,7 @@ func (c *Context) KeepOnly(indices []int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	kept := make([]llm.Message, 0, len(indices))
+	kept := make([]message.Message, 0, len(indices))
 	for _, idx := range indices {
 		if idx >= 0 && idx < len(c.messages) {
 			kept = append(kept, c.messages[idx])
@@ -273,11 +273,11 @@ func (c *Context) MarkUserProfileInjected(userID string) {
 }
 
 // PopLast removes and returns the last message. Returns false if empty.
-func (c *Context) PopLast() (llm.Message, bool) {
+func (c *Context) PopLast() (message.Message, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.messages) == 0 {
-		return llm.Message{}, false
+		return message.Message{}, false
 	}
 	last := c.messages[len(c.messages)-1]
 	c.messages = c.messages[:len(c.messages)-1]
@@ -354,7 +354,7 @@ func (c *Context) RemoveByChannel(channelID string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	before := len(c.messages)
-	filtered := make([]llm.Message, 0, len(c.messages))
+	filtered := make([]message.Message, 0, len(c.messages))
 	for _, m := range c.messages {
 		if m.Channel == channelID {
 			continue
@@ -385,7 +385,7 @@ func (c *Context) Channels() []string {
 // Otherwise returns messages where Channel matches channelID or Channel is empty.
 // Tool call/result chains are kept intact: if an assistant message with ToolCalls
 // is included, all corresponding tool results are also included, and vice versa.
-func (c *Context) MessagesForChannel(channelID string) []llm.Message {
+func (c *Context) MessagesForChannel(channelID string) []message.Message {
 	if channelID == "" {
 		return c.Messages()
 	}
@@ -435,7 +435,7 @@ func (c *Context) MessagesForChannel(channelID string) []llm.Message {
 		}
 	}
 
-	out := make([]llm.Message, 0, len(matched))
+	out := make([]message.Message, 0, len(matched))
 	for i, m := range c.messages {
 		if matched[i] {
 			out = append(out, m)
@@ -446,12 +446,12 @@ func (c *Context) MessagesForChannel(channelID string) []llm.Message {
 
 // MessagesWithSystemForChannel returns the system prompt followed by
 // channel-filtered messages. Used for LLM calls after the first iteration.
-func (c *Context) MessagesWithSystemForChannel(channelID string) []llm.Message {
+func (c *Context) MessagesWithSystemForChannel(channelID string) []message.Message {
 	filtered := c.MessagesForChannel(channelID)
 	sp := c.SystemPrompt()
-	out := make([]llm.Message, 0, 1+len(filtered))
+	out := make([]message.Message, 0, 1+len(filtered))
 	if sp != "" {
-		out = append(out, llm.Message{
+		out = append(out, message.Message{
 			Role:    "system",
 			Content: sp,
 		})
@@ -473,7 +473,7 @@ func (c *Context) SetMaxTokens(n int) {
 }
 
 // ReplaceAll replaces all messages with the given slice.
-func (c *Context) ReplaceAll(msgs []llm.Message) {
+func (c *Context) ReplaceAll(msgs []message.Message) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.messages = msgs
@@ -481,10 +481,10 @@ func (c *Context) ReplaceAll(msgs []llm.Message) {
 
 // CompactReplace atomically replaces the first snapshotLen messages
 // with kept, preserving any messages appended after the snapshot.
-func (c *Context) CompactReplace(snapshotLen int, kept []llm.Message) {
+func (c *Context) CompactReplace(snapshotLen int, kept []message.Message) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var result []llm.Message
+	var result []message.Message
 	result = append(result, kept...)
 	if len(c.messages) > snapshotLen {
 		result = append(result, c.messages[snapshotLen:]...)
