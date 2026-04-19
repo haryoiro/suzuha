@@ -2,7 +2,6 @@ package voice
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -14,10 +13,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 )
 
-func base64EncodeBytes(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b)
-}
-
 // Pipeline bridges voice input/output with the agent's text pipeline.
 // It manages voice sessions, STT, and TTS.
 type Pipeline struct {
@@ -26,7 +21,6 @@ type Pipeline struct {
 	stt            stt.STT
 	tts            tts.TTS
 	logger         *slog.Logger
-	streamWatcher  *StreamWatcher
 
 	mu       sync.Mutex
 	sessions map[string]*Session // guildID -> Session
@@ -42,49 +36,7 @@ func NewPipeline(ds *discordgo.Session, bus *event.Bus, sttClient stt.STT, ttsCl
 		logger:         logger,
 		sessions:       make(map[string]*Session),
 	}
-
-	// Stream preview watcher (disabled for now — debugging voice output).
-	// sw := NewStreamWatcher(ds, logger)
-	// sw.OnPreview(p.handleStreamPreview)
-	// sw.Start()
-	// p.streamWatcher = sw
-
 	return p
-}
-
-// handleStreamPreview is called when a stream preview image is captured.
-func (p *Pipeline) handleStreamPreview(guildID string, jpeg []byte) {
-	if len(jpeg) == 0 {
-		return
-	}
-
-	dataURI := "data:image/jpeg;base64," + base64EncodeBytes(jpeg)
-
-	// Find the voice channel for this guild.
-	var channelID, guildName string
-	p.mu.Lock()
-	if sess, ok := p.sessions[guildID]; ok {
-		channelID = sess.channelID
-	}
-	p.mu.Unlock()
-	if g, err := p.discordSession.State.Guild(guildID); err == nil {
-		guildName = g.Name
-	}
-
-	evt := event.NewMessageEvent("discord", event.MessagePayload{
-		Content:     "[画面共有の映像]",
-		Channel:     channelID,
-		UserID:      "",
-		UserName:    "screen-share",
-		ImageURLs:   []string{dataURI},
-		IsMention:   false,
-		IsVoice:     true,
-		GuildID:     guildID,
-		GuildName:   guildName,
-		ChannelName: "voice",
-	})
-	p.bus.Publish(evt)
-	p.logger.Debug("プレビュー画像を共有した", "guild", guildID, "size", len(jpeg))
 }
 
 // SetSpeakerID changes the VOICEVOX speaker ID at runtime.

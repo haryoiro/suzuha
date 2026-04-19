@@ -40,18 +40,6 @@ func (v *VoicevoxClient) SetSpeakerID(id int) {
 	v.speakerID = id
 }
 
-// SpeakerID returns the current speaker ID.
-func (v *VoicevoxClient) SpeakerID() int {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	return v.speakerID
-}
-
-// BaseURL returns the VOICEVOX engine URL.
-func (v *VoicevoxClient) BaseURL() string {
-	return v.baseURL
-}
-
 // ListSpeakers fetches /speakers from the VOICEVOX engine and returns raw JSON.
 // 返却 JSON は voicevox のレスポンスをそのまま。構造は engine バージョンに依存。
 func (v *VoicevoxClient) ListSpeakers(ctx context.Context) (json.RawMessage, error) {
