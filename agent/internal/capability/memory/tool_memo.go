@@ -1,4 +1,4 @@
-package builtin
+package memory
 
 import (
 	"context"
@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	memorystore "github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // MemoCreate はメモを新規作成するツール。
 type MemoCreate struct {
-	store memory.Store
+	store memorystore.Store
 }
 
 // NewMemoCreate は MemoCreate のインスタンスを生成する。
-func NewMemoCreate(store memory.Store) *MemoCreate {
+func NewMemoCreate(store memorystore.Store) *MemoCreate {
 	return &MemoCreate{store: store}
 }
 
@@ -49,14 +49,14 @@ func (t *MemoCreate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return tool.ErrorResult("content が空です"), nil
 	}
 
-	tags := memory.ExtractTags(in.Content)
+	tags := memorystore.ExtractTags(in.Content)
 	meta := map[string]any{}
 	if len(tags) > 0 {
 		meta["tags"] = tags
 	}
 
-	mem := memory.Memory{
-		Type:     memory.MemoryTypeMemo,
+	mem := memorystore.Memory{
+		Type:     memorystore.MemoryTypeMemo,
 		Content:  in.Content,
 		Metadata: meta,
 	}
@@ -73,11 +73,11 @@ func (t *MemoCreate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 
 // MemoSearch はメモを検索するツール。
 type MemoSearch struct {
-	store memory.Store
+	store memorystore.Store
 }
 
 // NewMemoSearch は MemoSearch のインスタンスを生成する。
-func NewMemoSearch(store memory.Store) *MemoSearch {
+func NewMemoSearch(store memorystore.Store) *MemoSearch {
 	return &MemoSearch{store: store}
 }
 
@@ -112,14 +112,14 @@ func (t *MemoSearch) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return tool.ErrorResult("query が空です"), nil
 	}
 
-	mems, err := t.store.SearchByType(ctx, in.Query, memory.MemoryTypeMemo, 10)
+	mems, err := t.store.SearchByType(ctx, in.Query, memorystore.MemoryTypeMemo, 10)
 	if err != nil {
 		return tool.ErrorResult("検索に失敗: " + err.Error()), nil
 	}
 
 	// Tag filter.
 	if in.Tag != "" {
-		var filtered []memory.Memory
+		var filtered []memorystore.Memory
 		for _, m := range mems {
 			if hasMemoTag(m, in.Tag) {
 				filtered = append(filtered, m)
@@ -148,11 +148,11 @@ func (t *MemoSearch) Execute(ctx context.Context, input json.RawMessage) (*tool.
 
 // MemoUpdate は既存のメモを更新するツール。
 type MemoUpdate struct {
-	store memory.Store
+	store memorystore.Store
 }
 
 // NewMemoUpdate は MemoUpdate のインスタンスを生成する。
-func NewMemoUpdate(store memory.Store) *MemoUpdate {
+func NewMemoUpdate(store memorystore.Store) *MemoUpdate {
 	return &MemoUpdate{store: store}
 }
 
@@ -185,7 +185,7 @@ func (t *MemoUpdate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	}
 
 	// Store needs AdminStore for Get+Update.
-	adminStore, ok := t.store.(memory.AdminStore)
+	adminStore, ok := t.store.(memorystore.AdminStore)
 	if !ok {
 		return tool.ErrorResult("メモの更新に対応していない"), nil
 	}
@@ -197,12 +197,12 @@ func (t *MemoUpdate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 	if existing == nil {
 		return tool.ErrorResult("メモが見つからない: " + in.ID), nil
 	}
-	if existing.Type != memory.MemoryTypeMemo {
+	if existing.Type != memorystore.MemoryTypeMemo {
 		return tool.ErrorResult("指定されたIDはメモではない"), nil
 	}
 
 	existing.Content = in.Content
-	tags := memory.ExtractTags(in.Content)
+	tags := memorystore.ExtractTags(in.Content)
 	if existing.Metadata == nil {
 		existing.Metadata = map[string]any{}
 	}
@@ -227,7 +227,7 @@ func (t *MemoUpdate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 
 // ── helpers ──
 
-func hasMemoTag(m memory.Memory, tag string) bool {
+func hasMemoTag(m memorystore.Memory, tag string) bool {
 	for _, t := range extractMetaTags(m) {
 		if t == tag {
 			return true
@@ -236,7 +236,7 @@ func hasMemoTag(m memory.Memory, tag string) bool {
 	return false
 }
 
-func extractMetaTags(m memory.Memory) []string {
+func extractMetaTags(m memorystore.Memory) []string {
 	if m.Metadata == nil {
 		return nil
 	}
