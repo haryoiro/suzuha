@@ -25,6 +25,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/bench"
+	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/event"
@@ -202,7 +203,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 			Key: agent.SourceKeyDiscord,
 			NewSession: func(agentCtx *agent.Context) agent.Session {
 				// captureSession に後で差し替えるのでダミー
-				return agent.NewDiscordSession(agentCtx, nil, nil, nil, 0, logger)
+				return discord.NewSession(agentCtx, nil, nil, nil, 0, logger)
 			},
 			PersistKey: "bench_discord",
 		},

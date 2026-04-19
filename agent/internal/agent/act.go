@@ -252,8 +252,8 @@ func (a *Agent) continueToolLoop(
 
 	for iter := 1; iter < maxIter; iter++ {
 		if channel != "" {
-			if ds, ok := sess.(*DiscordSession); ok {
-				ds.Typing(ctx)
+			if ts, ok := sess.(typingSession); ok {
+				ts.Typing(ctx)
 			}
 		}
 

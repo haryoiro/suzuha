@@ -20,9 +20,11 @@ import (
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
+	"github.com/haryoiro/suzuha/internal/channel/cli"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/channel/device"
+	"github.com/haryoiro/suzuha/internal/channel/web"
 	"github.com/haryoiro/suzuha/internal/di"
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
@@ -91,7 +93,7 @@ func run() error {
 		gw.Register(dc)
 	} else {
 		gw.Register(chatIface.(gateway.Source))
-		ag.SetSession(agent.SourceKeyCLI, agent.NewCLISession(
+		ag.SetSession(agent.SourceKeyCLI, cli.NewSession(
 			ag.AgentContextFor(agent.SourceKeyCLI),
 			os.Stdout,
 			logger,
@@ -196,7 +198,7 @@ func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 					if vp := dc.VoicePipeline(); vp != nil {
 						registry.Register(discord.NewVoiceJoin(vp, s, cfg.Voice.AllowedChannels, logger))
 						registry.Register(discord.NewVoiceLeave(vp, s, logger))
-						if ds, ok := ag.GetSession(agent.SourceKeyDiscord).(*agent.DiscordSession); ok {
+						if ds, ok := ag.GetSession(agent.SourceKeyDiscord).(*discord.Session); ok {
 							ds.SetVoice(vp)
 						}
 						logger.Info("voice tools registered")
@@ -273,10 +275,10 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	mux.HandleFunc("GET /ws/web", hub.WebHandler())
 
 	// Physical device session / gateway 配線。
-	ag.SetSession(agent.SourceKeyDevice, agent.NewDeviceSession(
+	ag.SetSession(agent.SourceKeyDevice, device.NewSession(
 		ag.AgentContextFor(agent.SourceKeyDevice), hub, logger,
 	))
-	ag.SetSession(agent.SourceKeyWeb, agent.NewWebSession(
+	ag.SetSession(agent.SourceKeyWeb, web.NewSession(
 		ag.AgentContextFor(agent.SourceKeyWeb), hub, logger,
 	))
 	gw.Register(device.NewSource(hub))

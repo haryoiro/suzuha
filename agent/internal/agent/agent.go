@@ -278,11 +278,6 @@ func (a *Agent) BotID() string {
 	return a.botID
 }
 
-// DeviceSpeaker is the interface for sending TTS to a physical device.
-type DeviceSpeaker interface {
-	SpeakText(ctx context.Context, text string) error
-}
-
 // SetSession registers a Session for the given source key.
 func (a *Agent) SetSession(key SourceKey, sess Session) {
 	a.sessions[key] = sess

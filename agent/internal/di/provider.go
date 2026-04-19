@@ -24,6 +24,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/channel/cli"
 	"github.com/haryoiro/suzuha/internal/channel/device"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
+	"github.com/haryoiro/suzuha/internal/channel/web"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/gateway"
@@ -164,21 +165,21 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				{
 					Key: agent.SourceKeyDiscord,
 					NewSession: func(agentCtx *agent.Context) agent.Session {
-						return agent.NewDiscordSession(agentCtx, chatIface, nil, channelSettings, agent.DefaultDrainWindow, logger)
+						return discord.NewSession(agentCtx, chatIface, nil, channelSettings, agent.DefaultDrainWindow, logger)
 					},
 					PersistKey: "discord",
 				},
 				{
 					Key: agent.SourceKeyDevice,
 					NewSession: func(agentCtx *agent.Context) agent.Session {
-						return agent.NewDeviceSession(agentCtx, nil, logger)
+						return device.NewSession(agentCtx, nil, logger)
 					},
 					PersistKey: "device",
 				},
 				{
 					Key: agent.SourceKeyWeb,
 					NewSession: func(agentCtx *agent.Context) agent.Session {
-						return agent.NewWebSession(agentCtx, nil, logger)
+						return web.NewSession(agentCtx, nil, logger)
 					},
 					PersistKey: "web",
 				},

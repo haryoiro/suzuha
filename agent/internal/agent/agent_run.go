@@ -160,9 +160,9 @@ func (a *Agent) runWorker(ctx context.Context, key SourceKey, ch <-chan event.Ev
 func (a *Agent) directiveConfigFor(key SourceKey) DirectiveConfig {
 	switch key {
 	case SourceKeyDevice:
-		return deviceDirectiveConfig()
+		return DeviceDirectiveConfig()
 	default:
-		return discordDirectiveConfig(a.drainWindow)
+		return DiscordDirectiveConfig(a.drainWindow)
 	}
 }
 
