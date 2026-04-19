@@ -48,29 +48,93 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		switch elem[0] {
-		case '/': // Prefix: "/internal/reload-channel-settings"
+		case '/': // Prefix: "/internal/"
 
-			if l := len("/internal/reload-channel-settings"); len(elem) >= l && elem[0:l] == "/internal/reload-channel-settings" {
+			if l := len("/internal/"); len(elem) >= l && elem[0:l] == "/internal/" {
 				elem = elem[l:]
 			} else {
 				break
 			}
 
 			if len(elem) == 0 {
-				// Leaf node.
-				switch r.Method {
-				case "POST":
-					s.handleRuntimeReloadChannelSettingsRequest([0]string{}, elemIsEscaped, w, r)
-				default:
-					s.notAllowed(w, r, notAllowedParams{
-						allowedMethods: "POST",
-						allowedHeaders: nil,
-						acceptPost:     "",
-						acceptPatch:    "",
-					})
+				break
+			}
+			switch elem[0] {
+			case 'c': // Prefix: "context"
+
+				if l := len("context"); len(elem) >= l && elem[0:l] == "context" {
+					elem = elem[l:]
+				} else {
+					break
 				}
 
-				return
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleAgentOpsGetContextRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
+			case 'i': // Prefix: "identity"
+
+				if l := len("identity"); len(elem) >= l && elem[0:l] == "identity" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "GET":
+						s.handleAgentOpsIdentityRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "GET",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
+			case 'r': // Prefix: "reload-channel-settings"
+
+				if l := len("reload-channel-settings"); len(elem) >= l && elem[0:l] == "reload-channel-settings" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch r.Method {
+					case "POST":
+						s.handleRuntimeReloadChannelSettingsRequest([0]string{}, elemIsEscaped, w, r)
+					default:
+						s.notAllowed(w, r, notAllowedParams{
+							allowedMethods: "POST",
+							allowedHeaders: nil,
+							acceptPost:     "",
+							acceptPatch:    "",
+						})
+					}
+
+					return
+				}
+
 			}
 
 		}
@@ -159,29 +223,93 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 			break
 		}
 		switch elem[0] {
-		case '/': // Prefix: "/internal/reload-channel-settings"
+		case '/': // Prefix: "/internal/"
 
-			if l := len("/internal/reload-channel-settings"); len(elem) >= l && elem[0:l] == "/internal/reload-channel-settings" {
+			if l := len("/internal/"); len(elem) >= l && elem[0:l] == "/internal/" {
 				elem = elem[l:]
 			} else {
 				break
 			}
 
 			if len(elem) == 0 {
-				// Leaf node.
-				switch method {
-				case "POST":
-					r.name = RuntimeReloadChannelSettingsOperation
-					r.summary = ""
-					r.operationID = "Runtime_reloadChannelSettings"
-					r.operationGroup = ""
-					r.pathPattern = "/internal/reload-channel-settings"
-					r.args = args
-					r.count = 0
-					return r, true
-				default:
-					return
+				break
+			}
+			switch elem[0] {
+			case 'c': // Prefix: "context"
+
+				if l := len("context"); len(elem) >= l && elem[0:l] == "context" {
+					elem = elem[l:]
+				} else {
+					break
 				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = AgentOpsGetContextOperation
+						r.summary = ""
+						r.operationID = "AgentOps_getContext"
+						r.operationGroup = ""
+						r.pathPattern = "/internal/context"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 'i': // Prefix: "identity"
+
+				if l := len("identity"); len(elem) >= l && elem[0:l] == "identity" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "GET":
+						r.name = AgentOpsIdentityOperation
+						r.summary = ""
+						r.operationID = "AgentOps_identity"
+						r.operationGroup = ""
+						r.pathPattern = "/internal/identity"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
+			case 'r': // Prefix: "reload-channel-settings"
+
+				if l := len("reload-channel-settings"); len(elem) >= l && elem[0:l] == "reload-channel-settings" {
+					elem = elem[l:]
+				} else {
+					break
+				}
+
+				if len(elem) == 0 {
+					// Leaf node.
+					switch method {
+					case "POST":
+						r.name = RuntimeReloadChannelSettingsOperation
+						r.summary = ""
+						r.operationID = "Runtime_reloadChannelSettings"
+						r.operationGroup = ""
+						r.pathPattern = "/internal/reload-channel-settings"
+						r.args = args
+						r.count = 0
+						return r, true
+					default:
+						return
+					}
+				}
+
 			}
 
 		}

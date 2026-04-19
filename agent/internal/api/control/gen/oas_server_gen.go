@@ -8,6 +8,18 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	// AgentOpsGetContext implements AgentOps_getContext operation.
+	//
+	// 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。.
+	//
+	// GET /internal/context
+	AgentOpsGetContext(ctx context.Context) (*AgentContext, error)
+	// AgentOpsIdentity implements AgentOps_identity operation.
+	//
+	// 現在の bot identity (platform ID と内部 user レコード) を返す。.
+	//
+	// GET /internal/identity
+	AgentOpsIdentity(ctx context.Context) (*Identity, error)
 	// RuntimeReloadChannelSettings implements Runtime_reloadChannelSettings operation.
 	//
 	// チャンネル設定 (channel_settings) を DB から再読み込みする。.

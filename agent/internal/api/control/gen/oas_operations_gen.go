@@ -6,5 +6,7 @@ package gen
 type OperationName = string
 
 const (
+	AgentOpsGetContextOperation           OperationName = "AgentOpsGetContext"
+	AgentOpsIdentityOperation             OperationName = "AgentOpsIdentity"
 	RuntimeReloadChannelSettingsOperation OperationName = "RuntimeReloadChannelSettings"
 )

@@ -4,6 +4,7 @@ import "@typespec/openapi";
 import "@typespec/openapi3";
 
 import "./routes/runtime.tsp";
+import "./routes/agent.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;

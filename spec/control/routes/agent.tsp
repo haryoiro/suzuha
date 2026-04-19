@@ -1,0 +1,45 @@
+import "@typespec/http";
+import "@typespec/rest";
+
+using TypeSpec.Http;
+using TypeSpec.Rest;
+
+namespace SuzuhaControl;
+
+model Identity {
+  bot_platform_id: string;
+  bot_user_id?: string;
+  bot_name?: string;
+}
+
+model ContextMessage {
+  role: string;
+  content: string;
+  channel?: string;
+  channel_name?: string;
+  timestamp?: string;
+}
+
+model AgentContext {
+  messages: ContextMessage[];
+  count: int32;
+  estimated_tokens: int32;
+  usage_ratio: float64;
+  max_tokens: int32;
+  background?: ContextMessage[];
+  foreground?: ContextMessage[];
+}
+
+@route("/internal")
+@tag("Agent")
+interface AgentOps {
+  /**
+   * 現在の bot identity (platform ID と内部 user レコード) を返す。
+   */
+  @route("identity") @get op identity(): Identity;
+
+  /**
+   * 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。
+   */
+  @route("context") @get op getContext(): AgentContext;
+}

@@ -360,8 +360,10 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Control (internal) API handler — mount on internal mux.
 		do.Provide(i, func(i do.Injector) (*control.Handler, error) {
+			ag := do.MustInvoke[*agent.Agent](i)
 			channelStore := do.MustInvoke[*channel.Store](i)
-			return control.NewHandler(channelStore), nil
+			userStore := do.MustInvoke[user.Store](i)
+			return control.NewHandler(ag, channelStore, userStore), nil
 		})
 	}
 }

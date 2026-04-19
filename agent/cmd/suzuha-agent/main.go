@@ -256,6 +256,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
 	// Ogen-backed control API (段階的に /internal/* を移行中).
 	mux.Handle("POST /internal/reload-channel-settings", controlOgen)
+	mux.Handle("GET /internal/identity", controlOgen)
+	mux.Handle("GET /internal/context", controlOgen)
 	mux.HandleFunc("POST /internal/compact", func(w http.ResponseWriter, r *http.Request) {
 		compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
@@ -285,34 +287,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		ag.ReloadPrompt(newPrompt)
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"ok":true,"length":%d}`, len(newPrompt))
-	})
-	mux.HandleFunc("GET /internal/identity", func(w http.ResponseWriter, r *http.Request) {
-		botPlatformID := ag.BotID()
-		result := map[string]any{"bot_platform_id": botPlatformID}
-		// Resolve bot's internal user record if available.
-		if botPlatformID != "" {
-			userStore := do.MustInvoke[user.Store](injector)
-			if u, err := userStore.Resolve(r.Context(), "discord", botPlatformID, ""); err == nil {
-				result["bot_user_id"] = u.ID
-				result["bot_name"] = u.DisplayName
-			}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
-	})
-	mux.HandleFunc("GET /internal/context", func(w http.ResponseWriter, r *http.Request) {
-		actx := ag.AgentContext()
-		msgs := actx.MessagesWithSystem()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"messages":         msgs,
-			"count":            len(msgs),
-			"estimated_tokens": actx.ActualTokens(),
-			"usage_ratio":      actx.UsageRatio(),
-			"max_tokens":       actx.MaxTokens(),
-			"background":       ag.LastBackground(),
-			"foreground":       ag.LastForeground(),
-		})
 	})
 	mux.HandleFunc("GET /internal/scheduler/jobs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

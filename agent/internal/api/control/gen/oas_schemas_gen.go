@@ -2,6 +2,183 @@
 
 package gen
 
+// Ref: #/components/schemas/AgentContext
+type AgentContext struct {
+	Messages        []ContextMessage `json:"messages"`
+	Count           int32            `json:"count"`
+	EstimatedTokens int32            `json:"estimated_tokens"`
+	UsageRatio      float64          `json:"usage_ratio"`
+	MaxTokens       int32            `json:"max_tokens"`
+	Background      []ContextMessage `json:"background"`
+	Foreground      []ContextMessage `json:"foreground"`
+}
+
+// GetMessages returns the value of Messages.
+func (s *AgentContext) GetMessages() []ContextMessage {
+	return s.Messages
+}
+
+// GetCount returns the value of Count.
+func (s *AgentContext) GetCount() int32 {
+	return s.Count
+}
+
+// GetEstimatedTokens returns the value of EstimatedTokens.
+func (s *AgentContext) GetEstimatedTokens() int32 {
+	return s.EstimatedTokens
+}
+
+// GetUsageRatio returns the value of UsageRatio.
+func (s *AgentContext) GetUsageRatio() float64 {
+	return s.UsageRatio
+}
+
+// GetMaxTokens returns the value of MaxTokens.
+func (s *AgentContext) GetMaxTokens() int32 {
+	return s.MaxTokens
+}
+
+// GetBackground returns the value of Background.
+func (s *AgentContext) GetBackground() []ContextMessage {
+	return s.Background
+}
+
+// GetForeground returns the value of Foreground.
+func (s *AgentContext) GetForeground() []ContextMessage {
+	return s.Foreground
+}
+
+// SetMessages sets the value of Messages.
+func (s *AgentContext) SetMessages(val []ContextMessage) {
+	s.Messages = val
+}
+
+// SetCount sets the value of Count.
+func (s *AgentContext) SetCount(val int32) {
+	s.Count = val
+}
+
+// SetEstimatedTokens sets the value of EstimatedTokens.
+func (s *AgentContext) SetEstimatedTokens(val int32) {
+	s.EstimatedTokens = val
+}
+
+// SetUsageRatio sets the value of UsageRatio.
+func (s *AgentContext) SetUsageRatio(val float64) {
+	s.UsageRatio = val
+}
+
+// SetMaxTokens sets the value of MaxTokens.
+func (s *AgentContext) SetMaxTokens(val int32) {
+	s.MaxTokens = val
+}
+
+// SetBackground sets the value of Background.
+func (s *AgentContext) SetBackground(val []ContextMessage) {
+	s.Background = val
+}
+
+// SetForeground sets the value of Foreground.
+func (s *AgentContext) SetForeground(val []ContextMessage) {
+	s.Foreground = val
+}
+
+// Ref: #/components/schemas/ContextMessage
+type ContextMessage struct {
+	Role        string    `json:"role"`
+	Content     string    `json:"content"`
+	Channel     OptString `json:"channel"`
+	ChannelName OptString `json:"channel_name"`
+	Timestamp   OptString `json:"timestamp"`
+}
+
+// GetRole returns the value of Role.
+func (s *ContextMessage) GetRole() string {
+	return s.Role
+}
+
+// GetContent returns the value of Content.
+func (s *ContextMessage) GetContent() string {
+	return s.Content
+}
+
+// GetChannel returns the value of Channel.
+func (s *ContextMessage) GetChannel() OptString {
+	return s.Channel
+}
+
+// GetChannelName returns the value of ChannelName.
+func (s *ContextMessage) GetChannelName() OptString {
+	return s.ChannelName
+}
+
+// GetTimestamp returns the value of Timestamp.
+func (s *ContextMessage) GetTimestamp() OptString {
+	return s.Timestamp
+}
+
+// SetRole sets the value of Role.
+func (s *ContextMessage) SetRole(val string) {
+	s.Role = val
+}
+
+// SetContent sets the value of Content.
+func (s *ContextMessage) SetContent(val string) {
+	s.Content = val
+}
+
+// SetChannel sets the value of Channel.
+func (s *ContextMessage) SetChannel(val OptString) {
+	s.Channel = val
+}
+
+// SetChannelName sets the value of ChannelName.
+func (s *ContextMessage) SetChannelName(val OptString) {
+	s.ChannelName = val
+}
+
+// SetTimestamp sets the value of Timestamp.
+func (s *ContextMessage) SetTimestamp(val OptString) {
+	s.Timestamp = val
+}
+
+// Ref: #/components/schemas/Identity
+type Identity struct {
+	BotPlatformID string    `json:"bot_platform_id"`
+	BotUserID     OptString `json:"bot_user_id"`
+	BotName       OptString `json:"bot_name"`
+}
+
+// GetBotPlatformID returns the value of BotPlatformID.
+func (s *Identity) GetBotPlatformID() string {
+	return s.BotPlatformID
+}
+
+// GetBotUserID returns the value of BotUserID.
+func (s *Identity) GetBotUserID() OptString {
+	return s.BotUserID
+}
+
+// GetBotName returns the value of BotName.
+func (s *Identity) GetBotName() OptString {
+	return s.BotName
+}
+
+// SetBotPlatformID sets the value of BotPlatformID.
+func (s *Identity) SetBotPlatformID(val string) {
+	s.BotPlatformID = val
+}
+
+// SetBotUserID sets the value of BotUserID.
+func (s *Identity) SetBotUserID(val OptString) {
+	s.BotUserID = val
+}
+
+// SetBotName sets the value of BotName.
+func (s *Identity) SetBotName(val OptString) {
+	s.BotName = val
+}
+
 // Ref: #/components/schemas/OkResponse
 type OkResponse struct {
 	Ok bool `json:"ok"`
@@ -15,4 +192,50 @@ func (s *OkResponse) GetOk() bool {
 // SetOk sets the value of Ok.
 func (s *OkResponse) SetOk(val bool) {
 	s.Ok = val
+}
+
+// NewOptString returns new OptString with value set to v.
+func NewOptString(v string) OptString {
+	return OptString{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptString is optional string.
+type OptString struct {
+	Value string
+	Set   bool
+}
+
+// IsSet returns true if OptString was set.
+func (o OptString) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptString) Reset() {
+	var v string
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptString) SetTo(v string) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptString) Get() (v string, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
 }

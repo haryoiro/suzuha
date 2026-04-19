@@ -26,6 +26,18 @@ func trimTrailingSlashes(u *url.URL) {
 
 // Invoker invokes operations described by OpenAPI v3 specification.
 type Invoker interface {
+	// AgentOpsGetContext invokes AgentOps_getContext operation.
+	//
+	// 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。.
+	//
+	// GET /internal/context
+	AgentOpsGetContext(ctx context.Context) (*AgentContext, error)
+	// AgentOpsIdentity invokes AgentOps_identity operation.
+	//
+	// 現在の bot identity (platform ID と内部 user レコード) を返す。.
+	//
+	// GET /internal/identity
+	AgentOpsIdentity(ctx context.Context) (*Identity, error)
 	// RuntimeReloadChannelSettings invokes Runtime_reloadChannelSettings operation.
 	//
 	// チャンネル設定 (channel_settings) を DB から再読み込みする。.
@@ -71,6 +83,154 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 		return c.serverURL
 	}
 	return u
+}
+
+// AgentOpsGetContext invokes AgentOps_getContext operation.
+//
+// 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。.
+//
+// GET /internal/context
+func (c *Client) AgentOpsGetContext(ctx context.Context) (*AgentContext, error) {
+	res, err := c.sendAgentOpsGetContext(ctx)
+	return res, err
+}
+
+func (c *Client) sendAgentOpsGetContext(ctx context.Context) (res *AgentContext, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("AgentOps_getContext"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/context"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, AgentOpsGetContextOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/context"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeAgentOpsGetContextResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// AgentOpsIdentity invokes AgentOps_identity operation.
+//
+// 現在の bot identity (platform ID と内部 user レコード) を返す。.
+//
+// GET /internal/identity
+func (c *Client) AgentOpsIdentity(ctx context.Context) (*Identity, error) {
+	res, err := c.sendAgentOpsIdentity(ctx)
+	return res, err
+}
+
+func (c *Client) sendAgentOpsIdentity(ctx context.Context) (res *Identity, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("AgentOps_identity"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/identity"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, AgentOpsIdentityOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/identity"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeAgentOpsIdentityResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
 }
 
 // RuntimeReloadChannelSettings invokes Runtime_reloadChannelSettings operation.
