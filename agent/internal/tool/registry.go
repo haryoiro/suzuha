@@ -103,3 +103,18 @@ func (r *Registry) DisabledNames() []string {
 	}
 	return out
 }
+
+// SetEnabled toggles a single tool's enabled state.
+// enabled=true なら disabled セットから除外、false なら追加する。
+func (r *Registry) SetEnabled(name string, enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if enabled {
+		delete(r.disabled, name)
+	} else {
+		if r.disabled == nil {
+			r.disabled = map[string]bool{}
+		}
+		r.disabled[name] = true
+	}
+}

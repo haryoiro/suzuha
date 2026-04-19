@@ -51,6 +51,24 @@ type Handler interface {
 	//
 	// POST /internal/trigger/{task}
 	SchedulerTrigger(ctx context.Context, req *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
+	// ToolsExecute implements Tools_execute operation.
+	//
+	// ツールを手動実行する。リクエストボディがそのまま入力 JSON。.
+	//
+	// POST /internal/tools/{name}/execute
+	ToolsExecute(ctx context.Context, req ToolsExecuteReq, params ToolsExecuteParams) (*ToolExecuteResponse, error)
+	// ToolsList implements Tools_list operation.
+	//
+	// 登録済みツール一覧を返す (enabled/disabled 情報付き)。.
+	//
+	// GET /internal/tools
+	ToolsList(ctx context.Context) (*ToolsListResponse, error)
+	// ToolsSetEnabled implements Tools_setEnabled operation.
+	//
+	// ツールの enable/disable を切り替える。DB に永続化する。.
+	//
+	// PUT /internal/tools/{name}/enabled
+	ToolsSetEnabled(ctx context.Context, req *SetToolEnabledRequest, params ToolsSetEnabledParams) (*OkResponse, error)
 	// VoicevoxGetSpeaker implements Voicevox_getSpeaker operation.
 	//
 	// 現在設定されている話者 ID を返す。.

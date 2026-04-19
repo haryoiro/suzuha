@@ -388,6 +388,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				vp = dc.VoicePipeline()
 			}
 
+			toolRegistry := do.MustInvoke[*tool.Registry](i)
+			sharedDB := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+
 			return control.NewHandler(control.Config{
 				Agent:         ag,
 				ChannelStore:  channelStore,
@@ -396,6 +399,8 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				Voicevox:      vvClient,
 				VoicevoxCfg:   vvCfg,
 				VoicePipeline: vp,
+				ToolRegistry:  toolRegistry,
+				SharedDB:      sharedDB,
 				PromptDir:     cfg.Agent.PromptDir,
 				ConfigDir:     filepath.Dir(cfgPath),
 			}), nil

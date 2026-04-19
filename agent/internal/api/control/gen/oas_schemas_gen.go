@@ -499,6 +499,143 @@ func (s *SetSpeakerRequest) SetSpeakerID(val int32) {
 	s.SpeakerID = val
 }
 
+// Ref: #/components/schemas/SetToolEnabledRequest
+type SetToolEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *SetToolEnabledRequest) GetEnabled() bool {
+	return s.Enabled
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *SetToolEnabledRequest) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
+// Ref: #/components/schemas/ToolExecuteResponse
+type ToolExecuteResponse struct {
+	Ok      bool   `json:"ok"`
+	Output  string `json:"output"`
+	IsError bool   `json:"is_error"`
+}
+
+// GetOk returns the value of Ok.
+func (s *ToolExecuteResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetOutput returns the value of Output.
+func (s *ToolExecuteResponse) GetOutput() string {
+	return s.Output
+}
+
+// GetIsError returns the value of IsError.
+func (s *ToolExecuteResponse) GetIsError() bool {
+	return s.IsError
+}
+
+// SetOk sets the value of Ok.
+func (s *ToolExecuteResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetOutput sets the value of Output.
+func (s *ToolExecuteResponse) SetOutput(val string) {
+	s.Output = val
+}
+
+// SetIsError sets the value of IsError.
+func (s *ToolExecuteResponse) SetIsError(val bool) {
+	s.IsError = val
+}
+
+// Ref: #/components/schemas/ToolInfo
+type ToolInfo struct {
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	InputSchema ToolInfoInputSchema `json:"input_schema"`
+	Enabled     bool                `json:"enabled"`
+}
+
+// GetName returns the value of Name.
+func (s *ToolInfo) GetName() string {
+	return s.Name
+}
+
+// GetDescription returns the value of Description.
+func (s *ToolInfo) GetDescription() string {
+	return s.Description
+}
+
+// GetInputSchema returns the value of InputSchema.
+func (s *ToolInfo) GetInputSchema() ToolInfoInputSchema {
+	return s.InputSchema
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *ToolInfo) GetEnabled() bool {
+	return s.Enabled
+}
+
+// SetName sets the value of Name.
+func (s *ToolInfo) SetName(val string) {
+	s.Name = val
+}
+
+// SetDescription sets the value of Description.
+func (s *ToolInfo) SetDescription(val string) {
+	s.Description = val
+}
+
+// SetInputSchema sets the value of InputSchema.
+func (s *ToolInfo) SetInputSchema(val ToolInfoInputSchema) {
+	s.InputSchema = val
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *ToolInfo) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
+type ToolInfoInputSchema map[string]jx.Raw
+
+func (s *ToolInfoInputSchema) init() ToolInfoInputSchema {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+type ToolsExecuteReq map[string]jx.Raw
+
+func (s *ToolsExecuteReq) init() ToolsExecuteReq {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/ToolsListResponse
+type ToolsListResponse struct {
+	Data []ToolInfo `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ToolsListResponse) GetData() []ToolInfo {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ToolsListResponse) SetData(val []ToolInfo) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/TriggerRequest
 type TriggerRequest struct {
 	Config OptTriggerRequestConfig `json:"config"`

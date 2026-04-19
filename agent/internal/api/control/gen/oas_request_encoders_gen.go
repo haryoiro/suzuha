@@ -24,6 +24,34 @@ func encodeSchedulerTriggerRequest(
 	return nil
 }
 
+func encodeToolsExecuteRequest(
+	req ToolsExecuteReq,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeToolsSetEnabledRequest(
+	req *SetToolEnabledRequest,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
 func encodeVoicevoxSetSpeakerRequest(
 	req *SetSpeakerRequest,
 	r *http.Request,

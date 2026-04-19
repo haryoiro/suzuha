@@ -11,10 +11,16 @@ import (
 )
 
 var (
+	rn18AllowedHeaders = map[string]string{
+		"PUT": "Content-Type",
+	}
+	rn15AllowedHeaders = map[string]string{
+		"POST": "Content-Type",
+	}
 	rn11AllowedHeaders = map[string]string{
 		"POST": "Content-Type",
 	}
-	rn12AllowedHeaders = map[string]string{
+	rn19AllowedHeaders = map[string]string{
 		"PUT": "Content-Type",
 	}
 )
@@ -248,40 +254,171 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-			case 't': // Prefix: "trigger/"
+			case 't': // Prefix: "t"
 
-				if l := len("trigger/"); len(elem) >= l && elem[0:l] == "trigger/" {
+				if l := len("t"); len(elem) >= l && elem[0:l] == "t" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
-				// Param: "task"
-				// Leaf parameter, slashes are prohibited
-				idx := strings.IndexByte(elem, '/')
-				if idx >= 0 {
+				if len(elem) == 0 {
 					break
 				}
-				args[0] = elem
-				elem = ""
+				switch elem[0] {
+				case 'o': // Prefix: "ools"
 
-				if len(elem) == 0 {
-					// Leaf node.
-					switch r.Method {
-					case "POST":
-						s.handleSchedulerTriggerRequest([1]string{
-							args[0],
-						}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "POST",
-							allowedHeaders: rn11AllowedHeaders,
-							acceptPost:     "application/json",
-							acceptPatch:    "",
-						})
+					if l := len("ools"); len(elem) >= l && elem[0:l] == "ools" {
+						elem = elem[l:]
+					} else {
+						break
 					}
 
-					return
+					if len(elem) == 0 {
+						switch r.Method {
+						case "GET":
+							s.handleToolsListRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+					switch elem[0] {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						// Param: "name"
+						// Match until "/"
+						idx := strings.IndexByte(elem, '/')
+						if idx < 0 {
+							idx = len(elem)
+						}
+						args[0] = elem[:idx]
+						elem = elem[idx:]
+
+						if len(elem) == 0 {
+							break
+						}
+						switch elem[0] {
+						case '/': // Prefix: "/e"
+
+							if l := len("/e"); len(elem) >= l && elem[0:l] == "/e" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								break
+							}
+							switch elem[0] {
+							case 'n': // Prefix: "nabled"
+
+								if l := len("nabled"); len(elem) >= l && elem[0:l] == "nabled" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch r.Method {
+									case "PUT":
+										s.handleToolsSetEnabledRequest([1]string{
+											args[0],
+										}, elemIsEscaped, w, r)
+									default:
+										s.notAllowed(w, r, notAllowedParams{
+											allowedMethods: "PUT",
+											allowedHeaders: rn18AllowedHeaders,
+											acceptPost:     "",
+											acceptPatch:    "",
+										})
+									}
+
+									return
+								}
+
+							case 'x': // Prefix: "xecute"
+
+								if l := len("xecute"); len(elem) >= l && elem[0:l] == "xecute" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch r.Method {
+									case "POST":
+										s.handleToolsExecuteRequest([1]string{
+											args[0],
+										}, elemIsEscaped, w, r)
+									default:
+										s.notAllowed(w, r, notAllowedParams{
+											allowedMethods: "POST",
+											allowedHeaders: rn15AllowedHeaders,
+											acceptPost:     "application/json",
+											acceptPatch:    "",
+										})
+									}
+
+									return
+								}
+
+							}
+
+						}
+
+					}
+
+				case 'r': // Prefix: "rigger/"
+
+					if l := len("rigger/"); len(elem) >= l && elem[0:l] == "rigger/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					// Param: "task"
+					// Leaf parameter, slashes are prohibited
+					idx := strings.IndexByte(elem, '/')
+					if idx >= 0 {
+						break
+					}
+					args[0] = elem
+					elem = ""
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleSchedulerTriggerRequest([1]string{
+								args[0],
+							}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: rn11AllowedHeaders,
+								acceptPost:     "application/json",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				}
 
 			case 'v': // Prefix: "voicevox/speaker"
@@ -301,7 +438,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					default:
 						s.notAllowed(w, r, notAllowedParams{
 							allowedMethods: "GET,PUT",
-							allowedHeaders: rn12AllowedHeaders,
+							allowedHeaders: rn19AllowedHeaders,
 							acceptPost:     "",
 							acceptPatch:    "",
 						})
@@ -615,38 +752,165 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					}
 				}
 
-			case 't': // Prefix: "trigger/"
+			case 't': // Prefix: "t"
 
-				if l := len("trigger/"); len(elem) >= l && elem[0:l] == "trigger/" {
+				if l := len("t"); len(elem) >= l && elem[0:l] == "t" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
-				// Param: "task"
-				// Leaf parameter, slashes are prohibited
-				idx := strings.IndexByte(elem, '/')
-				if idx >= 0 {
+				if len(elem) == 0 {
 					break
 				}
-				args[0] = elem
-				elem = ""
+				switch elem[0] {
+				case 'o': // Prefix: "ools"
 
-				if len(elem) == 0 {
-					// Leaf node.
-					switch method {
-					case "POST":
-						r.name = SchedulerTriggerOperation
-						r.summary = ""
-						r.operationID = "Scheduler_trigger"
-						r.operationGroup = ""
-						r.pathPattern = "/internal/trigger/{task}"
-						r.args = args
-						r.count = 1
-						return r, true
-					default:
-						return
+					if l := len("ools"); len(elem) >= l && elem[0:l] == "ools" {
+						elem = elem[l:]
+					} else {
+						break
 					}
+
+					if len(elem) == 0 {
+						switch method {
+						case "GET":
+							r.name = ToolsListOperation
+							r.summary = ""
+							r.operationID = "Tools_list"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/tools"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+					switch elem[0] {
+					case '/': // Prefix: "/"
+
+						if l := len("/"); len(elem) >= l && elem[0:l] == "/" {
+							elem = elem[l:]
+						} else {
+							break
+						}
+
+						// Param: "name"
+						// Match until "/"
+						idx := strings.IndexByte(elem, '/')
+						if idx < 0 {
+							idx = len(elem)
+						}
+						args[0] = elem[:idx]
+						elem = elem[idx:]
+
+						if len(elem) == 0 {
+							break
+						}
+						switch elem[0] {
+						case '/': // Prefix: "/e"
+
+							if l := len("/e"); len(elem) >= l && elem[0:l] == "/e" {
+								elem = elem[l:]
+							} else {
+								break
+							}
+
+							if len(elem) == 0 {
+								break
+							}
+							switch elem[0] {
+							case 'n': // Prefix: "nabled"
+
+								if l := len("nabled"); len(elem) >= l && elem[0:l] == "nabled" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch method {
+									case "PUT":
+										r.name = ToolsSetEnabledOperation
+										r.summary = ""
+										r.operationID = "Tools_setEnabled"
+										r.operationGroup = ""
+										r.pathPattern = "/internal/tools/{name}/enabled"
+										r.args = args
+										r.count = 1
+										return r, true
+									default:
+										return
+									}
+								}
+
+							case 'x': // Prefix: "xecute"
+
+								if l := len("xecute"); len(elem) >= l && elem[0:l] == "xecute" {
+									elem = elem[l:]
+								} else {
+									break
+								}
+
+								if len(elem) == 0 {
+									// Leaf node.
+									switch method {
+									case "POST":
+										r.name = ToolsExecuteOperation
+										r.summary = ""
+										r.operationID = "Tools_execute"
+										r.operationGroup = ""
+										r.pathPattern = "/internal/tools/{name}/execute"
+										r.args = args
+										r.count = 1
+										return r, true
+									default:
+										return
+									}
+								}
+
+							}
+
+						}
+
+					}
+
+				case 'r': // Prefix: "rigger/"
+
+					if l := len("rigger/"); len(elem) >= l && elem[0:l] == "rigger/" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					// Param: "task"
+					// Leaf parameter, slashes are prohibited
+					idx := strings.IndexByte(elem, '/')
+					if idx >= 0 {
+						break
+					}
+					args[0] = elem
+					elem = ""
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = SchedulerTriggerOperation
+							r.summary = ""
+							r.operationID = "Scheduler_trigger"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/trigger/{task}"
+							r.args = args
+							r.count = 1
+							return r, true
+						default:
+							return
+						}
+					}
+
 				}
 
 			case 'v': // Prefix: "voicevox/speaker"

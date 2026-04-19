@@ -77,6 +77,33 @@ func (UnimplementedHandler) SchedulerTrigger(ctx context.Context, req *TriggerRe
 	return r, ht.ErrNotImplemented
 }
 
+// ToolsExecute implements Tools_execute operation.
+//
+// ツールを手動実行する。リクエストボディがそのまま入力 JSON。.
+//
+// POST /internal/tools/{name}/execute
+func (UnimplementedHandler) ToolsExecute(ctx context.Context, req ToolsExecuteReq, params ToolsExecuteParams) (r *ToolExecuteResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ToolsList implements Tools_list operation.
+//
+// 登録済みツール一覧を返す (enabled/disabled 情報付き)。.
+//
+// GET /internal/tools
+func (UnimplementedHandler) ToolsList(ctx context.Context) (r *ToolsListResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// ToolsSetEnabled implements Tools_setEnabled operation.
+//
+// ツールの enable/disable を切り替える。DB に永続化する。.
+//
+// PUT /internal/tools/{name}/enabled
+func (UnimplementedHandler) ToolsSetEnabled(ctx context.Context, req *SetToolEnabledRequest, params ToolsSetEnabledParams) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // VoicevoxGetSpeaker implements Voicevox_getSpeaker operation.
 //
 // 現在設定されている話者 ID を返す。.

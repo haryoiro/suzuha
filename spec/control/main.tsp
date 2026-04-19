@@ -7,6 +7,7 @@ import "./routes/runtime.tsp";
 import "./routes/agent.tsp";
 import "./routes/scheduler.tsp";
 import "./routes/voicevox.tsp";
+import "./routes/tools.tsp";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;

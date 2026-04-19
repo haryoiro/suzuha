@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"database/sql"
+	"sort"
+
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/agent"
@@ -14,6 +17,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/scheduler"
+	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"
 	"github.com/haryoiro/suzuha/internal/voice"
 )
@@ -29,6 +33,8 @@ type Handler struct {
 	voicevox      *tts.VoicevoxClient
 	voicevoxCfg   *config.TTSProvider // 話者 ID 変更を config に反映するため
 	voicePipeline *voice.Pipeline     // runtime の話者切り替え用 (nil 可)
+	toolRegistry  *tool.Registry
+	sharedDB      *sql.DB // disabled tools 永続化用
 	promptDir     string
 	configDir     string
 }
@@ -43,6 +49,8 @@ type Config struct {
 	Voicevox      *tts.VoicevoxClient   // nil: voicevox endpoint は 503
 	VoicevoxCfg   *config.TTSProvider   // nil: voicevox endpoint は 503
 	VoicePipeline *voice.Pipeline       // nil: runtime 話者切替をスキップ
+	ToolRegistry  *tool.Registry
+	SharedDB      *sql.DB // tool.SaveDisabled 用
 	PromptDir     string
 	ConfigDir     string
 }
@@ -57,6 +65,8 @@ func NewHandler(cfg Config) *Handler {
 		voicevox:      cfg.Voicevox,
 		voicevoxCfg:   cfg.VoicevoxCfg,
 		voicePipeline: cfg.VoicePipeline,
+		toolRegistry:  cfg.ToolRegistry,
+		sharedDB:      cfg.SharedDB,
 		promptDir:     cfg.PromptDir,
 		configDir:     cfg.ConfigDir,
 	}
@@ -214,6 +224,73 @@ func (h *Handler) VoicevoxSetSpeaker(ctx context.Context, req *gen.SetSpeakerReq
 		h.voicePipeline.SetSpeakerID(id)
 	}
 	return &gen.OkResponse{Ok: true}, nil
+}
+
+// ToolsList implements GET /internal/tools.
+func (h *Handler) ToolsList(ctx context.Context) (*gen.ToolsListResponse, error) {
+	tools := h.toolRegistry.All()
+	out := make([]gen.ToolInfo, 0, len(tools))
+	for _, t := range tools {
+		schema := gen.ToolInfoInputSchema{}
+		if raw := t.InputSchema(); len(raw) > 0 {
+			var m map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &m); err == nil {
+				for k, v := range m {
+					schema[k] = jx.Raw(v)
+				}
+			}
+		}
+		out = append(out, gen.ToolInfo{
+			Name:        t.Name(),
+			Description: t.Description(),
+			InputSchema: schema,
+			Enabled:     !h.toolRegistry.IsDisabled(t.Name()),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return &gen.ToolsListResponse{Data: out}, nil
+}
+
+// ToolsSetEnabled implements PUT /internal/tools/{name}/enabled.
+func (h *Handler) ToolsSetEnabled(ctx context.Context, req *gen.SetToolEnabledRequest, params gen.ToolsSetEnabledParams) (*gen.OkResponse, error) {
+	h.toolRegistry.SetEnabled(params.Name, req.Enabled)
+	if err := tool.SaveDisabled(ctx, h.sharedDB, h.toolRegistry.DisabledNames()); err != nil {
+		return nil, err
+	}
+	return &gen.OkResponse{Ok: true}, nil
+}
+
+// ToolsExecute implements POST /internal/tools/{name}/execute.
+func (h *Handler) ToolsExecute(ctx context.Context, req gen.ToolsExecuteReq, params gen.ToolsExecuteParams) (*gen.ToolExecuteResponse, error) {
+	t, ok := h.toolRegistry.Get(params.Name)
+	if !ok {
+		return nil, fmt.Errorf("tool not found: %s", params.Name)
+	}
+	input := []byte("{}")
+	if len(req) > 0 {
+		m := make(map[string]json.RawMessage, len(req))
+		for k, v := range req {
+			m[k] = json.RawMessage(v)
+		}
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
+		input = b
+	}
+	result, err := t.Execute(ctx, json.RawMessage(input))
+	if err != nil {
+		return nil, err
+	}
+	var text string
+	for _, c := range result.Content {
+		text += c.Text
+	}
+	return &gen.ToolExecuteResponse{
+		Ok:      !result.IsError,
+		Output:  text,
+		IsError: result.IsError,
+	}, nil
 }
 
 // toJxMap は map[string]any を ogen の map[string]jx.Raw に変換する。

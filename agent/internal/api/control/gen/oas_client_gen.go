@@ -70,6 +70,24 @@ type Invoker interface {
 	//
 	// POST /internal/trigger/{task}
 	SchedulerTrigger(ctx context.Context, request *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
+	// ToolsExecute invokes Tools_execute operation.
+	//
+	// ツールを手動実行する。リクエストボディがそのまま入力 JSON。.
+	//
+	// POST /internal/tools/{name}/execute
+	ToolsExecute(ctx context.Context, request ToolsExecuteReq, params ToolsExecuteParams) (*ToolExecuteResponse, error)
+	// ToolsList invokes Tools_list operation.
+	//
+	// 登録済みツール一覧を返す (enabled/disabled 情報付き)。.
+	//
+	// GET /internal/tools
+	ToolsList(ctx context.Context) (*ToolsListResponse, error)
+	// ToolsSetEnabled invokes Tools_setEnabled operation.
+	//
+	// ツールの enable/disable を切り替える。DB に永続化する。.
+	//
+	// PUT /internal/tools/{name}/enabled
+	ToolsSetEnabled(ctx context.Context, request *SetToolEnabledRequest, params ToolsSetEnabledParams) (*OkResponse, error)
 	// VoicevoxGetSpeaker invokes Voicevox_getSpeaker operation.
 	//
 	// 現在設定されている話者 ID を返す。.
@@ -663,6 +681,272 @@ func (c *Client) sendSchedulerTrigger(ctx context.Context, request *TriggerReque
 
 	stage = "DecodeResponse"
 	result, err := decodeSchedulerTriggerResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// ToolsExecute invokes Tools_execute operation.
+//
+// ツールを手動実行する。リクエストボディがそのまま入力 JSON。.
+//
+// POST /internal/tools/{name}/execute
+func (c *Client) ToolsExecute(ctx context.Context, request ToolsExecuteReq, params ToolsExecuteParams) (*ToolExecuteResponse, error) {
+	res, err := c.sendToolsExecute(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendToolsExecute(ctx context.Context, request ToolsExecuteReq, params ToolsExecuteParams) (res *ToolExecuteResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Tools_execute"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/internal/tools/{name}/execute"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ToolsExecuteOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/internal/tools/"
+	{
+		// Encode "name" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "name",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Name))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/execute"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeToolsExecuteRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeToolsExecuteResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// ToolsList invokes Tools_list operation.
+//
+// 登録済みツール一覧を返す (enabled/disabled 情報付き)。.
+//
+// GET /internal/tools
+func (c *Client) ToolsList(ctx context.Context) (*ToolsListResponse, error) {
+	res, err := c.sendToolsList(ctx)
+	return res, err
+}
+
+func (c *Client) sendToolsList(ctx context.Context) (res *ToolsListResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Tools_list"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/tools"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ToolsListOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/tools"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeToolsListResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// ToolsSetEnabled invokes Tools_setEnabled operation.
+//
+// ツールの enable/disable を切り替える。DB に永続化する。.
+//
+// PUT /internal/tools/{name}/enabled
+func (c *Client) ToolsSetEnabled(ctx context.Context, request *SetToolEnabledRequest, params ToolsSetEnabledParams) (*OkResponse, error) {
+	res, err := c.sendToolsSetEnabled(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendToolsSetEnabled(ctx context.Context, request *SetToolEnabledRequest, params ToolsSetEnabledParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Tools_setEnabled"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/internal/tools/{name}/enabled"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, ToolsSetEnabledOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [3]string
+	pathParts[0] = "/internal/tools/"
+	{
+		// Encode "name" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "name",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Name))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	pathParts[2] = "/enabled"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeToolsSetEnabledRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeToolsSetEnabledResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
