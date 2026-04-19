@@ -810,25 +810,6 @@ func (s *RawStreamsLogsOKRawTextEventStream) SetResponse(val *http.Response) {
 
 func (*RawStreamsLogsOKRawTextEventStream) rawStreamsLogsRes() {}
 
-type RawStreamsOverlandOKApplicationJSON string
-
-// RawStreamsOverlandOKRawApplicationJSON represents raw HTTP response for RawStreamsOverland application/json.
-type RawStreamsOverlandOKRawApplicationJSON struct {
-	Response *http.Response `json:"-"`
-}
-
-// GetResponse returns the value of Response.
-func (s *RawStreamsOverlandOKRawApplicationJSON) GetResponse() *http.Response {
-	return s.Response
-}
-
-// SetResponse sets the value of Response.
-func (s *RawStreamsOverlandOKRawApplicationJSON) SetResponse(val *http.Response) {
-	s.Response = val
-}
-
-func (*RawStreamsOverlandOKRawApplicationJSON) rawStreamsOverlandRes() {}
-
 // Ref: #/components/schemas/ReloadPromptResponse
 type ReloadPromptResponse struct {
 	Ok     bool  `json:"ok"`

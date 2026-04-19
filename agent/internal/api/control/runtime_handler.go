@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/samber/do/v2"
 )
 
@@ -18,7 +16,6 @@ import (
 type RuntimeHandler struct {
 	agent        *agent.Agent
 	channelStore *channel.Store
-	locStore     *location.Store
 	promptDir    string
 	configDir    string
 }
@@ -30,7 +27,6 @@ func NewRuntimeHandler(i do.Injector) (gen.RuntimeHandler, error) {
 	return &RuntimeHandler{
 		agent:        do.MustInvoke[*agent.Agent](i),
 		channelStore: do.MustInvoke[*channel.Store](i),
-		locStore:     do.MustInvoke[*location.Store](i),
 		promptDir:    cfg.Agent.PromptDir,
 		configDir:    filepath.Dir(cfgPath),
 	}, nil
@@ -46,7 +42,6 @@ func (h *RuntimeHandler) RuntimeReloadChannelSettings(ctx context.Context) (*gen
 
 // RuntimeCompact implements POST /internal/compact.
 func (h *RuntimeHandler) RuntimeCompact(ctx context.Context) (*gen.CompactResponse, error) {
-	// 圧縮は時間がかかるので呼び出し元 ctx とは独立させて 5 分タイムアウトに。
 	compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	h.agent.ForceCompact(compactCtx)
@@ -67,15 +62,4 @@ func (h *RuntimeHandler) RuntimeReloadPrompt(ctx context.Context) (*gen.ReloadPr
 		Ok:     true,
 		Length: int32(len(prompt)),
 	}, nil
-}
-
-// RuntimeReloadLocationSettings implements POST /internal/reload-location-settings.
-func (h *RuntimeHandler) RuntimeReloadLocationSettings(ctx context.Context) (*gen.OkResponse, error) {
-	if h.locStore == nil {
-		return nil, fmt.Errorf("location store not configured")
-	}
-	if err := h.locStore.LoadSettings(ctx); err != nil {
-		return nil, err
-	}
-	return &gen.OkResponse{Ok: true}, nil
 }

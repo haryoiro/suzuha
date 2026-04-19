@@ -11,7 +11,6 @@ import "./routes/users.tsp";
 import "./routes/guilds.tsp";
 import "./routes/channels.tsp";
 import "./routes/actions.tsp";
-import "./routes/location.tsp";
 import "./routes/prompts.tsp";
 import "./routes/tools.tsp";
 import "./routes/logs.tsp";

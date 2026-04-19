@@ -146,38 +146,6 @@ type Handler interface {
 	//
 	// PUT /api/llm/roles/{role}
 	LLMRolesUpdate(ctx context.Context, req *LLMRoleUpdateReq, params LLMRolesUpdateParams) (*OkResponse, error)
-	// LocationCreatePlace implements Location_createPlace operation.
-	//
-	// POST /api/location/places
-	LocationCreatePlace(ctx context.Context, req *CreatePlaceRequest) (*OkResponse, error)
-	// LocationDeleteDevice implements Location_deleteDevice operation.
-	//
-	// DELETE /api/location/devices/{id}
-	LocationDeleteDevice(ctx context.Context, params LocationDeleteDeviceParams) error
-	// LocationDeletePlace implements Location_deletePlace operation.
-	//
-	// DELETE /api/location/places/{id}
-	LocationDeletePlace(ctx context.Context, params LocationDeletePlaceParams) error
-	// LocationListDevices implements Location_listDevices operation.
-	//
-	// GET /api/location/devices
-	LocationListDevices(ctx context.Context) (*LocationListDevicesOK, error)
-	// LocationListPlaces implements Location_listPlaces operation.
-	//
-	// GET /api/location/places
-	LocationListPlaces(ctx context.Context) (*LocationListPlacesOK, error)
-	// LocationUpdateDevice implements Location_updateDevice operation.
-	//
-	// PUT /api/location/devices/{id}
-	LocationUpdateDevice(ctx context.Context, req *UpdateDeviceRequest, params LocationUpdateDeviceParams) (*OkResponse, error)
-	// LocationUpdatePlace implements Location_updatePlace operation.
-	//
-	// PUT /api/location/places/{id}
-	LocationUpdatePlace(ctx context.Context, req *UpdatePlaceRequest, params LocationUpdatePlaceParams) (*OkResponse, error)
-	// LocationUserLocation implements Location_userLocation operation.
-	//
-	// GET /api/location/{userId}
-	LocationUserLocation(ctx context.Context, params LocationUserLocationParams) (*LocationUserLocationOK, error)
 	// MemoriesCreate implements Memories_create operation.
 	//
 	// POST /api/memories

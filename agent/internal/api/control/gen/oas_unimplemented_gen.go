@@ -187,17 +187,6 @@ func (UnimplementedHandler) RawStreamsLogs(ctx context.Context, w http.ResponseW
 	return ht.ErrNotImplemented
 }
 
-// RawStreamsOverland implements RawStreams_overland operation.
-//
-// Overland モバイルアプリからの GPS データ POST (Bearer token 認証)。
-// ペイロードが巨大な JSON 配列なので raw で受けてそのまま location.Handler
-// に委譲する。.
-//
-// POST /internal/overland
-func (UnimplementedHandler) RawStreamsOverland(ctx context.Context, w http.ResponseWriter) error {
-	return ht.ErrNotImplemented
-}
-
 // RuntimeCompact implements Runtime_compact operation.
 //
 // 会話コンテキストを強制的に圧縮する。.
@@ -213,15 +202,6 @@ func (UnimplementedHandler) RuntimeCompact(ctx context.Context) (r *CompactRespo
 //
 // POST /internal/reload-channel-settings
 func (UnimplementedHandler) RuntimeReloadChannelSettings(ctx context.Context) (r *OkResponse, _ error) {
-	return r, ht.ErrNotImplemented
-}
-
-// RuntimeReloadLocationSettings implements Runtime_reloadLocationSettings operation.
-//
-// Location 設定 (locations / places / devices) を DB から再読み込み。.
-//
-// POST /internal/reload-location-settings
-func (UnimplementedHandler) RuntimeReloadLocationSettings(ctx context.Context) (r *OkResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

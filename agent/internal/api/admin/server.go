@@ -23,10 +23,10 @@ type Server struct {
 }
 
 // NewServer creates a new admin Server with all routes configured.
-func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore ActionStore, diaryStore DiaryStore, locStore LocationStore, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
+func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminStore, schedStore ActionStore, diaryStore DiaryStore, mediaStore memory.MediaStore, logger *slog.Logger) (*Server, error) {
 	agentBase := strings.TrimSuffix(cfg.AgentMetrics, "/metrics")
 
-	adminHandler := NewAdminHandler(store, userStore, schedStore, diaryStore, locStore, mediaStore, agentBase, cfg.PromptDir, logger)
+	adminHandler := NewAdminHandler(store, userStore, schedStore, diaryStore, mediaStore, agentBase, cfg.PromptDir, logger)
 
 	// RequestMiddleware で raw *http.Request を ctx に載せ、
 	// SSE / multipart / binary 系の RawHandler で取り出せるようにする。

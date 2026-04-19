@@ -34,12 +34,10 @@ import (
 	"github.com/haryoiro/suzuha/internal/feature/topics"
 	"github.com/haryoiro/suzuha/internal/feature/video"
 	"github.com/haryoiro/suzuha/internal/feature/vision"
-	"github.com/haryoiro/suzuha/internal/feature/wander"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
 	"github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memento/consolidator"
@@ -128,20 +126,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			}
 
 			return reg, nil
-		})
-
-		// Location store (nil when location tracking is not configured).
-		do.Provide(i, func(i do.Injector) (*location.Store, error) {
-			cfg := do.MustInvoke[*config.Config](i)
-			if !cfg.Location.Enabled {
-				return nil, nil
-			}
-			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
-			store := location.NewStore(db)
-			if err := store.LoadCache(context.Background()); err != nil {
-				// Non-fatal: cache will warm on first Overland POST.
-			}
-			return store, nil
 		})
 
 		// Discord chat instance (nil when Discord is not configured).
@@ -246,7 +230,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Features: setup + tool/hook registration.
 		do.Provide(i, func(i do.Injector) ([]scheduler.Feature, error) {
-			cfg := do.MustInvoke[*config.Config](i)
 			store := do.MustInvoke[memory.Backend](i)
 			registry := do.MustInvoke[*tool.Registry](i)
 			logger := do.MustInvoke[*slog.Logger](i)
@@ -283,7 +266,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				mcp.NewFeature(mcpMgr, logger),
 				topics.New(),
 				research.New(searxURL, 5),
-				wander.New(searxURL, llmClient, store, cfg.Agent.SystemPrompt, 4),
 				forget.New(do.MustInvoke[*consolidator.Consolidator](i)),
 				diary.New(),
 				video.New(videoFetcher, videoExtractor, llmClient, logger),
@@ -292,13 +274,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			// Add vision feature if device block created it.
 			if vf, err := do.Invoke[*vision.Feature](i); err == nil {
 				features = append(features, vf)
-			}
-
-			// Add location feature if enabled.
-			locStore := do.MustInvoke[*location.Store](i)
-			if locStore != nil {
-				features = append(features, location.NewFeature(locStore))
-				ag.SetLocationStore(locStore)
 			}
 
 			// Wire Langfuse tracing if enabled.
@@ -356,9 +331,8 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 			db := store.DB()
 			var ds admin.DiaryStore = &diaryStoreAdapter{s: diary.NewStore(db)}
-			var ls admin.LocationStore = &locationStoreAdapter{s: location.NewStore(db)}
 
-			return admin.NewServer(cfg.Admin, store, userStore, &actionStoreAdapter{s: schedStore}, ds, ls, mediaStore, adminLogger)
+			return admin.NewServer(cfg.Admin, store, userStore, &actionStoreAdapter{s: schedStore}, ds, mediaStore, adminLogger)
 		})
 
 		// Scheduler (nil when disabled in config).

@@ -10,7 +10,6 @@ import {
   ClockCircleOutlined,
   MenuOutlined,
   ApiOutlined,
-  EnvironmentOutlined,
   ToolOutlined,
   ScheduleOutlined,
   CameraOutlined,
@@ -28,7 +27,6 @@ const ContextPage = lazy(() => import("./routes/context"));
 const DiscordPage = lazy(() => import("./routes/discord/index"));
 const PromptsPage = lazy(() => import("./routes/prompts"));
 const ActionsPage = lazy(() => import("./routes/actions"));
-const LocationPage = lazy(() => import("./routes/location"));
 const ToolsPage = lazy(() => import("./routes/tools"));
 const SchedulerPage = lazy(() => import("./routes/scheduler"));
 const DevicePage = lazy(() => import("./routes/device"));
@@ -45,7 +43,6 @@ type Page =
   | { key: "discord" }
   | { key: "users" }
   | { key: "actions" }
-  | { key: "location" }
   | { key: "tools" }
   | { key: "scheduler" }
   | { key: "prompts" }
@@ -62,7 +59,7 @@ function parseHash(): Page {
   if (hash.startsWith("memory/")) {
     return { key: "memory-detail", id: hash.slice("memory/".length) };
   }
-  const valid = ["dashboard", "memories", "discord", "users", "actions", "location", "tools", "scheduler", "prompts", "context", "device", "voice", "diary", "logs"];
+  const valid = ["dashboard", "memories", "discord", "users", "actions", "tools", "scheduler", "prompts", "context", "device", "voice", "diary", "logs"];
   if (valid.includes(hash)) return { key: hash } as Page;
   return { key: "dashboard" };
 }
@@ -91,7 +88,6 @@ export function App() {
     { key: "discord", icon: <ApiOutlined />, label: "Discord" },
     { key: "users", icon: <TeamOutlined />, label: "Users" },
     { key: "actions", icon: <ClockCircleOutlined />, label: "Actions" },
-    { key: "location", icon: <EnvironmentOutlined />, label: "Location" },
     { key: "tools", icon: <ToolOutlined />, label: "Tools" },
     { key: "scheduler", icon: <ScheduleOutlined />, label: "Scheduler" },
     { key: "prompts", icon: <EditOutlined />, label: "Prompts" },
@@ -120,8 +116,6 @@ export function App() {
         return <UsersPage />;
       case "actions":
         return <ActionsPage />;
-      case "location":
-        return <LocationPage />;
       case "tools":
         return <ToolsPage />;
       case "scheduler":
