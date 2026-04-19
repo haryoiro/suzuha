@@ -7,15 +7,10 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/admin/api"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 )
 
-func (h *AdminHandler) locStore() *location.Store {
-	return location.NewStore(h.db)
-}
-
 func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.LocationUserLocationParams) (*api.LocationUserLocationOK, error) {
-	locs, err := h.locStore().QueryLatestByUserID(ctx, params.UserId)
+	locs, err := h.locStore.QueryLatestByUserID(ctx, params.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
@@ -49,7 +44,7 @@ func (h *AdminHandler) LocationUserLocation(ctx context.Context, params api.Loca
 }
 
 func (h *AdminHandler) LocationListDevices(ctx context.Context) (*api.LocationListDevicesOK, error) {
-	devices, err := h.locStore().ListDevices(ctx)
+	devices, err := h.locStore.ListDevices(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
@@ -72,7 +67,7 @@ func (h *AdminHandler) LocationUpdateDevice(ctx context.Context, req *api.Update
 	ownerName := req.OwnerName.Or("")
 	userID := req.UserID.Or("")
 
-	if err := h.locStore().UpsertDevice(ctx, deviceID, ownerName, userID); err != nil {
+	if err := h.locStore.UpsertDevice(ctx, deviceID, ownerName, userID); err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
 
@@ -82,7 +77,7 @@ func (h *AdminHandler) LocationUpdateDevice(ctx context.Context, req *api.Update
 
 func (h *AdminHandler) LocationDeleteDevice(ctx context.Context, params api.LocationDeleteDeviceParams) error {
 	deviceID := fmt.Sprintf("%d", params.ID)
-	if err := h.locStore().DeleteDevice(ctx, deviceID); err != nil {
+	if err := h.locStore.DeleteDevice(ctx, deviceID); err != nil {
 		return fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
@@ -90,7 +85,7 @@ func (h *AdminHandler) LocationDeleteDevice(ctx context.Context, params api.Loca
 }
 
 func (h *AdminHandler) LocationListPlaces(ctx context.Context) (*api.LocationListPlacesOK, error) {
-	places, err := h.locStore().ListPlaces(ctx)
+	places, err := h.locStore.ListPlaces(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
@@ -115,13 +110,13 @@ func (h *AdminHandler) LocationListPlaces(ctx context.Context) (*api.LocationLis
 
 func (h *AdminHandler) LocationCreatePlace(ctx context.Context, req *api.CreatePlaceRequest) (*api.OkResponse, error) {
 	radiusM := req.RadiusM.Or(50)
-	p := location.Place{
+	p := Place{
 		Name:      req.Name,
 		Latitude:  req.Latitude,
 		Longitude: req.Longitude,
 		RadiusM:   radiusM,
 	}
-	if err := h.locStore().CreatePlace(ctx, p); err != nil {
+	if err := h.locStore.CreatePlace(ctx, p); err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
@@ -129,14 +124,14 @@ func (h *AdminHandler) LocationCreatePlace(ctx context.Context, req *api.CreateP
 }
 
 func (h *AdminHandler) LocationUpdatePlace(ctx context.Context, req *api.UpdatePlaceRequest, params api.LocationUpdatePlaceParams) (*api.OkResponse, error) {
-	p := location.Place{
+	p := Place{
 		ID:        fmt.Sprintf("%d", params.ID),
 		Name:      req.Name.Or(""),
 		Latitude:  req.Latitude.Or(0),
 		Longitude: req.Longitude.Or(0),
 		RadiusM:   req.RadiusM.Or(0),
 	}
-	if err := h.locStore().UpdatePlace(ctx, p); err != nil {
+	if err := h.locStore.UpdatePlace(ctx, p); err != nil {
 		return nil, fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
@@ -144,7 +139,7 @@ func (h *AdminHandler) LocationUpdatePlace(ctx context.Context, req *api.UpdateP
 }
 
 func (h *AdminHandler) LocationDeletePlace(ctx context.Context, params api.LocationDeletePlaceParams) error {
-	if err := h.locStore().DeletePlace(ctx, fmt.Sprintf("%d", params.ID)); err != nil {
+	if err := h.locStore.DeletePlace(ctx, fmt.Sprintf("%d", params.ID)); err != nil {
 		return fmt.Errorf("internal error")
 	}
 	h.notifyAgentReload(ctx, "/internal/reload-location-settings")
