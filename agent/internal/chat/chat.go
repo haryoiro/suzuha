@@ -1,6 +1,6 @@
 // Package chat は port/chat への互換 shim。
-// 段階移行のため呼び出し側の import path を温存し、正準定義は port/chat/ にある。
-// Phase 11 以降に本 package を廃止予定。
+// 正準定義は port/chat/ にあり、本 file は既存呼び出し側の import path を
+// 温存するための暫定 alias のみを持つ。callers 移行完了後に削除予定。
 package chat
 
 import port "github.com/haryoiro/suzuha/internal/port/chat"

@@ -3,9 +3,8 @@
 // - Management: admin 管理画面から使う CRUD + 保守 API
 // - Media: binary 添付ファイルの put/get
 //
-// 実装は capability/memory/ (Phase 6 後半で配置予定) + adapter/store/memory/
-// (Phase 6 後半で配置予定)。現状は internal/memory/*.DBStore がこれらの
-// interface を満たす形で暫定運用する。
+// 最終形の実装は capability/memory/ + adapter/store/memory/ に配置する想定。
+// 暫定は internal/memory/*.DBStore がこれらの interface を満たす。
 package memory
 
 import (
@@ -16,7 +15,7 @@ import (
 )
 
 // Memory は agent pipeline が使う主 API。
-// embedder.Part を使う SearchByParts は Phase 8a で port 化するまで本 interface には含めない。
+// embedder.Part を使う SearchByParts は embedder 側の port 整備後に追加する。
 type Memory interface {
 	Save(ctx context.Context, mem *memo.Memory) error
 	Search(ctx context.Context, query string, limit int) ([]memo.Memory, error)
@@ -34,7 +33,7 @@ type Memory interface {
 }
 
 // Management は admin dashboard が使う管理系 API。
-// Phase 6 plan では "Admin" の名前衝突回避のため Management を採用。
+// 名前衝突 (api/admin) 回避のため "Admin" ではなく Management を採用。
 type Management interface {
 	Memory
 

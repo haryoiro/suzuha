@@ -44,7 +44,7 @@ type CronContext struct {
 	DB       *sql.DB               // Keep for backward compat; prefer typed stores.
 	Logger   *slog.Logger
 
-	// Typed stores (Phase 1 — prefer these over raw DB).
+	// Typed stores — prefer these over raw DB.
 	Users           user.Store             // User operations (resolve, affinity, etc.).
 	ChannelActivity channel.ActivityStore  // Channel activity reads.
 	MemoryAdmin     memory.AdminStore      // Admin-level memory operations (batch delete, etc.).

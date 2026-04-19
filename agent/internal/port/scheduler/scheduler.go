@@ -2,9 +2,8 @@
 // 実装は各 behavior / capability の `task.go` に配置する。
 //
 // 現行の `internal/scheduler.CronTask` (CronContext 経由で LLM/Memory/Notifier 等に
-// アクセス) はそのまま残し、runtime/scheduler/ 内部型として Phase 9 まで共存する。
-// 本 port.Task は Feature interface 廃止後の「最小契約」を先取りして定義しており、
-// 新規 Task 実装はこちらを目指す。
+// アクセス) は runtime/scheduler/ 内部型として共存させ、Feature interface 廃止後に
+// 本 port.Task へ一本化する。新規 Task 実装はこちらを目指す。
 package scheduler
 
 import (
