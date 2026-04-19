@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/haryoiro/suzuha/external/embedding"
@@ -360,10 +361,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Control (internal) API handler — mount on internal mux.
 		do.Provide(i, func(i do.Injector) (*control.Handler, error) {
+			cfg := do.MustInvoke[*config.Config](i)
 			ag := do.MustInvoke[*agent.Agent](i)
 			channelStore := do.MustInvoke[*channel.Store](i)
 			userStore := do.MustInvoke[user.Store](i)
-			return control.NewHandler(ag, channelStore, userStore), nil
+			cfgPath := do.MustInvokeNamed[string](i, "config-path")
+			return control.NewHandler(ag, channelStore, userStore, cfg.Agent.PromptDir, filepath.Dir(cfgPath)), nil
 		})
 	}
 }

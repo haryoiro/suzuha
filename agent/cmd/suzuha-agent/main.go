@@ -11,9 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
-	"strings"
 	"syscall"
 	"time"
 
@@ -258,36 +256,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	mux.Handle("POST /internal/reload-channel-settings", controlOgen)
 	mux.Handle("GET /internal/identity", controlOgen)
 	mux.Handle("GET /internal/context", controlOgen)
-	mux.HandleFunc("POST /internal/compact", func(w http.ResponseWriter, r *http.Request) {
-		compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		ag.ForceCompact(compactCtx)
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"ok":true,"message_count":%d}`, ag.AgentContext().Len())
-	})
-	mux.HandleFunc("POST /internal/reload-prompt", func(w http.ResponseWriter, r *http.Request) {
-		dir := cfg.Agent.PromptDir
-		if dir != "" && !filepath.IsAbs(dir) {
-			dir = filepath.Join(filepath.Dir(cfgPath), dir)
-		}
-		var parts []string
-		for _, name := range []string{"IDENTITY.md", "SOUL.md"} {
-			data, err := os.ReadFile(filepath.Join(dir, name))
-			if err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				logger.Error("reload-prompt read", "name", name, "error", err)
-				http.Error(w, `{"error":"read failed"}`, http.StatusInternalServerError)
-				return
-			}
-			parts = append(parts, strings.TrimSpace(string(data)))
-		}
-		newPrompt := strings.Join(parts, "\n\n")
-		ag.ReloadPrompt(newPrompt)
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"ok":true,"length":%d}`, len(newPrompt))
-	})
+	mux.Handle("POST /internal/compact", controlOgen)
+	mux.Handle("POST /internal/reload-prompt", controlOgen)
 	mux.HandleFunc("GET /internal/scheduler/jobs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if sched == nil {

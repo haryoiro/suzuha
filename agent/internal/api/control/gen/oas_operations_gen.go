@@ -8,5 +8,7 @@ type OperationName = string
 const (
 	AgentOpsGetContextOperation           OperationName = "AgentOpsGetContext"
 	AgentOpsIdentityOperation             OperationName = "AgentOpsIdentity"
+	RuntimeCompactOperation               OperationName = "RuntimeCompact"
 	RuntimeReloadChannelSettingsOperation OperationName = "RuntimeReloadChannelSettings"
+	RuntimeReloadPromptOperation          OperationName = "RuntimeReloadPrompt"
 )

@@ -31,11 +31,29 @@ func (UnimplementedHandler) AgentOpsIdentity(ctx context.Context) (r *Identity, 
 	return r, ht.ErrNotImplemented
 }
 
+// RuntimeCompact implements Runtime_compact operation.
+//
+// 会話コンテキストを強制的に圧縮する。.
+//
+// POST /internal/compact
+func (UnimplementedHandler) RuntimeCompact(ctx context.Context) (r *CompactResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // RuntimeReloadChannelSettings implements Runtime_reloadChannelSettings operation.
 //
 // チャンネル設定 (channel_settings) を DB から再読み込みする。.
 //
 // POST /internal/reload-channel-settings
 func (UnimplementedHandler) RuntimeReloadChannelSettings(ctx context.Context) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// RuntimeReloadPrompt implements Runtime_reloadPrompt operation.
+//
+// ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。.
+//
+// POST /internal/reload-prompt
+func (UnimplementedHandler) RuntimeReloadPrompt(ctx context.Context) (r *ReloadPromptResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }

@@ -20,12 +20,24 @@ type Handler interface {
 	//
 	// GET /internal/identity
 	AgentOpsIdentity(ctx context.Context) (*Identity, error)
+	// RuntimeCompact implements Runtime_compact operation.
+	//
+	// 会話コンテキストを強制的に圧縮する。.
+	//
+	// POST /internal/compact
+	RuntimeCompact(ctx context.Context) (*CompactResponse, error)
 	// RuntimeReloadChannelSettings implements Runtime_reloadChannelSettings operation.
 	//
 	// チャンネル設定 (channel_settings) を DB から再読み込みする。.
 	//
 	// POST /internal/reload-channel-settings
 	RuntimeReloadChannelSettings(ctx context.Context) (*OkResponse, error)
+	// RuntimeReloadPrompt implements Runtime_reloadPrompt operation.
+	//
+	// ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。.
+	//
+	// POST /internal/reload-prompt
+	RuntimeReloadPrompt(ctx context.Context) (*ReloadPromptResponse, error)
 }
 
 // Server implements http server based on OpenAPI v3 specification and

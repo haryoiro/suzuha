@@ -60,29 +60,68 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			switch elem[0] {
-			case 'c': // Prefix: "context"
+			case 'c': // Prefix: "co"
 
-				if l := len("context"); len(elem) >= l && elem[0:l] == "context" {
+				if l := len("co"); len(elem) >= l && elem[0:l] == "co" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					// Leaf node.
-					switch r.Method {
-					case "GET":
-						s.handleAgentOpsGetContextRequest([0]string{}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "GET",
-							allowedHeaders: nil,
-							acceptPost:     "",
-							acceptPatch:    "",
-						})
+					break
+				}
+				switch elem[0] {
+				case 'm': // Prefix: "mpact"
+
+					if l := len("mpact"); len(elem) >= l && elem[0:l] == "mpact" {
+						elem = elem[l:]
+					} else {
+						break
 					}
 
-					return
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleRuntimeCompactRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 'n': // Prefix: "ntext"
+
+					if l := len("ntext"); len(elem) >= l && elem[0:l] == "ntext" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "GET":
+							s.handleAgentOpsGetContextRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "GET",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				}
 
 			case 'i': // Prefix: "identity"
@@ -110,29 +149,68 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-			case 'r': // Prefix: "reload-channel-settings"
+			case 'r': // Prefix: "reload-"
 
-				if l := len("reload-channel-settings"); len(elem) >= l && elem[0:l] == "reload-channel-settings" {
+				if l := len("reload-"); len(elem) >= l && elem[0:l] == "reload-" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					// Leaf node.
-					switch r.Method {
-					case "POST":
-						s.handleRuntimeReloadChannelSettingsRequest([0]string{}, elemIsEscaped, w, r)
-					default:
-						s.notAllowed(w, r, notAllowedParams{
-							allowedMethods: "POST",
-							allowedHeaders: nil,
-							acceptPost:     "",
-							acceptPatch:    "",
-						})
+					break
+				}
+				switch elem[0] {
+				case 'c': // Prefix: "channel-settings"
+
+					if l := len("channel-settings"); len(elem) >= l && elem[0:l] == "channel-settings" {
+						elem = elem[l:]
+					} else {
+						break
 					}
 
-					return
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleRuntimeReloadChannelSettingsRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
+				case 'p': // Prefix: "prompt"
+
+					if l := len("prompt"); len(elem) >= l && elem[0:l] == "prompt" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch r.Method {
+						case "POST":
+							s.handleRuntimeReloadPromptRequest([0]string{}, elemIsEscaped, w, r)
+						default:
+							s.notAllowed(w, r, notAllowedParams{
+								allowedMethods: "POST",
+								allowedHeaders: nil,
+								acceptPost:     "",
+								acceptPatch:    "",
+							})
+						}
+
+						return
+					}
+
 				}
 
 			}
@@ -235,29 +313,68 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 				break
 			}
 			switch elem[0] {
-			case 'c': // Prefix: "context"
+			case 'c': // Prefix: "co"
 
-				if l := len("context"); len(elem) >= l && elem[0:l] == "context" {
+				if l := len("co"); len(elem) >= l && elem[0:l] == "co" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					// Leaf node.
-					switch method {
-					case "GET":
-						r.name = AgentOpsGetContextOperation
-						r.summary = ""
-						r.operationID = "AgentOps_getContext"
-						r.operationGroup = ""
-						r.pathPattern = "/internal/context"
-						r.args = args
-						r.count = 0
-						return r, true
-					default:
-						return
+					break
+				}
+				switch elem[0] {
+				case 'm': // Prefix: "mpact"
+
+					if l := len("mpact"); len(elem) >= l && elem[0:l] == "mpact" {
+						elem = elem[l:]
+					} else {
+						break
 					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = RuntimeCompactOperation
+							r.summary = ""
+							r.operationID = "Runtime_compact"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/compact"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'n': // Prefix: "ntext"
+
+					if l := len("ntext"); len(elem) >= l && elem[0:l] == "ntext" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "GET":
+							r.name = AgentOpsGetContextOperation
+							r.summary = ""
+							r.operationID = "AgentOps_getContext"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/context"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				}
 
 			case 'i': // Prefix: "identity"
@@ -285,29 +402,68 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					}
 				}
 
-			case 'r': // Prefix: "reload-channel-settings"
+			case 'r': // Prefix: "reload-"
 
-				if l := len("reload-channel-settings"); len(elem) >= l && elem[0:l] == "reload-channel-settings" {
+				if l := len("reload-"); len(elem) >= l && elem[0:l] == "reload-" {
 					elem = elem[l:]
 				} else {
 					break
 				}
 
 				if len(elem) == 0 {
-					// Leaf node.
-					switch method {
-					case "POST":
-						r.name = RuntimeReloadChannelSettingsOperation
-						r.summary = ""
-						r.operationID = "Runtime_reloadChannelSettings"
-						r.operationGroup = ""
-						r.pathPattern = "/internal/reload-channel-settings"
-						r.args = args
-						r.count = 0
-						return r, true
-					default:
-						return
+					break
+				}
+				switch elem[0] {
+				case 'c': // Prefix: "channel-settings"
+
+					if l := len("channel-settings"); len(elem) >= l && elem[0:l] == "channel-settings" {
+						elem = elem[l:]
+					} else {
+						break
 					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = RuntimeReloadChannelSettingsOperation
+							r.summary = ""
+							r.operationID = "Runtime_reloadChannelSettings"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/reload-channel-settings"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
+				case 'p': // Prefix: "prompt"
+
+					if l := len("prompt"); len(elem) >= l && elem[0:l] == "prompt" {
+						elem = elem[l:]
+					} else {
+						break
+					}
+
+					if len(elem) == 0 {
+						// Leaf node.
+						switch method {
+						case "POST":
+							r.name = RuntimeReloadPromptOperation
+							r.summary = ""
+							r.operationID = "Runtime_reloadPrompt"
+							r.operationGroup = ""
+							r.pathPattern = "/internal/reload-prompt"
+							r.args = args
+							r.count = 0
+							return r, true
+						default:
+							return
+						}
+					}
+
 				}
 
 			}

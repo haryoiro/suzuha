@@ -83,6 +83,32 @@ func (s *AgentContext) SetForeground(val []ContextMessage) {
 	s.Foreground = val
 }
 
+// Ref: #/components/schemas/CompactResponse
+type CompactResponse struct {
+	Ok           bool  `json:"ok"`
+	MessageCount int32 `json:"message_count"`
+}
+
+// GetOk returns the value of Ok.
+func (s *CompactResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetMessageCount returns the value of MessageCount.
+func (s *CompactResponse) GetMessageCount() int32 {
+	return s.MessageCount
+}
+
+// SetOk sets the value of Ok.
+func (s *CompactResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetMessageCount sets the value of MessageCount.
+func (s *CompactResponse) SetMessageCount(val int32) {
+	s.MessageCount = val
+}
+
 // Ref: #/components/schemas/ContextMessage
 type ContextMessage struct {
 	Role        string    `json:"role"`
@@ -238,4 +264,30 @@ func (o OptString) Or(d string) string {
 		return v
 	}
 	return d
+}
+
+// Ref: #/components/schemas/ReloadPromptResponse
+type ReloadPromptResponse struct {
+	Ok     bool  `json:"ok"`
+	Length int32 `json:"length"`
+}
+
+// GetOk returns the value of Ok.
+func (s *ReloadPromptResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetLength returns the value of Length.
+func (s *ReloadPromptResponse) GetLength() int32 {
+	return s.Length
+}
+
+// SetOk sets the value of Ok.
+func (s *ReloadPromptResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetLength sets the value of Length.
+func (s *ReloadPromptResponse) SetLength(val int32) {
+	s.Length = val
 }

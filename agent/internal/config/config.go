@@ -248,12 +248,12 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// loadPromptFiles reads IDENTITY.md and SOUL.md from Agent.PromptDir
-// and assembles them into Agent.SystemPrompt.
-func (c *Config) loadPromptFiles(configDir string) error {
-	dir := c.Agent.PromptDir
+// LoadPromptFiles は dir 以下の IDENTITY.md と SOUL.md を読み、
+// 2 つを "\n\n" で連結した system prompt を返す。
+// 存在しないファイルはスキップする。相対パスは configDir 基準で解決する。
+func LoadPromptFiles(dir, configDir string) (string, error) {
 	if dir == "" {
-		return nil
+		return "", nil
 	}
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(configDir, dir)
@@ -266,11 +266,21 @@ func (c *Config) loadPromptFiles(configDir string) error {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return fmt.Errorf("config: %s の読み込みに失敗: %w", name, err)
+			return "", fmt.Errorf("prompt %s の読み込みに失敗: %w", name, err)
 		}
 		parts = append(parts, strings.TrimSpace(string(data)))
 	}
-	c.Agent.SystemPrompt = strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), nil
+}
+
+// loadPromptFiles reads IDENTITY.md and SOUL.md from Agent.PromptDir
+// and assembles them into Agent.SystemPrompt.
+func (c *Config) loadPromptFiles(configDir string) error {
+	prompt, err := LoadPromptFiles(c.Agent.PromptDir, configDir)
+	if err != nil {
+		return err
+	}
+	c.Agent.SystemPrompt = prompt
 	return nil
 }
 

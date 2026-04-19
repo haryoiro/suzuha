@@ -2,10 +2,12 @@ package control
 
 import (
 	"context"
+	"time"
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/channel"
+	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/user"
 )
@@ -17,11 +19,20 @@ type Handler struct {
 	agent        *agent.Agent
 	channelStore *channel.Store
 	userStore    user.Store
+	promptDir    string
+	configDir    string
 }
 
 // NewHandler は Control API のハンドラを生成する。
-func NewHandler(ag *agent.Agent, channelStore *channel.Store, userStore user.Store) *Handler {
-	return &Handler{agent: ag, channelStore: channelStore, userStore: userStore}
+// promptDir と configDir は reload-prompt で使う。
+func NewHandler(ag *agent.Agent, channelStore *channel.Store, userStore user.Store, promptDir, configDir string) *Handler {
+	return &Handler{
+		agent:        ag,
+		channelStore: channelStore,
+		userStore:    userStore,
+		promptDir:    promptDir,
+		configDir:    configDir,
+	}
 }
 
 // RuntimeReloadChannelSettings implements POST /internal/reload-channel-settings.
@@ -30,6 +41,31 @@ func (h *Handler) RuntimeReloadChannelSettings(ctx context.Context) (*gen.OkResp
 		return nil, err
 	}
 	return &gen.OkResponse{Ok: true}, nil
+}
+
+// RuntimeCompact implements POST /internal/compact.
+func (h *Handler) RuntimeCompact(ctx context.Context) (*gen.CompactResponse, error) {
+	// 圧縮は時間がかかるので ctx とは別に 5 分タイムアウトを設ける。
+	compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	h.agent.ForceCompact(compactCtx)
+	return &gen.CompactResponse{
+		Ok:           true,
+		MessageCount: int32(h.agent.AgentContext().Len()),
+	}, nil
+}
+
+// RuntimeReloadPrompt implements POST /internal/reload-prompt.
+func (h *Handler) RuntimeReloadPrompt(ctx context.Context) (*gen.ReloadPromptResponse, error) {
+	prompt, err := config.LoadPromptFiles(h.promptDir, h.configDir)
+	if err != nil {
+		return nil, err
+	}
+	h.agent.ReloadPrompt(prompt)
+	return &gen.ReloadPromptResponse{
+		Ok:     true,
+		Length: int32(len(prompt)),
+	}, nil
 }
 
 // AgentOpsIdentity implements GET /internal/identity.

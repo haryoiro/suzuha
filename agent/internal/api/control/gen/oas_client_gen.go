@@ -38,12 +38,24 @@ type Invoker interface {
 	//
 	// GET /internal/identity
 	AgentOpsIdentity(ctx context.Context) (*Identity, error)
+	// RuntimeCompact invokes Runtime_compact operation.
+	//
+	// 会話コンテキストを強制的に圧縮する。.
+	//
+	// POST /internal/compact
+	RuntimeCompact(ctx context.Context) (*CompactResponse, error)
 	// RuntimeReloadChannelSettings invokes Runtime_reloadChannelSettings operation.
 	//
 	// チャンネル設定 (channel_settings) を DB から再読み込みする。.
 	//
 	// POST /internal/reload-channel-settings
 	RuntimeReloadChannelSettings(ctx context.Context) (*OkResponse, error)
+	// RuntimeReloadPrompt invokes Runtime_reloadPrompt operation.
+	//
+	// ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。.
+	//
+	// POST /internal/reload-prompt
+	RuntimeReloadPrompt(ctx context.Context) (*ReloadPromptResponse, error)
 }
 
 // Client implements OAS client.
@@ -233,6 +245,80 @@ func (c *Client) sendAgentOpsIdentity(ctx context.Context) (res *Identity, err e
 	return result, nil
 }
 
+// RuntimeCompact invokes Runtime_compact operation.
+//
+// 会話コンテキストを強制的に圧縮する。.
+//
+// POST /internal/compact
+func (c *Client) RuntimeCompact(ctx context.Context) (*CompactResponse, error) {
+	res, err := c.sendRuntimeCompact(ctx)
+	return res, err
+}
+
+func (c *Client) sendRuntimeCompact(ctx context.Context) (res *CompactResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Runtime_compact"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/internal/compact"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, RuntimeCompactOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/compact"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeRuntimeCompactResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
 // RuntimeReloadChannelSettings invokes Runtime_reloadChannelSettings operation.
 //
 // チャンネル設定 (channel_settings) を DB から再読み込みする。.
@@ -300,6 +386,80 @@ func (c *Client) sendRuntimeReloadChannelSettings(ctx context.Context) (res *OkR
 
 	stage = "DecodeResponse"
 	result, err := decodeRuntimeReloadChannelSettingsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// RuntimeReloadPrompt invokes Runtime_reloadPrompt operation.
+//
+// ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。.
+//
+// POST /internal/reload-prompt
+func (c *Client) RuntimeReloadPrompt(ctx context.Context) (*ReloadPromptResponse, error) {
+	res, err := c.sendRuntimeReloadPrompt(ctx)
+	return res, err
+}
+
+func (c *Client) sendRuntimeReloadPrompt(ctx context.Context) (res *ReloadPromptResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("Runtime_reloadPrompt"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/internal/reload-prompt"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, RuntimeReloadPromptOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/reload-prompt"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeRuntimeReloadPromptResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
