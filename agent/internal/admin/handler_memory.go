@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
-
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/admin/api"
 	"github.com/haryoiro/suzuha/internal/memory"
@@ -254,6 +252,3 @@ func (h *AdminHandler) MemoriesDuplicates(ctx context.Context, params api.Memori
 	}
 	return &api.MemoriesDuplicatesOK{Data: groups, Total: int32(len(groups))}, nil
 }
-
-// used to suppress unused import warning
-var _ = strconv.Itoa

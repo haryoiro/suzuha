@@ -263,7 +263,9 @@ func (s *Session) SendPCMChunk(pcm []byte) error {
 				if waitErr := s.waitForDAVEReady(); waitErr != nil {
 					return waitErr
 				}
-				_ = s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone)
+				if err := s.conn.SetSpeaking(ctx, voice.SpeakingFlagMicrophone); err != nil {
+					return fmt.Errorf("voice: speaking フラグ再設定に失敗: %w", err)
+				}
 				if _, err := udp.Write(opusBuf[:n]); err != nil {
 					return fmt.Errorf("voice: Opus送信失敗（リトライ後）: %w", err)
 				}
@@ -298,12 +300,16 @@ func (s *Session) EndSpeaking() {
 
 	udp := s.conn.UDP()
 	for range 5 {
-		_, _ = udp.Write(silenceFrame)
+		if _, err := udp.Write(silenceFrame); err != nil {
+			s.logger.Debug("末尾の無音フレーム送信に失敗", "error", err)
+		}
 		time.Sleep(20 * time.Millisecond)
 	}
 
 	ctx := context.Background()
-	_ = s.conn.SetSpeaking(ctx, 0)
+	if err := s.conn.SetSpeaking(ctx, 0); err != nil {
+		s.logger.Warn("話し終わりの合図に失敗", "error", err)
+	}
 
 	s.logger.Debug("音声の送信が完了")
 	s.encoderMu.Unlock()

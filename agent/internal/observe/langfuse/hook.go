@@ -41,7 +41,8 @@ func NewHook(tracer trace.Tracer) *Hook {
 
 // BeforePipeline はターン全体のルートスパンを開始する。
 func (h *Hook) BeforePipeline(ctx context.Context) context.Context {
-	ctx, _ = h.tracer.Start(ctx, "pipeline.turn")
+	ctx, span := h.tracer.Start(ctx, "pipeline.turn")
+	span.SetAttributes(attribute.String("suzuha.pipeline", "started"))
 	return ctx
 }
 
