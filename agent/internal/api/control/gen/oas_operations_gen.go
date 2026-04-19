@@ -8,6 +8,13 @@ type OperationName = string
 const (
 	AgentOpsGetContextOperation           OperationName = "AgentOpsGetContext"
 	AgentOpsIdentityOperation             OperationName = "AgentOpsIdentity"
+	LLMAssignRoleOperation                OperationName = "LLMAssignRole"
+	LLMListModelsOperation                OperationName = "LLMListModels"
+	LLMListProvidersOperation             OperationName = "LLMListProviders"
+	LLMListRolesOperation                 OperationName = "LLMListRoles"
+	LLMRefreshModelsOperation             OperationName = "LLMRefreshModels"
+	LLMSaveModelOperation                 OperationName = "LLMSaveModel"
+	LLMStatusOperation                    OperationName = "LLMStatus"
 	RuntimeCompactOperation               OperationName = "RuntimeCompact"
 	RuntimeReloadChannelSettingsOperation OperationName = "RuntimeReloadChannelSettings"
 	RuntimeReloadPromptOperation          OperationName = "RuntimeReloadPrompt"

@@ -371,6 +371,26 @@ func (a *Agent) LastForeground() []llm.Message {
 	return out
 }
 
+// OnRoleSpecChanged は llm ロール変更時に必要な agent 側調整を行う。
+// conversation ロールに限り、token counter の更新とコンテキストサイズ
+// 調整、必要なら即時圧縮までを面倒見る。
+// llm.Client.SwapRoleSpec はこの呼び出しより前に済ませておくこと。
+func (a *Agent) OnRoleSpecChanged(role string, spec llm.RoleSpec) {
+	if role != "conversation" {
+		return
+	}
+	a.UpdateTokenCounter(spec.ProviderType, spec.ModelID)
+	if spec.MaxContext <= 0 {
+		return
+	}
+	a.AgentContext().SetMaxTokens(spec.MaxContext)
+	if a.AgentContext().UsageRatio() > 0.5 {
+		compactCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		a.ForceCompact(compactCtx)
+	}
+}
+
 // UpdateTokenCounter はプロバイダタイプとモデル名からトークンカウンタを更新する。
 // conversation ロールの swap 時に呼ぶ。
 func (a *Agent) UpdateTokenCounter(providerType, model string) {

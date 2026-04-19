@@ -14,6 +14,135 @@ import (
 	"github.com/ogen-go/ogen/validate"
 )
 
+// LLMAssignRoleParams is parameters of LLM_assignRole operation.
+type LLMAssignRoleParams struct {
+	Role string
+}
+
+func unpackLLMAssignRoleParams(packed middleware.Parameters) (params LLMAssignRoleParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "role",
+			In:   "path",
+		}
+		params.Role = packed[key].(string)
+	}
+	return params
+}
+
+func decodeLLMAssignRoleParams(args [1]string, argsEscaped bool, r *http.Request) (params LLMAssignRoleParams, _ error) {
+	// Decode path: role.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "role",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Role = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "role",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// LLMListModelsParams is parameters of LLM_listModels operation.
+type LLMListModelsParams struct {
+	Provider OptString `json:",omitempty,omitzero"`
+}
+
+func unpackLLMListModelsParams(packed middleware.Parameters) (params LLMListModelsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "provider",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Provider = v.(OptString)
+		}
+	}
+	return params
+}
+
+func decodeLLMListModelsParams(args [0]string, argsEscaped bool, r *http.Request) (params LLMListModelsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: provider.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "provider",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotProviderVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotProviderVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.Provider.SetTo(paramsDotProviderVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "provider",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // SchedulerTriggerParams is parameters of Scheduler_trigger operation.
 type SchedulerTriggerParams struct {
 	Task string

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"database/sql"
+	"log/slog"
 	"sort"
 
 	"github.com/go-faster/jx"
@@ -26,49 +27,58 @@ import (
 // 各メソッドは gen が定義する interface を満たす。
 type Handler struct {
 	gen.UnimplementedHandler
-	agent         *agent.Agent
-	channelStore  *channel.Store
-	userStore     user.Store
-	scheduler     *scheduler.Scheduler
-	voicevox      *tts.VoicevoxClient
-	voicevoxCfg   *config.TTSProvider // 話者 ID 変更を config に反映するため
-	voicePipeline *voice.Pipeline     // runtime の話者切り替え用 (nil 可)
-	toolRegistry  *tool.Registry
-	sharedDB      *sql.DB // disabled tools 永続化用
-	promptDir     string
-	configDir     string
+	agent            *agent.Agent
+	channelStore     *channel.Store
+	userStore        user.Store
+	scheduler        *scheduler.Scheduler
+	voicevox         *tts.VoicevoxClient
+	voicevoxCfg      *config.TTSProvider // 話者 ID 変更を config に反映するため
+	voicePipeline    *voice.Pipeline     // runtime の話者切り替え用 (nil 可)
+	toolRegistry     *tool.Registry
+	sharedDB         *sql.DB // disabled tools 永続化用
+	llmClient        *llm.Client
+	providerRegistry *llm.ProviderRegistry
+	logger           *slog.Logger
+	promptDir        string
+	configDir        string
 }
 
 // Config は Handler のコンストラクタ引数。
 // 依存が多いので struct literal で渡す。nil 可なフィールドは nil 可と明記。
 type Config struct {
-	Agent         *agent.Agent
-	ChannelStore  *channel.Store
-	UserStore     user.Store
-	Scheduler     *scheduler.Scheduler  // nil: scheduler endpoint は空で返す
-	Voicevox      *tts.VoicevoxClient   // nil: voicevox endpoint は 503
-	VoicevoxCfg   *config.TTSProvider   // nil: voicevox endpoint は 503
-	VoicePipeline *voice.Pipeline       // nil: runtime 話者切替をスキップ
-	ToolRegistry  *tool.Registry
-	SharedDB      *sql.DB // tool.SaveDisabled 用
-	PromptDir     string
-	ConfigDir     string
+	Agent            *agent.Agent
+	ChannelStore     *channel.Store
+	UserStore        user.Store
+	Scheduler        *scheduler.Scheduler // nil: scheduler endpoint は空で返す
+	Voicevox         *tts.VoicevoxClient  // nil: voicevox endpoint は 503
+	VoicevoxCfg      *config.TTSProvider  // nil: voicevox endpoint は 503
+	VoicePipeline    *voice.Pipeline      // nil: runtime 話者切替をスキップ
+	ToolRegistry     *tool.Registry
+	SharedDB         *sql.DB // tool.SaveDisabled 用
+	LLMClient        *llm.Client
+	ProviderRegistry *llm.ProviderRegistry
+	Logger           *slog.Logger
+	PromptDir        string
+	ConfigDir        string
 }
 
 // NewHandler は Control API のハンドラを生成する。
 func NewHandler(cfg Config) *Handler {
 	return &Handler{
-		agent:         cfg.Agent,
-		channelStore:  cfg.ChannelStore,
-		userStore:     cfg.UserStore,
-		scheduler:     cfg.Scheduler,
-		voicevox:      cfg.Voicevox,
-		voicevoxCfg:   cfg.VoicevoxCfg,
-		voicePipeline: cfg.VoicePipeline,
-		toolRegistry:  cfg.ToolRegistry,
-		sharedDB:      cfg.SharedDB,
-		promptDir:     cfg.PromptDir,
-		configDir:     cfg.ConfigDir,
+		agent:            cfg.Agent,
+		channelStore:     cfg.ChannelStore,
+		userStore:        cfg.UserStore,
+		scheduler:        cfg.Scheduler,
+		voicevox:         cfg.Voicevox,
+		voicevoxCfg:      cfg.VoicevoxCfg,
+		voicePipeline:    cfg.VoicePipeline,
+		toolRegistry:     cfg.ToolRegistry,
+		sharedDB:         cfg.SharedDB,
+		llmClient:        cfg.LLMClient,
+		providerRegistry: cfg.ProviderRegistry,
+		logger:           cfg.Logger,
+		promptDir:        cfg.PromptDir,
+		configDir:        cfg.ConfigDir,
 	}
 }
 
@@ -291,6 +301,155 @@ func (h *Handler) ToolsExecute(ctx context.Context, req gen.ToolsExecuteReq, par
 		Output:  text,
 		IsError: result.IsError,
 	}, nil
+}
+
+// LLMStatus implements GET /internal/llm.
+func (h *Handler) LLMStatus(ctx context.Context) (*gen.LLMStatus, error) {
+	prov, model, apiBase, vision := h.llmClient.ProviderInfo()
+	assignments, err := h.providerRegistry.Assignments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &gen.LLMStatus{
+		Provider:    prov,
+		ModelID:     model,
+		APIBase:     apiBase,
+		MaxCtx:      int32(h.llmClient.MaxContextTokens()),
+		Vision:      vision,
+		Assignments: structSliceToJxItems[gen.LLMStatusAssignmentsItem](assignments),
+	}, nil
+}
+
+// LLMListProviders implements GET /internal/llm/providers.
+func (h *Handler) LLMListProviders(ctx context.Context) ([]gen.LLMListProvidersOKItem, error) {
+	providers, err := h.providerRegistry.ListProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToJxItems[gen.LLMListProvidersOKItem](providers), nil
+}
+
+// LLMListModels implements GET /internal/llm/models.
+func (h *Handler) LLMListModels(ctx context.Context, params gen.LLMListModelsParams) ([]gen.LLMListModelsOKItem, error) {
+	providerFilter := params.Provider.Or("")
+	models, err := h.providerRegistry.ListModels(ctx, providerFilter)
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToJxItems[gen.LLMListModelsOKItem](models), nil
+}
+
+// LLMSaveModel implements POST /internal/llm/models.
+func (h *Handler) LLMSaveModel(ctx context.Context, req *gen.SaveModelRequest) (*gen.OkResponse, error) {
+	if req.ProviderName == "" || req.ModelID == "" {
+		return nil, fmt.Errorf("provider_name and model_id required")
+	}
+	m := &llm.ModelInfo{
+		ProviderName: req.ProviderName,
+		ModelID:      req.ModelID,
+		Capabilities: req.Capabilities,
+	}
+	if len(m.Capabilities) == 0 {
+		m.Capabilities = []string{"text"}
+	}
+	if v, ok := req.MaxContext.Get(); ok {
+		m.MaxContext = int(v)
+	}
+	if v, ok := req.Source.Get(); ok {
+		m.Source = v
+	}
+	if err := h.providerRegistry.SaveModel(ctx, m); err != nil {
+		return nil, err
+	}
+	return &gen.OkResponse{Ok: true}, nil
+}
+
+// LLMRefreshModels implements POST /internal/llm/models/refresh.
+// 全プロバイダの API からモデル一覧を再取得して upsert する。
+func (h *Handler) LLMRefreshModels(ctx context.Context) (*gen.ModelsRefreshResponse, error) {
+	providers, err := h.providerRegistry.ListProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var total int
+	for _, p := range providers {
+		meta := llm.GetProviderMeta(p.Type)
+		if meta == nil {
+			continue
+		}
+		models, err := meta.ListModels(ctx, p.APIKey, p.APIBase)
+		if err != nil {
+			if h.logger != nil {
+				h.logger.Warn("モデルカタログ更新失敗", "provider", p.Name, "error", err)
+			}
+			continue
+		}
+		for i := range models {
+			models[i].ProviderName = p.Name
+			if err := h.providerRegistry.SaveModel(ctx, &models[i]); err != nil {
+				if h.logger != nil {
+					h.logger.Warn("モデル保存失敗", "provider", p.Name, "model", models[i].ModelID, "error", err)
+				}
+				continue
+			}
+			total++
+		}
+	}
+	return &gen.ModelsRefreshResponse{Ok: true, ModelsUpdated: int32(total)}, nil
+}
+
+// LLMListRoles implements GET /internal/llm/roles.
+func (h *Handler) LLMListRoles(ctx context.Context) ([]gen.LLMListRolesOKItem, error) {
+	assignments, err := h.providerRegistry.Assignments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToJxItems[gen.LLMListRolesOKItem](assignments), nil
+}
+
+// LLMAssignRole implements PUT /internal/llm/roles/{role}.
+// ロール割当を DB に保存し、runtime 側にも反映する。conversation ロール
+// 変更時は agent 側の token counter / max tokens / 必要なら圧縮も走る。
+func (h *Handler) LLMAssignRole(ctx context.Context, req *gen.AssignRoleRequest, params gen.LLMAssignRoleParams) (*gen.OkResponse, error) {
+	if req.Provider == "" || req.ModelID == "" {
+		return nil, fmt.Errorf("provider and model_id required")
+	}
+	spec, err := h.providerRegistry.BuildRoleSpec(ctx, req.Provider, req.ModelID)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.providerRegistry.AssignRole(ctx, params.Role, req.Provider, req.ModelID); err != nil {
+		return nil, err
+	}
+	h.llmClient.SwapRoleSpec(params.Role, *spec)
+	h.agent.OnRoleSpecChanged(params.Role, *spec)
+	return &gen.OkResponse{Ok: true}, nil
+}
+
+// structSliceToJxItems は struct のスライスを JSON 経由で ogen の
+// map[string]jx.Raw スライスに変換する。ogen の Record<unknown>[] 返値用。
+// ItemT は具体的な gen.XxxItem 型 (map[string]jx.Raw を alias したもの)。
+func structSliceToJxItems[ItemT ~map[string]jx.Raw, T any](items []T) []ItemT {
+	if len(items) == 0 {
+		return []ItemT{}
+	}
+	raw, err := json.Marshal(items)
+	if err != nil {
+		return []ItemT{}
+	}
+	var maps []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &maps); err != nil {
+		return []ItemT{}
+	}
+	out := make([]ItemT, len(maps))
+	for i, m := range maps {
+		item := make(ItemT, len(m))
+		for k, v := range m {
+			item[k] = jx.Raw(v)
+		}
+		out[i] = item
+	}
+	return out
 }
 
 // toJxMap は map[string]any を ogen の map[string]jx.Raw に変換する。

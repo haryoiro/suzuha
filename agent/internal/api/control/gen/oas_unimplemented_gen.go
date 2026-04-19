@@ -31,6 +31,70 @@ func (UnimplementedHandler) AgentOpsIdentity(ctx context.Context) (r *Identity, 
 	return r, ht.ErrNotImplemented
 }
 
+// LLMAssignRole implements LLM_assignRole operation.
+//
+// 指定ロールにプロバイダ+モデルを割り当てる。
+// conversation ロール変更時は token counter と max tokens も自動追従する。.
+//
+// PUT /internal/llm/roles/{role}
+func (UnimplementedHandler) LLMAssignRole(ctx context.Context, req *AssignRoleRequest, params LLMAssignRoleParams) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMListModels implements LLM_listModels operation.
+//
+// 登録済みモデル一覧を返す。provider クエリで絞り込み可能。.
+//
+// GET /internal/llm/models
+func (UnimplementedHandler) LLMListModels(ctx context.Context, params LLMListModelsParams) (r []LLMListModelsOKItem, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMListProviders implements LLM_listProviders operation.
+//
+// 登録済み LLM プロバイダ一覧を返す。.
+//
+// GET /internal/llm/providers
+func (UnimplementedHandler) LLMListProviders(ctx context.Context) (r []LLMListProvidersOKItem, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMListRoles implements LLM_listRoles operation.
+//
+// ロール割当一覧を返す。.
+//
+// GET /internal/llm/roles
+func (UnimplementedHandler) LLMListRoles(ctx context.Context) (r []LLMListRolesOKItem, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMRefreshModels implements LLM_refreshModels operation.
+//
+// 登録プロバイダの API からモデルカタログを再取得して upsert する。.
+//
+// POST /internal/llm/models/refresh
+func (UnimplementedHandler) LLMRefreshModels(ctx context.Context) (r *ModelsRefreshResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMSaveModel implements LLM_saveModel operation.
+//
+// モデルを 1 件登録/更新する。provider_name と model_id が必須。.
+//
+// POST /internal/llm/models
+func (UnimplementedHandler) LLMSaveModel(ctx context.Context, req *SaveModelRequest) (r *OkResponse, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// LLMStatus implements LLM_status operation.
+//
+// 現在有効な conversation ロールのプロバイダ情報と全ロール割当を返す。.
+//
+// GET /internal/llm
+func (UnimplementedHandler) LLMStatus(ctx context.Context) (r *LLMStatus, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // RuntimeCompact implements Runtime_compact operation.
 //
 // 会話コンテキストを強制的に圧縮する。.

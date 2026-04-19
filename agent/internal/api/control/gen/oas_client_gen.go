@@ -39,6 +39,49 @@ type Invoker interface {
 	//
 	// GET /internal/identity
 	AgentOpsIdentity(ctx context.Context) (*Identity, error)
+	// LLMAssignRole invokes LLM_assignRole operation.
+	//
+	// 指定ロールにプロバイダ+モデルを割り当てる。
+	// conversation ロール変更時は token counter と max tokens も自動追従する。.
+	//
+	// PUT /internal/llm/roles/{role}
+	LLMAssignRole(ctx context.Context, request *AssignRoleRequest, params LLMAssignRoleParams) (*OkResponse, error)
+	// LLMListModels invokes LLM_listModels operation.
+	//
+	// 登録済みモデル一覧を返す。provider クエリで絞り込み可能。.
+	//
+	// GET /internal/llm/models
+	LLMListModels(ctx context.Context, params LLMListModelsParams) ([]LLMListModelsOKItem, error)
+	// LLMListProviders invokes LLM_listProviders operation.
+	//
+	// 登録済み LLM プロバイダ一覧を返す。.
+	//
+	// GET /internal/llm/providers
+	LLMListProviders(ctx context.Context) ([]LLMListProvidersOKItem, error)
+	// LLMListRoles invokes LLM_listRoles operation.
+	//
+	// ロール割当一覧を返す。.
+	//
+	// GET /internal/llm/roles
+	LLMListRoles(ctx context.Context) ([]LLMListRolesOKItem, error)
+	// LLMRefreshModels invokes LLM_refreshModels operation.
+	//
+	// 登録プロバイダの API からモデルカタログを再取得して upsert する。.
+	//
+	// POST /internal/llm/models/refresh
+	LLMRefreshModels(ctx context.Context) (*ModelsRefreshResponse, error)
+	// LLMSaveModel invokes LLM_saveModel operation.
+	//
+	// モデルを 1 件登録/更新する。provider_name と model_id が必須。.
+	//
+	// POST /internal/llm/models
+	LLMSaveModel(ctx context.Context, request *SaveModelRequest) (*OkResponse, error)
+	// LLMStatus invokes LLM_status operation.
+	//
+	// 現在有効な conversation ロールのプロバイダ情報と全ロール割当を返す。.
+	//
+	// GET /internal/llm
+	LLMStatus(ctx context.Context) (*LLMStatus, error)
 	// RuntimeCompact invokes Runtime_compact operation.
 	//
 	// 会話コンテキストを強制的に圧縮する。.
@@ -289,6 +332,570 @@ func (c *Client) sendAgentOpsIdentity(ctx context.Context) (res *Identity, err e
 
 	stage = "DecodeResponse"
 	result, err := decodeAgentOpsIdentityResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMAssignRole invokes LLM_assignRole operation.
+//
+// 指定ロールにプロバイダ+モデルを割り当てる。
+// conversation ロール変更時は token counter と max tokens も自動追従する。.
+//
+// PUT /internal/llm/roles/{role}
+func (c *Client) LLMAssignRole(ctx context.Context, request *AssignRoleRequest, params LLMAssignRoleParams) (*OkResponse, error) {
+	res, err := c.sendLLMAssignRole(ctx, request, params)
+	return res, err
+}
+
+func (c *Client) sendLLMAssignRole(ctx context.Context, request *AssignRoleRequest, params LLMAssignRoleParams) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_assignRole"),
+		semconv.HTTPRequestMethodKey.String("PUT"),
+		semconv.URLTemplateKey.String("/internal/llm/roles/{role}"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMAssignRoleOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [2]string
+	pathParts[0] = "/internal/llm/roles/"
+	{
+		// Encode "role" parameter.
+		e := uri.NewPathEncoder(uri.PathEncoderConfig{
+			Param:   "role",
+			Style:   uri.PathStyleSimple,
+			Explode: false,
+		})
+		if err := func() error {
+			return e.EncodeValue(conv.StringToString(params.Role))
+		}(); err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		encoded, err := e.Result()
+		if err != nil {
+			return res, errors.Wrap(err, "encode path")
+		}
+		pathParts[1] = encoded
+	}
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "PUT", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeLLMAssignRoleRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMAssignRoleResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMListModels invokes LLM_listModels operation.
+//
+// 登録済みモデル一覧を返す。provider クエリで絞り込み可能。.
+//
+// GET /internal/llm/models
+func (c *Client) LLMListModels(ctx context.Context, params LLMListModelsParams) ([]LLMListModelsOKItem, error) {
+	res, err := c.sendLLMListModels(ctx, params)
+	return res, err
+}
+
+func (c *Client) sendLLMListModels(ctx context.Context, params LLMListModelsParams) (res []LLMListModelsOKItem, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_listModels"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/llm/models"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMListModelsOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/llm/models"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeQueryParams"
+	q := uri.NewQueryEncoder()
+	{
+		// Encode "provider" parameter.
+		cfg := uri.QueryParameterEncodingConfig{
+			Name:    "provider",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.EncodeParam(cfg, func(e uri.Encoder) error {
+			if val, ok := params.Provider.Get(); ok {
+				return e.EncodeValue(conv.StringToString(val))
+			}
+			return nil
+		}); err != nil {
+			return res, errors.Wrap(err, "encode query")
+		}
+	}
+	u.RawQuery = q.Values().Encode()
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMListModelsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMListProviders invokes LLM_listProviders operation.
+//
+// 登録済み LLM プロバイダ一覧を返す。.
+//
+// GET /internal/llm/providers
+func (c *Client) LLMListProviders(ctx context.Context) ([]LLMListProvidersOKItem, error) {
+	res, err := c.sendLLMListProviders(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMListProviders(ctx context.Context) (res []LLMListProvidersOKItem, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_listProviders"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/llm/providers"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMListProvidersOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/llm/providers"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMListProvidersResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMListRoles invokes LLM_listRoles operation.
+//
+// ロール割当一覧を返す。.
+//
+// GET /internal/llm/roles
+func (c *Client) LLMListRoles(ctx context.Context) ([]LLMListRolesOKItem, error) {
+	res, err := c.sendLLMListRoles(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMListRoles(ctx context.Context) (res []LLMListRolesOKItem, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_listRoles"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/llm/roles"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMListRolesOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/llm/roles"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMListRolesResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMRefreshModels invokes LLM_refreshModels operation.
+//
+// 登録プロバイダの API からモデルカタログを再取得して upsert する。.
+//
+// POST /internal/llm/models/refresh
+func (c *Client) LLMRefreshModels(ctx context.Context) (*ModelsRefreshResponse, error) {
+	res, err := c.sendLLMRefreshModels(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMRefreshModels(ctx context.Context) (res *ModelsRefreshResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_refreshModels"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/internal/llm/models/refresh"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMRefreshModelsOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/llm/models/refresh"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMRefreshModelsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMSaveModel invokes LLM_saveModel operation.
+//
+// モデルを 1 件登録/更新する。provider_name と model_id が必須。.
+//
+// POST /internal/llm/models
+func (c *Client) LLMSaveModel(ctx context.Context, request *SaveModelRequest) (*OkResponse, error) {
+	res, err := c.sendLLMSaveModel(ctx, request)
+	return res, err
+}
+
+func (c *Client) sendLLMSaveModel(ctx context.Context, request *SaveModelRequest) (res *OkResponse, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_saveModel"),
+		semconv.HTTPRequestMethodKey.String("POST"),
+		semconv.URLTemplateKey.String("/internal/llm/models"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMSaveModelOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/llm/models"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "POST", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+	if err := encodeLLMSaveModelRequest(request, r); err != nil {
+		return res, errors.Wrap(err, "encode request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMSaveModelResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
+}
+
+// LLMStatus invokes LLM_status operation.
+//
+// 現在有効な conversation ロールのプロバイダ情報と全ロール割当を返す。.
+//
+// GET /internal/llm
+func (c *Client) LLMStatus(ctx context.Context) (*LLMStatus, error) {
+	res, err := c.sendLLMStatus(ctx)
+	return res, err
+}
+
+func (c *Client) sendLLMStatus(ctx context.Context) (res *LLMStatus, err error) {
+	otelAttrs := []attribute.KeyValue{
+		otelogen.OperationID("LLM_status"),
+		semconv.HTTPRequestMethodKey.String("GET"),
+		semconv.URLTemplateKey.String("/internal/llm"),
+	}
+	otelAttrs = append(otelAttrs, c.cfg.Attributes...)
+
+	// Run stopwatch.
+	startTime := time.Now()
+	defer func() {
+		// Use floating point division here for higher precision (instead of Millisecond method).
+		elapsedDuration := time.Since(startTime)
+		c.duration.Record(ctx, float64(elapsedDuration)/float64(time.Millisecond), metric.WithAttributes(otelAttrs...))
+	}()
+
+	// Increment request counter.
+	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+
+	// Start a span for this request.
+	ctx, span := c.cfg.Tracer.Start(ctx, LLMStatusOperation,
+		trace.WithAttributes(otelAttrs...),
+		clientSpanKind,
+	)
+	// Track stage for error reporting.
+	var stage string
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, stage)
+			c.errors.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
+		}
+		span.End()
+	}()
+
+	stage = "BuildURL"
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/internal/llm"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	stage = "EncodeRequest"
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	stage = "SendRequest"
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	stage = "DecodeResponse"
+	result, err := decodeLLMStatusResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

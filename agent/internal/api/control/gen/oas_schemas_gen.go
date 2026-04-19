@@ -87,6 +87,32 @@ func (s *AgentContext) SetForeground(val []ContextMessage) {
 	s.Foreground = val
 }
 
+// Ref: #/components/schemas/AssignRoleRequest
+type AssignRoleRequest struct {
+	Provider string `json:"provider"`
+	ModelID  string `json:"model_id"`
+}
+
+// GetProvider returns the value of Provider.
+func (s *AssignRoleRequest) GetProvider() string {
+	return s.Provider
+}
+
+// GetModelID returns the value of ModelID.
+func (s *AssignRoleRequest) GetModelID() string {
+	return s.ModelID
+}
+
+// SetProvider sets the value of Provider.
+func (s *AssignRoleRequest) SetProvider(val string) {
+	s.Provider = val
+}
+
+// SetModelID sets the value of ModelID.
+func (s *AssignRoleRequest) SetModelID(val string) {
+	s.ModelID = val
+}
+
 // Ref: #/components/schemas/CompactResponse
 type CompactResponse struct {
 	Ok           bool  `json:"ok"`
@@ -209,6 +235,146 @@ func (s *Identity) SetBotName(val OptString) {
 	s.BotName = val
 }
 
+type LLMListModelsOKItem map[string]jx.Raw
+
+func (s *LLMListModelsOKItem) init() LLMListModelsOKItem {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+type LLMListProvidersOKItem map[string]jx.Raw
+
+func (s *LLMListProvidersOKItem) init() LLMListProvidersOKItem {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+type LLMListRolesOKItem map[string]jx.Raw
+
+func (s *LLMListRolesOKItem) init() LLMListRolesOKItem {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/LLMStatus
+type LLMStatus struct {
+	Provider    string                     `json:"provider"`
+	ModelID     string                     `json:"model_id"`
+	APIBase     string                     `json:"api_base"`
+	MaxCtx      int32                      `json:"max_ctx"`
+	Vision      bool                       `json:"vision"`
+	Assignments []LLMStatusAssignmentsItem `json:"assignments"`
+}
+
+// GetProvider returns the value of Provider.
+func (s *LLMStatus) GetProvider() string {
+	return s.Provider
+}
+
+// GetModelID returns the value of ModelID.
+func (s *LLMStatus) GetModelID() string {
+	return s.ModelID
+}
+
+// GetAPIBase returns the value of APIBase.
+func (s *LLMStatus) GetAPIBase() string {
+	return s.APIBase
+}
+
+// GetMaxCtx returns the value of MaxCtx.
+func (s *LLMStatus) GetMaxCtx() int32 {
+	return s.MaxCtx
+}
+
+// GetVision returns the value of Vision.
+func (s *LLMStatus) GetVision() bool {
+	return s.Vision
+}
+
+// GetAssignments returns the value of Assignments.
+func (s *LLMStatus) GetAssignments() []LLMStatusAssignmentsItem {
+	return s.Assignments
+}
+
+// SetProvider sets the value of Provider.
+func (s *LLMStatus) SetProvider(val string) {
+	s.Provider = val
+}
+
+// SetModelID sets the value of ModelID.
+func (s *LLMStatus) SetModelID(val string) {
+	s.ModelID = val
+}
+
+// SetAPIBase sets the value of APIBase.
+func (s *LLMStatus) SetAPIBase(val string) {
+	s.APIBase = val
+}
+
+// SetMaxCtx sets the value of MaxCtx.
+func (s *LLMStatus) SetMaxCtx(val int32) {
+	s.MaxCtx = val
+}
+
+// SetVision sets the value of Vision.
+func (s *LLMStatus) SetVision(val bool) {
+	s.Vision = val
+}
+
+// SetAssignments sets the value of Assignments.
+func (s *LLMStatus) SetAssignments(val []LLMStatusAssignmentsItem) {
+	s.Assignments = val
+}
+
+type LLMStatusAssignmentsItem map[string]jx.Raw
+
+func (s *LLMStatusAssignmentsItem) init() LLMStatusAssignmentsItem {
+	m := *s
+	if m == nil {
+		m = map[string]jx.Raw{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/ModelsRefreshResponse
+type ModelsRefreshResponse struct {
+	Ok            bool  `json:"ok"`
+	ModelsUpdated int32 `json:"models_updated"`
+}
+
+// GetOk returns the value of Ok.
+func (s *ModelsRefreshResponse) GetOk() bool {
+	return s.Ok
+}
+
+// GetModelsUpdated returns the value of ModelsUpdated.
+func (s *ModelsRefreshResponse) GetModelsUpdated() int32 {
+	return s.ModelsUpdated
+}
+
+// SetOk sets the value of Ok.
+func (s *ModelsRefreshResponse) SetOk(val bool) {
+	s.Ok = val
+}
+
+// SetModelsUpdated sets the value of ModelsUpdated.
+func (s *ModelsRefreshResponse) SetModelsUpdated(val int32) {
+	s.ModelsUpdated = val
+}
+
 // Ref: #/components/schemas/OkResponse
 type OkResponse struct {
 	Ok bool `json:"ok"`
@@ -222,6 +388,52 @@ func (s *OkResponse) GetOk() bool {
 // SetOk sets the value of Ok.
 func (s *OkResponse) SetOk(val bool) {
 	s.Ok = val
+}
+
+// NewOptInt32 returns new OptInt32 with value set to v.
+func NewOptInt32(v int32) OptInt32 {
+	return OptInt32{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt32 is optional int32.
+type OptInt32 struct {
+	Value int32
+	Set   bool
+}
+
+// IsSet returns true if OptInt32 was set.
+func (o OptInt32) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt32) Reset() {
+	var v int32
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt32) SetTo(v int32) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt32) Get() (v int32, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt32) Or(d int32) int32 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
 }
 
 // NewOptSchedulerJobConfig returns new OptSchedulerJobConfig with value set to v.
@@ -386,6 +598,66 @@ func (s *ReloadPromptResponse) SetOk(val bool) {
 // SetLength sets the value of Length.
 func (s *ReloadPromptResponse) SetLength(val int32) {
 	s.Length = val
+}
+
+// Llm.ModelInfo と対応するフィールド。.
+// Ref: #/components/schemas/SaveModelRequest
+type SaveModelRequest struct {
+	ProviderName string    `json:"provider_name"`
+	ModelID      string    `json:"model_id"`
+	Capabilities []string  `json:"capabilities"`
+	MaxContext   OptInt32  `json:"max_context"`
+	Source       OptString `json:"source"`
+}
+
+// GetProviderName returns the value of ProviderName.
+func (s *SaveModelRequest) GetProviderName() string {
+	return s.ProviderName
+}
+
+// GetModelID returns the value of ModelID.
+func (s *SaveModelRequest) GetModelID() string {
+	return s.ModelID
+}
+
+// GetCapabilities returns the value of Capabilities.
+func (s *SaveModelRequest) GetCapabilities() []string {
+	return s.Capabilities
+}
+
+// GetMaxContext returns the value of MaxContext.
+func (s *SaveModelRequest) GetMaxContext() OptInt32 {
+	return s.MaxContext
+}
+
+// GetSource returns the value of Source.
+func (s *SaveModelRequest) GetSource() OptString {
+	return s.Source
+}
+
+// SetProviderName sets the value of ProviderName.
+func (s *SaveModelRequest) SetProviderName(val string) {
+	s.ProviderName = val
+}
+
+// SetModelID sets the value of ModelID.
+func (s *SaveModelRequest) SetModelID(val string) {
+	s.ModelID = val
+}
+
+// SetCapabilities sets the value of Capabilities.
+func (s *SaveModelRequest) SetCapabilities(val []string) {
+	s.Capabilities = val
+}
+
+// SetMaxContext sets the value of MaxContext.
+func (s *SaveModelRequest) SetMaxContext(val OptInt32) {
+	s.MaxContext = val
+}
+
+// SetSource sets the value of Source.
+func (s *SaveModelRequest) SetSource(val OptString) {
+	s.Source = val
 }
 
 // Ref: #/components/schemas/SchedulerJob

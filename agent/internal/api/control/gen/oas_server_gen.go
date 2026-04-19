@@ -20,6 +20,49 @@ type Handler interface {
 	//
 	// GET /internal/identity
 	AgentOpsIdentity(ctx context.Context) (*Identity, error)
+	// LLMAssignRole implements LLM_assignRole operation.
+	//
+	// 指定ロールにプロバイダ+モデルを割り当てる。
+	// conversation ロール変更時は token counter と max tokens も自動追従する。.
+	//
+	// PUT /internal/llm/roles/{role}
+	LLMAssignRole(ctx context.Context, req *AssignRoleRequest, params LLMAssignRoleParams) (*OkResponse, error)
+	// LLMListModels implements LLM_listModels operation.
+	//
+	// 登録済みモデル一覧を返す。provider クエリで絞り込み可能。.
+	//
+	// GET /internal/llm/models
+	LLMListModels(ctx context.Context, params LLMListModelsParams) ([]LLMListModelsOKItem, error)
+	// LLMListProviders implements LLM_listProviders operation.
+	//
+	// 登録済み LLM プロバイダ一覧を返す。.
+	//
+	// GET /internal/llm/providers
+	LLMListProviders(ctx context.Context) ([]LLMListProvidersOKItem, error)
+	// LLMListRoles implements LLM_listRoles operation.
+	//
+	// ロール割当一覧を返す。.
+	//
+	// GET /internal/llm/roles
+	LLMListRoles(ctx context.Context) ([]LLMListRolesOKItem, error)
+	// LLMRefreshModels implements LLM_refreshModels operation.
+	//
+	// 登録プロバイダの API からモデルカタログを再取得して upsert する。.
+	//
+	// POST /internal/llm/models/refresh
+	LLMRefreshModels(ctx context.Context) (*ModelsRefreshResponse, error)
+	// LLMSaveModel implements LLM_saveModel operation.
+	//
+	// モデルを 1 件登録/更新する。provider_name と model_id が必須。.
+	//
+	// POST /internal/llm/models
+	LLMSaveModel(ctx context.Context, req *SaveModelRequest) (*OkResponse, error)
+	// LLMStatus implements LLM_status operation.
+	//
+	// 現在有効な conversation ロールのプロバイダ情報と全ロール割当を返す。.
+	//
+	// GET /internal/llm
+	LLMStatus(ctx context.Context) (*LLMStatus, error)
 	// RuntimeCompact implements Runtime_compact operation.
 	//
 	// 会話コンテキストを強制的に圧縮する。.

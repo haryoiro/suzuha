@@ -390,19 +390,25 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 			toolRegistry := do.MustInvoke[*tool.Registry](i)
 			sharedDB := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+			llmClient := do.MustInvoke[*llm.Client](i)
+			providerRegistry := do.MustInvoke[*llm.ProviderRegistry](i)
+			logger := do.MustInvoke[*slog.Logger](i)
 
 			return control.NewHandler(control.Config{
-				Agent:         ag,
-				ChannelStore:  channelStore,
-				UserStore:     userStore,
-				Scheduler:     sched,
-				Voicevox:      vvClient,
-				VoicevoxCfg:   vvCfg,
-				VoicePipeline: vp,
-				ToolRegistry:  toolRegistry,
-				SharedDB:      sharedDB,
-				PromptDir:     cfg.Agent.PromptDir,
-				ConfigDir:     filepath.Dir(cfgPath),
+				Agent:            ag,
+				ChannelStore:     channelStore,
+				UserStore:        userStore,
+				Scheduler:        sched,
+				Voicevox:         vvClient,
+				VoicevoxCfg:      vvCfg,
+				VoicePipeline:    vp,
+				ToolRegistry:     toolRegistry,
+				SharedDB:         sharedDB,
+				LLMClient:        llmClient,
+				ProviderRegistry: providerRegistry,
+				Logger:           logger,
+				PromptDir:        cfg.Agent.PromptDir,
+				ConfigDir:        filepath.Dir(cfgPath),
 			}), nil
 		})
 	}
