@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/internal/adapter/transcript"
 )
 
 // AnnotateVideoURLs はメッセージ中の動画 URL を検知し、メタデータで enrich する。

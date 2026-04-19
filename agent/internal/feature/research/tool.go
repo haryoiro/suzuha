@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/tool"
 )
 
 // ResearchTool triggers a fast web research session.
 // Search → fetch top pages in parallel. No LLM overhead.
 type ResearchTool struct {
-	searx      *search.SearXNGClient
+	searx      *SearXNGClient
 	maxSources int
 }
 
@@ -23,7 +22,7 @@ func NewResearchTool(searxngURL string, maxSources int) *ResearchTool {
 		maxSources = defaultMaxSources
 	}
 	return &ResearchTool{
-		searx:      search.NewSearXNG(searxngURL),
+		searx:      NewSearXNG(searxngURL),
 		maxSources: maxSources,
 	}
 }

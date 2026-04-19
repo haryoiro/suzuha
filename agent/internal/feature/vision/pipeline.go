@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/external/detect"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -15,13 +14,13 @@ type Pipeline struct {
 	frames    *FrameStore
 	changes   *ChangeDetector
 	tracker   *ObjectTracker
-	yolo      *detect.YOLOClient
+	yolo      *YOLOClient
 	detectSem *semaphore.Weighted
 	logger    *slog.Logger
 }
 
 // NewPipeline creates a vision processing pipeline.
-func NewPipeline(frames *FrameStore, changes *ChangeDetector, tracker *ObjectTracker, yolo *detect.YOLOClient, logger *slog.Logger) *Pipeline {
+func NewPipeline(frames *FrameStore, changes *ChangeDetector, tracker *ObjectTracker, yolo *YOLOClient, logger *slog.Logger) *Pipeline {
 	return &Pipeline{
 		frames:    frames,
 		changes:   changes,

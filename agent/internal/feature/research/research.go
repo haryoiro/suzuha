@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/search"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 )
 
@@ -30,8 +29,8 @@ type source struct {
 var skipExtensions = []string{".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".tar", ".gz"}
 
 // filterHTMLResults removes non-HTML URLs (PDF, docs, etc.) from search results.
-func filterHTMLResults(results []search.SearchResult) []search.SearchResult {
-	var out []search.SearchResult
+func filterHTMLResults(results []SearchResult) []SearchResult {
+	var out []SearchResult
 	for _, r := range results {
 		lower := strings.ToLower(r.URL)
 		skip := false
@@ -51,8 +50,8 @@ func filterHTMLResults(results []search.SearchResult) []search.SearchResult {
 // fetchAll fetches multiple pages in parallel using readability.
 func fetchAll(
 	ctx context.Context,
-	searx *search.SearXNGClient,
-	results []search.SearchResult,
+	searx *SearXNGClient,
+	results []SearchResult,
 	maxSources int,
 	maxRunes int,
 ) []source {
@@ -65,7 +64,7 @@ func fetchAll(
 	var wg sync.WaitGroup
 	for i, r := range results {
 		wg.Add(1)
-		go func(idx int, sr search.SearchResult) {
+		go func(idx int, sr SearchResult) {
 			defer wg.Done()
 			start := time.Now()
 			content, err := searx.FetchPage(ctx, sr.URL, maxRunes)

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/embedding"
+	"github.com/haryoiro/suzuha/internal/adapter/embedder"
 	"github.com/haryoiro/suzuha/internal/event"
 	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
 	"github.com/haryoiro/suzuha/internal/memory"
