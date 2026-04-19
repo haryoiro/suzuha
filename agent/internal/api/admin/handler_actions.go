@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/api/admin/gen"
+	actionDom "github.com/haryoiro/suzuha/internal/domain/action"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/robfig/cron/v3"
 )
 
-func actionToAPI(a Action) gen.ScheduledAction {
+func actionToAPI(a actionDom.Action) gen.ScheduledAction {
 	sa := gen.ScheduledAction{
 		ID:          a.ID,
 		ChannelID:   a.ChannelID,
@@ -36,7 +37,7 @@ func actionToAPI(a Action) gen.ScheduledAction {
 func (h *AdminHandler) ScheduledActionsList(ctx context.Context, params gen.ScheduledActionsListParams) (*gen.ScheduledActionsListOK, error) {
 	limit := int(params.Limit.Or(50))
 
-	actions, err := h.schedStore.List(ctx, ActionListOpts{
+	actions, err := h.schedStore.List(ctx, actionDom.ListOpts{
 		Status: params.Status.Or(""),
 		Limit:  limit,
 	})
@@ -74,7 +75,7 @@ func (h *AdminHandler) ScheduledActionsCreate(ctx context.Context, req *gen.Crea
 	mode := string(req.Mode.Or(gen.CreateActionRequestModePrompt))
 	cronExpr := req.CronExpr.Or("")
 
-	a := &Action{
+	a := &actionDom.Action{
 		ChannelID:   req.ChannelID,
 		Content:     req.Content,
 		Mode:        mode,
@@ -91,7 +92,7 @@ func (h *AdminHandler) ScheduledActionsCreate(ctx context.Context, req *gen.Crea
 }
 
 func (h *AdminHandler) ScheduledActionsUpdate(ctx context.Context, req *gen.UpdateActionRequest, params gen.ScheduledActionsUpdateParams) (*gen.OkResponse, error) {
-	fields := ActionUpdateFields{}
+	fields := actionDom.UpdateFields{}
 
 	if v, ok := req.ChannelID.Get(); ok {
 		fields.ChannelID = &v

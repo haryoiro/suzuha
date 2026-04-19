@@ -330,9 +330,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
 
 			db := store.DB()
-			var ds admin.DiaryStore = &diaryStoreAdapter{s: diary.NewStore(db)}
+			// 型が domain 経由で共有されるようになったので、feature の Store を
+			// そのまま admin.ActionStore / admin.DiaryStore として渡せる。
+			var ds admin.DiaryStore = diary.NewStore(db)
+			var as admin.ActionStore = schedStore
 
-			return admin.NewServer(cfg.Admin, store, userStore, &actionStoreAdapter{s: schedStore}, ds, mediaStore, adminLogger)
+			return admin.NewServer(cfg.Admin, store, userStore, as, ds, mediaStore, adminLogger)
 		})
 
 		// Scheduler (nil when disabled in config).

@@ -8,25 +8,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domain "github.com/haryoiro/suzuha/internal/domain/action"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/robfig/cron/v3"
 )
 
-// Action represents a scheduled action row.
-type Action struct {
-	ID            string
-	ChannelID     string
-	Content       string
-	Mode          string // "direct" (post as-is) or "prompt" (LLM generates response)
-	ScheduledAt   time.Time
-	CronExpr      string // empty for one-shot
-	RandomMinutes int    // random offset window in minutes (0 = disabled)
-	CreatedBy     string
-	Status        string // pending, executed, canceled, failed
-	RetryCount    int
-	ExecutedAt    *time.Time
-	CreatedAt     time.Time
-}
+// Action は domain/action.Action の型エイリアス。
+// 既存の `action.Action` 呼び出し箇所が残るため互換目的で保持する。
+type Action = domain.Action
 
 // Store handles scheduled_actions DB operations.
 type Store struct {
@@ -208,21 +197,11 @@ func scanActions(rows *sql.Rows) ([]Action, error) {
 	return actions, rows.Err()
 }
 
-// ActionListOpts controls filtering for admin List.
-type ActionListOpts struct {
-	Status string // empty = all
-	Limit  int
-}
+// ActionListOpts は domain/action.ListOpts の型エイリアス (legacy 名)。
+type ActionListOpts = domain.ListOpts
 
-// ActionUpdateFields holds the optional update fields for admin Update.
-type ActionUpdateFields struct {
-	ChannelID   *string
-	Content     *string
-	Mode        *string
-	ScheduledAt *string
-	CronExpr    *string
-	Status      *string
-}
+// ActionUpdateFields は domain/action.UpdateFields の型エイリアス (legacy 名)。
+type ActionUpdateFields = domain.UpdateFields
 
 // List returns actions with optional status filter, ordered by scheduled_at DESC.
 func (s *Store) List(ctx context.Context, opts ActionListOpts) ([]Action, error) {
