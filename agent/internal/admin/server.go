@@ -56,7 +56,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 	// SPA static files.
 	staticDir := cfg.StaticDir
 	if staticDir == "" {
-		staticDir = "web/admin/dist"
+		staticDir = "admin/dist"
 	}
 	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
 		mux.Handle("/", spaHandler(staticDir))
@@ -67,7 +67,7 @@ func NewServer(cfg config.Admin, store memory.AdminStore, userStore user.AdminSt
 			w.Write([]byte(`<!doctype html><html><body style="font-family:sans-serif;padding:2em;background:#111;color:#eee">` +
 				`<h1>suzuha admin API</h1>` +
 				`<p>The frontend is served by Vite dev server at <a href="http://localhost:5173" style="color:#7c3aed">http://localhost:5173</a></p>` +
-				`<p>Or build the frontend (<code>cd web/admin &amp;&amp; pnpm run build</code>) to serve it from here.</p>` +
+				`<p>Or build the frontend (<code>pnpm build:admin</code>) to serve it from here.</p>` +
 				`<h3>API endpoints</h3><ul>` +
 				`<li><a href="/api/health" style="color:#7c3aed">GET /api/health</a></li>` +
 				`<li><a href="/api/memories" style="color:#7c3aed">GET /api/memories</a></li>` +

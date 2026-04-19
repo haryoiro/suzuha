@@ -124,7 +124,8 @@ suzuha/
 │   ├── user/               # ユーザー管理 + 好感度
 │   └── voice/              # 音声パイプライン (VAD, STT, TTS, Session)
 ├── external/               # サードパーティサービスアダプタ
-├── web/admin/              # React SPA (Vite + Ant Design)
+├── admin/                  # React SPA (Vite + Ant Design)
+├── widget/                 # WebSocket voice widget (React + Vite)
 ├── firmware/               # ESP32 ファームウェア (ESP-IDF)
 ├── api/                    # TypeSpec API 仕様
 ├── .suzuha/                # プロンプトファイル (IDENTITY.md, SOUL.md) [gitignored]

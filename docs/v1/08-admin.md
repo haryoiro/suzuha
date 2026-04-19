@@ -105,7 +105,7 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 | GET | `/api/voicevox/speakers` | `/internal/voicevox/speakers` | VOICEVOX 話者 |
 | GET/PUT | `/api/voicevox/speaker` | `/internal/voicevox/speaker` | 現在の話者 |
 
-## フロントエンド（`web/admin/`）
+## フロントエンド（`admin/`）
 
 ### 技術スタック
 
@@ -134,7 +134,7 @@ React SPA + Go バックエンドによる管理インターフェース。エ�
 | Context | `#context` | エージェントコンテキスト（メッセージ履歴 + エフェメラル）表示 |
 | Logs | `#logs` | リアルタイムログ（SSE） |
 
-### API クライアント（`web/admin/src/lib/api.ts`）
+### API クライアント（`admin/src/lib/api.ts`）
 
 全 API エンドポイントへのアクセスを型付きで提供。各機能ごとに namespace で分割:
 

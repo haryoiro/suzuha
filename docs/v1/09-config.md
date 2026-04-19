@@ -103,7 +103,7 @@ admin:
   agent_logs: "http://localhost:9090/internal/logs"
   agent_context: "http://localhost:9090/internal/context"
   # consolidator_api は廃止 (インプロセスに移行済み)
-  static_dir: "web/admin/dist"
+  static_dir: "admin/dist"
   prompt_dir: ".suzuha"
   auth:
     username: ""            # 未指定時は認証なし
