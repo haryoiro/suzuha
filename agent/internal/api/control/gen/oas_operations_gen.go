@@ -6,6 +6,7 @@ package gen
 type OperationName = string
 
 const (
+	AgentOpsGatewayStatusOperation         OperationName = "AgentOpsGatewayStatus"
 	AgentOpsGetContextOperation            OperationName = "AgentOpsGetContext"
 	AgentOpsIdentityOperation              OperationName = "AgentOpsIdentity"
 	DeviceGetTrackerOperation              OperationName = "DeviceGetTracker"
@@ -24,6 +25,7 @@ const (
 	RawStreamsDeviceDetectionsOperation    OperationName = "RawStreamsDeviceDetections"
 	RawStreamsDeviceFrameOperation         OperationName = "RawStreamsDeviceFrame"
 	RawStreamsLogsOperation                OperationName = "RawStreamsLogs"
+	RawStreamsOverlandOperation            OperationName = "RawStreamsOverland"
 	RuntimeCompactOperation                OperationName = "RuntimeCompact"
 	RuntimeReloadChannelSettingsOperation  OperationName = "RuntimeReloadChannelSettings"
 	RuntimeReloadLocationSettingsOperation OperationName = "RuntimeReloadLocationSettings"

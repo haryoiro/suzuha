@@ -26,6 +26,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/event"
+	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/feature/action"
 	"github.com/haryoiro/suzuha/internal/feature/diary"
 	"github.com/haryoiro/suzuha/internal/feature/forget"
@@ -362,6 +363,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Scheduler (nil when disabled in config).
 		do.Provide(i, provideScheduler)
+
+		// Gateway は各 Source のライフサイクルを管理する。
+		do.Provide(i, func(i do.Injector) (*gateway.Gateway, error) {
+			return gateway.New(do.MustInvoke[*slog.Logger](i)), nil
+		})
 
 		// Device Hub (ESP32 WebSocket + Web widget) and Vision feature.
 		do.Provide(i, provideDeviceHub)

@@ -23,6 +23,12 @@ type Handler interface {
 //
 // x-ogen-operation-group: Agent
 type AgentHandler interface {
+	// AgentOpsGatewayStatus implements AgentOps_gatewayStatus operation.
+	//
+	// Gateway 管理下の全ソース (Discord/CLI/Device 等) の状態を返す。.
+	//
+	// GET /internal/gateway/status
+	AgentOpsGatewayStatus(ctx context.Context) ([]GatewayStatusItem, error)
 	// AgentOpsGetContext implements AgentOps_getContext operation.
 	//
 	// 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。.
@@ -150,6 +156,14 @@ type RawHandler interface {
 	//
 	// GET /internal/logs
 	RawStreamsLogs(ctx context.Context, w http.ResponseWriter) error
+	// RawStreamsOverland implements RawStreams_overland operation.
+	//
+	// Overland モバイルアプリからの GPS データ POST (Bearer token 認証)。
+	// ペイロードが巨大な JSON 配列なので raw で受けてそのまま location.Handler
+	// に委譲する。.
+	//
+	// POST /internal/overland
+	RawStreamsOverland(ctx context.Context, w http.ResponseWriter) error
 }
 
 // RuntimeHandler handles operations described by OpenAPI v3 specification.

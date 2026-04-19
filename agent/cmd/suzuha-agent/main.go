@@ -27,7 +27,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/feature/location"
 	"github.com/haryoiro/suzuha/internal/mcp"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
@@ -82,8 +81,8 @@ func run() error {
 		}()
 	}
 
-	// Create Gateway early so startInternalHTTP can register Device source.
-	gw := gateway.New(logger)
+	// Gateway は DI 登録済み。startInternalHTTP で Device source を登録する。
+	gw := do.MustInvoke[*gateway.Gateway](injector)
 
 	// Register Discord OnReady callback.
 	dc := do.MustInvoke[*discord.Chat](injector)
@@ -265,12 +264,11 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		logger.Info("restored disabled tools", "count", len(names))
 	}
 
-	// ogen-backed control API は /internal/* を全部処理する (SSE/binary/JSON 問わず)。
-	// WebSocket のみ ogen スコープ外なので raw handler で別途登録する。
+	// ogen-backed control API が /internal/* を全部処理する
+	// (SSE/binary/JSON/bearer-auth すべて含む)。WebSocket のみ ogen スコープ外。
 	hub := do.MustInvoke[*device.Hub](injector)
 	mux := http.NewServeMux()
 	mux.Handle("/internal/", controlOgen)
-	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
 	mux.HandleFunc("GET /ws/device", hub.Handler())
 	mux.HandleFunc("GET /ws/web", hub.WebHandler())
 
@@ -289,13 +287,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	hub.StartCaptureLoop(captureCtx, 333)
 	logger.Info("デバイス接続口を開いた")
 
-	// Overland location tracking (token 認証付き raw handler)。
-	locStore := do.MustInvoke[*location.Store](injector)
-	if locStore != nil {
-		locHandler := location.NewHandler(locStore, cfg.Location.Token, logger)
-		mux.Handle("POST /internal/overland", locHandler)
-		logger.Info("overland location endpoint enabled")
-	}
 
 	logger.Info("internal server starting", "addr", cfg.Observe.InternalAddr)
 	if err := http.ListenAndServe(cfg.Observe.InternalAddr, mux); err != nil {

@@ -32,6 +32,13 @@ model AgentContext {
   foreground?: ContextMessage[];
 }
 
+model GatewayStatusItem {
+  name: string;
+  state: string;
+  started_at?: string;
+  error?: string;
+}
+
 @route("/internal")
 @tag("Agent")
 interface AgentOps {
@@ -50,4 +57,12 @@ interface AgentOps {
   @get
   @extension("x-ogen-operation-group", "Agent")
   op getContext(): AgentContext;
+
+  /**
+   * Gateway 管理下の全ソース (Discord/CLI/Device 等) の状態を返す。
+   */
+  @route("gateway/status")
+  @get
+  @extension("x-ogen-operation-group", "Agent")
+  op gatewayStatus(): GatewayStatusItem[];
 }

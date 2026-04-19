@@ -5,15 +5,17 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
+	"github.com/haryoiro/suzuha/internal/gateway"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/user"
 	"github.com/samber/do/v2"
 )
 
-// AgentHandler は Agent グループ (identity / context) を実装する。
+// AgentHandler は Agent グループ (identity / context / gateway status) を実装する。
 type AgentHandler struct {
 	agent     *agent.Agent
 	userStore user.Store
+	gateway   *gateway.Gateway
 }
 
 // NewAgentHandler は DI injector から依存を取り出して AgentHandler を生成する。
@@ -21,6 +23,7 @@ func NewAgentHandler(i do.Injector) (gen.AgentHandler, error) {
 	return &AgentHandler{
 		agent:     do.MustInvoke[*agent.Agent](i),
 		userStore: do.MustInvoke[user.Store](i),
+		gateway:   do.MustInvoke[*gateway.Gateway](i),
 	}, nil
 }
 
@@ -54,6 +57,26 @@ func (h *AgentHandler) AgentOpsGetContext(ctx context.Context) (*gen.AgentContex
 		Background:      toContextMessages(h.agent.LastBackground()),
 		Foreground:      toContextMessages(h.agent.LastForeground()),
 	}, nil
+}
+
+// AgentOpsGatewayStatus implements GET /internal/gateway/status.
+func (h *AgentHandler) AgentOpsGatewayStatus(ctx context.Context) ([]gen.GatewayStatusItem, error) {
+	statuses := h.gateway.Status()
+	out := make([]gen.GatewayStatusItem, len(statuses))
+	for i, s := range statuses {
+		item := gen.GatewayStatusItem{
+			Name:  s.Name,
+			State: string(s.State),
+		}
+		if s.StartedAt != nil {
+			item.StartedAt = gen.NewOptString(s.StartedAt.Format("2006-01-02T15:04:05Z07:00"))
+		}
+		if s.Error != "" {
+			item.Error = gen.NewOptString(s.Error)
+		}
+		out[i] = item
+	}
+	return out, nil
 }
 
 func toContextMessages(msgs []llm.Message) []gen.ContextMessage {

@@ -201,6 +201,54 @@ func (s *ContextMessage) SetTimestamp(val OptString) {
 	s.Timestamp = val
 }
 
+// Ref: #/components/schemas/GatewayStatusItem
+type GatewayStatusItem struct {
+	Name      string    `json:"name"`
+	State     string    `json:"state"`
+	StartedAt OptString `json:"started_at"`
+	Error     OptString `json:"error"`
+}
+
+// GetName returns the value of Name.
+func (s *GatewayStatusItem) GetName() string {
+	return s.Name
+}
+
+// GetState returns the value of State.
+func (s *GatewayStatusItem) GetState() string {
+	return s.State
+}
+
+// GetStartedAt returns the value of StartedAt.
+func (s *GatewayStatusItem) GetStartedAt() OptString {
+	return s.StartedAt
+}
+
+// GetError returns the value of Error.
+func (s *GatewayStatusItem) GetError() OptString {
+	return s.Error
+}
+
+// SetName sets the value of Name.
+func (s *GatewayStatusItem) SetName(val string) {
+	s.Name = val
+}
+
+// SetState sets the value of State.
+func (s *GatewayStatusItem) SetState(val string) {
+	s.State = val
+}
+
+// SetStartedAt sets the value of StartedAt.
+func (s *GatewayStatusItem) SetStartedAt(val OptString) {
+	s.StartedAt = val
+}
+
+// SetError sets the value of Error.
+func (s *GatewayStatusItem) SetError(val OptString) {
+	s.Error = val
+}
+
 // Ref: #/components/schemas/Identity
 type Identity struct {
 	BotPlatformID string    `json:"bot_platform_id"`
@@ -761,6 +809,25 @@ func (s *RawStreamsLogsOKRawTextEventStream) SetResponse(val *http.Response) {
 }
 
 func (*RawStreamsLogsOKRawTextEventStream) rawStreamsLogsRes() {}
+
+type RawStreamsOverlandOKApplicationJSON string
+
+// RawStreamsOverlandOKRawApplicationJSON represents raw HTTP response for RawStreamsOverland application/json.
+type RawStreamsOverlandOKRawApplicationJSON struct {
+	Response *http.Response `json:"-"`
+}
+
+// GetResponse returns the value of Response.
+func (s *RawStreamsOverlandOKRawApplicationJSON) GetResponse() *http.Response {
+	return s.Response
+}
+
+// SetResponse sets the value of Response.
+func (s *RawStreamsOverlandOKRawApplicationJSON) SetResponse(val *http.Response) {
+	s.Response = val
+}
+
+func (*RawStreamsOverlandOKRawApplicationJSON) rawStreamsOverlandRes() {}
 
 // Ref: #/components/schemas/ReloadPromptResponse
 type ReloadPromptResponse struct {

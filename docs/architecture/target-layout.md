@@ -167,13 +167,13 @@ agent/
     │
     ├── domain/                   # 全パッケージで共有される Entity / Value Object
     │   ├── memo/                 # Memo, MemoryType, Keywords
-    │   ├── user/                 # User, Platform
-    │   ├── message/              # Message, Role
+    │   ├── user/                 # User, PlatformLink, UserGuild, MentionableUser, GuildSummary, ChannelEntry, GuildChannel
+    │   ├── message/              # Message, Role（llm から昇格）
     │   ├── channel/              # ChannelID, PlatformID, Source kind
     │   ├── diary/                # Entry, Period, EntryKind
     │   ├── action/               # ScheduledAction, ActionStatus
-    │   ├── location/             # LocationPoint, LocationArea
-    │   └── research/             # ResearchResult 等（必要に応じて）
+    │   └── location/             # LocationPoint, LocationArea, DeviceMapping, Place, UserLocation
+    │   （research は外向け型無しのため domain 不要。behavior/research/ 内に閉じる）
     │
     ├── runtime/                  # agent loop そのもの
     │   ├── agent/                # オーケストレータ・ライフサイクル
@@ -192,6 +192,8 @@ agent/
     │   ├── vision/               # カメラ映像理解
     │   ├── location/             # GPS 取り込み + query
     │   └── mcp/                  # MCP クライアント管理
+    │   （user は capability ではない：ロジックが無く純データストアのため
+    │    domain/user/ + port/user/ + driver/store/user/ に分解する）
     │
     ├── behavior/                 # agent がする行動（scheduler / LLM に駆動される）
     │   ├── diary/                # 日記書き込み (Task)
@@ -504,6 +506,27 @@ behavior/diary/               → task.go が scheduler.Task を満たす
 
 該当：`diary` `research` `wander` `forget` `topics` `video` `action`
 
+### 6.4 パターン D：channel 固有の Tool
+
+プロトコル固有の操作（Discord の voice_join / voice_leave など）は channel 内に置く：
+
+```
+channel/discord/
+├── discord.go
+├── source.go
+├── session.go
+├── tool_voice_join.go    # Discord 特有の Tool（tool.Tool 実装）
+└── tool_voice_leave.go
+```
+
+- channel 内の `tool_*.go` も `port/tool.Tool` を実装する
+- DI で tool registry に register
+- 他の channel / behavior からは直接触らない（tool registry 経由）
+
+behavior と channel の違い：
+- **behavior/**：プロトコル非依存の自律行動（diary / research 等）
+- **channel/**：特定プロトコル固有の入出力 + そのプロトコル固有 Tool
+
 ---
 
 ## 7. 廃止・統合対象
@@ -513,11 +536,17 @@ behavior/diary/               → task.go が scheduler.Task を満たす
 | `external/` | 廃止 | 内容は `adapter/` へ |
 | `internal/adapter/` | リネーム → `channel/` | プロトコル adapter として |
 | `internal/admin/` | `internal/api/admin/` | HTTP サーフェスとして |
+| `agent/{cli,device,discord,web}_session.go` | **移動**：各 `channel/<name>/session.go` へ | Session は入出力プロトコル固有なので channel/ に属する |
+| web 入力経路（現状 hub 経由で散在） | `channel/web/` に集約 | 他 adapter と揃える（source.go / session.go を揃える） |
 | `scheduler.Feature` interface | **廃止** | behavior は `task.go` / `tool_*.go` で個別に port/scheduler.Task / port/tool.Tool を満たす。DI で登録 |
 | `Feature.Setup(ctx, *sql.DB)` | **廃止** | schema migration は `driver/store/<name>/migrations/` or 専用 migration tool に分離 |
 | `api/admin/store.go` の shadow 型 | **廃止** | `Action` / `ActionListOpts` / `ActionUpdateFields` / `DiaryEntry` / `Location` / `UserLocation` / `DeviceMapping` / `Place` の 8 型全て `domain/<name>/` に一本化 |
 | `api/admin/store.go` の shadow interface | **廃止** | `ActionStore` / `DiaryStore` / `LocationStore` の 3 interface は domain 統合により不要に（admin が直接 capability の port を使う） |
 | `di/admin_adapter.go` の型変換関数 | **廃止** | `diaryStoreAdapter` / `diaryReaderAdapter` 等の変換は domain 統合で不要 |
+| `agent/memory.Store` 直接 import（10 箇所） | **`port/memory.Memory` 経由に置換** | runtime / behavior / tool が `port/memory` のみ知る形に移行（最大の refactor 範囲） |
+| `tool/builtin/memo.go` の `memory.AdminStore` 依存 | memo 専用の狭い interface に分離 | `port/memory.Admin` 全体ではなく memo が必要なメソッドだけの消費側 interface（consumer-side） |
+| scheduler の広範な依存（channel / llm / memory / tool / user） | Feature 廃止で連鎖的に解消 | scheduler は port/scheduler.Task のみ知る |
+| conversation の `llm.Message` 依存 | `domain/message/` に昇格で解消 | Message を domain に出せば conversation → domain/message のみ |
 | `internal/memento/` + `internal/memory/` | **`capability/memory/` に統合** | acquire / consolidate / search / store を 1 package に。port/memory を新設 |
 | `internal/memento/acquirer.Completer` `internal/memento/consolidator.Completer` | 重複解消 | memory 統合で 1 つに |
 | `internal/llm/` | `capability/llm/` + `port/llm/` + `adapter/llm/<vendor>/` | |
