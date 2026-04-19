@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/haryoiro/suzuha/internal/conversation"
 	"github.com/haryoiro/suzuha/internal/llm"
-	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
+	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 )
 
 // filterOutInjectedHistory は Compact に渡すメッセージから

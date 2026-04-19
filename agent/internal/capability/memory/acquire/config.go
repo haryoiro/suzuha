@@ -1,4 +1,4 @@
-package acquirer
+package acquire
 
 import "time"
 

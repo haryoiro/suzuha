@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/llm"
-	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
+	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	"github.com/haryoiro/suzuha/internal/memory"
 )
 

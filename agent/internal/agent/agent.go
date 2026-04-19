@@ -12,7 +12,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
+	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/agent/prompt"
 	"github.com/haryoiro/suzuha/internal/tool"

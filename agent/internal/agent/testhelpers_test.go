@@ -7,7 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/embedder"
 	"github.com/haryoiro/suzuha/internal/event"
-	acq "github.com/haryoiro/suzuha/internal/memento/acquirer"
+	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	"github.com/haryoiro/suzuha/internal/memory"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/user"
