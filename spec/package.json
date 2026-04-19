@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "compile": "tsp compile .",
+    "compile": "tsp compile admin && tsp compile control",
+    "compile:admin": "tsp compile admin",
+    "compile:control": "tsp compile control",
     "format": "tsp format \"**/*.tsp\""
   },
   "devDependencies": {

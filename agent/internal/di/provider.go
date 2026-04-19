@@ -12,6 +12,7 @@ import (
 	"github.com/haryoiro/suzuha/external/transcript"
 	"github.com/haryoiro/suzuha/external/twitter"
 	"github.com/haryoiro/suzuha/internal/api/admin"
+	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/conversation"
@@ -356,6 +357,12 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 		// Scheduler (nil when disabled in config).
 		do.Provide(i, provideScheduler)
+
+		// Control (internal) API handler — mount on internal mux.
+		do.Provide(i, func(i do.Injector) (*control.Handler, error) {
+			channelStore := do.MustInvoke[*channel.Store](i)
+			return control.NewHandler(channelStore), nil
+		})
 	}
 }
 

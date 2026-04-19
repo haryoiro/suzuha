@@ -21,6 +21,7 @@ import (
 	"github.com/haryoiro/suzuha/external/stt"
 	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/api/admin"
+	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
@@ -241,12 +242,20 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	logger := do.MustInvoke[*slog.Logger](injector)
 	logRing := do.MustInvoke[*observe.RingBuffer](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
-	channelStore := do.MustInvoke[*channel.Store](injector)
 	sched := do.MustInvoke[*scheduler.Scheduler](injector)
+
+	controlHandler := do.MustInvoke[*control.Handler](injector)
+	controlOgen, err := control.NewOgenHandler(controlHandler)
+	if err != nil {
+		logger.Error("control API の初期化に失敗", "error", err)
+		return
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/internal/logs", observe.LogHandler(logRing))
 	mux.Handle("GET /internal/gateway/status", gw.StatusHandler())
+	// Ogen-backed control API (段階的に /internal/* を移行中).
+	mux.Handle("POST /internal/reload-channel-settings", controlOgen)
 	mux.HandleFunc("POST /internal/compact", func(w http.ResponseWriter, r *http.Request) {
 		compactCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
@@ -276,14 +285,6 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		ag.ReloadPrompt(newPrompt)
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"ok":true,"length":%d}`, len(newPrompt))
-	})
-	mux.HandleFunc("POST /internal/reload-channel-settings", func(w http.ResponseWriter, r *http.Request) {
-		if err := channelStore.Reload(r.Context()); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"ok":true}`)
 	})
 	mux.HandleFunc("GET /internal/identity", func(w http.ResponseWriter, r *http.Request) {
 		botPlatformID := ag.BotID()
