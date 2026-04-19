@@ -1,6 +1,6 @@
 // Package tts は Text-to-Speech の契約を定義する。
-// 実装は adapter/tts/ (voicevox / sbv2)、consumer は capability/voice
-// (Phase 8a 後半で移動予定) や channel/device 等。
+// 実装は adapter/tts/ (voicevox / sbv2)、consumer は capability/voice や
+// channel/device 等。
 package tts
 
 import "context"

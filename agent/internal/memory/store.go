@@ -51,8 +51,8 @@ type MediaStore interface {
 
 // Store is the long-term memory storage interface.
 // embedding.Part を使う SearchByParts を含むため、port/memory.Memory には
-// 収まらない追加メソッドを持つ。Phase 8a で SearchByParts を port 化できる
-// 見込みが立ったら Store = port/memory.Memory に統合する。
+// 収まらない追加メソッドを持つ。embedder 側の port 整備後に
+// Store = port/memory.Memory へ統合予定。
 type Store interface {
 	Save(ctx context.Context, mem *Memory) error
 	Search(ctx context.Context, query string, limit int) ([]Memory, error)

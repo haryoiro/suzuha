@@ -1,6 +1,6 @@
 // Package stt は Speech-to-Text の契約を定義する。
-// 実装は adapter/stt/ (deepgram / whisper)、consumer は capability/voice
-// (Phase 8a 後半で移動予定) や channel/discord 等。
+// 実装は adapter/stt/ (deepgram / whisper)、consumer は capability/voice や
+// channel/discord 等。
 package stt
 
 import "context"

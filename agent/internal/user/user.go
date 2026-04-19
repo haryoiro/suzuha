@@ -1,7 +1,7 @@
 // Package user は domain/user (型) + port/user (interface) + adapter/store/user
 // (実装) への互換 shim。既存呼び出し側の `user.X` 参照を温存するため、
-// type alias と re-export を集約する。Phase 12 (lint 厳格化) で callers を
-// 正準 package に移し、本 package ごと廃止予定。
+// type alias と re-export を集約する。callers を正準 package に移した時点で
+// 本 package ごと廃止予定。
 package user
 
 import (

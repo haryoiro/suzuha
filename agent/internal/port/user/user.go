@@ -1,6 +1,5 @@
 // Package user は内部ユーザーの Store 契約を定義する。
-// 実装は internal/user/store.go (Phase 5 で adapter/store/user/ に移動予定)、
-// データ型は domain/user/。
+// 実装は adapter/store/user/、データ型は domain/user/。
 package user
 
 import (

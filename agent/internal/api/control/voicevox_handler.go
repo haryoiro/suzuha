@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
-	"github.com/haryoiro/suzuha/internal/adapter/discord"
+	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/voice"

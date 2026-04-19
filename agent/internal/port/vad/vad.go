@@ -1,5 +1,5 @@
 // Package vad は Voice Activity Detection の契約を定義する。
-// 実装は capability/voice/vad.go (Phase 8a 後半で移動予定)。
+// 実装は capability/voice/vad.go。
 package vad
 
 // Result は VAD の 1 フレーム分の判定結果。
