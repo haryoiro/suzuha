@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/bench"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/agent/prompt"
+	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
 	domainchannel "github.com/haryoiro/suzuha/internal/domain/channel"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/llm"

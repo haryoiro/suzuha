@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 )
 
 // Speaker は web クライアントへ TTS を送る契約 (consumer-side interface)。

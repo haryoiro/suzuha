@@ -3,7 +3,7 @@ package control
 import (
 	"context"
 
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/runtime/gateway"
 	"github.com/haryoiro/suzuha/internal/llm"

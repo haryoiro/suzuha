@@ -17,7 +17,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/agent"
+	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/port/chat"
 	"github.com/haryoiro/suzuha/internal/channel/cli"
