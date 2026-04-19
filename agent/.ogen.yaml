@@ -2,5 +2,10 @@ parser:
   allow_remote: false
 
 generator:
+  features:
+    enable:
+      - "paths/server"
+      - "ogen/otel"
+    disable_all: true
   ignore_not_implemented:
     - "all"

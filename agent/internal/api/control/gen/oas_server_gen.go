@@ -8,6 +8,18 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	AgentHandler
+	LLMHandler
+	RuntimeHandler
+	SchedulerHandler
+	ToolsHandler
+	VoicevoxHandler
+}
+
+// AgentHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Agent
+type AgentHandler interface {
 	// AgentOpsGetContext implements AgentOps_getContext operation.
 	//
 	// 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。.
@@ -20,6 +32,12 @@ type Handler interface {
 	//
 	// GET /internal/identity
 	AgentOpsIdentity(ctx context.Context) (*Identity, error)
+}
+
+// LLMHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: LLM
+type LLMHandler interface {
 	// LLMAssignRole implements LLM_assignRole operation.
 	//
 	// 指定ロールにプロバイダ+モデルを割り当てる。
@@ -63,6 +81,12 @@ type Handler interface {
 	//
 	// GET /internal/llm
 	LLMStatus(ctx context.Context) (*LLMStatus, error)
+}
+
+// RuntimeHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Runtime
+type RuntimeHandler interface {
 	// RuntimeCompact implements Runtime_compact operation.
 	//
 	// 会話コンテキストを強制的に圧縮する。.
@@ -81,6 +105,12 @@ type Handler interface {
 	//
 	// POST /internal/reload-prompt
 	RuntimeReloadPrompt(ctx context.Context) (*ReloadPromptResponse, error)
+}
+
+// SchedulerHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Scheduler
+type SchedulerHandler interface {
 	// SchedulerJobs implements Scheduler_jobs operation.
 	//
 	// 登録済み scheduler ジョブとその次回/前回実行時刻を返す。.
@@ -94,6 +124,12 @@ type Handler interface {
 	//
 	// POST /internal/trigger/{task}
 	SchedulerTrigger(ctx context.Context, req *TriggerRequest, params SchedulerTriggerParams) (*TriggerResponse, error)
+}
+
+// ToolsHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Tools
+type ToolsHandler interface {
 	// ToolsExecute implements Tools_execute operation.
 	//
 	// ツールを手動実行する。リクエストボディがそのまま入力 JSON。.
@@ -112,6 +148,12 @@ type Handler interface {
 	//
 	// PUT /internal/tools/{name}/enabled
 	ToolsSetEnabled(ctx context.Context, req *SetToolEnabledRequest, params ToolsSetEnabledParams) (*OkResponse, error)
+}
+
+// VoicevoxHandler handles operations described by OpenAPI v3 specification.
+//
+// x-ogen-operation-group: Voicevox
+type VoicevoxHandler interface {
 	// VoicevoxGetSpeaker implements Voicevox_getSpeaker operation.
 	//
 	// 現在設定されている話者 ID を返す。.

@@ -1,8 +1,10 @@
 import "@typespec/http";
 import "@typespec/rest";
+import "@typespec/openapi";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;
+using TypeSpec.OpenAPI;
 
 namespace SuzuhaControl;
 
@@ -36,10 +38,16 @@ interface AgentOps {
   /**
    * 現在の bot identity (platform ID と内部 user レコード) を返す。
    */
-  @route("identity") @get op identity(): Identity;
+  @route("identity")
+  @get
+  @extension("x-ogen-operation-group", "Agent")
+  op identity(): Identity;
 
   /**
    * 現在の会話コンテキスト (system + messages + 直近 background/foreground) を返す。
    */
-  @route("context") @get op getContext(): AgentContext;
+  @route("context")
+  @get
+  @extension("x-ogen-operation-group", "Agent")
+  op getContext(): AgentContext;
 }

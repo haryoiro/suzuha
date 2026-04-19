@@ -787,7 +787,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = RuntimeCompactOperation
 							r.summary = ""
 							r.operationID = "Runtime_compact"
-							r.operationGroup = ""
+							r.operationGroup = "Runtime"
 							r.pathPattern = "/internal/compact"
 							r.args = args
 							r.count = 0
@@ -812,7 +812,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = AgentOpsGetContextOperation
 							r.summary = ""
 							r.operationID = "AgentOps_getContext"
-							r.operationGroup = ""
+							r.operationGroup = "Agent"
 							r.pathPattern = "/internal/context"
 							r.args = args
 							r.count = 0
@@ -839,7 +839,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.name = AgentOpsIdentityOperation
 						r.summary = ""
 						r.operationID = "AgentOps_identity"
-						r.operationGroup = ""
+						r.operationGroup = "Agent"
 						r.pathPattern = "/internal/identity"
 						r.args = args
 						r.count = 0
@@ -863,7 +863,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.name = LLMStatusOperation
 						r.summary = ""
 						r.operationID = "LLM_status"
-						r.operationGroup = ""
+						r.operationGroup = "LLM"
 						r.pathPattern = "/internal/llm"
 						r.args = args
 						r.count = 0
@@ -899,7 +899,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.name = LLMListModelsOperation
 								r.summary = ""
 								r.operationID = "LLM_listModels"
-								r.operationGroup = ""
+								r.operationGroup = "LLM"
 								r.pathPattern = "/internal/llm/models"
 								r.args = args
 								r.count = 0
@@ -908,7 +908,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.name = LLMSaveModelOperation
 								r.summary = ""
 								r.operationID = "LLM_saveModel"
-								r.operationGroup = ""
+								r.operationGroup = "LLM"
 								r.pathPattern = "/internal/llm/models"
 								r.args = args
 								r.count = 0
@@ -933,7 +933,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									r.name = LLMRefreshModelsOperation
 									r.summary = ""
 									r.operationID = "LLM_refreshModels"
-									r.operationGroup = ""
+									r.operationGroup = "LLM"
 									r.pathPattern = "/internal/llm/models/refresh"
 									r.args = args
 									r.count = 0
@@ -960,7 +960,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.name = LLMListProvidersOperation
 								r.summary = ""
 								r.operationID = "LLM_listProviders"
-								r.operationGroup = ""
+								r.operationGroup = "LLM"
 								r.pathPattern = "/internal/llm/providers"
 								r.args = args
 								r.count = 0
@@ -984,7 +984,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								r.name = LLMListRolesOperation
 								r.summary = ""
 								r.operationID = "LLM_listRoles"
-								r.operationGroup = ""
+								r.operationGroup = "LLM"
 								r.pathPattern = "/internal/llm/roles"
 								r.args = args
 								r.count = 0
@@ -1018,7 +1018,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									r.name = LLMAssignRoleOperation
 									r.summary = ""
 									r.operationID = "LLM_assignRole"
-									r.operationGroup = ""
+									r.operationGroup = "LLM"
 									r.pathPattern = "/internal/llm/roles/{role}"
 									r.args = args
 									r.count = 1
@@ -1061,7 +1061,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = RuntimeReloadChannelSettingsOperation
 							r.summary = ""
 							r.operationID = "Runtime_reloadChannelSettings"
-							r.operationGroup = ""
+							r.operationGroup = "Runtime"
 							r.pathPattern = "/internal/reload-channel-settings"
 							r.args = args
 							r.count = 0
@@ -1086,7 +1086,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = RuntimeReloadPromptOperation
 							r.summary = ""
 							r.operationID = "Runtime_reloadPrompt"
-							r.operationGroup = ""
+							r.operationGroup = "Runtime"
 							r.pathPattern = "/internal/reload-prompt"
 							r.args = args
 							r.count = 0
@@ -1113,7 +1113,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.name = SchedulerJobsOperation
 						r.summary = ""
 						r.operationID = "Scheduler_jobs"
-						r.operationGroup = ""
+						r.operationGroup = "Scheduler"
 						r.pathPattern = "/internal/scheduler/jobs"
 						r.args = args
 						r.count = 0
@@ -1149,7 +1149,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = ToolsListOperation
 							r.summary = ""
 							r.operationID = "Tools_list"
-							r.operationGroup = ""
+							r.operationGroup = "Tools"
 							r.pathPattern = "/internal/tools"
 							r.args = args
 							r.count = 0
@@ -1207,7 +1207,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										r.name = ToolsSetEnabledOperation
 										r.summary = ""
 										r.operationID = "Tools_setEnabled"
-										r.operationGroup = ""
+										r.operationGroup = "Tools"
 										r.pathPattern = "/internal/tools/{name}/enabled"
 										r.args = args
 										r.count = 1
@@ -1232,7 +1232,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										r.name = ToolsExecuteOperation
 										r.summary = ""
 										r.operationID = "Tools_execute"
-										r.operationGroup = ""
+										r.operationGroup = "Tools"
 										r.pathPattern = "/internal/tools/{name}/execute"
 										r.args = args
 										r.count = 1
@@ -1272,7 +1272,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = SchedulerTriggerOperation
 							r.summary = ""
 							r.operationID = "Scheduler_trigger"
-							r.operationGroup = ""
+							r.operationGroup = "Scheduler"
 							r.pathPattern = "/internal/trigger/{task}"
 							r.args = args
 							r.count = 1
@@ -1298,7 +1298,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.name = VoicevoxGetSpeakerOperation
 						r.summary = ""
 						r.operationID = "Voicevox_getSpeaker"
-						r.operationGroup = ""
+						r.operationGroup = "Voicevox"
 						r.pathPattern = "/internal/voicevox/speaker"
 						r.args = args
 						r.count = 0
@@ -1307,7 +1307,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						r.name = VoicevoxSetSpeakerOperation
 						r.summary = ""
 						r.operationID = "Voicevox_setSpeaker"
-						r.operationGroup = ""
+						r.operationGroup = "Voicevox"
 						r.pathPattern = "/internal/voicevox/speaker"
 						r.args = args
 						r.count = 0
@@ -1332,7 +1332,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							r.name = VoicevoxSpeakersOperation
 							r.summary = ""
 							r.operationID = "Voicevox_speakers"
-							r.operationGroup = ""
+							r.operationGroup = "Voicevox"
 							r.pathPattern = "/internal/voicevox/speakers"
 							r.args = args
 							r.count = 0

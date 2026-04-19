@@ -1,8 +1,10 @@
 import "@typespec/http";
 import "@typespec/rest";
+import "@typespec/openapi";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;
+using TypeSpec.OpenAPI;
 
 namespace SuzuhaControl;
 
@@ -33,15 +35,23 @@ interface Tools {
   /**
    * 登録済みツール一覧を返す (enabled/disabled 情報付き)。
    */
-  @get op list(): ToolsListResponse;
+  @get
+  @extension("x-ogen-operation-group", "Tools")
+  op list(): ToolsListResponse;
 
   /**
    * ツールの enable/disable を切り替える。DB に永続化する。
    */
-  @route("{name}/enabled") @put op setEnabled(@path name: string, @body req: SetToolEnabledRequest): OkResponse;
+  @route("{name}/enabled")
+  @put
+  @extension("x-ogen-operation-group", "Tools")
+  op setEnabled(@path name: string, @body req: SetToolEnabledRequest): OkResponse;
 
   /**
    * ツールを手動実行する。リクエストボディがそのまま入力 JSON。
    */
-  @route("{name}/execute") @post op execute(@path name: string, @body input: Record<unknown>): ToolExecuteResponse;
+  @route("{name}/execute")
+  @post
+  @extension("x-ogen-operation-group", "Tools")
+  op execute(@path name: string, @body input: Record<unknown>): ToolExecuteResponse;
 }

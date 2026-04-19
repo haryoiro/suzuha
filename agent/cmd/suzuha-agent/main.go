@@ -18,6 +18,7 @@ import (
 	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
+	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
@@ -239,7 +240,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 	logRing := do.MustInvoke[*observe.RingBuffer](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
 
-	controlHandler := do.MustInvoke[*control.Handler](injector)
+	controlHandler := do.MustInvoke[gen.Handler](injector)
 	controlOgen, err := control.NewOgenHandler(controlHandler)
 	if err != nil {
 		logger.Error("control API の初期化に失敗", "error", err)

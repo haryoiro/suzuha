@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/external/transcript"
-	"github.com/haryoiro/suzuha/external/tts"
 	"github.com/haryoiro/suzuha/external/twitter"
 	"github.com/haryoiro/suzuha/internal/api/admin"
 	"github.com/haryoiro/suzuha/internal/api/control"
+	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/conversation"
@@ -43,7 +42,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/scheduler/notification"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/voice"
 	"github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/user"
@@ -361,55 +359,16 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		// Scheduler (nil when disabled in config).
 		do.Provide(i, provideScheduler)
 
-		// Control (internal) API handler — mount on internal mux.
-		do.Provide(i, func(i do.Injector) (*control.Handler, error) {
-			cfg := do.MustInvoke[*config.Config](i)
-			ag := do.MustInvoke[*agent.Agent](i)
-			channelStore := do.MustInvoke[*channel.Store](i)
-			userStore := do.MustInvoke[user.Store](i)
-			sched := do.MustInvoke[*scheduler.Scheduler](i)
-			cfgPath := do.MustInvokeNamed[string](i, "config-path")
-
-			// Voicevox 関連: 設定から voicevox エントリを探し、あれば client を作る。
-			var vvClient *tts.VoicevoxClient
-			var vvCfg *config.TTSProvider
-			for idx := range cfg.Voice.TTS {
-				if cfg.Voice.TTS[idx].Provider == "voicevox" {
-					vvCfg = &cfg.Voice.TTS[idx]
-					if vvCfg.URL != "" {
-						vvClient = tts.NewVoicevox(vvCfg.URL, vvCfg.SpeakerID)
-					}
-					break
-				}
-			}
-			// Discord 接続済みなら runtime 切り替え用の voice pipeline も渡す。
-			var vp *voice.Pipeline
-			if dc, err := do.Invoke[*discord.Chat](i); err == nil && dc != nil {
-				vp = dc.VoicePipeline()
-			}
-
-			toolRegistry := do.MustInvoke[*tool.Registry](i)
-			sharedDB := do.MustInvokeNamed[*sql.DB](i, "shared-db")
-			llmClient := do.MustInvoke[*llm.Client](i)
-			providerRegistry := do.MustInvoke[*llm.ProviderRegistry](i)
-			logger := do.MustInvoke[*slog.Logger](i)
-
-			return control.NewHandler(control.Config{
-				Agent:            ag,
-				ChannelStore:     channelStore,
-				UserStore:        userStore,
-				Scheduler:        sched,
-				Voicevox:         vvClient,
-				VoicevoxCfg:      vvCfg,
-				VoicePipeline:    vp,
-				ToolRegistry:     toolRegistry,
-				SharedDB:         sharedDB,
-				LLMClient:        llmClient,
-				ProviderRegistry: providerRegistry,
-				Logger:           logger,
-				PromptDir:        cfg.Agent.PromptDir,
-				ConfigDir:        filepath.Dir(cfgPath),
-			}), nil
+		// Control (internal) API — sub-handler ごとに DI 登録し、
+		// control.NewHandler が合成する。
+		do.Provide(i, control.NewRuntimeHandler)
+		do.Provide(i, control.NewAgentHandler)
+		do.Provide(i, control.NewSchedulerHandler)
+		do.Provide(i, control.NewVoicevoxHandler)
+		do.Provide(i, control.NewToolsHandler)
+		do.Provide(i, control.NewLLMHandler)
+		do.Provide(i, func(i do.Injector) (gen.Handler, error) {
+			return control.NewHandler(i), nil
 		})
 	}
 }

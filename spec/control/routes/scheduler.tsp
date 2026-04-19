@@ -1,8 +1,10 @@
 import "@typespec/http";
 import "@typespec/rest";
+import "@typespec/openapi";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;
+using TypeSpec.OpenAPI;
 
 namespace SuzuhaControl;
 
@@ -34,10 +36,16 @@ interface Scheduler {
   /**
    * 登録済み scheduler ジョブとその次回/前回実行時刻を返す。
    */
-  @route("scheduler/jobs") @get op jobs(): SchedulerJobsResponse;
+  @route("scheduler/jobs")
+  @get
+  @extension("x-ogen-operation-group", "Scheduler")
+  op jobs(): SchedulerJobsResponse;
 
   /**
    * 指定タスクを即時実行する。config 未指定時は設定済みジョブの default を使う。
    */
-  @route("trigger/{task}") @post op trigger(@path task: string, @body req: TriggerRequest): TriggerResponse;
+  @route("trigger/{task}")
+  @post
+  @extension("x-ogen-operation-group", "Scheduler")
+  op trigger(@path task: string, @body req: TriggerRequest): TriggerResponse;
 }

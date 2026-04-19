@@ -1,8 +1,10 @@
 import "@typespec/http";
 import "@typespec/rest";
+import "@typespec/openapi";
 
 using TypeSpec.Http;
 using TypeSpec.Rest;
+using TypeSpec.OpenAPI;
 
 namespace SuzuhaControl;
 
@@ -26,15 +28,24 @@ interface Runtime {
   /**
    * チャンネル設定 (channel_settings) を DB から再読み込みする。
    */
-  @route("reload-channel-settings") @post op reloadChannelSettings(): OkResponse;
+  @route("reload-channel-settings")
+  @post
+  @extension("x-ogen-operation-group", "Runtime")
+  op reloadChannelSettings(): OkResponse;
 
   /**
    * 会話コンテキストを強制的に圧縮する。
    */
-  @route("compact") @post op compact(): CompactResponse;
+  @route("compact")
+  @post
+  @extension("x-ogen-operation-group", "Runtime")
+  op compact(): CompactResponse;
 
   /**
    * ディスク上の IDENTITY.md / SOUL.md から system prompt を再構築する。
    */
-  @route("reload-prompt") @post op reloadPrompt(): ReloadPromptResponse;
+  @route("reload-prompt")
+  @post
+  @extension("x-ogen-operation-group", "Runtime")
+  op reloadPrompt(): ReloadPromptResponse;
 }
