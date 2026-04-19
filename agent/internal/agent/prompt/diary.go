@@ -37,9 +37,9 @@ func (p *DiaryProvider) ProvideContext(ctx context.Context, _ Request) Block {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("Recent diary (past 12h):\n")
+	sb.WriteString("[直近12時間の日記]\n")
 	for _, e := range entries {
-		fmt.Fprintf(&sb, "- [%s] %s\n", e.PeriodStart.Format("2006-01-02T15:00"), e.Content)
+		fmt.Fprintf(&sb, "- [%s] %s\n", jtime.In(e.PeriodStart).Format("2006-01-02 15:00"), e.Content)
 	}
 
 	return Block{Background: []llm.Message{{

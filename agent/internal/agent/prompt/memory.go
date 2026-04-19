@@ -107,13 +107,13 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 				label += " tone=" + tone
 			}
 		}
-		date := m.CreatedAt.Format("2006-01-02")
+		date := jtime.In(m.CreatedAt).Format("2006-01-02")
 		if m.EventTime != nil {
-			date = m.EventTime.Format("2006-01-02")
+			date = jtime.In(*m.EventTime).Format("2006-01-02")
 		}
 		textParts = append(textParts, fmt.Sprintf("- [%s] %s (%s)", label, m.Content, date))
 	}
-	textContent := "Relevant memories:\n" + strings.Join(textParts, "\n")
+	textContent := "[関連する記憶]\n" + strings.Join(textParts, "\n")
 
 	var attachedImages []string
 	if p.Media != nil {
@@ -136,7 +136,7 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 	if len(attachedImages) > 0 {
 		return Block{Background: []llm.Message{{
 			Role:      "user",
-			Content:   "[Memory context with images]\n" + textContent,
+			Content:   "[記憶 (画像付き)]\n" + textContent,
 			ImageURLs: attachedImages,
 			Timestamp: jtime.Now(),
 		}}}

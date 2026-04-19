@@ -54,7 +54,7 @@ func (p *ProfileProvider) ProvideContext(ctx context.Context, req Request) Block
 			selfMems, err := p.Memory.ListByType(ctx, memory.MemoryTypeSelf, 3)
 			if err == nil && len(selfMems) > 0 {
 				var sb strings.Builder
-				sb.WriteString("Self-awareness:\n")
+				sb.WriteString("[自己認識]\n")
 				for _, m := range selfMems {
 					fmt.Fprintf(&sb, "  - %s\n", m.Content)
 				}
@@ -82,7 +82,9 @@ func (p *ProfileProvider) buildProfile(ctx context.Context, platform, platformUs
 		return ""
 	}
 
-	content := fmt.Sprintf("[User profile: %s (ID=%s) role=%s]\n", u.DisplayName, u.ID, u.Role)
+	// Header は本文メタデータと揃えた key=value 形式。
+	content := fmt.Sprintf("[プロフィール platform=%s user_id=%s user=%s 役割=%s]\n",
+		platform, platformUserID, u.DisplayName, u.Role)
 
 	if p.Memory != nil {
 		memories, err := p.Memory.ListByUser(ctx, u.ID, 5)
@@ -90,7 +92,7 @@ func (p *ProfileProvider) buildProfile(ctx context.Context, platform, platformUs
 			p.Logger.Debug("相手との記憶を探せなかった", "error", err)
 		}
 		if len(memories) > 0 {
-			content += "Known facts:\n"
+			content += "知ってること:\n"
 			for _, m := range memories {
 				content += fmt.Sprintf("  - %s\n", m.Content)
 			}
@@ -101,7 +103,7 @@ func (p *ProfileProvider) buildProfile(ctx context.Context, platform, platformUs
 			p.Logger.Debug("エピソードの記憶を探せなかった", "error", err)
 		}
 		if len(episodes) > 0 {
-			content += "Shared episodes:\n"
+			content += "共有エピソード:\n"
 			for _, e := range episodes {
 				content += fmt.Sprintf("  - %s (%s)\n", e.Content, e.CreatedAt.Format("2006-01-02"))
 			}
@@ -132,7 +134,7 @@ func (p *ProfileProvider) buildProfile(ctx context.Context, platform, platformUs
 			}
 			gi.channels = append(gi.channels, chLabel)
 		}
-		content += "Servers:\n"
+		content += "参加場所:\n"
 		for _, gid := range guildOrder {
 			gi := guildMap[gid]
 			label := gi.name

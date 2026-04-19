@@ -305,7 +305,7 @@ func buildSelfPrompt(
 		if mentionTarget != nil {
 			fmt.Fprintf(&sb, "%sさん (Discord: <@%s>) に声をかけてみてもいい。\n", mentionTarget.DisplayName, mentionTarget.DiscordUserID)
 		}
-		sb.WriteString("気になることを調べたり、音楽を変えたり、積極的に動いていい。\n\n")
+		sb.WriteString("\n")
 	case boredom >= 40:
 		sb.WriteString("そこそこ暇。ひとりごとを言ったり、気になることを調べたりしてもいい。\n")
 		if mentionTarget != nil {
@@ -313,8 +313,7 @@ func buildSelfPrompt(
 		}
 		sb.WriteString("\n")
 	default:
-		sb.WriteString("まだそんなに暇じゃない。誰かに話しかける必要はない。\n")
-		sb.WriteString("ステータスを変えたり、気になることを考えたり調べたり、何かを作ったりしてもいい。\n\n")
+		sb.WriteString("まだそんなに暇じゃない。誰かに話しかける必要はない。\n\n")
 	}
 
 	if len(recentMemories) > 0 {
@@ -336,7 +335,6 @@ func buildSelfPrompt(
 	sb.WriteString("同じようなことの繰り返しにならないように\n\n")
 	sb.WriteString("- 短く自然に 綺麗にまとめない\n")
 	sb.WriteString("- 絵文字・顔文字は使わない\n")
-	sb.WriteString("- 時報禁止（「0時。」「もう3時か」等、時刻を報告するだけの発言はしない）\n")
 	sb.WriteString("- ツールを使ったことを報告しない（「調べてみた」「検索した」「記録した」等のメタ発言禁止）\n")
 	hour := now.Hour()
 	if hour >= 22 || hour < 6 {
