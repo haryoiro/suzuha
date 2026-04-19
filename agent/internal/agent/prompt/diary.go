@@ -2,28 +2,37 @@ package prompt
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/feature/diary"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
 )
 
+// DiaryEntry は日記エントリの最小表現 (consumer-side type)。
+type DiaryEntry struct {
+	PeriodStart time.Time
+	Content     string
+}
+
+// DiaryReader は日記エントリを取得する (consumer-side interface)。
+type DiaryReader interface {
+	ListByKind(ctx context.Context, kind string, since time.Time, limit int) ([]DiaryEntry, error)
+}
+
+// DiaryProvider は直近の日記エントリをコンテキストに注入する。
 type DiaryProvider struct {
-	DB     *sql.DB
+	Reader DiaryReader
 	Logger *slog.Logger
 }
 
 func (p *DiaryProvider) ProvideContext(ctx context.Context, _ Request) Block {
-	if p.DB == nil {
+	if p.Reader == nil {
 		return Block{}
 	}
-	ds := diary.NewStore(p.DB)
-	entries, err := ds.ListByKind(ctx, "hourly", jtime.Now().Add(-12*time.Hour), 24)
+	entries, err := p.Reader.ListByKind(ctx, "hourly", jtime.Now().Add(-12*time.Hour), 24)
 	if err != nil {
 		p.Logger.Debug("日記を取得できなかった", "error", err)
 		return Block{}

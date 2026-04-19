@@ -10,6 +10,7 @@ import (
 
 	"github.com/haryoiro/suzuha/external/embedding"
 	"github.com/haryoiro/suzuha/external/transcript"
+	"github.com/haryoiro/suzuha/external/twitter"
 	"github.com/haryoiro/suzuha/internal/admin"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
@@ -195,6 +196,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				},
 			}
 
+			db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
+			diaryReader := &diaryReaderAdapter{store: diary.NewStore(db)}
+
 			return agent.New(
 				agent.Config{
 					SystemPrompt:     cfg.Agent.SystemPrompt,
@@ -209,8 +213,8 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvoke[*user.SQLiteStore](i),
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[*acquirer.Acquirer](i),
-				conversation.NewStore(do.MustInvokeNamed[*sql.DB](i, "shared-db")),
-				do.MustInvokeNamed[*sql.DB](i, "shared-db"),
+				conversation.NewStore(db),
+				diaryReader,
 				channelSettings,
 				logger,
 			), nil
@@ -267,7 +271,8 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				transcript.NewYtDlpFetcher(),
 			)
 			videoExtractor := transcript.NewYtDlpFrameExtractor()
-			ag.SetVideoMeta(ytFetcher)
+			ag.SetVideoMeta(&videoMetaAdapter{inner: ytFetcher}, transcript.ExtractVideoURLs)
+			ag.SetTweetFetcher(&tweetFetcherAdapter{inner: twitter.NewFxTwitterFetcher()}, twitter.ExtractTwitterURLs)
 
 			features := []scheduler.Feature{
 				action.New(store.DB()),

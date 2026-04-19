@@ -8,6 +8,18 @@ import (
 	"github.com/haryoiro/suzuha/external/embedding"
 )
 
+// Part は embedding.Part の型エイリアス。domain レイヤーが external/embedding を直接 import しなくて済むようにする。
+type Part = embedding.Part
+
+// Modality は embedding.Modality の型エイリアス。
+type Modality = embedding.Modality
+
+const (
+	ModalityText  = embedding.ModalityText
+	ModalityImage = embedding.ModalityImage
+	ModalityAudio = embedding.ModalityAudio
+)
+
 // MemoryType categorizes memory entries.
 type MemoryType string
 

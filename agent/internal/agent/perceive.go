@@ -14,9 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/external/transcript"
-	"github.com/haryoiro/suzuha/external/twitter"
-
 	"golang.org/x/image/webp"
 
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
@@ -147,12 +144,14 @@ func (a *Agent) ingestEventWith(ctx context.Context, agentCtx *Context, evt even
 	}
 
 	// Annotate video URLs with metadata (title, duration).
-	if a.videoMeta != nil {
-		msg.Content = annotateVideoURLs(ctx, msg.Content, a.videoMeta, a.logger)
+	if a.videoMeta != nil && a.videoURLExtract != nil {
+		msg.Content = annotateVideoURLs(ctx, msg.Content, a.videoMeta, a.videoURLExtract, a.logger)
 	}
 
 	// Annotate X/Twitter URLs with tweet preview.
-	msg.Content = annotateTwitterURLs(ctx, msg.Content, a.logger)
+	if a.tweetFetcher != nil && a.tweetURLExtract != nil {
+		msg.Content = annotateTwitterURLs(ctx, msg.Content, a.tweetFetcher, a.tweetURLExtract, a.logger)
+	}
 
 	// Bootstrap channel history if this is a new channel (unless SkipChannelHistory is set).
 	if !dc.SkipChannelHistory {
@@ -458,8 +457,8 @@ func (a *Agent) injectMemoryFallback(ctx context.Context, agentCtx *Context, tri
 }
 
 // annotateVideoURLs はメッセージ中の動画 URL を検知し、メタデータで enrich する。
-func annotateVideoURLs(ctx context.Context, text string, meta transcript.MetadataFetcher, logger *slog.Logger) string {
-	urls := transcript.ExtractVideoURLs(text)
+func annotateVideoURLs(ctx context.Context, text string, meta VideoMetadataFetcher, extractURLs func(string) []string, logger *slog.Logger) string {
+	urls := extractURLs(text)
 	if len(urls) == 0 {
 		return text
 	}
@@ -482,14 +481,16 @@ func annotateVideoURLs(ctx context.Context, text string, meta transcript.Metadat
 }
 
 // annotateTwitterURLs はメッセージ中の X/Twitter URL を検知し、ツイート内容でアノテーションする。
-func annotateTwitterURLs(ctx context.Context, text string, logger *slog.Logger) string {
-	urls := twitter.ExtractTwitterURLs(text)
+func annotateTwitterURLs(ctx context.Context, text string, fetcher TweetFetcher, extractURLs func(string) []string, logger *slog.Logger) string {
+	urls := extractURLs(text)
 	if len(urls) == 0 {
 		return text
 	}
 
-	fetcher := twitter.NewFxTwitterFetcher()
 	for _, u := range urls {
+		if !fetcher.Supports(u) {
+			continue
+		}
 		tweet, err := fetcher.Fetch(ctx, u)
 		if err != nil {
 			logger.Debug("twitter: ツイート取得失敗", "url", u, "error", err)
