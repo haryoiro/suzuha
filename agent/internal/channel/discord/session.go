@@ -1,4 +1,4 @@
-package agent
+package discord
 
 import (
 	"context"
@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/agent"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
 	"github.com/haryoiro/suzuha/internal/chat"
 )
 
-// DiscordSession is the Session implementation for Discord text and voice interactions.
-type DiscordSession struct {
-	agentCtx     *Context
+// Session は Discord のテキスト / 音声対話に対応する agent.Session 実装。
+type Session struct {
+	agentCtx     *agent.Context
 	chat         chat.Sender
 	voice        chat.VoiceSpeaker
 	chanSettings *channelpkg.Store
@@ -26,16 +27,16 @@ type DiscordSession struct {
 	turnGuildID string
 }
 
-// NewDiscordSession creates a new DiscordSession.
-func NewDiscordSession(
-	agentCtx *Context,
+// NewSession creates a new Discord Session.
+func NewSession(
+	agentCtx *agent.Context,
 	chatSender chat.Sender,
 	voice chat.VoiceSpeaker,
 	chanSettings *channelpkg.Store,
 	drainWindow time.Duration,
 	logger *slog.Logger,
-) *DiscordSession {
-	return &DiscordSession{
+) *Session {
+	return &Session{
 		agentCtx:     agentCtx,
 		chat:         chatSender,
 		voice:        voice,
@@ -45,21 +46,22 @@ func NewDiscordSession(
 	}
 }
 
-func (s *DiscordSession) Source() SourceKey          { return SourceKeyDiscord }
-func (s *DiscordSession) Context() *Context          { return s.agentCtx }
-func (s *DiscordSession) PersistKey() string         { return "discord" }
-func (s *DiscordSession) DirectiveConfig() DirectiveConfig {
-	return discordDirectiveConfig(s.drainWindow)
+func (s *Session) Source() agent.SourceKey { return agent.SourceKeyDiscord }
+func (s *Session) Context() *agent.Context { return s.agentCtx }
+func (s *Session) PersistKey() string      { return "discord" }
+
+func (s *Session) DirectiveConfig() agent.DirectiveConfig {
+	return agent.DiscordDirectiveConfig(s.drainWindow)
 }
 
-func (s *DiscordSession) BeginTurn(p *Perception) {
+func (s *Session) BeginTurn(p *agent.Perception) {
 	s.turnChannel = p.Channel
 	s.turnIsVoice = p.IsVoice
 	s.turnIsDM = p.IsDM
 	s.turnGuildID = p.LastEvent.Message.GuildID
 }
 
-func (s *DiscordSession) Respond(ctx context.Context, text string) error {
+func (s *Session) Respond(ctx context.Context, text string) error {
 	// Suppress non-active channels (Discord-specific).
 	if s.chanSettings != nil && s.turnChannel != "" && !s.turnIsDM {
 		mode := s.chanSettings.GetMode(s.turnChannel)
@@ -86,7 +88,7 @@ func (s *DiscordSession) Respond(ctx context.Context, text string) error {
 
 // RespondStream は LLM ストリーミングレスポンスを音声で逐次返す。
 // voice が接続中ならストリーミング TTS、そうでなければテキスト送信にフォールバック。
-func (s *DiscordSession) RespondStream(ctx context.Context, sentences <-chan string) error {
+func (s *Session) RespondStream(ctx context.Context, sentences <-chan string) error {
 	// Voice channel: stream TTS.
 	if s.voice != nil && s.turnGuildID != "" && s.voice.IsConnected(s.turnGuildID) {
 		s.logger.Info("VCでストリーミング返答", "guild", s.turnGuildID)
@@ -109,7 +111,7 @@ func (s *DiscordSession) RespondStream(ctx context.Context, sentences <-chan str
 }
 
 // Typing sends a typing indicator (Discord-specific, used during tool loops).
-func (s *DiscordSession) Typing(ctx context.Context) {
+func (s *Session) Typing(ctx context.Context) {
 	if s.turnChannel == "" {
 		return
 	}
@@ -119,11 +121,11 @@ func (s *DiscordSession) Typing(ctx context.Context) {
 }
 
 // SetVoice sets the voice speaker for voice channel responses.
-func (s *DiscordSession) SetVoice(v chat.VoiceSpeaker) {
+func (s *Session) SetVoice(v chat.VoiceSpeaker) {
 	s.voice = v
 }
 
 // IsVoiceReady は現在のターンが VC で、かつ voice 接続が生きているかを返す。
-func (s *DiscordSession) IsVoiceReady() bool {
+func (s *Session) IsVoiceReady() bool {
 	return s.turnIsVoice && s.voice != nil && s.turnGuildID != "" && s.voice.IsConnected(s.turnGuildID)
 }

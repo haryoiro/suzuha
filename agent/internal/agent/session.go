@@ -32,15 +32,17 @@ type DirectiveConfig struct {
 	SkipChannelHistory bool
 }
 
-// discordDirectiveConfig returns the DirectiveConfig for Discord sources.
-func discordDirectiveConfig(drainWindow time.Duration) DirectiveConfig {
+// DiscordDirectiveConfig returns the DirectiveConfig for Discord sources.
+// channel/discord.Session から呼び出される (exported)。
+func DiscordDirectiveConfig(drainWindow time.Duration) DirectiveConfig {
 	return DirectiveConfig{
 		DrainWindow: drainWindow,
 	}
 }
 
-// deviceDirectiveConfig returns the DirectiveConfig for physical device sources.
-func deviceDirectiveConfig() DirectiveConfig {
+// DeviceDirectiveConfig returns the DirectiveConfig for physical device sources.
+// channel/device.Session から呼び出される (exported)。
+func DeviceDirectiveConfig() DirectiveConfig {
 	return DirectiveConfig{
 		ForceRespond:       true,
 		DrainWindow:        2 * time.Second,
@@ -81,8 +83,9 @@ type Session interface {
 	Respond(ctx context.Context, text string) error
 }
 
-// webDirectiveConfig returns the DirectiveConfig for web widget sources.
-func webDirectiveConfig() DirectiveConfig {
+// WebDirectiveConfig returns the DirectiveConfig for web widget sources.
+// channel/web.Session から呼び出される (exported)。
+func WebDirectiveConfig() DirectiveConfig {
 	return DirectiveConfig{
 		ForceRespond:       true,
 		DrainWindow:        2 * time.Second,
@@ -91,6 +94,12 @@ func webDirectiveConfig() DirectiveConfig {
 		SkipCatchUpStale:   true,
 		SkipChannelHistory: true,
 	}
+}
+
+// typingSession はタイピングインジケータをサポートする Session 用のオプショナル interface。
+// act ループが tool 実行中に typing を出すのに使う (Discord session が満たす)。
+type typingSession interface {
+	Typing(ctx context.Context)
 }
 
 // sourceKeyForEvent maps an event source string to a SourceKey.

@@ -113,31 +113,53 @@ func (m *mockAcquirer) Acquire(_ context.Context, _ *acq.AcquireRequest) (*acq.A
 	return &acq.AcquireResult{}, nil
 }
 
+// --- testSession: Session interface の最小テスト実装 ---
+
+type testSession struct {
+	agentCtx    *Context
+	src         SourceKey
+	persistKey  string
+	drainWindow time.Duration
+}
+
+func (s *testSession) Source() SourceKey     { return s.src }
+func (s *testSession) Context() *Context     { return s.agentCtx }
+func (s *testSession) PersistKey() string    { return s.persistKey }
+func (s *testSession) BeginTurn(*Perception) {}
+func (s *testSession) DirectiveConfig() DirectiveConfig {
+	switch s.src {
+	case SourceKeyDevice:
+		return DeviceDirectiveConfig()
+	case SourceKeyWeb:
+		return WebDirectiveConfig()
+	default:
+		return DiscordDirectiveConfig(s.drainWindow)
+	}
+}
+func (s *testSession) Respond(_ context.Context, _ string) error { return nil }
+
 // --- Test Agent builder ---
 
 func newTestAgent(opts ...func(*Agent)) *Agent {
 	bus := event.NewBus(16)
 	mc := &mockChat{}
+	// testSession は channel/* 実装に依存せず Session interface を満たす最小実装。
+	// import cycle 回避のため package agent 内で簡易実装する。
+	_ = mc // mock chat は respond 経路で参照させない — 必要なら respondFn に差し替える
 	regs := []SourceRegistration{
 		{
-			Key: SourceKeyDiscord,
-			NewSession: func(agentCtx *Context) Session {
-				return NewDiscordSession(agentCtx, mc, nil, nil, DefaultDrainWindow, slog.Default())
-			},
+			Key:        SourceKeyDiscord,
+			NewSession: func(agentCtx *Context) Session { return &testSession{agentCtx: agentCtx, src: SourceKeyDiscord, persistKey: "discord", drainWindow: DefaultDrainWindow} },
 			PersistKey: "discord",
 		},
 		{
-			Key: SourceKeyDevice,
-			NewSession: func(agentCtx *Context) Session {
-				return NewDeviceSession(agentCtx, nil, slog.Default())
-			},
+			Key:        SourceKeyDevice,
+			NewSession: func(agentCtx *Context) Session { return &testSession{agentCtx: agentCtx, src: SourceKeyDevice, persistKey: "device"} },
 			PersistKey: "device",
 		},
 		{
-			Key: SourceKeyWeb,
-			NewSession: func(agentCtx *Context) Session {
-				return NewWebSession(agentCtx, nil, slog.Default())
-			},
+			Key:        SourceKeyWeb,
+			NewSession: func(agentCtx *Context) Session { return &testSession{agentCtx: agentCtx, src: SourceKeyWeb, persistKey: "web"} },
 			PersistKey: "web",
 		},
 	}
