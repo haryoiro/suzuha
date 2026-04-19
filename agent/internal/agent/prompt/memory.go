@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/domain/memo"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
 
 func parseDataURI(uri string) ([]byte, string) {
@@ -29,21 +31,21 @@ func parseDataURI(uri string) ([]byte, string) {
 	return data, mime
 }
 
-func modalityFromMime(mime string) memory.Modality {
+func modalityFromMime(mime string) embedding.Modality {
 	switch {
 	case strings.HasPrefix(mime, "image/"):
-		return memory.ModalityImage
+		return embedding.ModalityImage
 	case strings.HasPrefix(mime, "audio/"):
-		return memory.ModalityAudio
+		return embedding.ModalityAudio
 	default:
-		return memory.ModalityText
+		return embedding.ModalityText
 	}
 }
 
 // MemoryProvider はメモリ検索結果をプロンプトブロックとして提供する。
 type MemoryProvider struct {
-	Memory memory.Store
-	Media  memory.MediaStore
+	Memory portmem.Memory
+	Media  portmem.Media
 	Logger *slog.Logger
 }
 
@@ -52,7 +54,7 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 		return Block{}
 	}
 
-	filter := memory.SymbolicFilter{}
+	filter := memo.SymbolicFilter{}
 	for _, pt := range req.Participants {
 		filter.PersonIDs = append(filter.PersonIDs, pt.UserID)
 	}
@@ -67,7 +69,7 @@ func (p *MemoryProvider) ProvideContext(ctx context.Context, req Request) Block 
 		if data == nil {
 			continue
 		}
-		parts := []memory.Part{{
+		parts := []embedding.Part{{
 			Modality: modalityFromMime(mime),
 			Data:     data,
 			MimeType: mime,

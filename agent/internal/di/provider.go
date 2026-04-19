@@ -9,7 +9,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/adapter/embedder"
+	"github.com/haryoiro/suzuha/internal/adapter/embedder/gemini"
+	"github.com/haryoiro/suzuha/internal/adapter/embedder/textonly"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"github.com/haryoiro/suzuha/internal/adapter/stt"
 	"github.com/haryoiro/suzuha/internal/adapter/transcript"
 	"github.com/haryoiro/suzuha/internal/adapter/tts"
@@ -86,11 +88,11 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			cfg := do.MustInvoke[*config.Config](i)
 			switch cfg.Embedding.Provider {
 			case "gemini":
-				return embedding.NewGeminiEmbedder(cfg.Embedding.APIKey, cfg.Embedding.Model, cfg.Embedding.Dims)
+				return gemini.NewGeminiEmbedder(cfg.Embedding.APIKey, cfg.Embedding.Model, cfg.Embedding.Dims)
 			default:
 				// OpenAI etc: llm.Client satisfies embedding.TextEmbedClient.
 				llmClient := do.MustInvoke[*llm.Client](i)
-				return embedding.NewTextOnlyEmbedder(llmClient, cfg.Embedding.Dims), nil
+				return textonly.NewTextOnlyEmbedder(llmClient, cfg.Embedding.Dims), nil
 			}
 		})
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/internal/adapter/embedder"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/samber/do/v2"
 )

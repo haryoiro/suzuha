@@ -1,14 +1,15 @@
-package embedding
+package gemini
 
 import (
 	"context"
 	"fmt"
 	"os"
 
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"google.golang.org/genai"
 )
 
-// GeminiEmbedder implements Embedder using the Google Gemini embedding API.
+// GeminiEmbedder implements embedding.Embedder using the Google Gemini embedding API.
 // Supports text and image parts natively via the genai SDK.
 type GeminiEmbedder struct {
 	client *genai.Client
@@ -16,7 +17,7 @@ type GeminiEmbedder struct {
 	dims   int
 }
 
-// NewGeminiEmbedder creates a multimodal Embedder using the Gemini API.
+// NewGeminiEmbedder creates a multimodal embedding.Embedder using the Gemini API.
 func NewGeminiEmbedder(apiKey, model string, dims int) (*GeminiEmbedder, error) {
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey:  apiKey,
@@ -32,7 +33,7 @@ func NewGeminiEmbedder(apiKey, model string, dims int) (*GeminiEmbedder, error) 
 	}, nil
 }
 
-func (e *GeminiEmbedder) Embed(ctx context.Context, parts []Part) ([]float32, error) {
+func (e *GeminiEmbedder) Embed(ctx context.Context, parts []embedding.Part) ([]float32, error) {
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("embedding: パートが空です")
 	}
@@ -52,9 +53,9 @@ func (e *GeminiEmbedder) Embed(ctx context.Context, parts []Part) ([]float32, er
 	if err != nil {
 		// If multimodal input failed, retry with text-only parts.
 		hasNonText := false
-		var textParts []Part
+		var textParts []embedding.Part
 		for _, p := range parts {
-			if p.Modality == ModalityText {
+			if p.Modality == embedding.ModalityText {
 				textParts = append(textParts, p)
 			} else {
 				hasNonText = true
@@ -78,7 +79,7 @@ func (e *GeminiEmbedder) Embed(ctx context.Context, parts []Part) ([]float32, er
 // gemini-embedding-2-preview does not support batchEmbedContents,
 // so we fall back to individual embedContent calls.
 // Individual failures are skipped (result is nil) rather than aborting the batch.
-func (e *GeminiEmbedder) EmbedBatch(ctx context.Context, inputs [][]Part) ([][]float32, error) {
+func (e *GeminiEmbedder) EmbedBatch(ctx context.Context, inputs [][]embedding.Part) ([][]float32, error) {
 	results := make([][]float32, len(inputs))
 	for i, parts := range inputs {
 		vec, err := e.Embed(ctx, parts)
@@ -93,20 +94,20 @@ func (e *GeminiEmbedder) EmbedBatch(ctx context.Context, inputs [][]Part) ([][]f
 }
 
 func (e *GeminiEmbedder) Dimensions() int        { return e.dims }
-func (e *GeminiEmbedder) Modalities() []Modality { return []Modality{ModalityText, ModalityImage} }
+func (e *GeminiEmbedder) Modalities() []embedding.Modality { return []embedding.Modality{embedding.ModalityText, embedding.ModalityImage} }
 
 // partsToContent converts embedding Parts to a genai.Content.
 // Role is intentionally left empty — the embedding API does not require it,
 // and setting it can cause INVALID_ARGUMENT in batch calls.
-func partsToContent(parts []Part) *genai.Content {
+func partsToContent(parts []embedding.Part) *genai.Content {
 	content := &genai.Content{}
 	for _, p := range parts {
 		switch p.Modality {
-		case ModalityText:
+		case embedding.ModalityText:
 			content.Parts = append(content.Parts, &genai.Part{
 				Text: string(p.Data),
 			})
-		case ModalityImage:
+		case embedding.ModalityImage:
 			content.Parts = append(content.Parts, &genai.Part{
 				InlineData: &genai.Blob{
 					MIMEType: p.MimeType,
@@ -118,4 +119,4 @@ func partsToContent(parts []Part) *genai.Content {
 	return content
 }
 
-var _ Embedder = (*GeminiEmbedder)(nil)
+var _ embedding.Embedder = (*GeminiEmbedder)(nil)

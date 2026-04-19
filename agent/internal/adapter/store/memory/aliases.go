@@ -8,7 +8,7 @@ package memory
 import (
 	"context"
 
-	"github.com/haryoiro/suzuha/internal/adapter/embedder"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 	"github.com/haryoiro/suzuha/internal/domain/memo"
 )
 

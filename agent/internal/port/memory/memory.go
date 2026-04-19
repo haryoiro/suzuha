@@ -12,16 +12,17 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/domain/memo"
+	"github.com/haryoiro/suzuha/internal/port/embedder"
 )
 
 // Memory は agent pipeline が使う主 API。
-// embedder.Part を使う SearchByParts は embedder 側の port 整備後に追加する。
 type Memory interface {
 	Save(ctx context.Context, mem *memo.Memory) error
 	Search(ctx context.Context, query string, limit int) ([]memo.Memory, error)
 	SearchWithContext(ctx context.Context, query string, limit int, filter memo.SymbolicFilter) ([]memo.Memory, error)
 	SearchByType(ctx context.Context, query string, memType memo.MemoryType, limit int) ([]memo.Memory, error)
 	SearchRecent(ctx context.Context, query string, limit int, since time.Time) ([]memo.Memory, error)
+	SearchByParts(ctx context.Context, parts []embedding.Part, limit int) ([]memo.Memory, error)
 	ListByUser(ctx context.Context, userID string, limit int) ([]memo.Memory, error)
 	ListEpisodesByParticipant(ctx context.Context, userID string, limit int) ([]memo.Memory, error)
 	ListByType(ctx context.Context, memType memo.MemoryType, limit int) ([]memo.Memory, error)
