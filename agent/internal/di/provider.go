@@ -1,4 +1,4 @@
-package main
+package di
 
 import (
 	"context"
@@ -46,8 +46,9 @@ import (
 	"github.com/samber/do/v2"
 )
 
-// allPackages returns all DI package functions for the agent process.
-func allPackages(cfgPath string) []func(do.Injector) {
+// Packages returns all DI package functions for the agent process.
+// cmd は samber/do.New に渡すだけで全配線が完了する。
+func Packages(cfgPath string) []func(do.Injector) {
 	return []func(do.Injector){
 		agentPackages(cfgPath),
 		config.Package,

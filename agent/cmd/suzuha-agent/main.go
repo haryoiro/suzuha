@@ -27,6 +27,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/discord"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/adapter/device"
+	"github.com/haryoiro/suzuha/internal/di"
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/feature/vision"
 	"github.com/haryoiro/suzuha/internal/gateway"
@@ -57,7 +58,7 @@ func run() error {
 	}
 
 	// Build DI container with all providers.
-	injector := do.New(allPackages(cfgPath)...)
+	injector := do.New(di.Packages(cfgPath)...)
 
 	// Eager resolve: fail fast on misconfiguration.
 	cfg := do.MustInvoke[*config.Config](injector)
