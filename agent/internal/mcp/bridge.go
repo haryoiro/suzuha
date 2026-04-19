@@ -13,7 +13,8 @@ import (
 	"sync"
 
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -27,12 +28,12 @@ type serverEntry struct {
 type Manager struct {
 	mu       sync.Mutex
 	logger   *slog.Logger
-	registry *tool.Registry
+	registry *toolreg.Registry
 	servers  map[string]*serverEntry
 }
 
 // NewManager creates a new MCP bridge Manager.
-func NewManager(logger *slog.Logger, registry *tool.Registry) *Manager {
+func NewManager(logger *slog.Logger, registry *toolreg.Registry) *Manager {
 	return &Manager{
 		logger:   logger,
 		registry: registry,

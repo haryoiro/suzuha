@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // PythonExec is a tool that executes Python code in a sandboxed subprocess.

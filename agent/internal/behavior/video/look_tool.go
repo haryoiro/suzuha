@@ -11,7 +11,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/transcript"
 	"github.com/haryoiro/suzuha/internal/llm"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // lookTool は動画の特定時点のフレームを VLM で描写するツール。

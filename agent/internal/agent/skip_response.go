@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
 // skipResponseTool は LLM が応答をスキップしたいことを示す仮想ツール。
-// グローバルな tool.Registry には登録せず、directive に応じて
+// グローバルな Registry には登録せず、directive に応じて
 // completeWithTools の呼び出し時にのみ注入される。
 type skipResponseTool struct{}
 

@@ -9,7 +9,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	acq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	"github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	userdom "github.com/haryoiro/suzuha/internal/domain/user"
 )
@@ -173,7 +173,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		},
 		regs,
 		nil, // llm.Client — nil is OK when we don't call Act
-		tool.NewRegistry(),
+		toolreg.NewRegistry(),
 		&mockMemory{},
 		&mockUsers{},
 		bus,

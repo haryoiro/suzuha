@@ -1,24 +1,28 @@
 package tool
 
-import "sync"
+import (
+	"sync"
+
+	port "github.com/haryoiro/suzuha/internal/port/tool"
+)
 
 // Registry is a thread-safe collection of all available tools.
 type Registry struct {
 	mu       sync.RWMutex
-	tools    map[string]Tool
+	tools    map[string]port.Tool
 	disabled map[string]bool
 }
 
 // NewRegistry creates an empty tool registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		tools:    make(map[string]Tool),
+		tools:    make(map[string]port.Tool),
 		disabled: make(map[string]bool),
 	}
 }
 
 // Register adds a tool to the registry.
-func (r *Registry) Register(t Tool) {
+func (r *Registry) Register(t port.Tool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tools[t.Name()] = t
@@ -32,7 +36,7 @@ func (r *Registry) Unregister(name string) {
 }
 
 // Get returns a tool by name.
-func (r *Registry) Get(name string) (Tool, bool) {
+func (r *Registry) Get(name string) (port.Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	t, ok := r.tools[name]
@@ -40,10 +44,10 @@ func (r *Registry) Get(name string) (Tool, bool) {
 }
 
 // All returns all registered tools.
-func (r *Registry) All() []Tool {
+func (r *Registry) All() []port.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]Tool, 0, len(r.tools))
+	out := make([]port.Tool, 0, len(r.tools))
 	for _, t := range r.tools {
 		out = append(out, t)
 	}
@@ -51,10 +55,10 @@ func (r *Registry) All() []Tool {
 }
 
 // AllEnabled returns all registered tools that are not disabled.
-func (r *Registry) AllEnabled() []Tool {
+func (r *Registry) AllEnabled() []port.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]Tool, 0, len(r.tools))
+	out := make([]port.Tool, 0, len(r.tools))
 	for _, t := range r.tools {
 		if !r.disabled[t.Name()] {
 			out = append(out, t)

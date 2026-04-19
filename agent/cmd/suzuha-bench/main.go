@@ -31,7 +31,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/event"
 	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	"github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
 	user "github.com/haryoiro/suzuha/internal/adapter/store/user"
 )
 
@@ -219,7 +219,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 		},
 		regs,
 		llmClient,
-		tool.NewRegistry(),
+		toolreg.NewRegistry(),
 		store,
 		userStore,
 		bus,

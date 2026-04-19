@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // BootstrapStore は mcpapps ストアを生成して Setup を実行する。

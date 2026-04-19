@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/event"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // Feature は物体検出・追跡・変化通知を提供する capability。

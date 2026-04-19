@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // MemoCreate はメモを新規作成するツール。

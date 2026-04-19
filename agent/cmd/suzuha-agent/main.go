@@ -19,7 +19,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
 	"github.com/haryoiro/suzuha/internal/agent"
 	"github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/chat"
+	"github.com/haryoiro/suzuha/internal/port/chat"
 	"github.com/haryoiro/suzuha/internal/channel/cli"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"
@@ -32,7 +32,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/mcp"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/scheduler"
-	"github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
 	"github.com/haryoiro/suzuha/internal/tool/builtin"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/samber/do/v2"
@@ -150,7 +150,7 @@ func run() error {
 }
 
 func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
-	registry := do.MustInvoke[*tool.Registry](injector)
+	registry := do.MustInvoke[*toolreg.Registry](injector)
 	userStore := do.MustInvoke[user.Store](injector)
 	botReg := do.MustInvoke[user.BotRegistrar](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
@@ -258,8 +258,8 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 			logger.Info("LLMロールを復元", "role", a.Role, "provider", a.ProviderName, "model", a.ModelID)
 		}
 	}
-	registry := do.MustInvoke[*tool.Registry](injector)
-	if names, err := tool.LoadDisabled(context.Background(), llmDB); err != nil {
+	registry := do.MustInvoke[*toolreg.Registry](injector)
+	if names, err := toolreg.LoadDisabled(context.Background(), llmDB); err != nil {
 		logger.Warn("disabled tools の復元に失敗", "error", err)
 	} else if len(names) > 0 {
 		registry.SetDisabled(names)

@@ -3,7 +3,7 @@ package scheduler
 import "sync"
 
 // TaskRegistry is a thread-safe collection of available CronTask implementations.
-// It mirrors tool.Registry in design.
+// It mirrors toolreg.Registry in design.
 type TaskRegistry struct {
 	mu    sync.RWMutex
 	tasks map[string]CronTask

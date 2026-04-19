@@ -9,20 +9,20 @@ import (
 
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/tool"
+	toolreg "github.com/haryoiro/suzuha/internal/tool"
 	"github.com/samber/do/v2"
 )
 
 // ToolsHandler は Tools グループ (list / enable / execute) を実装する。
 type ToolsHandler struct {
-	registry *tool.Registry
+	registry *toolreg.Registry
 	db       *sql.DB // disabled tools の永続化に使う
 }
 
 // NewToolsHandler は DI injector から依存を取り出して ToolsHandler を生成する。
 func NewToolsHandler(i do.Injector) (gen.ToolsHandler, error) {
 	return &ToolsHandler{
-		registry: do.MustInvoke[*tool.Registry](i),
+		registry: do.MustInvoke[*toolreg.Registry](i),
 		db:       do.MustInvokeNamed[*sql.DB](i, "shared-db"),
 	}, nil
 }
@@ -55,7 +55,7 @@ func (h *ToolsHandler) ToolsList(ctx context.Context) (*gen.ToolsListResponse, e
 // ToolsSetEnabled implements PUT /internal/tools/{name}/enabled.
 func (h *ToolsHandler) ToolsSetEnabled(ctx context.Context, req *gen.SetToolEnabledRequest, params gen.ToolsSetEnabledParams) (*gen.OkResponse, error) {
 	h.registry.SetEnabled(params.Name, req.Enabled)
-	if err := tool.SaveDisabled(ctx, h.db, h.registry.DisabledNames()); err != nil {
+	if err := toolreg.SaveDisabled(ctx, h.db, h.registry.DisabledNames()); err != nil {
 		return nil, err
 	}
 	return &gen.OkResponse{Ok: true}, nil

@@ -11,7 +11,7 @@ import (
 
 	readability "codeberg.org/readeck/go-readability/v2"
 	"github.com/haryoiro/suzuha/internal/adapter/twitter"
-	"github.com/haryoiro/suzuha/internal/tool"
+	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 const maxBodyBytes = 512 << 10 // 512KB raw read limit

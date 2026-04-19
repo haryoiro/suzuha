@@ -8,7 +8,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/agent"
 	channelpkg "github.com/haryoiro/suzuha/internal/channel"
-	"github.com/haryoiro/suzuha/internal/chat"
+	"github.com/haryoiro/suzuha/internal/port/chat"
 )
 
 // Session は Discord のテキスト / 音声対話に対応する agent.Session 実装。
