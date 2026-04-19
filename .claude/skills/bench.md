@@ -36,7 +36,7 @@ docker compose -f container/compose.yaml exec suzuha-db \
 
 ```bash
 docker compose -f container/compose.yaml exec agent \
-  go run -tags fts5 ./cmd/suzuha-bench \
+  go run ./cmd/suzuha-bench \
     -config config.yaml \
     -scenarios bench/scenarios/ \
     -snapshot bench/snapshots/baseline.dump \

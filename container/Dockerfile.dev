@@ -1,9 +1,7 @@
 FROM golang:1.26
 
-# Install build dependencies for CGO (sqlite-vec), protoc, Node.js, and libdave
+# Install build dependencies for CGO (opus), protoc, Node.js, and libdave
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsqlite3-dev \
-    sqlite3 \
     libopus-dev \
     libopusfile-dev \
     pkg-config \

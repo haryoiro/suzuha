@@ -55,7 +55,7 @@ type geofenceEvent struct {
 	Timestamp time.Time
 }
 
-// Store manages location data with SQLite persistence and in-memory cache.
+// Store manages location data with DB persistence and in-memory cache.
 type Store struct {
 	db         *sql.DB
 	mu         sync.RWMutex

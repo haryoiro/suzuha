@@ -10,34 +10,34 @@ import (
 	"github.com/google/uuid"
 )
 
-// SQLiteStore implements Store using the shared SQLite database.
-type SQLiteStore struct {
+// Store implements the user store using the shared database.
+type PostgresStore struct {
 	db         *sql.DB
 	botUserIDs map[string]bool // platform user IDs that belong to the bot itself
 }
 
-// NewSQLiteStore creates a user store that shares the given database connection.
+// NewStore creates a user store that shares the given database connection.
 // botPlatformUserIDs are platform user IDs (e.g. Discord user ID) that identify
 // the bot itself. Users resolved with these IDs are marked as is_bot=true.
-func NewSQLiteStore(db *sql.DB, botPlatformUserIDs ...string) *SQLiteStore {
+func NewPostgresStore(db *sql.DB, botPlatformUserIDs ...string) *PostgresStore {
 	ids := make(map[string]bool, len(botPlatformUserIDs))
 	for _, id := range botPlatformUserIDs {
 		if id != "" {
 			ids[id] = true
 		}
 	}
-	return &SQLiteStore{db: db, botUserIDs: ids}
+	return &PostgresStore{db: db, botUserIDs: ids}
 }
 
 // AddBotID registers an additional platform user ID as belonging to the bot.
 // This is used when the actual bot ID is only known at runtime (e.g. after Discord connects).
-func (s *SQLiteStore) AddBotID(platformUserID string) {
+func (s *PostgresStore) AddBotID(platformUserID string) {
 	if platformUserID != "" {
 		s.botUserIDs[platformUserID] = true
 	}
 }
 
-func (s *SQLiteStore) Resolve(ctx context.Context, platform, platformUserID, platformName string) (*User, error) {
+func (s *PostgresStore) Resolve(ctx context.Context, platform, platformUserID, platformName string) (*User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("user: トランザクション開始に失敗: %w", err)
@@ -127,11 +127,11 @@ createUser:
 	return u, nil
 }
 
-func (s *SQLiteStore) Get(ctx context.Context, id string) (*User, error) {
+func (s *PostgresStore) Get(ctx context.Context, id string) (*User, error) {
 	return s.getFromDB(ctx, s.db, id)
 }
 
-func (s *SQLiteStore) getInTx(ctx context.Context, tx *sql.Tx, id string) (*User, error) {
+func (s *PostgresStore) getInTx(ctx context.Context, tx *sql.Tx, id string) (*User, error) {
 	return s.getFromDB(ctx, tx, id)
 }
 
@@ -139,7 +139,7 @@ type queryable interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*User, error) {
+func (s *PostgresStore) getFromDB(ctx context.Context, q queryable, id string) (*User, error) {
 	var u User
 	var roleStr string
 	var metaJSON sql.NullString
@@ -161,7 +161,7 @@ func (s *SQLiteStore) getFromDB(ctx context.Context, q queryable, id string) (*U
 	return &u, nil
 }
 
-func (s *SQLiteStore) UpdateDisplayName(ctx context.Context, userID, displayName string) error {
+func (s *PostgresStore) UpdateDisplayName(ctx context.Context, userID, displayName string) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE users SET display_name = $1, updated_at = $2 WHERE id = $3`,
 		displayName, time.Now(), userID,
@@ -176,7 +176,7 @@ func (s *SQLiteStore) UpdateDisplayName(ctx context.Context, userID, displayName
 	return nil
 }
 
-func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error {
+func (s *PostgresStore) TrackGuildChannel(ctx context.Context, userID, guildID, guildName, channelID, channelName string) error {
 	if guildID == "" || channelID == "" {
 		return nil
 	}
@@ -204,7 +204,7 @@ func (s *SQLiteStore) TrackGuildChannel(ctx context.Context, userID, guildID, gu
 	return nil
 }
 
-func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserGuild, error) {
+func (s *PostgresStore) GetUserGuilds(ctx context.Context, userID string) ([]UserGuild, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT ugc.guild_id, g.name, ugc.channel_id, ugc.channel_name, ugc.last_seen_at
 		 FROM user_guild_channels ugc
@@ -229,7 +229,7 @@ func (s *SQLiteStore) GetUserGuilds(ctx context.Context, userID string) ([]UserG
 	return result, rows.Err()
 }
 
-func (s *SQLiteStore) ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error) {
+func (s *PostgresStore) ResolveExisting(ctx context.Context, platform, platformUserID string) (*User, error) {
 	var userID string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT user_id FROM platform_links WHERE platform = $1 AND platform_user_id = $2`,
@@ -241,7 +241,7 @@ func (s *SQLiteStore) ResolveExisting(ctx context.Context, platform, platformUse
 	return s.Get(ctx, userID)
 }
 
-func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, error) {
+func (s *PostgresStore) ListMentionable(ctx context.Context) ([]MentionableUser, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.display_name, pl.platform_user_id
 		FROM users u
@@ -266,7 +266,7 @@ func (s *SQLiteStore) ListMentionable(ctx context.Context) ([]MentionableUser, e
 
 // --- AdminStore implementation ---
 
-func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int, error) {
+func (s *PostgresStore) List(ctx context.Context, offset, limit int) ([]User, int, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -303,7 +303,7 @@ func (s *SQLiteStore) List(ctx context.Context, offset, limit int) ([]User, int,
 	return users, total, rows.Err()
 }
 
-func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields) error {
+func (s *PostgresStore) Update(ctx context.Context, id string, fields UpdateFields) error {
 	var sets []string
 	var args []any
 	n := 1
@@ -350,7 +350,7 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fields UpdateFields
 	return nil
 }
 
-func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]PlatformLink, error) {
+func (s *PostgresStore) ListPlatformLinks(ctx context.Context, userID string) ([]PlatformLink, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, user_id, platform, platform_user_id, platform_name, created_at
 		 FROM platform_links WHERE user_id = $1`, userID)
@@ -370,7 +370,7 @@ func (s *SQLiteStore) ListPlatformLinks(ctx context.Context, userID string) ([]P
 	return links, rows.Err()
 }
 
-func (s *SQLiteStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {
+func (s *PostgresStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT g.id, g.name, g.updated_at,
 		       COUNT(DISTINCT ugc.user_id) AS member_count,
@@ -395,7 +395,7 @@ func (s *SQLiteStore) ListGuilds(ctx context.Context) ([]GuildSummary, error) {
 	return guilds, rows.Err()
 }
 
-func (s *SQLiteStore) ListAllChannels(ctx context.Context) ([]ChannelEntry, error) {
+func (s *PostgresStore) ListAllChannels(ctx context.Context) ([]ChannelEntry, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT ugc.channel_id, ugc.channel_name, ugc.guild_id, g.name
 		FROM user_guild_channels ugc
@@ -418,7 +418,7 @@ func (s *SQLiteStore) ListAllChannels(ctx context.Context) ([]ChannelEntry, erro
 	return entries, rows.Err()
 }
 
-func (s *SQLiteStore) GetGuildChannels(ctx context.Context, guildID string) ([]GuildChannel, error) {
+func (s *PostgresStore) GetGuildChannels(ctx context.Context, guildID string) ([]GuildChannel, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT ugc.channel_id, ugc.channel_name,
 		       COUNT(DISTINCT ugc.user_id) AS user_count,
@@ -449,12 +449,12 @@ func (s *SQLiteStore) GetGuildChannels(ctx context.Context, guildID string) ([]G
 	return channels, rows.Err()
 }
 
-func (s *SQLiteStore) Close() error {
+func (s *PostgresStore) Close() error {
 	// DB is shared — don't close it here.
 	return nil
 }
 
-// nullTime returns nil for zero time values (so SQLite stores NULL).
+// nullTime returns nil for zero time values (so the DB stores NULL).
 func nullTime(t time.Time) any {
 	if t.IsZero() {
 		return nil

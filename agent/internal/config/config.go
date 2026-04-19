@@ -157,8 +157,7 @@ type Trigger struct {
 
 // Memory configures the long-term memory store.
 type Memory struct {
-	DBPath      string `yaml:"db_path"`       // SQLite ファイルパス (レガシー)
-	PostgresURL string `yaml:"postgres_url"`  // PostgreSQL (ParadeDB) DSN (設定時は PG を使用)
+	PostgresURL string `yaml:"postgres_url"` // PostgreSQL (ParadeDB) DSN
 }
 
 // Agent configures agent behavior.
@@ -377,9 +376,6 @@ func (c *Config) setDefaults() {
 		if c.Voice.TTS[i].Provider == "voicevox" && c.Voice.TTS[i].SpeakerID == 0 {
 			c.Voice.TTS[i].SpeakerID = 3 // zundamon normal
 		}
-	}
-	if c.Memory.DBPath == "" {
-		c.Memory.DBPath = "memory.db"
 	}
 	if c.Agent.ContextWindowPct == 0 {
 		c.Agent.ContextWindowPct = 0.8

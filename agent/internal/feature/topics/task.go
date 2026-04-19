@@ -172,7 +172,7 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 	return nil
 }
 
-// saveState persists the current state to SQLite.
+// saveState persists the current state to the DB.
 func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
 	if cc.DB == nil {
 		return

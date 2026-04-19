@@ -846,7 +846,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 		return nil, fmt.Errorf("llm: 埋め込みの空レスポンス")
 	}
 
-	// Convert float64 (API response) to float32 (sqlite-vec storage).
+	// Convert float64 (API response) to float32 for vector storage.
 	f64 := resp.Data[0].Embedding
 	result := make([]float32, len(f64))
 	for i, v := range f64 {

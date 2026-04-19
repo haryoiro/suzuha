@@ -210,7 +210,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				do.MustInvoke[*llm.Client](i),
 				do.MustInvoke[*tool.Registry](i),
 				do.MustInvoke[memory.Backend](i),
-				do.MustInvoke[*user.SQLiteStore](i),
+				do.MustInvoke[*user.PostgresStore](i),
 				do.MustInvoke[*event.Bus](i),
 				do.MustInvoke[*acquirer.Acquirer](i),
 				conversation.NewStore(db),
@@ -248,7 +248,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			logger := do.MustInvoke[*slog.Logger](i)
 			mcpMgr := do.MustInvoke[*mcp.Manager](i)
 			ag := do.MustInvoke[*agent.Agent](i)
-			userStore := do.MustInvoke[*user.SQLiteStore](i)
+			userStore := do.MustInvoke[*user.PostgresStore](i)
 			llmClient := do.MustInvoke[*llm.Client](i)
 
 			// Register builtin tools.
@@ -345,7 +345,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 		do.Provide(i, func(i do.Injector) (*admin.Server, error) {
 			cfg := do.MustInvoke[*config.Config](i)
 			store := do.MustInvoke[memory.Backend](i)
-			userStore := do.MustInvoke[*user.SQLiteStore](i)
+			userStore := do.MustInvoke[*user.PostgresStore](i)
 			schedStore := do.MustInvoke[*action.Store](i)
 			mediaStore := do.MustInvoke[memory.MediaStore](i)
 			adminLogger := observe.NewLogger(cfg.Observe.LogLevel)
@@ -373,7 +373,7 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	ring := do.MustInvoke[*observe.RingBuffer](i)
 	logger := observe.NewLoggerWithRing(do.MustInvoke[*config.Config](i).Observe.LogLevel, ring)
 	chatIface := do.MustInvoke[chat.Interface](i)
-	userStore := do.MustInvoke[*user.SQLiteStore](i)
+	userStore := do.MustInvoke[*user.PostgresStore](i)
 	features := do.MustInvoke[[]scheduler.Feature](i)
 
 	// Build notifier with middleware chain.

@@ -184,8 +184,7 @@ func (t *MemoUpdate) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return tool.ErrorResult("無効な入力: " + err.Error()), nil
 	}
 
-	// Store needs AdminStore for Get+Update. We use the Store interface
-	// which is actually *SQLiteStore that also implements AdminStore.
+	// Store needs AdminStore for Get+Update.
 	adminStore, ok := t.store.(memory.AdminStore)
 	if !ok {
 		return tool.ErrorResult("メモの更新に対応していない"), nil

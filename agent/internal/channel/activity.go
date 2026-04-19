@@ -14,17 +14,17 @@ type ActivityStore interface {
 	LastInteractionGlobal(ctx context.Context) (lastMsg time.Time, channelID string, err error)
 }
 
-// SQLiteActivityStore implements ActivityStore using the shared SQLite database.
-type SQLiteActivityStore struct {
+// PostgresActivityStore implements ActivityStore using the shared database.
+type PostgresActivityStore struct {
 	db *sql.DB
 }
 
-// NewActivityStore creates a new SQLiteActivityStore.
-func NewActivityStore(db *sql.DB) *SQLiteActivityStore {
-	return &SQLiteActivityStore{db: db}
+// NewActivityStore creates a new PostgresActivityStore backed by the shared database.
+func NewActivityStore(db *sql.DB) *PostgresActivityStore {
+	return &PostgresActivityStore{db: db}
 }
 
-func (s *SQLiteActivityStore) LastInteractionGlobal(ctx context.Context) (time.Time, string, error) {
+func (s *PostgresActivityStore) LastInteractionGlobal(ctx context.Context) (time.Time, string, error) {
 	var lastMsg time.Time
 	var channelID string
 	err := s.db.QueryRowContext(ctx,

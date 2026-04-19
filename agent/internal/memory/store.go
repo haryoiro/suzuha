@@ -199,7 +199,6 @@ type AdminStore interface {
 }
 
 // Backend は AdminStore + ライフサイクル管理を統合したインターフェース。
-// DI で SQLiteStore / PostgresStore を統一的に扱う。
 type Backend interface {
 	AdminStore
 	SetMediaStore(ms MediaStore)

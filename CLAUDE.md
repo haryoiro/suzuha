@@ -20,7 +20,6 @@ docker compose -f container/compose.yaml exec agent go build -buildvcs=false ./a
 docker compose -f container/compose.yaml exec agent go test ./agent/...
 ```
 
-SQLite バックエンドを含める場合は `-tags 'fts5,sqlite'` を追加（CGO 必須）。
 
 ## API 生成
 

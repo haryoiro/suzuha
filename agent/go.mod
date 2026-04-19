@@ -7,7 +7,6 @@ tool github.com/ogen-go/ogen/cmd/ogen
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.1
 	github.com/agnivade/levenshtein v1.2.1
-	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/disgoorg/disgo v0.19.2
 	github.com/disgoorg/godave/golibdave v0.1.0
@@ -19,7 +18,6 @@ require (
 	github.com/horiagug/youtube-transcript-api-go v0.0.13
 	github.com/hraban/opus v0.0.0-20251117090126-c76ea7e21bf3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/mozilla-ai/any-llm-go v0.8.0
 	github.com/ogen-go/ogen v1.20.1
 	github.com/pgvector/pgvector-go v0.3.0

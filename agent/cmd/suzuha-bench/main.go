@@ -174,7 +174,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 
 	db := store.DB()
 	convStore := conversation.NewStore(db)
-	userStore := user.NewSQLiteStore(db)
+	userStore := user.NewPostgresStore(db)
 
 	// LLM Client (本番と同じ設定)
 	embCfg := llm.EmbeddingConfig{

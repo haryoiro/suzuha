@@ -9,9 +9,9 @@ import (
 
 // Package registers user store providers into the DI injector.
 func Package(i do.Injector) {
-	do.Provide(i, func(i do.Injector) (*SQLiteStore, error) {
+	do.Provide(i, func(i do.Injector) (*PostgresStore, error) {
 		db := do.MustInvokeNamed[*sql.DB](i, "shared-db")
 		cfg := do.MustInvoke[*config.Config](i)
-		return NewSQLiteStore(db, cfg.Discord.BotID), nil
+		return NewPostgresStore(db, cfg.Discord.BotID), nil
 	})
 }

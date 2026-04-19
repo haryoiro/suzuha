@@ -156,7 +156,7 @@ func run() error {
 
 func registerDiscordOnReady(injector do.Injector, dc *discord.Chat) {
 	registry := do.MustInvoke[*tool.Registry](injector)
-	userStore := do.MustInvoke[*user.SQLiteStore](injector)
+	userStore := do.MustInvoke[*user.PostgresStore](injector)
 	ag := do.MustInvoke[*agent.Agent](injector)
 	logger := do.MustInvoke[*slog.Logger](injector)
 	cfg := do.MustInvoke[*config.Config](injector)
@@ -288,7 +288,7 @@ func startInternalHTTP(injector do.Injector, cfgPath string, gw *gateway.Gateway
 		result := map[string]any{"bot_platform_id": botPlatformID}
 		// Resolve bot's internal user record if available.
 		if botPlatformID != "" {
-			userStore := do.MustInvoke[*user.SQLiteStore](injector)
+			userStore := do.MustInvoke[*user.PostgresStore](injector)
 			if u, err := userStore.Resolve(r.Context(), "discord", botPlatformID, ""); err == nil {
 				result["bot_user_id"] = u.ID
 				result["bot_name"] = u.DisplayName
