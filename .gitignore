@@ -1,57 +1,51 @@
-# Binaries
-tmp/
-*.exe
-*.dll
-*.so
-*.dylib
+# Root-built binaries
 /suzuha-admin
 /suzuha-agent
 /suzuha-bench
 /suzuha-synth
 /migrate_sqlite_to_pg
+/build/
 
-# Environment
+# Native build artifacts (anywhere)
+*.exe
+*.dll
+*.so
+*.dylib
+tmp/
+
+# Environment / config
 .env
 config.yaml
+config.suzuha1.yaml
 
-# Database
+# Data / DB
 *.db
 data/
+backup/
+backups/
 
 # Dependencies
 .pnpm-store/
 .venv*/
-spec/node_modules/
-web/widget/node_modules/
+node_modules/
 
 # ML / fine-tuning
 models/
 unsloth_compiled_cache/
 
-# Runtime
+# Runtime state
 .suzuha/
 .suzuha1/
-config.suzuha1.yaml
+current_frame.jpg
 
-# IDE
+# IDE / OS
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# Firmware build artifacts
-firmware/build-*/
-firmware/build/
-firmware/sdkconfig.secrets
-
-# OS
 .DS_Store
 Thumbs.db
+
+# Claude Code local
 .claude/settings.local.json
 .claude/worktrees/
-current_frame.jpg
-/build/
-backups/
-backup/
-bench/snapshots/
-bench/results.json
