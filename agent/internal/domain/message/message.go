@@ -1,7 +1,7 @@
 // Package message は agent パイプラインの中立メッセージ型を定義する。
 //
-// target-layout.md §3 に従い「複数 package から参照される Entity / Value
-// Object」として domain に配置する。capability/llm の Client 実装や
+// architecture.md § 配置判定 に従い「複数 package から参照される Entity /
+// Value Object」として domain に配置する。capability/llm の Client 実装や
 // runtime/agent の pipeline が共通に使う形。
 package message
 

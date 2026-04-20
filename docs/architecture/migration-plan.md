@@ -1,6 +1,6 @@
 # アーキテクチャ移行計画
 
-`target-layout.md` で定義した目標形への段階的な移行手順。各フェーズは **独立してビルド・テストが通る** ことを条件とし、順序を守れば各段階で main に merge できる。
+`architecture.md` で定義した目標形への段階的な移行手順。各フェーズは **独立してビルド・テストが通る** ことを条件とし、順序を守れば各段階で main に merge できる。
 
 ---
 
@@ -100,9 +100,9 @@ Phase <N> で失敗しました。
 後続の破壊的変更の前準備。既存コードを動かしたまま足場を作る。
 
 ### 作業
-1. **`docs/architecture/target-layout.md` レビュー完了**（済）
+1. **`docs/architecture/architecture.md` レビュー完了**（済）
 2. **depguard の baseline 設定** — `.depguard.yml` に現状の import 関係を snapshot。**各 Phase 終了時に baseline 更新**（段階的に厳しくなる運用）
-3. **`.claude/rules/architecture.md` を target-layout.md の要約に差し替え** — LLM とコーディング時に設計が参照される
+3. **`.claude/rules/architecture.md` を architecture.md の要約に差し替え** — LLM とコーディング時に設計が参照される
 4. **import graph の可視化**（任意、ツールは `go-callvis` or `goda`、出力は docs/architecture/import-graph.svg）
 
 ### baseline 運用ポリシー
@@ -112,7 +112,7 @@ Phase <N> で失敗しました。
 - Phase 12 で baseline を完全廃止、ルールのみ残す
 
 ### 完了条件
-- target-layout.md がレビューされ、追加決定事項が反映済み
+- architecture.md がレビューされ、追加決定事項が反映済み
 - depguard lint が CI で動作、新規違反を検知可能
 - baseline 再生成スクリプト（`scripts/update-depguard-baseline.sh` 等）が用意されている
 
@@ -532,9 +532,9 @@ Phase 10 / Phase 11 の着手時に hub コードを特定し、`channel/web/` �
 
 ## クロスリファレンス
 
-本計画の各 Phase は `target-layout.md` の対応箇所を参照：
+本計画の各 Phase は `architecture.md` の対応箇所を参照：
 
-| Phase | target-layout.md の参照先 |
+| Phase | architecture.md の参照先 |
 |---|---|
 | 0 | §7.0 事前削除 |
 | 2 | §3 目標ディレクトリ `domain/`、§7.6 shadow 型廃止 |

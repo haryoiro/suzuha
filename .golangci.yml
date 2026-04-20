@@ -16,7 +16,7 @@ linters:
   - gocyclo      # 循環的複雑度のチェック
 
   # その他
-  - depguard      # layered import ルール強制 (target-layout.md §10.1)
+  - depguard      # layered import ルール強制 (architecture.md / architecture-rationale.md §3)
   - durationcheck # time.Duration の誤用検出
   - gomodguard    # 禁止パッケージのimport検出
   - misspell      # スペルミス検出
@@ -35,7 +35,7 @@ linters:
       - '-ST1020'
       - '-SA1008'
 
-    # depguard: target-layout.md §10.1 の import 制約を **strict モードで** 強制する。
+    # depguard: architecture.md の import 制約を **strict モードで** 強制する。
     # 全ての rule は有効、baseline exemption は無し。違反はすべてビルドエラー。
     # `scripts/update-depguard-baseline.sh` は CI で走らせ、出力が空 (0 行) 以外なら
     # 回帰として扱う運用。
@@ -49,8 +49,6 @@ linters:
           deny:
           - pkg: 'github.com/haryoiro/suzuha/internal/capability'
             desc: 'port は capability 実装を import しない'
-          - pkg: 'github.com/haryoiro/suzuha/internal/behavior'
-            desc: 'port は behavior を import しない'
           - pkg: 'github.com/haryoiro/suzuha/internal/runtime'
             desc: 'port は runtime を import しない'
           - pkg: 'github.com/haryoiro/suzuha/internal/adapter'
@@ -64,19 +62,6 @@ linters:
           deny:
           - pkg: 'github.com/haryoiro/suzuha/internal/capability'
             desc: 'capability 同士の直接 import は禁止。port/ 経由で使うこと'
-          - pkg: 'github.com/haryoiro/suzuha/internal/behavior'
-            desc: 'capability は behavior を import しない'
-
-        # behavior/X は 他 behavior/Y も capability/Y も直接 import 禁止
-        behavior-siblings:
-          list-mode: lax
-          files:
-          - '**/agent/internal/behavior/*/**'
-          deny:
-          - pkg: 'github.com/haryoiro/suzuha/internal/behavior'
-            desc: 'behavior 同士の直接 import は禁止'
-          - pkg: 'github.com/haryoiro/suzuha/internal/capability'
-            desc: 'behavior → capability は port/ 経由のみ'
 
         # adapter は port / domain / lib / observe のみ
         adapter-only-port:
@@ -86,12 +71,10 @@ linters:
           deny:
           - pkg: 'github.com/haryoiro/suzuha/internal/capability'
             desc: 'adapter は capability を import しない'
-          - pkg: 'github.com/haryoiro/suzuha/internal/behavior'
-            desc: 'adapter は behavior を import しない'
           - pkg: 'github.com/haryoiro/suzuha/internal/runtime'
             desc: 'adapter は runtime を import しない'
 
-        # runtime は capability / behavior / channel / api / adapter を知らない
+        # runtime は capability / channel / api / adapter を知らない
         runtime-only-port:
           list-mode: lax
           files:
@@ -99,24 +82,12 @@ linters:
           deny:
           - pkg: 'github.com/haryoiro/suzuha/internal/capability'
             desc: 'runtime は capability を import しない (port 経由のみ)'
-          - pkg: 'github.com/haryoiro/suzuha/internal/behavior'
-            desc: 'runtime は behavior を import しない'
           - pkg: 'github.com/haryoiro/suzuha/internal/channel'
             desc: 'runtime は channel を import しない'
           - pkg: 'github.com/haryoiro/suzuha/internal/api'
             desc: 'runtime は api を import しない'
           - pkg: 'github.com/haryoiro/suzuha/internal/adapter'
             desc: 'runtime は adapter を import しない'
-
-        # feature/X は 他 feature/Y を import 禁止 (現行 layout の暫定ルール、
-        # Phase 8d で behavior/ に移動したら behavior-siblings が引き継ぐ)
-        feature-siblings:
-          list-mode: lax
-          files:
-          - '**/agent/internal/feature/*/**'
-          deny:
-          - pkg: 'github.com/haryoiro/suzuha/internal/feature'
-            desc: 'feature 同士の直接 import は禁止 (architecture.md 参照)'
 
   exclusions:
     presets:
