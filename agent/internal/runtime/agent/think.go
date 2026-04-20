@@ -49,14 +49,14 @@ func conversationStateFrom(msgs []message.Message, channel, botID string) convSt
 		}
 		scanned++
 
-		if m.Role == "assistant" && m.UserID == botID {
+		if m.IsFromAgent(botID) {
 			if cs.botLastSpokeAgo < 0 {
 				cs.botLastSpokeAgo = now.Sub(m.Timestamp)
 			}
 			continue
 		}
 
-		if m.Role == "user" && m.UserID != "" && m.UserID != botID {
+		if m.IsUser() && m.UserID != "" && m.UserID != botID {
 			if cs.botLastSpokeAgo < 0 {
 				cs.messagesSinceBotSpoke++
 			}
