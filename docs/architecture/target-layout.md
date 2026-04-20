@@ -209,46 +209,40 @@ agent/
     │   └── ...
     │
     ├── domain/                   # 全パッケージで共有される Entity / Value Object
+    │   ├── action/               # ScheduledAction, ActionStatus
+    │   ├── channel/              # ChannelID, PlatformID, Source kind, Mode, Settings
+    │   ├── diary/                # DiaryEntry（capability/memory/summarize が生成）
+    │   ├── llm/                  # ProviderInfo, ModelInfo, RoleSpec
     │   ├── memo/                 # Memo, MemoryType, Keywords
-    │   ├── user/                 # User, PlatformLink, UserGuild, MentionableUser, GuildSummary, ChannelEntry, GuildChannel
     │   ├── message/              # Message, Role
-    │   ├── channel/              # ChannelID, PlatformID, Source kind, Mode, Settings（旧 internal/channel/ の型を吸収）
-    │   └── action/               # ScheduledAction, ActionStatus
+    │   └── user/                 # User, PlatformLink, UserGuild, MentionableUser, GuildSummary, ChannelEntry, GuildChannel
     │   （research は外向け型無しのため domain 不要。behavior/research/ 内に閉じる）
-    │   （diary は capability/memory/ に統合、domain 不要）
-    │   （location は廃止）
     │
     ├── runtime/                  # agent loop そのもの
-    │   ├── agent/                # オーケストレータ・ライフサイクル
-    │   ├── pipeline/             # Perceive / Think / Act / Reflect
-    │   ├── session/              # Session interface と共通実装（per-source の抽象）
-    │   │                         # プロトコル固有の Session 実装は channel/<name>/session.go
+    │   ├── agent/                # オーケストレータ・ライフサイクル + Perceive/Think/Act/Reflect
+    │   ├── event/                # イベントバス
     │   ├── gateway/              # Source 登録 hub (errgroup)
     │   ├── scheduler/            # cron runner + Task registry
-    │   ├── toolregistry/         # Tool の登録と解決
-    │   ├── conversation/         # 会話履歴バッファ
-    │   └── event/                # イベントバス
+    │   └── toolregistry/         # Tool の登録と解決
     │
     ├── capability/               # agent が持つ能力（他から呼ばれる、port あり）
-    │   ├── memory/               # 記憶（旧 memento + memory を統合）
-    │   │                         # tasks: acquire / consolidate / forget / summarize（旧 diary）
-    │   ├── llm/                  # LLM プロバイダ管理
-    │   ├── voice/                # VAD/STT/TTS 配線
-    │   ├── vision/               # カメラ映像理解
     │   ├── conversation/         # 会話履歴 + channel activity/settings
-    │   │                         # tasks: boredom（旧 topics）
-    │   └── mcp/                  # MCP クライアント管理
-    │   （location は廃止。diary/forget → memory、topics → conversation に統合）
+    │   │                         # sub-pkg: boredom
+    │   ├── llm/                  # LLM プロバイダ管理（role 解決 + provider registry）
+    │   ├── mcp/                  # MCP クライアント管理
+    │   ├── memory/               # 記憶
+    │   │                         # sub-pkg: acquire / consolidate / forget / summarize
+    │   ├── vision/               # カメラ映像理解
+    │   └── voice/                # VAD/STT/TTS 配線
     │   （user は capability ではない：ロジックが無く純データストアのため
     │    domain/user/ + port/user/ + adapter/store/user/ に分解する）
+    │   【既知の未整備】mcp / vision / voice は port/ 未公開。capability 原則違反、別 PR で解消予定
     │
     ├── behavior/                 # agent の自律行動（LLM を使う能動的な行為）
-    │   ├── research/             # 研究 (Task + Tool)
     │   ├── action/               # 予約アクション実行 (Task + Tool)
+    │   ├── builtin/              # 汎用 Tool 集約 (python_exec / user_profile 等)
+    │   ├── research/             # 研究 (Task + Tool)
     │   └── video/                # 動画理解 (Tool 群のみ)
-    │   （diary/forget は capability/memory/ の task に統合）
-    │   （topics は capability/conversation/ の task に統合）
-    │   （wander は廃止）
     │
     ├── channel/                  # 入出力プロトコル（独立扱い）
     │   ├── discord/              # source.go / session.go / sender.go / tool_*.go
@@ -273,48 +267,37 @@ agent/
     │       └── handler_<area>.go
     │
     ├── port/                     # cross-cutting 契約（interface のみ）
-    │   ├── scheduler/            # Task interface のみ（Scheduler 実装は runtime/scheduler/）
-    │   ├── tool/                 # Tool, ReadOnlyTool, ToolResult, Content（現行 internal/tool/ の interface 群を移動）
-    │   ├── chat/                 # Sender, Interface, Replier, IDSender, Typer, VoiceSpeaker（現行 internal/chat/ を port 化）
-    │   ├── user/                 # Store, AdminStore, BotRegistrar（現行 internal/user/ の interface 群）
-    │   ├── conversation/         # ChannelSettingsStore, ChannelActivityStore（capability/conversation の公開 API）
-    │   ├── llm/                  # Client（capability/llm の公開 API）
-    │   │                         # 注：現行 *llm.Client は concrete struct。interface 抽出が要
-    │   ├── memory/               # Memory（capability/memory の公開 API）
-    │   ├── mcp/                  # Client（capability/mcp の公開 API）
+    │   ├── chat/                 # Sender, Interface, Replier, IDSender, Typer, VoiceSpeaker
+    │   ├── conversation/         # ChannelSettingsStore, ChannelActivityStore
     │   ├── embedder/             # Embedder（capability 無し、薄い port）
-    │   ├── tts/                  # Synthesizer
+    │   ├── llm/                  # Client（capability/llm の公開 API）
+    │   ├── memory/               # Memory（capability/memory の公開 API）
+    │   ├── scheduler/            # Task interface のみ（Scheduler 実装は runtime/scheduler/）
     │   ├── stt/                  # Transcriber
-    │   ├── vad/                  # VoiceActivityDetector
-    │   ├── vision/               # FrameProcessor（将来切る場合のみ、保留扱い）
-    │   └── transcript/           # VideoTranscriptFetcher
-    │   （location は廃止。search は 1-consumer のため port なし、behavior/research/ 内部）
-    │   （detect/yolo も 1-consumer のため port なし、capability/vision/ 内部）
+    │   ├── tool/                 # Tool, ReadOnlyTool, ToolResult, Content
+    │   ├── tts/                  # Synthesizer
+    │   ├── user/                 # Store, AdminStore, BotRegistrar
+    │   └── vad/                  # VoiceActivityDetector
+    │   【未整備】port/mcp, port/vision, port/voice, port/transcript は未定義
+    │   （search は 1-consumer のため port なし、behavior/research/ 内部）
+    │   （detect/yolo は 1-consumer のため port なし、capability/vision/ 内部）
     │
-    ├── adapter/                  # port 実装（外部 SDK / 永続化 / webhook）
+    ├── adapter/                  # port 実装（外部 SDK / 永続化）
     │   │
     │   │ ── 外部 SDK ──
-    │   ├── llm/
-    │   │   ├── openai/
-    │   │   ├── zhipu/
-    │   │   └── gemini/
-    │   ├── embedder/{gemini,openai}/
-    │   ├── tts/{voicevox,sbv2}/
-    │   ├── stt/{deepgram,whisper}/
-    │   ├── vad/
-    │   ├── transcript/
-    │   └── twitter/              # 複数 consumer（agent TweetFetcher + builtin/fetch）ゆえ adapter 化
-    │   （detect は capability/vision/ 内部、search は behavior/research/ 内部に吸収）
+    │   ├── embedder/             # gemini / openai
+    │   ├── llm/                  # openai / zhipu / gemini
+    │   ├── stt/                  # deepgram / whisper 等
+    │   ├── transcript/           # 字幕取得
+    │   ├── tts/                  # voicevox / sbv2 等
+    │   └── twitter/              # 複数 consumer ゆえ adapter 化
     │   │
     │   │ ── 永続化（SQL 等）──
     │   └── store/
-    │       ├── memory/           # memory.Store の SQL 実装 + migrations/
-    │       │                     # diary_entries schema もここに統合（旧 feature/diary）
     │       ├── conversation/     # ChannelSettings / ChannelActivity の SQL 実装
-    │       ├── research/
-    │       ├── user/
-    │       └── action/
-    │       （location 関連は廃止：location capability / port / webhook すべて削除）
+    │       ├── memory/           # memory.Store の SQL 実装 + diary_entries schema
+    │       └── user/
+    │   （detect は capability/vision/ 内部、search は behavior/research/ 内部に吸収）
     │
     └── di/                       # composition root
 ```
@@ -663,92 +646,7 @@ capability / behavior は以下を満たす設計にする：
 
 ---
 
-## 7. 廃止・統合対象
-
-### 7.0 事前削除（migration 開始前）
-
-以下は本設計の対象外。migration 開始前（Phase 0）にコードベースから削除する：
-
-| 現行 | 削除理由 |
-|---|---|
-| `internal/feature/wander/` (524 行) | 自律徘徊、実用上筋悪のため廃止 |
-| `internal/feature/location/` (1200+ 行) | GPS 取り込み、機能継続しないため廃止 |
-| `api/admin/handler_location.go`、`spec/admin/routes/location.tsp` | location 依存、連動廃止 |
-| `api/control/` の location 依存部 | 同上 |
-| DI provider.go の wander / location 登録 | 連動削除 |
-
-### 7.1 階層レベルの変更
-
-| 現在 | 目標 | 備考 |
-|---|---|---|
-| `external/` | 廃止 | 7 package の移行先は個別判断：<br>・transcript / embedder / tts / stt / twitter → `adapter/` 配下（複数 consumer あり or 汎用）<br>・detect（YOLO）→ `capability/vision/` 内部（1-consumer）<br>・search → `behavior/research/` 内部（1-consumer） |
-| `internal/adapter/{cli,device,discord}/` | **移動** → `internal/channel/{cli,device,discord}/` | プロトコル adapter は channel/ に |
-| 新設 `internal/adapter/` | cross-cutting 実装用（llm/tts/store 等） | 旧 adapter との用途違いに注意（新設） |
-| `internal/admin/` | `internal/api/admin/` | HTTP サーフェスとして（既に現状で進行中） |
-| `internal/channel/` （activity.go / provider.go / settings.go） | **分解**：型は `domain/channel/` 吸収、Store は `capability/conversation/` | 旧 channel/ は「チャンネル状態」の capability、新 channel/ は「プロトコル adapter」で用途が別 |
-| `internal/lib/` | `lib/` | 位置同じ、L0 として明示 |
-| `internal/observe/` | `internal/observe/` のまま | 位置は internal 配下。層ルール対象外（framework exempt）で誰でも import 可 |
-
-### 7.2 capability 昇格
-
-| 現在 | 目標 | 備考 |
-|---|---|---|
-| `internal/memento/` + `internal/memory/` | **`capability/memory/`** に統合 + `port/memory/` 新設 | acquire / consolidate / search / store を 1 package に。最大の refactor |
-| `internal/llm/` | **`capability/llm/`** + `port/llm/` + `adapter/llm/<vendor>/` | concrete *llm.Client → interface 抽出 |
-| `internal/mcp/` | **`capability/mcp/`** + `port/mcp/` | Client / Manager 分離候補 |
-| `internal/voice/` | **`capability/voice/`** + `port/{stt,tts,vad}/` + `adapter/{stt,tts,vad}/*/` | VAD/STT/TTS 個別 port 分解 |
-| `internal/feature/vision/` | **`capability/vision/`** + `port/vision/` | camera pipeline、control API と device から使用 |
-
-### 7.3 behavior 再配置 / capability への統合
-
-| 現在 | 目標 | 備考 |
-|---|---|---|
-| `internal/feature/research/` | **`behavior/research/`** | task.go / tool_*.go / search.go / fetch.go に役割分離 |
-| `internal/feature/video/` | **`behavior/video/`** | tool_watch.go / tool_look.go 形、ほぼそのまま |
-| `internal/feature/action/` | **`behavior/action/`** + `domain/action/` | ScheduledAction を domain へ |
-| `internal/feature/diary/` | **`capability/memory/task_summarize.go`** に統合 | 会話要約 maintenance task、domain/diary 不要 |
-| `internal/feature/forget/` | **`capability/memory/task_forget.go`** に統合 | 記憶忘却 maintenance task |
-| `internal/feature/topics/` | **`capability/conversation/task_boredom.go`** に統合 | 暇度計算 maintenance task |
-
-### 7.4 port / domain 分解（capability 未使用の package）
-
-| 現在 | 目標 | 備考 |
-|---|---|---|
-| `internal/chat/` | **そのまま `port/chat/`** | 既に interface のみの package、移動のみ |
-| `internal/tool/tool.go` (interfaces) | `port/tool/` へ | Tool, ReadOnlyTool, ToolResult, Content を port 化 |
-| `internal/tool/registry.go` (Registry) | `runtime/toolregistry/` へ | 実装は runtime に残す |
-| `internal/user/` | `domain/user/` + `port/user/` + `adapter/store/user/` に 3 分割 | 純データストア、capability 不要（Entity 7 型、Store/AdminStore/BotRegistrar interface、DBStore SQL 実装） |
-
-### 7.5 Session / channel 再配置
-
-| 現在 | 目標 | 備考 |
-|---|---|---|
-| `agent/{cli,device,discord,web}_session.go` | 各 `channel/<name>/session.go` へ移動 | Session は入出力プロトコル固有 |
-| web 入力経路（現状 hub 経由で散在） | `channel/web/` に集約 | source.go / session.go / sender.go を揃える |
-
-### 7.6 interface / 型の廃止
-
-| 現在 | 目標 | 備考 |
-|---|---|---|
-| `scheduler.Feature` interface | **廃止** | behavior は `task.go` / `tool_*.go` で個別に port/scheduler.Task / port/tool.Tool を満たす。DI で登録 |
-| `Feature.Setup(ctx, *sql.DB)` | **廃止** | schema migration は `adapter/store/<name>/migrations/` or 専用 migration tool に分離 |
-| `api/admin/store.go` の shadow 型 (8 個) | **廃止** | `Action` / `ActionListOpts` / `ActionUpdateFields` / `DiaryEntry` / `Location` / `UserLocation` / `DeviceMapping` / `Place` を `domain/<name>/` に一本化 |
-| `api/admin/store.go` の shadow interface (3 個) | **廃止** | `ActionStore` / `DiaryStore` / `LocationStore` は domain 統合により不要 |
-| `di/admin_adapter.go` の型変換関数 | **廃止** | `diaryStoreAdapter` / `diaryReaderAdapter` 等の変換は domain 統合で不要 |
-| `memento/acquirer.Completer` `memento/consolidator.Completer` | **重複解消** | memory 統合により 1 つに |
-
-### 7.7 連鎖的に解消される問題
-
-| 現象 | 解消手段 |
-|---|---|
-| `agent/memory.Store` 直接 import（10 箇所） | memory 統合と `port/memory.Memory` 導入で runtime / behavior / tool が port 経由に置換（最大の refactor 範囲） |
-| `tool/builtin/memo.go` の `memory.AdminStore` 依存 | memo 専用の狭い interface（consumer-side）に分離 |
-| scheduler の広範な依存（channel / llm / memory / tool / user） | `scheduler.Feature` 廃止で連鎖解消、scheduler は `port/scheduler.Task` のみ知る |
-| conversation の `llm.Message` 依存 | `domain/message/` 昇格で解消、conversation → domain/message のみ |
-
----
-
-## 8. 命名
+## 7. 命名
 
 - **ディレクトリ名** = 役割・ドメイン語彙
 - **package 名** = ディレクトリ名と一致（Go 慣習）
