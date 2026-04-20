@@ -48,9 +48,8 @@ func (t *HourlyTask) Execute(ctx context.Context, _ json.RawMessage) error {
 
 	convLogs := t.fetchConversationLogs(ctx, windowStart, windowEnd)
 	recentMems := t.fetchRecentMemories(ctx, windowStart)
-	recentMemos := t.fetchRecentMemos(ctx, windowStart)
 
-	if len(convLogs) == 0 && len(recentMems) == 0 && len(recentMemos) == 0 {
+	if len(convLogs) == 0 && len(recentMems) == 0 {
 		t.logger.Debug("diary_hourly: 何もなかったのでスキップ",
 			"window_start", windowStart, "window_end", windowEnd)
 		return nil
@@ -59,7 +58,7 @@ func (t *HourlyTask) Execute(ctx context.Context, _ json.RawMessage) error {
 	prevDigests := t.fetchPreviousDigests(ctx, windowStart)
 
 	localStart := jtime.In(windowStart)
-	summary, err := summarizeHour(ctx, t.llm, t.systemPrompt, localStart, convLogs, recentMems, recentMemos, prevDigests)
+	summary, err := summarizeHour(ctx, t.llm, t.systemPrompt, localStart, convLogs, recentMems, prevDigests)
 	if err != nil {
 		t.logger.Error("diary_hourly: 要約に失敗", "error", err)
 		return err
@@ -151,18 +150,6 @@ func (t *HourlyTask) fetchRecentMemories(ctx context.Context, since time.Time) [
 	return all
 }
 
-func (t *HourlyTask) fetchRecentMemos(ctx context.Context, since time.Time) []memory.Memory {
-	if t.memory == nil {
-		return nil
-	}
-	mems, err := t.memory.ListRecentByType(ctx, memory.MemoryTypeMemo, since, 20)
-	if err != nil {
-		t.logger.Debug("diary_hourly: list recent memos", "error", err)
-		return nil
-	}
-	return mems
-}
-
 func (t *HourlyTask) fetchPreviousDigests(ctx context.Context, windowStart time.Time) []Entry {
 	if t.db == nil {
 		return nil
@@ -216,7 +203,7 @@ func sectionHeading(sk sectionKey) string {
 	}
 }
 
-func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, memos []memory.Memory, prevDigests []Entry) (string, error) {
+func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt string, localStart time.Time, logs []convLogRow, mems []memory.Memory, prevDigests []Entry) (string, error) {
 	var sb strings.Builder
 
 	sb.WriteString("以下はこの1時間の出来事です。日記の一節として主観的に2〜3文で要約してください。\n")
@@ -251,15 +238,6 @@ func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt s
 			}
 			sb.WriteString("\n")
 		}
-	}
-
-	if len(memos) > 0 {
-		sb.WriteString("## メモ\n")
-		for _, m := range memos {
-			ts := jtime.In(m.CreatedAt).Format("15:04")
-			fmt.Fprintf(&sb, "- [%s] %s\n", ts, textutil.TruncateRunes(m.Content, 200))
-		}
-		sb.WriteString("\n")
 	}
 
 	if len(mems) > 0 {
