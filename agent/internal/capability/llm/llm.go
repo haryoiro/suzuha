@@ -1,3 +1,18 @@
+// Package llm は role-based なプロバイダ管理と補完実行を提供する capability。
+//
+// Client は複数ロール (conversation / background / vision / embedding) の
+// プロバイダを保持し、role swap により runtime を停止せずに切り替え可能。
+//
+// ファイル分割:
+//   - llm.go         — Client / roleProvider / NewClient / 基本メソッド + 共有 helpers (parseThinkTags / retryOnRateLimit)
+//   - role_client.go — RoleClient と role 解決 (For / WithCapability / fallback)
+//   - complete.go    — Client.Complete (後方互換シム、domain→SDK 変換 + tracing)
+//   - embed.go       — Client.Embed
+//   - vision.go      — DescribeImage / HasVisionCapability
+//   - counter.go     — TokenCounter factory (port/llm.TokenCounterFactory 実装)
+//   - stream.go      — ストリーミング補完
+//   - provider.go    — DI 用 Provider
+//   - provider_registry.go — DB ベースの provider / model / role 管理
 package llm
 
 import (
@@ -10,19 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/haryoiro/suzuha/internal/domain/message"
-	"github.com/haryoiro/suzuha/internal/lib/llmconv"
-	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/observe/langfuse"
-	portllm "github.com/haryoiro/suzuha/internal/port/llm"
-	"github.com/haryoiro/suzuha/internal/port/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	llmerrors "github.com/mozilla-ai/any-llm-go/errors"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"github.com/mozilla-ai/any-llm-go/providers/gemini"
 	"github.com/mozilla-ai/any-llm-go/providers/openai"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 )
 
 // Response / RawMessage は port/llm の正準定義への型エイリアス。
@@ -32,37 +42,6 @@ type (
 	RawMessage = portllm.RawMessage
 )
 
-// parseThinkTags separates reasoning content from response text.
-// Handles both "<think>reasoning</think>response" and "reasoning</think>response".
-// If the model puts everything inside think tags (cleaned is empty),
-// the reasoning content is used as the response text.
-func parseThinkTags(text string) (reasoning, cleaned string) {
-	const closeTag = "</think>"
-	idx := strings.LastIndex(text, closeTag)
-	if idx < 0 {
-		return "", text
-	}
-
-	raw := text[:idx]
-	cleaned = strings.TrimSpace(text[idx+len(closeTag):])
-
-	const openTag = "<think>"
-	if oi := strings.Index(raw, openTag); oi >= 0 {
-		reasoning = strings.TrimSpace(raw[oi+len(openTag):])
-	} else {
-		reasoning = strings.TrimSpace(raw)
-	}
-
-	// Some models put the entire response inside think tags.
-	// Fall back to using reasoning as the response text.
-	if cleaned == "" && reasoning != "" {
-		cleaned = reasoning
-		reasoning = ""
-	}
-
-	return reasoning, cleaned
-}
-
 // roleProvider はロールに割り当てられたプロバイダの状態。
 type roleProvider struct {
 	provider     providers.Provider
@@ -70,7 +49,7 @@ type roleProvider struct {
 	model        string
 	apiBase      string
 	maxCtx       int
-	capabilities []string // ["text"], ["text","vision"], etc.
+	capabilities []string
 }
 
 // hasCapability はこのプロバイダが指定 capability を持つか返す。
@@ -86,7 +65,7 @@ func (rp *roleProvider) hasCapability(cap string) bool {
 // Client is a thin wrapper around any-llm-go provider with role-based provider management.
 type Client struct {
 	mu    sync.RWMutex
-	roles map[string]roleProvider // "conversation", "background", "vision", etc.
+	roles map[string]roleProvider
 
 	// Embedding は Embedder インターフェース経由のため据え置き。
 	embeddingProv  providers.Provider
@@ -94,229 +73,7 @@ type Client struct {
 	embeddingDims  int
 
 	logger *slog.Logger
-	tracer trace.Tracer // nil when tracing is disabled
-}
-
-// SetTracer sets the OpenTelemetry tracer for LLM call tracing.
-func (c *Client) SetTracer(t trace.Tracer) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.tracer = t
-}
-
-// ProviderInfo returns the current conversation provider name, model, API base URL, and vision capability.
-// 後方互換シム: conversation ロールの情報を返す。
-func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapable bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	rp, ok := c.roles["conversation"]
-	if !ok {
-		return "", "", "", false
-	}
-	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
-}
-
-// SwapRoleSpec はロールのプロバイダを portllm.RoleSpec で切り替える。
-func (c *Client) SwapRoleSpec(role string, spec portllm.RoleSpec) {
-	rp := roleProvider{
-		provider:     spec.ProviderInst,
-		providerName: spec.ProviderName,
-		model:        spec.ModelID,
-		apiBase:      spec.APIBase,
-		maxCtx:       spec.MaxContext,
-		capabilities: spec.Capabilities,
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.roles == nil {
-		c.roles = make(map[string]roleProvider)
-	}
-	c.roles[role] = rp
-	c.logger.Info("LLMロールを切り替えた", "role", role, "provider", spec.ProviderName, "model", spec.ModelID, "api_base", spec.APIBase, "max_ctx", spec.MaxContext)
-}
-
-// RoleClient はロールに紐づくプロバイダで補完を実行する。
-// Client への参照を保持し、呼び出し時に最新の provider を解決する。
-// これにより SwapRole() の変更が即座に反映される。
-type RoleClient struct {
-	client *Client
-	role   string // 解決済みのロール名
-}
-
-// resolve は呼び出し時に最新の roleProvider を取得する。
-func (rc *RoleClient) resolve() roleProvider {
-	rc.client.mu.RLock()
-	defer rc.client.mu.RUnlock()
-	if rp, ok := rc.client.roles[rc.role]; ok {
-		return rp
-	}
-	return roleProvider{}
-}
-
-// CompleteRaw はこのロールのプロバイダで completion を実行する。
-func (rc *RoleClient) CompleteRaw(ctx context.Context, messages []providers.Message) (*Response, error) {
-	rp := rc.resolve()
-	if rp.provider == nil {
-		return nil, fmt.Errorf("llm: ロール %q にプロバイダが設定されていません", rc.role)
-	}
-	params := providers.CompletionParams{
-		Model:    rp.model,
-		Messages: messages,
-	}
-
-	var resp *providers.ChatCompletion
-	err := retryOnRateLimit(ctx, rc.client.logger, func() error {
-		var callErr error
-		resp, callErr = rp.provider.Completion(ctx, params)
-		return callErr
-	})
-	if err != nil {
-		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
-	}
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("llm: 空のレスポンス")
-	}
-	choice := resp.Choices[0]
-	reasoning, cleaned := parseThinkTags(choice.Message.ContentString())
-	r := &Response{
-		Text:         cleaned,
-		Reasoning:    reasoning,
-		FinishReason: choice.FinishReason,
-	}
-	if resp.Usage != nil {
-		r.Usage = *resp.Usage
-	}
-	return r, nil
-}
-
-// CompleteWithTools はツール定義付きで completion を実行する。
-// メッセージとツールは事前に providers 形式に変換済みであること。
-func (rc *RoleClient) CompleteWithTools(ctx context.Context, messages []providers.Message, tools []providers.Tool) (*Response, error) {
-	rp := rc.resolve()
-	if rp.provider == nil {
-		return nil, fmt.Errorf("llm: ロール %q にプロバイダが設定されていません", rc.role)
-	}
-	params := providers.CompletionParams{
-		Model:    rp.model,
-		Messages: messages,
-		Tools:    tools,
-	}
-
-	var resp *providers.ChatCompletion
-	err := retryOnRateLimit(ctx, rc.client.logger, func() error {
-		var callErr error
-		resp, callErr = rp.provider.Completion(ctx, params)
-		return callErr
-	})
-	if err != nil {
-		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
-	}
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("llm: 空のレスポンス")
-	}
-	choice := resp.Choices[0]
-	reasoning, cleaned := parseThinkTags(choice.Message.ContentString())
-	r := &Response{
-		Text:         cleaned,
-		Reasoning:    reasoning,
-		ToolCalls:    choice.Message.ToolCalls,
-		FinishReason: choice.FinishReason,
-	}
-	if resp.Usage != nil {
-		r.Usage = *resp.Usage
-	}
-	return r, nil
-}
-
-// HasCapability はこのロールが指定されたケイパビリティを持つかを返す。
-func (rc *RoleClient) HasCapability(cap string) bool {
-	rc.client.mu.RLock()
-	defer rc.client.mu.RUnlock()
-	if rp, ok := rc.client.roles[rc.role]; ok {
-		return rp.hasCapability(cap)
-	}
-	return false
-}
-
-// Model はこのロールに割り当てられたモデル名を返す。
-func (rc *RoleClient) Model() string {
-	return rc.resolve().model
-}
-
-// ProviderName はこのロールに割り当てられたプロバイダ名を返す。
-func (rc *RoleClient) ProviderName() string {
-	return rc.resolve().providerName
-}
-
-// MaxContextTokens はこのロールの最大コンテキストトークン数を返す。
-func (rc *RoleClient) MaxContextTokens() int {
-	return rc.resolve().maxCtx
-}
-
-// For はロールに割り当てられたプロバイダを返す。
-// roleFallbacks はロールごとのフォールバックチェーン。
-// voice は conversation の変種なので background をスキップする。
-var roleFallbacks = map[string][]string{
-	"voice": {"voice", "conversation"},
-}
-
-// defaultRoleFallback は roleFallbacks に登録されていないロール用。
-var defaultRoleFallback = []string{"background", "conversation"}
-
-// フォールバック: ロール固有チェーン → デフォルト (background → conversation)
-// 返される RoleClient は Client への参照を保持し、SwapRole() の変更が即座に反映される。
-func (c *Client) For(role string) *RoleClient {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// ロール固有のフォールバックチェーンを取得
-	chain, ok := roleFallbacks[role]
-	if !ok {
-		chain = append([]string{role}, defaultRoleFallback...)
-	}
-
-	resolved := role
-	for _, r := range chain {
-		if _, ok := c.roles[r]; ok {
-			resolved = r
-			break
-		}
-	}
-
-	return &RoleClient{client: c, role: resolved}
-}
-
-// WithCapability はロールの capability 解決を行い、RoleClient と inline フラグを返す。
-// inline=true: ロールのプロバイダがネイティブ対応。
-// inline=false: capability 名のロールにフォールバック。
-func (c *Client) WithCapability(role, capability string) (*RoleClient, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// ロールのプロバイダを取得
-	rp, ok := c.roles[role]
-	if !ok {
-		// フォールバック
-		for _, r := range []string{"background", "conversation"} {
-			if rp, ok = c.roles[r]; ok {
-				role = r
-				break
-			}
-		}
-	}
-
-	// ロールのプロバイダが capability を持つ → inline
-	if ok && rp.hasCapability(capability) {
-		return &RoleClient{client: c, role: role}, true
-	}
-
-	// capability 名のロールにフォールバック
-	if _, ok := c.roles[capability]; ok {
-		return &RoleClient{client: c, role: capability}, false
-	}
-
-	// 見つからない
-	return nil, false
+	tracer trace.Tracer
 }
 
 // EmbeddingConfig holds optional embedding provider settings.
@@ -357,14 +114,13 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 	c := &Client{
 		roles: map[string]roleProvider{
 			"conversation": mainRP,
-			"background":   mainRP, // デフォルトは conversation と同じ
+			"background":   mainRP,
 		},
 		embeddingModel: emb.Model,
 		embeddingDims:  emb.Dims,
 		logger:         logger,
 	}
 
-	// Build embedding provider: use separate provider if configured, otherwise reuse main.
 	if emb.Model != "" {
 		if emb.Provider != "" && (emb.Provider != providerName || emb.APIKey != apiKey || emb.APIBase != apiBase) {
 			ep, err := newProvider(emb.Provider, emb.APIKey, emb.APIBase)
@@ -377,7 +133,6 @@ func NewClient(providerName, model, apiKey, apiBase string, maxCtx int, emb Embe
 		}
 	}
 
-	// Build vision provider: use separate provider if configured.
 	if vis.Model != "" {
 		visRP := roleProvider{
 			providerName: vis.Provider,
@@ -425,6 +180,44 @@ func newProvider(providerName, apiKey, apiBase string) (providers.Provider, erro
 	}
 }
 
+// SetTracer sets the OpenTelemetry tracer for LLM call tracing.
+func (c *Client) SetTracer(t trace.Tracer) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tracer = t
+}
+
+// ProviderInfo returns the current conversation provider name, model, API base URL, and vision capability.
+// 後方互換シム: conversation ロールの情報を返す。
+func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapable bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	rp, ok := c.roles["conversation"]
+	if !ok {
+		return "", "", "", false
+	}
+	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
+}
+
+// SwapRoleSpec はロールのプロバイダを portllm.RoleSpec で切り替える。
+func (c *Client) SwapRoleSpec(role string, spec portllm.RoleSpec) {
+	rp := roleProvider{
+		provider:     spec.ProviderInst,
+		providerName: spec.ProviderName,
+		model:        spec.ModelID,
+		apiBase:      spec.APIBase,
+		maxCtx:       spec.MaxContext,
+		capabilities: spec.Capabilities,
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.roles == nil {
+		c.roles = make(map[string]roleProvider)
+	}
+	c.roles[role] = rp
+	c.logger.Info("LLMロールを切り替えた", "role", role, "provider", spec.ProviderName, "model", spec.ModelID, "api_base", spec.APIBase, "max_ctx", spec.MaxContext)
+}
+
 // MaxContextTokens returns the max context window size for the conversation role.
 // 後方互換シム。
 func (c *Client) MaxContextTokens() int {
@@ -436,230 +229,35 @@ func (c *Client) MaxContextTokens() int {
 	return 0
 }
 
-// Complete sends a completion request with optional tools.
-// 後方互換シム: conversation ロールを使用する。
-// Deprecated: Complete はメッセージ/ツール変換と tracing を内包している。
-// 新規コードは ConvertMessages/ConvertTools + RoleClient.CompleteWithTools を使用すること。
-func (c *Client) Complete(ctx context.Context, messages []message.Message, tools []tool.Tool) (*Response, error) {
-	c.mu.RLock()
-	rp := c.roles["conversation"]
-	prov := rp.provider
-	provName := rp.providerName
-	model := rp.model
-	vision := rp.hasCapability("vision")
-	tracer := c.tracer
-	c.mu.RUnlock()
+// --- shared helpers ---
 
-	// Start LLM generation span if tracer is available.
-	var span trace.Span
-	if tracer != nil {
-		// Serialize messages for tracing (role + content only, skip images).
-		inputJSON := langfuse.SerializeMessages(messages)
-
-		ctx, span = tracer.Start(ctx, "llm.complete",
-			trace.WithSpanKind(trace.SpanKindClient),
-			trace.WithAttributes(
-				attribute.String("gen_ai.system", provName),
-				attribute.String("gen_ai.request.model", model),
-				attribute.Int("gen_ai.prompt.message_count", len(messages)),
-				attribute.Int("gen_ai.request.tool_count", len(tools)),
-				attribute.String("gen_ai.input", inputJSON),
-			),
-		)
-		defer span.End()
+// parseThinkTags separates reasoning content from response text.
+// Handles both "<think>reasoning</think>response" and "reasoning</think>response".
+// If the model puts everything inside think tags (cleaned is empty),
+// the reasoning content is used as the response text.
+func parseThinkTags(text string) (reasoning, cleaned string) {
+	const closeTag = "</think>"
+	idx := strings.LastIndex(text, closeTag)
+	if idx < 0 {
+		return "", text
 	}
 
-	params := providers.CompletionParams{
-		Model:    model,
-		Messages: llmconv.ConvertMessages(messages, vision),
-		Tools:    llmconv.ConvertTools(tools),
+	raw := text[:idx]
+	cleaned = strings.TrimSpace(text[idx+len(closeTag):])
+
+	const openTag = "<think>"
+	if oi := strings.Index(raw, openTag); oi >= 0 {
+		reasoning = strings.TrimSpace(raw[oi+len(openTag):])
+	} else {
+		reasoning = strings.TrimSpace(raw)
 	}
 
-	c.logger.Debug("LLMにリクエスト",
-		"model", model,
-		"messages", len(messages),
-		"tools", len(tools))
-
-	var resp *providers.ChatCompletion
-	start := time.Now()
-
-	err := retryOnRateLimit(ctx, c.logger, func() error {
-		var callErr error
-		resp, callErr = prov.Completion(ctx, params)
-		return callErr
-	})
-	elapsed := time.Since(start)
-
-	if err != nil {
-		if span != nil {
-			span.RecordError(err)
-		}
-		c.logger.Error("LLMが答えてくれなかった", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err.Error())
-		return nil, fmt.Errorf("llm: 補完に失敗: %w", err)
+	if cleaned == "" && reasoning != "" {
+		cleaned = reasoning
+		reasoning = ""
 	}
 
-	if len(resp.Choices) == 0 {
-		c.logger.Warn("LLMが何も言わなかった", "model", model, "elapsed_ms", elapsed.Milliseconds())
-		return nil, fmt.Errorf("llm: 空のレスポンス")
-	}
-
-	choice := resp.Choices[0]
-	reasoning, cleaned := parseThinkTags(choice.Message.ContentString())
-	r := &Response{
-		Text:         cleaned,
-		Reasoning:    reasoning,
-		ToolCalls:    choice.Message.ToolCalls,
-		FinishReason: choice.FinishReason,
-	}
-	if resp.Usage != nil {
-		r.Usage = *resp.Usage
-	}
-
-	// Record LLM response attributes to span.
-	if span != nil {
-		outputJSON := langfuse.SerializeResponse(r)
-		span.SetAttributes(
-			attribute.Int("gen_ai.usage.prompt_tokens", r.Usage.PromptTokens),
-			attribute.Int("gen_ai.usage.completion_tokens", r.Usage.CompletionTokens),
-			attribute.String("gen_ai.response.finish_reason", r.FinishReason),
-			attribute.Int("gen_ai.response.tool_call_count", len(r.ToolCalls)),
-			attribute.Int64("gen_ai.response.latency_ms", elapsed.Milliseconds()),
-			attribute.String("gen_ai.output", outputJSON),
-		)
-	}
-
-	c.logger.Info("LLMが答えた",
-		"model", model,
-		"elapsed_ms", elapsed.Milliseconds(),
-		"finish_reason", r.FinishReason,
-		"tokens_in", r.Usage.PromptTokens,
-		"tokens_out", r.Usage.CompletionTokens,
-		"tool_calls", len(r.ToolCalls))
-	if reasoning != "" {
-		c.logger.Debug("llm 推論内容", "length", len(reasoning),
-			"content", textutil.TruncateRunes(reasoning, 300))
-	}
-
-	return r, nil
-}
-
-// Embed generates an embedding vector for the given text.
-// Returns nil, nil if no embedding model is configured.
-func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
-	if c.embeddingModel == "" || c.embeddingProv == nil {
-		return nil, nil
-	}
-
-	ep, ok := c.embeddingProv.(providers.EmbeddingProvider)
-	if !ok {
-		return nil, fmt.Errorf("llm: 埋め込みプロバイダ %q は埋め込みをサポートしていません", c.embeddingProv.Name())
-	}
-
-	params := providers.EmbeddingParams{
-		Model: c.embeddingModel,
-		Input: text,
-	}
-	if c.embeddingDims > 0 {
-		dims := c.embeddingDims
-		params.Dimensions = &dims
-	}
-
-	c.logger.Debug("埋め込みリクエスト", "model", c.embeddingModel, "text_length", len(text))
-
-	var resp *providers.EmbeddingResponse
-	start := time.Now()
-
-	err := retryOnRateLimit(ctx, c.logger, func() error {
-		var callErr error
-		resp, callErr = ep.Embedding(ctx, params)
-		return callErr
-	})
-	elapsed := time.Since(start)
-
-	if err != nil {
-		c.logger.Error("埋め込みに失敗しました", "model", c.embeddingModel, "elapsed_ms", elapsed.Milliseconds(), "error", err)
-		return nil, fmt.Errorf("llm: 埋め込みに失敗: %w", err)
-	}
-
-	if len(resp.Data) == 0 {
-		c.logger.Warn("埋め込みの空レスポンスを受信しました", "model", c.embeddingModel)
-		return nil, fmt.Errorf("llm: 埋め込みの空レスポンス")
-	}
-
-	// Convert float64 (API response) to float32 for vector storage.
-	f64 := resp.Data[0].Embedding
-	result := make([]float32, len(f64))
-	for i, v := range f64 {
-		result[i] = float32(v)
-	}
-
-	c.logger.Debug("埋め込み完了", "model", c.embeddingModel, "dims", len(result), "elapsed_ms", elapsed.Milliseconds())
-	return result, nil
-}
-
-// HasVisionCapability returns whether vision is available and whether it's inline.
-// Satisfies vision.VisionDescriber interface.
-func (c *Client) HasVisionCapability() (available bool, inline bool) {
-	rc, inl := c.WithCapability("conversation", "vision")
-	return rc != nil, inl
-}
-
-// DescribeImage sends an image URL to a vision model and returns a text description.
-// 後方互換シム: WithCapability("conversation", "vision") を使用する。
-func (c *Client) DescribeImage(ctx context.Context, imageURL string, prompt ...string) (string, error) {
-	rc, _ := c.WithCapability("conversation", "vision")
-	if rc == nil {
-		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
-	}
-	rp := rc.resolve()
-	if rp.provider == nil {
-		return "", fmt.Errorf("llm: ビジョンモデルが設定されていません")
-	}
-	prov := rp.provider
-	model := rp.model
-
-	textPrompt := "この画像の内容を簡潔に描写してください。"
-	if len(prompt) > 0 && prompt[0] != "" {
-		textPrompt = prompt[0]
-	}
-
-	params := providers.CompletionParams{
-		Model: model,
-		Messages: []providers.Message{
-			{
-				Role: "user",
-				Content: []providers.ContentPart{
-					{Type: "text", Text: textPrompt},
-					{Type: "image_url", ImageURL: &providers.ImageURL{URL: imageURL}},
-				},
-			},
-		},
-	}
-
-	c.logger.Debug("ビジョンリクエスト", "model", model, "url", imageURL)
-
-	var resp *providers.ChatCompletion
-	start := time.Now()
-
-	err := retryOnRateLimit(ctx, c.logger, func() error {
-		var callErr error
-		resp, callErr = prov.Completion(ctx, params)
-		return callErr
-	})
-	elapsed := time.Since(start)
-
-	if err != nil {
-		c.logger.Error("ビジョン補完に失敗しました", "model", model, "elapsed_ms", elapsed.Milliseconds(), "error", err)
-		return "", fmt.Errorf("llm: ビジョンに失敗: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("llm: ビジョン: 空のレスポンス")
-	}
-
-	text := resp.Choices[0].Message.ContentString()
-	c.logger.Info("ビジョン補完完了", "model", model, "elapsed_ms", elapsed.Milliseconds(), "description_length", len(text))
-	return text, nil
+	return reasoning, cleaned
 }
 
 // retryOnRateLimit retries fn with exponential backoff when a rate-limit error is returned.
