@@ -12,8 +12,8 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/llmconv"
-	"github.com/haryoiro/suzuha/internal/lib/llmtrace"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
+	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	anyllm "github.com/mozilla-ai/any-llm-go"
@@ -454,7 +454,7 @@ func (c *Client) Complete(ctx context.Context, messages []message.Message, tools
 	var span trace.Span
 	if tracer != nil {
 		// Serialize messages for tracing (role + content only, skip images).
-		inputJSON := llmtrace.SerializeMessages(messages)
+		inputJSON := langfuse.SerializeMessages(messages)
 
 		ctx, span = tracer.Start(ctx, "llm.complete",
 			trace.WithSpanKind(trace.SpanKindClient),
@@ -517,7 +517,7 @@ func (c *Client) Complete(ctx context.Context, messages []message.Message, tools
 
 	// Record LLM response attributes to span.
 	if span != nil {
-		outputJSON := llmtrace.SerializeResponse(r)
+		outputJSON := langfuse.SerializeResponse(r)
 		span.SetAttributes(
 			attribute.Int("gen_ai.usage.prompt_tokens", r.Usage.PromptTokens),
 			attribute.Int("gen_ai.usage.completion_tokens", r.Usage.CompletionTokens),

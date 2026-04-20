@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/lib/llmtext"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler/notification"
@@ -145,7 +145,7 @@ func (t *Task) generateFromPrompt(ctx context.Context, prompt string) (string, e
 		return "", fmt.Errorf("llm: %w", err)
 	}
 
-	text := llmtext.StripDirectiveTags(resp.Text)
+	text := message.StripDirectiveTags(resp.Text)
 	if text == "" {
 		return "", fmt.Errorf("LLMが空またはサイレントなレスポンスを返しました")
 	}

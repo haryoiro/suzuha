@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/lib/llmconv"
-	"github.com/haryoiro/suzuha/internal/lib/llmtrace"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
+	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -38,7 +38,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 				attribute.String("gen_ai.request.model", rc.Model()),
 				attribute.Int("gen_ai.prompt.message_count", len(msgs)),
 				attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
-				attribute.String("gen_ai.input", llmtrace.SerializeMessages(msgs)),
+				attribute.String("gen_ai.input", langfuse.SerializeMessages(msgs)),
 				attribute.Bool("gen_ai.stream", true),
 			),
 		)
@@ -112,7 +112,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 		span.SetAttributes(
 			attribute.String("gen_ai.response.finish_reason", finalChunk.FinishReason),
 			attribute.Int("gen_ai.response.tool_call_count", len(finalChunk.ToolCalls)),
-			attribute.String("gen_ai.output", llmtrace.SerializeResponse(&portllm.Response{
+			attribute.String("gen_ai.output", langfuse.SerializeResponse(&portllm.Response{
 				Text:         fullText,
 				Reasoning:    reasoningBuf.String(),
 				ToolCalls:    finalChunk.ToolCalls,

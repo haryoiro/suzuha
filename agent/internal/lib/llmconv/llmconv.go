@@ -1,8 +1,14 @@
 // Package llmconv は suzuha の内部メッセージ / ツール表現を any-llm-go
 // (providers パッケージ) の形式に変換する純粋関数を提供する。
 //
-// capability/llm の Client 内部と runtime/agent の両方から使うため lib に配置する。
-// 副作用なし: slog のみ warn を出力する。
+// architecture.md の lib 層規約では「domain に依存するコード / 外部 SDK 型」は
+// lib に置いてはならないが、本 package は **暫定的な例外** として存置する:
+//
+//   - runtime/agent と capability/llm の両方が domain→SDK 変換を必要とする
+//   - 理想的には port/llm.Complete が domain 型を受け取り、adapter 内で SDK 変換する
+//   - この refactor は port/llm interface 変更を伴うため、別 Phase で対応予定
+//
+// 暫定的に lib 配置 + 副作用なし (slog warn のみ) で維持する。
 package llmconv
 
 import (

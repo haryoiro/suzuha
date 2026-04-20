@@ -221,6 +221,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 				},
 				regs,
 				do.MustInvoke[*llm.Client](i).AsPortClient(),
+				llm.NewTokenCounterFactory(logger),
 				do.MustInvoke[*toolreg.Registry](i),
 				memBackend,
 				userStore,

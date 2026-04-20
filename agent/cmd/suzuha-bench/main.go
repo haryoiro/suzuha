@@ -219,6 +219,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 		},
 		regs,
 		llmClient.AsPortClient(),
+		llm.NewTokenCounterFactory(logger),
 		toolreg.NewRegistry(),
 		store,
 		userStore,

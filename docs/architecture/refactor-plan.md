@@ -23,7 +23,7 @@
 ### 完了済み (PR #111〜#125)
 - 旧 `internal/feature/*`, `internal/memento`, `internal/memory`, `internal/llm`, `internal/mcp`, `internal/voice` を `capability/` と `behavior/` に再配置
 - `port/`, `adapter/`, `domain/`, `runtime/` 層の確立
-- `.claude/rules/architecture.md` と `docs/architecture/target-layout.md` の整備
+- `.claude/rules/architecture.md` と `docs/architecture/architecture-rationale.md` の整備
 
 ### 残存する問題 (本計画の対象)
 

@@ -1,6 +1,4 @@
-// Package llmtrace は LLM メッセージ / レスポンスを Langfuse などの
-// トレースシンクに流すための JSON 文字列化ヘルパを提供する。
-package llmtrace
+package langfuse
 
 import (
 	"encoding/json"

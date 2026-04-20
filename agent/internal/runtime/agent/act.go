@@ -7,8 +7,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/llmconv"
-	"github.com/haryoiro/suzuha/internal/lib/llmtext"
-	"github.com/haryoiro/suzuha/internal/lib/llmtrace"
+	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
@@ -65,7 +64,7 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 // silent / dedup のいずれかに該当する場合は空文字を返す。
 // skip_response は text が空のときだけ沈黙として扱う (text 共存時は text 優先)。
 func (a *Agent) filterResponse(resp *portllm.Response, channel string) string {
-	text := strings.TrimSpace(llmtext.StripDirectiveTags(resp.Text))
+	text := strings.TrimSpace(message.StripDirectiveTags(resp.Text))
 	skip := containsSkipTool(resp.ToolCalls)
 	switch {
 	case text == "":
@@ -75,7 +74,7 @@ func (a *Agent) filterResponse(resp *portllm.Response, channel string) string {
 			a.logger.Debug("何も思いつかなかった")
 		}
 		return ""
-	case llmtext.IsSilentResponse(text):
+	case message.IsSilentResponse(text):
 		a.logger.Info("黙った (サイレント)",
 			"raw_text", textutil.TruncateRunes(resp.Text, 100))
 		return ""
@@ -172,7 +171,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				attribute.String("gen_ai.request.model", rc.Model()),
 				attribute.Int("gen_ai.prompt.message_count", len(msgs)),
 				attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
-				attribute.String("gen_ai.input", llmtrace.SerializeMessages(msgs)),
+				attribute.String("gen_ai.input", langfuse.SerializeMessages(msgs)),
 			),
 		)
 		defer span.End()
@@ -192,7 +191,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			attribute.Int("gen_ai.usage.completion_tokens", resp.Usage.CompletionTokens),
 			attribute.String("gen_ai.response.finish_reason", resp.FinishReason),
 			attribute.Int("gen_ai.response.tool_call_count", len(resp.ToolCalls)),
-			attribute.String("gen_ai.output", llmtrace.SerializeResponse(resp)),
+			attribute.String("gen_ai.output", langfuse.SerializeResponse(resp)),
 		)
 	}
 

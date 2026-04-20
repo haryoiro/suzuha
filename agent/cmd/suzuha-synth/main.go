@@ -17,7 +17,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/capability/llm"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/domain/message"
-	"github.com/haryoiro/suzuha/internal/lib/llmtext"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 )
 
@@ -120,7 +119,7 @@ func runGenerate(cfgPath string, count int, outputPath string) error {
 			continue
 		}
 		text := strings.TrimSpace(resp.Text)
-		if text == "" || llmtext.IsSilentResponse(text) {
+		if text == "" || message.IsSilentResponse(text) {
 			log.Printf("[%d/%d] skipped (empty/silent)", i+1, len(scenarios))
 			continue
 		}

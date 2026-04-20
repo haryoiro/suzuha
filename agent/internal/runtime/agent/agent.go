@@ -9,7 +9,6 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/lib/llmtoken"
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
@@ -85,6 +84,7 @@ type Agent struct {
 	contextProviders []prompt.Provider
 	hooks            []PipelineHook
 	tracer           trace.Tracer
+	counterFactory   portllm.TokenCounterFactory
 
 	systemPrompt     string
 	botID            string
@@ -185,6 +185,7 @@ func New(
 	cfg Config,
 	registrations []SourceRegistration,
 	llmClient portllm.Client,
+	counterFactory portllm.TokenCounterFactory,
 	tools *toolreg.Registry,
 	memStore portmem.Memory,
 	userStore user.Store,
@@ -234,6 +235,7 @@ func New(
 		compactMu:        compactMu,
 		sessions:         sessions,
 		llm:              llmClient,
+		counterFactory:   counterFactory,
 		tools:            tools,
 		memory:           memStore,
 		users:            userStore,
@@ -361,7 +363,10 @@ func (a *Agent) OnRoleSpecChanged(role string, spec portllm.RoleSpec) {
 // UpdateTokenCounter はプロバイダタイプとモデル名からトークンカウンタを更新する。
 // conversation ロールの swap 時に呼ぶ。
 func (a *Agent) UpdateTokenCounter(providerType, model string) {
-	counter := llmtoken.NewTokenCounter(providerType, model, a.logger)
+	if a.counterFactory == nil {
+		return
+	}
+	counter := a.counterFactory(providerType, model)
 	for _, ctx := range a.contexts {
 		ctx.SetTokenCounter(counter)
 	}

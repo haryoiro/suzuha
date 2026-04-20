@@ -179,6 +179,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 		},
 		regs,
 		nil, // portllm.Client — nil is OK when we don't call Act
+		nil, // portllm.TokenCounterFactory — nil skips counter setup
 		toolreg.NewRegistry(),
 		&mockMemory{},
 		&mockUsers{},
