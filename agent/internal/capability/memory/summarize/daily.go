@@ -2,8 +2,10 @@ package summarize
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -13,31 +15,41 @@ import (
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
-// DailyTask creates a daily diary from hourly digests.
-type DailyTask struct{}
+// DailyTask は hourly digest から 1 日の日記をまとめる scheduler.CronTask 実装。
+type DailyTask struct {
+	db           *sql.DB
+	llm          portllm.Client
+	systemPrompt string
+	logger       *slog.Logger
+}
+
+// NewDailyTask は DailyTask を生成する。
+func NewDailyTask(db *sql.DB, llm portllm.Client, systemPrompt string, logger *slog.Logger) *DailyTask {
+	return &DailyTask{db: db, llm: llm, systemPrompt: systemPrompt, logger: logger}
+}
 
 var _ scheduler.CronTask = (*DailyTask)(nil)
 
 func (t *DailyTask) Name() string        { return "diary_daily" }
 func (t *DailyTask) Description() string { return "1日の日記をまとめる" }
 
-func (t *DailyTask) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
+// Setup は daily には初期化不要。
+func (t *DailyTask) Setup(_ context.Context) error { return nil }
 
-func (t *DailyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
+// Execute は昨日の hourly digest を集約して daily diary を生成する。
+func (t *DailyTask) Execute(ctx context.Context, _ json.RawMessage) error {
 	now := jtime.Now()
 	yesterday := now.Add(-24 * time.Hour)
 	localYesterday := jtime.In(yesterday)
 	dayStart := time.Date(localYesterday.Year(), localYesterday.Month(), localYesterday.Day(), 0, 0, 0, 0, localYesterday.Location())
 
-	// diary_entries テーブルから hourly digest を取得。
-	ds := NewStore(cc.DB)
+	ds := NewStore(t.db)
 	digests, err := ds.ListByKind(ctx, "hourly", dayStart, 50)
 	if err != nil {
-		cc.Logger.Debug("diary_daily: hourly digest 取得に失敗", "error", err)
+		t.logger.Debug("diary_daily: hourly digest 取得に失敗", "error", err)
 		return nil
 	}
 
-	// 対象日のみフィルタし、時系列順にソート。
 	dayEnd := dayStart.Add(24 * time.Hour)
 	var filtered []Entry
 	for _, e := range digests {
@@ -51,20 +63,18 @@ func (t *DailyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ js
 	}
 
 	if len(filtered) == 0 {
-		cc.Logger.Debug("diary_daily: hourly digest がないのでスキップ",
+		t.logger.Debug("diary_daily: hourly digest がないのでスキップ",
 			"date", dayStart.Format("2006-01-02"))
 		return nil
 	}
 
-	// LLM で日記を要約。
 	dateStr := dayStart.Format("2006-01-02")
-	summary, err := summarizeDay(ctx, cc.LLM, cc.SystemPrompt, dateStr, filtered)
+	summary, err := summarizeDay(ctx, t.llm, t.systemPrompt, dateStr, filtered)
 	if err != nil {
-		cc.Logger.Error("diary_daily: 要約に失敗", "error", err)
+		t.logger.Error("diary_daily: 要約に失敗", "error", err)
 		return err
 	}
 
-	// diary_entries テーブルに保存。
 	entry := &Entry{
 		Kind:        "daily",
 		Content:     summary,
@@ -72,11 +82,11 @@ func (t *DailyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ js
 		PeriodEnd:   dayEnd,
 	}
 	if err := ds.Save(ctx, entry); err != nil {
-		cc.Logger.Error("diary_daily: 日記保存に失敗", "error", err)
+		t.logger.Error("diary_daily: 日記保存に失敗", "error", err)
 		return err
 	}
 
-	cc.Logger.Info("diary_daily: 日記を書いた",
+	t.logger.Info("diary_daily: 日記を書いた",
 		"date", dateStr, "hourly_count", len(filtered))
 	return nil
 }

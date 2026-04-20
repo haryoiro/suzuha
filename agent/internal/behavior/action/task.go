@@ -2,18 +2,38 @@ package action
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/llmtext"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
+	"github.com/haryoiro/suzuha/internal/runtime/scheduler/notification"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
-// Task is a CronTask that sends due scheduled actions.
-type Task struct{}
+// Task は期限到来した予約アクションを送信する scheduler.CronTask 実装。
+type Task struct {
+	store        *Store
+	llm          portllm.Client
+	notifier     notification.Notifier
+	systemPrompt string
+	logger       *slog.Logger
+}
+
+// NewTask は action Task を生成する。
+func NewTask(db *sql.DB, llm portllm.Client, notifier notification.Notifier, systemPrompt string, logger *slog.Logger) *Task {
+	return &Task{
+		store:        NewStore(db),
+		llm:          llm,
+		notifier:     notifier,
+		systemPrompt: systemPrompt,
+		logger:       logger,
+	}
+}
 
 var _ scheduler.CronTask = (*Task)(nil)
 
@@ -22,14 +42,14 @@ func (t *Task) Description() string {
 	return "期限到来のスケジュールメッセージを送信"
 }
 
-func (t *Task) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
+// Setup は action には初期化不要。
+func (t *Task) Setup(_ context.Context) error { return nil }
 
-func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
-	store := NewStore(cc.DB)
+// Execute は期限到来したアクションを一括送信する。
+func (t *Task) Execute(ctx context.Context, _ json.RawMessage) error {
 	now := jtime.Now()
 
-	// Use wall clock in the scheduler's timezone, but store uses UTC.
-	actions, err := store.FetchDue(ctx, now)
+	actions, err := t.store.FetchDue(ctx, now)
 	if err != nil {
 		return err
 	}
@@ -37,18 +57,17 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 		return nil
 	}
 
-	cc.Logger.Info("schedule: 期限到来のアクションを処理中", slog.Int("count", len(actions)))
+	t.logger.Info("schedule: 期限到来のアクションを処理中", slog.Int("count", len(actions)))
 
 	const maxRetries = 5
 
 	for _, a := range actions {
 		message := a.Content
 
-		// In prompt mode, pass content through LLM to generate a natural response.
 		if a.Mode == "prompt" {
-			generated, llmErr := generateFromPrompt(ctx, cc, a.Content)
+			generated, llmErr := t.generateFromPrompt(ctx, a.Content)
 			if llmErr != nil {
-				cc.Logger.Error("schedule: LLM生成に失敗、リトライします",
+				t.logger.Error("schedule: LLM生成に失敗、リトライします",
 					slog.String("id", a.ID),
 					slog.String("error", llmErr.Error()),
 				)
@@ -57,32 +76,32 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 			message = generated
 		}
 
-		_, sendErr := cc.Notifier.Send(ctx, a.ChannelID, message, "schedule")
+		_, sendErr := t.notifier.Send(ctx, a.ChannelID, message, "schedule")
 		if sendErr != nil {
 			newCount := a.RetryCount + 1
 			if newCount >= maxRetries {
-				cc.Logger.Error("schedule: リトライ上限に到達、failedにマーク",
+				t.logger.Error("schedule: リトライ上限に到達、failedにマーク",
 					slog.String("id", a.ID),
 					slog.String("channel", a.ChannelID),
 					slog.String("error", sendErr.Error()),
 					slog.Int("retries", newCount),
 				)
-				if markErr := store.MarkFailed(ctx, a.ID, newCount); markErr != nil {
-					cc.Logger.Error("schedule: failed状態への更新に失敗",
+				if markErr := t.store.MarkFailed(ctx, a.ID, newCount); markErr != nil {
+					t.logger.Error("schedule: failed状態への更新に失敗",
 						slog.String("id", a.ID),
 						slog.Any("error", markErr),
 					)
 				}
 			} else {
-				cc.Logger.Warn("schedule: 送信に失敗、リトライします",
+				t.logger.Warn("schedule: 送信に失敗、リトライします",
 					slog.String("id", a.ID),
 					slog.String("channel", a.ChannelID),
 					slog.String("error", sendErr.Error()),
 					slog.Int("retry", newCount),
 					slog.Int("max", maxRetries),
 				)
-				if retryErr := store.IncrRetry(ctx, a.ID, newCount); retryErr != nil {
-					cc.Logger.Error("schedule: リトライカウント更新に失敗",
+				if retryErr := t.store.IncrRetry(ctx, a.ID, newCount); retryErr != nil {
+					t.logger.Error("schedule: リトライカウント更新に失敗",
 						slog.String("id", a.ID),
 						slog.Any("error", retryErr),
 					)
@@ -91,20 +110,20 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 			continue
 		}
 
-		if markErr := store.MarkExecuted(ctx, a.ID, now); markErr != nil {
-			cc.Logger.Error("schedule: 実行済みマークに失敗",
+		if markErr := t.store.MarkExecuted(ctx, a.ID, now); markErr != nil {
+			t.logger.Error("schedule: 実行済みマークに失敗",
 				slog.String("id", a.ID),
 				slog.Any("error", markErr),
 			)
 		}
 
 		if a.CronExpr != "" {
-			cc.Logger.Info("schedule: 定期アクションを送信、再スケジュール済み",
+			t.logger.Info("schedule: 定期アクションを送信、再スケジュール済み",
 				slog.String("id", a.ID),
 				slog.String("channel", a.ChannelID),
 			)
 		} else {
-			cc.Logger.Info("schedule: アクションを送信済み",
+			t.logger.Info("schedule: アクションを送信済み",
 				slog.String("id", a.ID),
 				slog.String("channel", a.ChannelID),
 			)
@@ -113,16 +132,15 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.Ra
 	return nil
 }
 
-// generateFromPrompt sends the content as a prompt to the LLM and returns the response.
-func generateFromPrompt(ctx context.Context, cc *scheduler.CronContext, prompt string) (string, error) {
+func (t *Task) generateFromPrompt(ctx context.Context, prompt string) (string, error) {
 	messages := []providers.Message{
 		{Role: "user", Content: prompt},
 	}
-	if cc.SystemPrompt != "" {
-		messages = append([]providers.Message{{Role: "system", Content: cc.SystemPrompt}}, messages...)
+	if t.systemPrompt != "" {
+		messages = append([]providers.Message{{Role: "system", Content: t.systemPrompt}}, messages...)
 	}
 
-	resp, err := cc.LLM.For("background").CompleteRaw(ctx, messages)
+	resp, err := t.llm.For("background").CompleteRaw(ctx, messages)
 	if err != nil {
 		return "", fmt.Errorf("llm: %w", err)
 	}

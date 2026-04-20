@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"sync"
@@ -14,43 +15,64 @@ import (
 	user "github.com/haryoiro/suzuha/internal/domain/user"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
+	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
+	portuser "github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 )
 
 const (
-	// boredomRate is the boredom increase per hour since last interaction.
-	// 100 / 8.0 ≈ 12.5 hours to reach maximum boredom.
+	// boredomRate は最終インタラクションからの 1 時間あたりの退屈度増加。
+	// 100 / 8.0 ≈ 12.5 時間で最大値に到達する。
 	boredomRate = 8.0
 
-	// boredomMax is the ceiling for the boredom score.
+	// boredomMax は退屈度の上限。
 	boredomMax = 100.0
 
-	// postThresholdMin is the minimum boredom level required to consider posting.
-	// At boredomRate=8, this means ~20 minutes of silence before any post is possible.
+	// postThresholdMin は発言を検討する最低退屈度。
+	// boredomRate=8 では無言 ~20 分でこの水準に達する。
 	postThresholdMin = 3.0
 
-	// postProbabilityMax is the posting probability at maximum boredom.
+	// postProbabilityMax は退屈度最大時の発言確率。
 	postProbabilityMax = 0.85
 
-	// mentionBoredomMin is the minimum boredom level to consider mentioning someone.
+	// mentionBoredomMin は mention を検討する最低退屈度。
 	mentionBoredomMin = 50.0
 
-	// mentionProbabilityMax is the mention probability at maximum boredom.
+	// mentionProbabilityMax は退屈度最大時の mention 確率。
 	mentionProbabilityMax = 0.40
 )
 
-// persistedState is the JSON-serializable state saved to task_state table.
+// persistedState は task_state テーブルに保存する JSON 値。
 type persistedState struct {
 	LastPostedAt time.Time `json:"last_posted_at"`
 }
 
-// Task implements scheduler.CronTask for periodic muttering.
+// Task は定期的な独り言を実現する scheduler.CronTask 実装。
 type Task struct {
+	db       *sql.DB
+	memory   portmem.Memory
+	users    portuser.Store
+	activity portconv.ActivityStore
+	bus      *event.Bus
+	logger   *slog.Logger
+
 	mu           sync.Mutex
 	lastPostedAt time.Time
-	// nowFunc is used for testing; defaults to time.Now.
-	nowFunc func() time.Time
+	nowFunc      func() time.Time // テスト用に time.Now を差し替え可能
+}
+
+// NewTask は boredom Task を生成する。
+func NewTask(db *sql.DB, mem portmem.Memory, users portuser.Store, activity portconv.ActivityStore, bus *event.Bus, logger *slog.Logger) *Task {
+	return &Task{
+		db:       db,
+		memory:   mem,
+		users:    users,
+		activity: activity,
+		bus:      bus,
+		logger:   logger,
+	}
 }
 
 var _ scheduler.CronTask = (*Task)(nil)
@@ -58,20 +80,20 @@ var _ scheduler.CronTask = (*Task)(nil)
 func (t *Task) Name() string        { return "topics" }
 func (t *Task) Description() string { return "独り言をつぶやく" }
 
-func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
-	if cc.DB == nil {
+// Setup は前回発言時刻を state ストアから復元する。
+func (t *Task) Setup(ctx context.Context) error {
+	if t.db == nil {
 		return nil
 	}
 	var s persistedState
-	if err := scheduler.LoadState(ctx, cc.DB, t.Name(), &s); err != nil {
-		cc.Logger.Warn("topics: load state", "error", err)
+	if err := scheduler.LoadState(ctx, t.db, t.Name(), &s); err != nil {
+		t.logger.Warn("topics: load state", "error", err)
 		return nil
 	}
 	t.mu.Lock()
 	t.lastPostedAt = s.LastPostedAt
 	t.mu.Unlock()
-	cc.Logger.Info("topics: restored state",
-		"last_posted_at", s.LastPostedAt)
+	t.logger.Info("topics: restored state", "last_posted_at", s.LastPostedAt)
 	return nil
 }
 
@@ -82,112 +104,105 @@ func (t *Task) now() time.Time {
 	return jtime.Now()
 }
 
-// mutteringConfig holds task-specific configuration from config.yaml.
+// mutteringConfig は config.yaml から渡される task 固有設定。
 type mutteringConfig struct {
 	ChannelID   string `json:"channel_id"`
 	SkipBoredom bool   `json:"skip_boredom"`
 }
 
-func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
+// Execute は退屈度を算出し、確率的に self-prompt イベントを発行する。
+func (t *Task) Execute(ctx context.Context, cfg json.RawMessage) error {
 	var mc mutteringConfig
 	if len(cfg) > 0 {
 		if err := json.Unmarshal(cfg, &mc); err != nil {
-			cc.Logger.Warn("topics: config parse failed, using defaults", "error", err)
+			t.logger.Warn("topics: config parse failed, using defaults", "error", err)
 		}
 	}
-	if cc.Bus == nil {
-		cc.Logger.Warn("topics: no event bus available, skipping")
+	if t.bus == nil {
+		t.logger.Warn("topics: no event bus available, skipping")
 		return nil
 	}
 
-	// --- Boredom-based posting decision ---
 	now := t.now()
 	var lastInteraction time.Time
-	if cc.ChannelActivity != nil {
+	if t.activity != nil {
 		var actErr error
-		lastInteraction, _, actErr = cc.ChannelActivity.LastInteractionGlobal(ctx)
+		lastInteraction, _, actErr = t.activity.LastInteractionGlobal(ctx)
 		if actErr != nil {
-			cc.Logger.Warn("topics: last interaction query failed", "error", actErr)
+			t.logger.Warn("topics: last interaction query failed", "error", actErr)
 		}
 	}
 	boredom := calcBoredom(now, lastInteraction)
 
-	cc.Logger.Info("topics: boredom check",
+	t.logger.Info("topics: boredom check",
 		"boredom", fmt.Sprintf("%.1f", boredom),
 		"last_interaction", lastInteraction,
 		"channel_id", mc.ChannelID)
 
 	if !mc.SkipBoredom && !shouldPost(boredom) {
-		cc.Logger.Info("topics: skipping (low boredom or probability miss)",
+		t.logger.Info("topics: skipping (low boredom or probability miss)",
 			"boredom", fmt.Sprintf("%.1f", boredom))
 		return nil
 	}
 
-	// Choose channel: high boredom → wander to any active channel, low → home only.
 	if mc.ChannelID == "" {
 		if boredom >= 50 {
-			mc.ChannelID = findRandomActiveChannel(ctx, cc.DB)
+			mc.ChannelID = findRandomActiveChannel(ctx, t.db)
 		}
 		if mc.ChannelID == "" {
-			mc.ChannelID = findHomeChannel(ctx, cc.DB)
+			mc.ChannelID = findHomeChannel(ctx, t.db)
 		}
 	}
 	if mc.ChannelID == "" {
-		cc.Logger.Warn("topics: no channel found, skipping")
+		t.logger.Warn("topics: no channel found, skipping")
 		return nil
 	}
 
-	// Build context for self-prompt.
 	localNow := jtime.In(now)
 	timeHint := buildTimeHint(localNow)
 
-	recentMemories := fetchRecentContext(ctx, cc, 8)
-	pastMutterings := fetchPastMutterings(ctx, cc, 8)
+	recentMemories := t.fetchRecentContext(ctx, 8)
+	pastMutterings := t.fetchPastMutterings(ctx, 8)
 
 	var mentionables []user.MentionableUser
-	if cc.Users != nil {
+	if t.users != nil {
 		var mentionErr error
-		mentionables, mentionErr = cc.Users.ListMentionable(ctx)
+		mentionables, mentionErr = t.users.ListMentionable(ctx)
 		if mentionErr != nil {
-			cc.Logger.Warn("topics: list mentionable users failed", "error", mentionErr)
+			t.logger.Warn("topics: list mentionable users failed", "error", mentionErr)
 		}
 	}
 	mentionTarget := selectMentionTarget(boredom, mentionables)
 
-	// Publish self-prompt event to agent pipeline.
 	prompt := buildSelfPrompt(localNow, timeHint, boredom, recentMemories, pastMutterings, mentionTarget)
 	evt := event.NewSelfPromptEvent(mc.ChannelID, prompt)
-	cc.Bus.Publish(evt)
+	t.bus.Publish(evt)
 
-	cc.Logger.Info("topics: published self-prompt event",
+	t.logger.Info("topics: published self-prompt event",
 		"channel_id", mc.ChannelID,
 		"boredom", fmt.Sprintf("%.1f", boredom))
 
-	// Record post time to prevent rapid re-triggering.
 	t.mu.Lock()
 	t.lastPostedAt = now
 	t.mu.Unlock()
-	t.saveState(ctx, cc)
+	t.saveState(ctx)
 
 	return nil
 }
 
-// saveState persists the current state to the DB.
-func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
-	if cc.DB == nil {
+func (t *Task) saveState(ctx context.Context) {
+	if t.db == nil {
 		return
 	}
 	t.mu.Lock()
-	s := persistedState{
-		LastPostedAt: t.lastPostedAt,
-	}
+	s := persistedState{LastPostedAt: t.lastPostedAt}
 	t.mu.Unlock()
-	if err := scheduler.SaveState(ctx, cc.DB, t.Name(), &s); err != nil {
-		cc.Logger.Warn("topics: save state", "error", err)
+	if err := scheduler.SaveState(ctx, t.db, t.Name(), &s); err != nil {
+		t.logger.Warn("topics: save state", "error", err)
 	}
 }
 
-// calcBoredom computes a boredom score (0–100) from time since last interaction.
+// calcBoredom は最終インタラクションからの経過時間から退屈度 (0-100) を算出する。
 func calcBoredom(now time.Time, lastInteraction time.Time) float64 {
 	if lastInteraction.IsZero() {
 		return boredomMax
@@ -203,17 +218,15 @@ func calcBoredom(now time.Time, lastInteraction time.Time) float64 {
 	return b
 }
 
-// shouldPost decides whether to post based on boredom level (probabilistic).
+// shouldPost は退屈度に応じて確率的に発言するかを判定する。
 func shouldPost(boredom float64) bool {
 	if boredom < postThresholdMin {
 		return false
 	}
-	// Linear interpolation from 0 at threshold to postProbabilityMax at 100.
 	prob := (boredom - postThresholdMin) / (boredomMax - postThresholdMin) * postProbabilityMax
 	return rand.Float64() < prob
 }
 
-// boredomLabel returns a human-readable label for the boredom level.
 func boredomLabel(boredom float64) string {
 	switch {
 	case boredom >= 80:
@@ -227,29 +240,28 @@ func boredomLabel(boredom float64) string {
 	}
 }
 
-// fetchRecentContext retrieves recent memories for conversational context.
-func fetchRecentContext(ctx context.Context, cc *scheduler.CronContext, limit int) []memory.Memory {
+// fetchRecentContext は最近の記憶を取得する (会話の文脈用)。
+func (t *Task) fetchRecentContext(ctx context.Context, limit int) []memory.Memory {
 	since := time.Now().Add(-48 * time.Hour)
-	mems, err := cc.Memory.SearchRecent(ctx, "会話", limit, since)
+	mems, err := t.memory.SearchRecent(ctx, "会話", limit, since)
 	if err != nil {
-		cc.Logger.Debug("topics: search recent context", "error", err)
+		t.logger.Debug("topics: search recent context", "error", err)
 		return nil
 	}
 	return mems
 }
 
-// fetchPastMutterings retrieves recent bot messages from conversation_logs
-// so that self-prompts can avoid repeating the same topics.
-func fetchPastMutterings(ctx context.Context, cc *scheduler.CronContext, limit int) []memory.Memory {
-	if cc.DB == nil {
+// fetchPastMutterings は最近の bot 発言を取得し、同じ話題の繰り返しを避ける。
+func (t *Task) fetchPastMutterings(ctx context.Context, limit int) []memory.Memory {
+	if t.db == nil {
 		return nil
 	}
-	rows, err := cc.DB.QueryContext(ctx,
+	rows, err := t.db.QueryContext(ctx,
 		`SELECT content, timestamp FROM conversation_logs
 		 WHERE role = 'assistant' AND content != ''
 		 ORDER BY timestamp DESC LIMIT $1`, limit)
 	if err != nil {
-		cc.Logger.Debug("topics: fetch past mutterings", "error", err)
+		t.logger.Debug("topics: fetch past mutterings", "error", err)
 		return nil
 	}
 	defer rows.Close()
@@ -266,7 +278,6 @@ func fetchPastMutterings(ctx context.Context, cc *scheduler.CronContext, limit i
 	return results
 }
 
-// buildTimeHint returns a time-of-day hint for the LLM prompt.
 func buildTimeHint(now time.Time) string {
 	hour := now.Hour()
 	switch {
@@ -283,7 +294,6 @@ func buildTimeHint(now time.Time) string {
 	}
 }
 
-// buildSelfPrompt builds the content for a self-prompt event.
 func buildSelfPrompt(
 	now time.Time,
 	timeHint string,
@@ -298,7 +308,6 @@ func buildSelfPrompt(
 	fmt.Fprintf(&sb, "今: %s %s\n", now.Format("2006-01-02"), now.Format("15:04"))
 	fmt.Fprintf(&sb, "退屈レベル: %.0f / 100（%s）\n\n", boredom, boredomLabel(boredom))
 
-	// 退屈度に応じた行動指針
 	switch {
 	case boredom >= 70:
 		sb.WriteString("かなり暇。誰かに話しかけたい気分。\n")
@@ -346,8 +355,6 @@ func buildSelfPrompt(
 	return sb.String()
 }
 
-// selectMentionTarget probabilistically picks a user to mention based on boredom.
-// Selection is uniformly random among mentionable users.
 func selectMentionTarget(boredom float64, users []user.MentionableUser) *user.MentionableUser {
 	if len(users) == 0 {
 		return nil
@@ -363,9 +370,6 @@ func selectMentionTarget(boredom float64, users []user.MentionableUser) *user.Me
 	return &users[rand.IntN(len(users))]
 }
 
-// findHomeChannel looks up the home channel from channel_settings.
-// Only returns channels with active mode (not disabled/listen).
-// findRandomActiveChannel picks a random active channel from any server.
 func findRandomActiveChannel(ctx context.Context, db *sql.DB) string {
 	if db == nil {
 		return ""

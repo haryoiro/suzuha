@@ -338,16 +338,9 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			// memory attachment 読み込み用の media store を配線。
 			ag.SetMediaStore(do.MustInvoke[memory.MediaStore](i))
 
-			// Tasks — 各 behavior / capability の scheduler.CronTask を列挙。
-			tasks := []scheduler.CronTask{
-				&action.Task{},
-				&boredom.Task{},
-				&research.Task{},
-				&summarize.HourlyTask{},
-				&summarize.DailyTask{},
-				&forget.Task{Consolidator: do.MustInvoke[*capmemCon.Consolidator](i)},
-			}
-			return tasks, nil
+			// tool 登録完了のマーカーとして空 slice を返す。task 本体は
+			// provideScheduler 内で notifier 等を揃えてから構築する。
+			return []scheduler.CronTask{}, nil
 		})
 
 		// Schedule store (used by admin server).
@@ -426,7 +419,9 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	logger := observe.NewLoggerWithRing(do.MustInvoke[*config.Config](i).Observe.LogLevel, ring)
 	chatIface := do.MustInvoke[chat.Interface](i)
 	userStore := do.MustInvoke[user.Store](i)
-	tasks := do.MustInvoke[[]scheduler.CronTask](i)
+	_ = do.MustInvoke[[]scheduler.CronTask](i) // tool 登録フェーズを発火させる
+	bus := do.MustInvoke[*event.Bus](i)
+	db := store.DB()
 
 	// Build notifier with middleware chain.
 	var notifier notification.Notifier = notification.NewChatNotifier(chatIface, logger)
@@ -458,32 +453,21 @@ func provideScheduler(i do.Injector) (*scheduler.Scheduler, error) {
 	channelSettings := do.MustInvoke[*convcap.SettingsStore](i)
 	notifier = notification.WithChannelSettings(channelSettings, logger)(notifier)
 
-	// Register tasks directly (former features.Tasks() の代替)。
+	// 各 task を constructor 注入で構築して registry に登録する。
+	// CronContext (神オブジェクト) を介さず、各 task が必要な依存だけを受ける。
+	activityStore := convcap.NewActivityStore(db)
+	portLLM := llmClient.AsPortClient()
+	systemPrompt := cfg.Agent.SystemPrompt
+
 	taskRegistry := scheduler.NewRegistry()
-	for _, t := range tasks {
-		taskRegistry.Register(t)
-	}
+	taskRegistry.Register(action.NewTask(db, portLLM, notifier, systemPrompt, logger))
+	taskRegistry.Register(research.NewTask(db, logger))
+	taskRegistry.Register(boredom.NewTask(db, store, userStore, activityStore, bus, logger))
+	taskRegistry.Register(summarize.NewHourlyTask(db, portLLM, store, systemPrompt, logger))
+	taskRegistry.Register(summarize.NewDailyTask(db, portLLM, systemPrompt, logger))
+	taskRegistry.Register(forget.NewTask(do.MustInvoke[*capmemCon.Consolidator](i), db, logger))
 
-	// Build CronContext.
-	bus := do.MustInvoke[*event.Bus](i)
-	activityStore := convcap.NewActivityStore(store.DB())
-	mediaStore := do.MustInvoke[memory.MediaStore](i)
-	cc := &scheduler.CronContext{
-		LLM:             llmClient.AsPortClient(),
-		Memory:          store,
-		Notifier:        notifier,
-		DB:              store.DB(),
-		Logger:          logger,
-		Users:           userStore,
-		ChannelActivity: activityStore,
-		MemoryAdmin:     store,
-		MediaStore:      mediaStore,
-		Bus:             bus,
-		Timezone:        schedulerLoc,
-		SystemPrompt:    cfg.Agent.SystemPrompt,
-	}
-
-	sched := scheduler.New(taskRegistry, cc, logger)
+	sched := scheduler.New(taskRegistry, schedulerLoc, logger)
 	if err := sched.Setup(context.Background()); err != nil {
 		return nil, fmt.Errorf("scheduler セットアップに失敗: %w", err)
 	}

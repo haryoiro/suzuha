@@ -2,8 +2,10 @@ package summarize
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -11,54 +13,59 @@ import (
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
+	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
 
-// HourlyTask creates hourly digest memories summarizing the past hour.
-type HourlyTask struct{}
+// HourlyTask は 1 時間ごとの出来事を要約する scheduler.CronTask 実装。
+type HourlyTask struct {
+	db           *sql.DB
+	llm          portllm.Client
+	memory       portmem.Memory
+	systemPrompt string
+	logger       *slog.Logger
+}
+
+// NewHourlyTask は HourlyTask を生成する。
+func NewHourlyTask(db *sql.DB, llm portllm.Client, mem portmem.Memory, systemPrompt string, logger *slog.Logger) *HourlyTask {
+	return &HourlyTask{db: db, llm: llm, memory: mem, systemPrompt: systemPrompt, logger: logger}
+}
 
 var _ scheduler.CronTask = (*HourlyTask)(nil)
 
 func (t *HourlyTask) Name() string        { return "diary_hourly" }
 func (t *HourlyTask) Description() string { return "1時間ごとの出来事を記録する" }
 
-func (t *HourlyTask) Setup(_ context.Context, _ *scheduler.CronContext) error { return nil }
+// Setup は hourly には初期化不要。
+func (t *HourlyTask) Setup(_ context.Context) error { return nil }
 
-func (t *HourlyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ json.RawMessage) error {
+// Execute は直前 1 時間の会話と記憶を要約し diary_entries に保存する。
+func (t *HourlyTask) Execute(ctx context.Context, _ json.RawMessage) error {
 	now := jtime.Now()
 	windowEnd := now.Truncate(time.Hour)
 	windowStart := windowEnd.Add(-time.Hour)
 
-	// 1. Collect conversation logs from the past hour.
-	convLogs := fetchConversationLogs(ctx, cc, windowStart, windowEnd)
+	convLogs := t.fetchConversationLogs(ctx, windowStart, windowEnd)
+	recentMems := t.fetchRecentMemories(ctx, windowStart)
+	recentMemos := t.fetchRecentMemos(ctx, windowStart)
 
-	// 2. Collect new memories from the past hour.
-	recentMems := fetchRecentMemories(ctx, cc, windowStart)
-
-	// 3. Collect memos from the past hour.
-	recentMemos := fetchRecentMemos(ctx, cc, windowStart)
-
-	// Nothing happened → skip.
 	if len(convLogs) == 0 && len(recentMems) == 0 && len(recentMemos) == 0 {
-		cc.Logger.Debug("diary_hourly: 何もなかったのでスキップ",
+		t.logger.Debug("diary_hourly: 何もなかったのでスキップ",
 			"window_start", windowStart, "window_end", windowEnd)
 		return nil
 	}
 
-	// 4. Fetch previous hourly digests for dedup context.
-	prevDigests := fetchPreviousDigests(ctx, cc, windowStart)
+	prevDigests := t.fetchPreviousDigests(ctx, windowStart)
 
-	// 5. Build LLM prompt and summarize.
 	localStart := jtime.In(windowStart)
-	summary, err := summarizeHour(ctx, cc.LLM, cc.SystemPrompt, localStart, convLogs, recentMems, recentMemos, prevDigests)
+	summary, err := summarizeHour(ctx, t.llm, t.systemPrompt, localStart, convLogs, recentMems, recentMemos, prevDigests)
 	if err != nil {
-		cc.Logger.Error("diary_hourly: 要約に失敗", "error", err)
+		t.logger.Error("diary_hourly: 要約に失敗", "error", err)
 		return err
 	}
 
-	// 5. Save to diary_entries table (not memories).
-	ds := NewStore(cc.DB)
+	ds := NewStore(t.db)
 	entry := &Entry{
 		Kind:        "hourly",
 		Content:     summary,
@@ -66,38 +73,38 @@ func (t *HourlyTask) Execute(ctx context.Context, cc *scheduler.CronContext, _ j
 		PeriodEnd:   windowEnd,
 	}
 	if err := ds.Save(ctx, entry); err != nil {
-		cc.Logger.Error("diary_hourly: 日記保存に失敗", "error", err)
+		t.logger.Error("diary_hourly: 日記保存に失敗", "error", err)
 		return err
 	}
 
-	cc.Logger.Info("diary_hourly: 記録した",
+	t.logger.Info("diary_hourly: 記録した",
 		"period", localStart.Format("2006-01-02T15:00"),
 		"conv_logs", len(convLogs), "memories", len(recentMems))
 	return nil
 }
 
-// convLogRow represents a single row from conversation_logs.
+// convLogRow は conversation_logs の 1 行を表す。
 type convLogRow struct {
 	SourceKey   string
 	ChannelID   string
-	ChannelName string // populated from context messages if available
+	ChannelName string
 	Role        string
 	UserName    string
 	Content     string
 	TS          time.Time
 }
 
-// sectionKey groups conversation logs into sections.
+// sectionKey は会話ログをセクションにグルーピングするキー。
 type sectionKey struct {
 	SourceKey string
 	ChannelID string
 }
 
-func fetchConversationLogs(ctx context.Context, cc *scheduler.CronContext, from, to time.Time) []convLogRow {
-	if cc.DB == nil {
+func (t *HourlyTask) fetchConversationLogs(ctx context.Context, from, to time.Time) []convLogRow {
+	if t.db == nil {
 		return nil
 	}
-	rows, err := cc.DB.QueryContext(ctx,
+	rows, err := t.db.QueryContext(ctx,
 		`SELECT source_key, channel_id, role, COALESCE(user_name, ''), content, timestamp
 		 FROM conversation_logs
 		 WHERE timestamp >= $1 AND timestamp < $2
@@ -106,7 +113,7 @@ func fetchConversationLogs(ctx context.Context, cc *scheduler.CronContext, from,
 		from, to,
 	)
 	if err != nil {
-		cc.Logger.Debug("diary_hourly: conversation_logs query", "error", err)
+		t.logger.Debug("diary_hourly: conversation_logs query", "error", err)
 		return nil
 	}
 	defer rows.Close()
@@ -121,22 +128,22 @@ func fetchConversationLogs(ctx context.Context, cc *scheduler.CronContext, from,
 		var parseErr error
 		r.TS, parseErr = time.Parse(time.RFC3339, ts)
 		if parseErr != nil {
-			cc.Logger.Debug("diary_hourly: timestamp parse failed", "ts", ts, "error", parseErr)
+			t.logger.Debug("diary_hourly: timestamp parse failed", "ts", ts, "error", parseErr)
 		}
 		result = append(result, r)
 	}
 	return result
 }
 
-func fetchRecentMemories(ctx context.Context, cc *scheduler.CronContext, since time.Time) []memory.Memory {
-	if cc.Memory == nil {
+func (t *HourlyTask) fetchRecentMemories(ctx context.Context, since time.Time) []memory.Memory {
+	if t.memory == nil {
 		return nil
 	}
 	var all []memory.Memory
 	for _, mt := range []memory.MemoryType{memory.MemoryTypeEpisode, memory.MemoryTypeUser, memory.MemoryTypeWorld} {
-		mems, err := cc.Memory.ListRecentByType(ctx, mt, since, 20)
+		mems, err := t.memory.ListRecentByType(ctx, mt, since, 20)
 		if err != nil {
-			cc.Logger.Debug("diary_hourly: list recent", "type", mt, "error", err)
+			t.logger.Debug("diary_hourly: list recent", "type", mt, "error", err)
 			continue
 		}
 		all = append(all, mems...)
@@ -144,31 +151,29 @@ func fetchRecentMemories(ctx context.Context, cc *scheduler.CronContext, since t
 	return all
 }
 
-func fetchRecentMemos(ctx context.Context, cc *scheduler.CronContext, since time.Time) []memory.Memory {
-	if cc.Memory == nil {
+func (t *HourlyTask) fetchRecentMemos(ctx context.Context, since time.Time) []memory.Memory {
+	if t.memory == nil {
 		return nil
 	}
-	mems, err := cc.Memory.ListRecentByType(ctx, memory.MemoryTypeMemo, since, 20)
+	mems, err := t.memory.ListRecentByType(ctx, memory.MemoryTypeMemo, since, 20)
 	if err != nil {
-		cc.Logger.Debug("diary_hourly: list recent memos", "error", err)
+		t.logger.Debug("diary_hourly: list recent memos", "error", err)
 		return nil
 	}
 	return mems
 }
 
-// fetchPreviousDigests returns the last few hourly digests before the given window.
-func fetchPreviousDigests(ctx context.Context, cc *scheduler.CronContext, windowStart time.Time) []Entry {
-	if cc.DB == nil {
+func (t *HourlyTask) fetchPreviousDigests(ctx context.Context, windowStart time.Time) []Entry {
+	if t.db == nil {
 		return nil
 	}
-	ds := NewStore(cc.DB)
+	ds := NewStore(t.db)
 	lookback := windowStart.Add(-3 * time.Hour)
 	entries, err := ds.ListByKind(ctx, "hourly", lookback, 10)
 	if err != nil {
 		return nil
 	}
 
-	// Only include digests before the current window.
 	var digests []Entry
 	for _, e := range entries {
 		if e.PeriodStart.Before(windowStart) {
@@ -181,8 +186,6 @@ func fetchPreviousDigests(ctx context.Context, cc *scheduler.CronContext, window
 	return digests
 }
 
-// groupLogsBySections groups conversation logs by source_key + channel_id,
-// preserving the order of first appearance.
 func groupLogsBySections(logs []convLogRow) ([]sectionKey, map[sectionKey][]convLogRow) {
 	groups := make(map[sectionKey][]convLogRow)
 	var order []sectionKey
@@ -199,7 +202,6 @@ func groupLogsBySections(logs []convLogRow) ([]sectionKey, map[sectionKey][]conv
 	return order, groups
 }
 
-// sectionHeading builds a human-readable heading for a section.
 func sectionHeading(sk sectionKey) string {
 	switch sk.SourceKey {
 	case "device":
@@ -207,7 +209,6 @@ func sectionHeading(sk sectionKey) string {
 	case "web":
 		return "Web"
 	default:
-		// Discord: show channel ID (best we have without channel_name in logs).
 		if sk.ChannelID != "" {
 			return fmt.Sprintf("Discord <#%s>", sk.ChannelID)
 		}
@@ -227,7 +228,6 @@ func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt s
 		localStart.Format("2006-01-02 15:04"),
 		localStart.Add(time.Hour).Format("15:04"))
 
-	// Previous digests for dedup.
 	if len(prevDigests) > 0 {
 		sb.WriteString("## 前の記録（被らないように）\n")
 		for _, d := range prevDigests {
@@ -236,7 +236,6 @@ func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt s
 		sb.WriteString("\n")
 	}
 
-	// Conversation logs grouped by source/channel.
 	if len(logs) > 0 {
 		order, groups := groupLogsBySections(logs)
 		for _, sk := range order {
@@ -254,7 +253,6 @@ func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt s
 		}
 	}
 
-	// Memos.
 	if len(memos) > 0 {
 		sb.WriteString("## メモ\n")
 		for _, m := range memos {
@@ -264,7 +262,6 @@ func summarizeHour(ctx context.Context, llmClient portllm.Client, systemPrompt s
 		sb.WriteString("\n")
 	}
 
-	// New memories.
 	if len(mems) > 0 {
 		sb.WriteString("## 新しい記憶\n")
 		for _, m := range mems {
