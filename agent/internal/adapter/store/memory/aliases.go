@@ -43,7 +43,6 @@ const (
 	MemoryTypeTool    = memo.MemoryTypeTool
 	MemoryTypeEpisode = memo.MemoryTypeEpisode
 	MemoryTypeSelf    = memo.MemoryTypeSelf
-	MemoryTypeMemo    = memo.MemoryTypeMemo
 )
 
 // MediaStore は binary 添付の put/get 契約 (consumer-side interface)。

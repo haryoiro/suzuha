@@ -15,7 +15,6 @@ const (
 	MemoryTypeTool    MemoryType = "tool"
 	MemoryTypeEpisode MemoryType = "episode"
 	MemoryTypeSelf    MemoryType = "self"
-	MemoryTypeMemo    MemoryType = "memo"
 )
 
 // Attachment は MediaStore に格納された media ファイルへの参照。

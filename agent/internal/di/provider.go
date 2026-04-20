@@ -32,7 +32,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/capability/conversation/boredom"
 	"github.com/haryoiro/suzuha/internal/capability/llm"
 	"github.com/haryoiro/suzuha/internal/capability/mcp"
-	memcap "github.com/haryoiro/suzuha/internal/capability/memory"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
 	capmemCon "github.com/haryoiro/suzuha/internal/capability/memory/consolidate"
 	"github.com/haryoiro/suzuha/internal/capability/memory/forget"
@@ -276,9 +275,6 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			registry.Register(builtin.NewUpdateUserProfile(userStore, func(userID, newName string) {
 				ag.AgentContext().UpdateUserName(userID, newName)
 			}))
-			registry.Register(memcap.NewMemoCreate(store))
-			registry.Register(memcap.NewMemoSearch(store))
-			registry.Register(memcap.NewMemoUpdate(store))
 
 			// action (scheduled_actions) — setup + tools + task.
 			actionStore := action.NewStore(db)
