@@ -3,6 +3,8 @@ package llm
 import (
 	"log/slog"
 	"testing"
+
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 )
 
 func buildTestClient(t *testing.T, roles map[string]roleProvider) *Client {
@@ -116,7 +118,7 @@ func TestSwapRoleSpec(t *testing.T) {
 		c := buildTestClient(t, map[string]roleProvider{
 			"conversation": {model: "old-model"},
 		})
-		c.SwapRoleSpec("conversation", RoleSpec{
+		c.SwapRoleSpec("conversation", portllm.RoleSpec{
 			ProviderName: "openai",
 			ModelID:      "new-model",
 			APIBase:      "https://api.openai.com/v1",
@@ -136,7 +138,7 @@ func TestSwapRoleSpec(t *testing.T) {
 		c := buildTestClient(t, map[string]roleProvider{
 			"conversation": {model: "conv"},
 		})
-		c.SwapRoleSpec("vision", RoleSpec{
+		c.SwapRoleSpec("vision", portllm.RoleSpec{
 			ProviderName: "openai",
 			ModelID:      "vision-model",
 			APIBase:      "https://api.openai.com/v1",
@@ -157,7 +159,7 @@ func TestSwapRoleSpec(t *testing.T) {
 			t.Fatalf("初期状態: got %q, want old-bg", rc.resolve().model)
 		}
 
-		c.SwapRoleSpec("background", RoleSpec{
+		c.SwapRoleSpec("background", portllm.RoleSpec{
 			ProviderName: "openai",
 			ModelID:      "new-bg",
 			APIBase:      "https://api.openai.com/v1",

@@ -8,7 +8,7 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/domain/memo"
-	"github.com/haryoiro/suzuha/internal/llm"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 )
 
 // --- モック ---
@@ -38,11 +38,11 @@ type mockCompleter struct {
 	err      error
 }
 
-func (m *mockCompleter) CompleteRaw(_ context.Context, _ []llm.RawMessage) (*llm.Response, error) {
+func (m *mockCompleter) CompleteRaw(_ context.Context, _ []portllm.RawMessage) (*portllm.Response, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	return &llm.Response{Text: m.response}, nil
+	return &portllm.Response{Text: m.response}, nil
 }
 
 // mockSaveStore は Save を記録するモック。

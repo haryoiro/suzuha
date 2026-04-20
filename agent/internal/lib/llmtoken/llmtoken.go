@@ -1,4 +1,4 @@
-package llm
+package llmtoken
 
 import (
 	"log/slog"

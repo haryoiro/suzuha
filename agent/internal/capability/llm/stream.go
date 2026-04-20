@@ -5,25 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
-
-// StreamChunk は streaming レスポンスの 1 チャンク。
-type StreamChunk struct {
-	// Content は表示可能なテキスト差分 (<think> タグ外の内容)。
-	Content string
-	// Reasoning は推論内容の差分 (<think> タグ内、または Reasoning フィールド)。
-	Reasoning string
-	// ToolCalls はストリーム完了時に蓄積されたツール呼び出し。
-	// Done == true のときのみ有効。
-	ToolCalls []providers.ToolCall
-	// Done はストリーム完了を示す。
-	Done bool
-	// FinishReason はストリーム完了時の終了理由。
-	FinishReason string
-	// Usage はストリーム完了時のトークン使用量 (nil の場合あり)。
-	Usage *providers.Usage
-}
 
 // CompleteStreamWithTools は streaming 補完を実行し、チャンクチャネルを返す。
 // Content にはユーザーに見せるテキストのみが含まれる (<think> タグはフィルタ済み)。
@@ -32,8 +16,8 @@ func (rc *RoleClient) CompleteStreamWithTools(
 	ctx context.Context,
 	messages []providers.Message,
 	tools []providers.Tool,
-) (<-chan StreamChunk, <-chan error) {
-	out := make(chan StreamChunk)
+) (<-chan portllm.StreamChunk, <-chan error) {
+	out := make(chan portllm.StreamChunk)
 	errs := make(chan error, 1)
 
 	rp := rc.resolve()
@@ -101,9 +85,9 @@ type streamAccumulator struct {
 	usage        *providers.Usage
 }
 
-// process は provider チャンクを処理し、送信すべき StreamChunk を返す。
+// process は provider チャンクを処理し、送信すべき portllm.StreamChunk を返す。
 // コンテンツがない場合は nil を返す。
-func (a *streamAccumulator) process(chunk providers.ChatCompletionChunk) *StreamChunk {
+func (a *streamAccumulator) process(chunk providers.ChatCompletionChunk) *portllm.StreamChunk {
 	if len(chunk.Choices) == 0 {
 		// Usage のみのチャンク (stream_options.include_usage で最後に来る)。
 		if chunk.Usage != nil {
@@ -139,7 +123,7 @@ func (a *streamAccumulator) process(chunk providers.ChatCompletionChunk) *Stream
 		return nil
 	}
 
-	return &StreamChunk{
+	return &portllm.StreamChunk{
 		Content:   contentDelta,
 		Reasoning: reasoningDelta,
 	}
@@ -147,7 +131,7 @@ func (a *streamAccumulator) process(chunk providers.ChatCompletionChunk) *Stream
 
 // finalize はストリーム完了チャンクを返す。
 // tagBuf に残っている未確定テキストも content として出力する。
-func (a *streamAccumulator) finalize() StreamChunk {
+func (a *streamAccumulator) finalize() portllm.StreamChunk {
 	// ストリーム終了時に未確定の部分タグが残っていれば
 	// タグではなかったので content に出力する。
 	if a.tagBuf != "" {
@@ -158,7 +142,7 @@ func (a *streamAccumulator) finalize() StreamChunk {
 		}
 		a.tagBuf = ""
 	}
-	return StreamChunk{
+	return portllm.StreamChunk{
 		Content:      a.content.String(),
 		Done:         true,
 		ToolCalls:    a.toolCalls,

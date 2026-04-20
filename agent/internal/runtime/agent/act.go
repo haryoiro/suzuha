@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/domain/message"
+	"github.com/haryoiro/suzuha/internal/lib/llmconv"
+	"github.com/haryoiro/suzuha/internal/lib/llmtext"
+	"github.com/haryoiro/suzuha/internal/lib/llmtrace"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -61,8 +64,8 @@ func (a *Agent) ActWith(ctx context.Context, agentCtx *Context, sess Session, p 
 // filterResponse はレスポンスを検査し、送信すべきテキストを返す。
 // silent / dedup のいずれかに該当する場合は空文字を返す。
 // skip_response は text が空のときだけ沈黙として扱う (text 共存時は text 優先)。
-func (a *Agent) filterResponse(resp *llm.Response, channel string) string {
-	text := strings.TrimSpace(llm.StripDirectiveTags(resp.Text))
+func (a *Agent) filterResponse(resp *portllm.Response, channel string) string {
+	text := strings.TrimSpace(llmtext.StripDirectiveTags(resp.Text))
 	skip := containsSkipTool(resp.ToolCalls)
 	switch {
 	case text == "":
@@ -72,7 +75,7 @@ func (a *Agent) filterResponse(resp *llm.Response, channel string) string {
 			a.logger.Debug("何も思いつかなかった")
 		}
 		return ""
-	case llm.IsSilentResponse(text):
+	case llmtext.IsSilentResponse(text):
 		a.logger.Info("黙った (サイレント)",
 			"raw_text", textutil.TruncateRunes(resp.Text, 100))
 		return ""
@@ -152,13 +155,13 @@ func (a *Agent) buildIterMessages(
 // completeWithToolsUsing は LLM 補完 + ツールループを実行する。
 // 初回 (iter=0) のトレーシングとキャリブレーションを行い、
 // ツール呼び出しがあれば continueToolLoop に委譲する。
-func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName, llmRole string) (*llm.Response, error) {
+func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, sess Session, t *Thought, channel, channelName, llmRole string) (*portllm.Response, error) {
 	ts := a.prepareTools(t.Directive)
 	rc := a.llm.For(llmRole)
 
 	msgs := a.buildIterMessages(ctx, agentCtx, t, ts, rc.MaxContextTokens(), channel, 0)
-	provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
-	provTools := llm.ConvertTools(ts.tools)
+	provMsgs := llmconv.ConvertMessages(msgs, rc.HasCapability("vision"))
+	provTools := llmconv.ConvertTools(ts.tools)
 
 	var span trace.Span
 	if a.tracer != nil {
@@ -169,7 +172,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 				attribute.String("gen_ai.request.model", rc.Model()),
 				attribute.Int("gen_ai.prompt.message_count", len(msgs)),
 				attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
-				attribute.String("gen_ai.input", llm.SerializeMessagesForTrace(msgs)),
+				attribute.String("gen_ai.input", llmtrace.SerializeMessages(msgs)),
 			),
 		)
 		defer span.End()
@@ -189,7 +192,7 @@ func (a *Agent) completeWithToolsUsing(ctx context.Context, agentCtx *Context, s
 			attribute.Int("gen_ai.usage.completion_tokens", resp.Usage.CompletionTokens),
 			attribute.String("gen_ai.response.finish_reason", resp.FinishReason),
 			attribute.Int("gen_ai.response.tool_call_count", len(resp.ToolCalls)),
-			attribute.String("gen_ai.output", llm.SerializeResponseForTrace(resp)),
+			attribute.String("gen_ai.output", llmtrace.SerializeResponse(resp)),
 		)
 	}
 
@@ -243,9 +246,9 @@ func (a *Agent) continueToolLoop(
 	sess Session,
 	t *Thought,
 	ts toolSet,
-	rc *llm.RoleClient,
+	rc portllm.RoleClient,
 	channel, channelName string,
-) (*llm.Response, error) {
+) (*portllm.Response, error) {
 	maxCtx := rc.MaxContextTokens()
 	const maxIter = 10
 	var lowProgressStreak int
@@ -258,8 +261,8 @@ func (a *Agent) continueToolLoop(
 		}
 
 		msgs := a.buildIterMessages(ctx, agentCtx, t, ts, maxCtx, channel, iter)
-		provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
-		provTools := llm.ConvertTools(ts.tools)
+		provMsgs := llmconv.ConvertMessages(msgs, rc.HasCapability("vision"))
+		provTools := llmconv.ConvertTools(ts.tools)
 
 		resp, err := rc.CompleteWithTools(ctx, provMsgs, provTools)
 		if err != nil {

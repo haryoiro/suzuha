@@ -1,4 +1,4 @@
-package llm
+package gemini
 
 import (
 	"context"
@@ -7,13 +7,22 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	domainllm "github.com/haryoiro/suzuha/internal/domain/llm"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 )
 
-// geminiMeta は Google Gemini API からモデルカタログを動的取得する。
+// Meta は Google Gemini API からモデルカタログを動的取得する。
 // Gemini は唯一 capabilities と context window を API から返すプロバイダ。
-type geminiMeta struct{}
+type Meta struct{}
 
-func (m *geminiMeta) ListModels(ctx context.Context, apiKey, _ string) ([]ModelInfo, error) {
+// NewMeta は Meta のインスタンスを返す。
+func NewMeta() *Meta { return &Meta{} }
+
+var _ portllm.ProviderMeta = (*Meta)(nil)
+
+// ListModels は Gemini API からモデル一覧を取得する。
+func (m *Meta) ListModels(ctx context.Context, apiKey, _ string) ([]domainllm.ModelInfo, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("gemini: API キーが必要です")
 	}
@@ -48,7 +57,7 @@ func (m *geminiMeta) ListModels(ctx context.Context, apiKey, _ string) ([]ModelI
 		return nil, fmt.Errorf("gemini: レスポンスの解析に失敗: %w", err)
 	}
 
-	var models []ModelInfo
+	var models []domainllm.ModelInfo
 	for _, gm := range result.Models {
 		// "models/gemini-2.0-flash" → "gemini-2.0-flash"
 		modelID := strings.TrimPrefix(gm.Name, "models/")
@@ -70,7 +79,7 @@ func (m *geminiMeta) ListModels(ctx context.Context, apiKey, _ string) ([]ModelI
 			continue
 		}
 
-		models = append(models, ModelInfo{
+		models = append(models, domainllm.ModelInfo{
 			ModelID:      modelID,
 			Capabilities: caps,
 			MaxContext:   gm.InputTokenLimit,

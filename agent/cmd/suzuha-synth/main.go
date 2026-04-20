@@ -14,10 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haryoiro/suzuha/internal/capability/llm"
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/domain/message"
+	"github.com/haryoiro/suzuha/internal/lib/llmtext"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
 )
 
 func main() {
@@ -119,7 +120,7 @@ func runGenerate(cfgPath string, count int, outputPath string) error {
 			continue
 		}
 		text := strings.TrimSpace(resp.Text)
-		if text == "" || llm.IsSilentResponse(text) {
+		if text == "" || llmtext.IsSilentResponse(text) {
 			log.Printf("[%d/%d] skipped (empty/silent)", i+1, len(scenarios))
 			continue
 		}

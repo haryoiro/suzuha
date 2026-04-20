@@ -27,9 +27,9 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	user "github.com/haryoiro/suzuha/internal/adapter/store/user"
 	"github.com/haryoiro/suzuha/internal/bench"
+	"github.com/haryoiro/suzuha/internal/capability/llm"
 	"github.com/haryoiro/suzuha/internal/channel/discord"
 	"github.com/haryoiro/suzuha/internal/config"
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/runtime/event"
 	toolreg "github.com/haryoiro/suzuha/internal/runtime/toolregistry"
@@ -218,7 +218,7 @@ func buildAgent(cfg *config.Config, dbURL, snapshotPath string, logger *slog.Log
 			DrainWindow:      -1,
 		},
 		regs,
-		llmClient,
+		llmClient.AsPortClient(),
 		toolreg.NewRegistry(),
 		store,
 		userStore,
