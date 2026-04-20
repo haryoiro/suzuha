@@ -79,7 +79,6 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		return tool.ErrorResult("content は2000文字以下にしてください"), nil
 	}
 
-	// Validate cron expression if provided.
 	var cronSchedule cron.Schedule
 	if in.CronExpr != "" {
 		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
@@ -102,13 +101,11 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 			return tool.ErrorResult("scheduled_at は少なくとも1分後の時刻を指定してください"), nil
 		}
 	case cronSchedule != nil:
-		// Auto-calculate the next occurrence from the cron expression.
 		scheduledAt = cronSchedule.Next(jtime.Now())
 	default:
 		return tool.ErrorResult("scheduled_at または cron_expr のいずれかが必須です"), nil
 	}
 
-	// Apply random offset.
 	if in.RandomMinutes > 0 {
 		offset := time.Duration(rand.IntN(in.RandomMinutes)) * time.Minute
 		scheduledAt = scheduledAt.Add(offset)
@@ -136,122 +133,4 @@ func (t *CreateTool) Execute(ctx context.Context, input json.RawMessage) (*tool.
 		result += fmt.Sprintf(" (recurring: %s)", in.CronExpr)
 	}
 	return tool.TextResult(result), nil
-}
-
-// ListTool は予約済みメッセージの一覧を表示するツール。
-type ListTool struct {
-	store *Store
-}
-
-// NewListTool は ListTool のインスタンスを生成する。
-func NewListTool(store *Store) *ListTool {
-	return &ListTool{store: store}
-}
-
-func (t *ListTool) Name() string   { return "schedule_list" }
-func (t *ListTool) ReadOnly() bool { return true }
-
-func (t *ListTool) Description() string {
-	return "予約済みのメッセージ一覧を見る。ユーザーIDで絞り込みもできる。"
-}
-
-func (t *ListTool) InputSchema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"created_by": {"type": "string", "description": "Optional: filter by creator user ID."}
-		}
-	}`)
-}
-
-type listInput struct {
-	CreatedBy string `json:"created_by"`
-}
-
-func (t *ListTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
-	var in listInput
-	if len(input) > 0 {
-		if err := json.Unmarshal(input, &in); err != nil {
-			return tool.ErrorResult("無効な入力: " + err.Error()), nil
-		}
-	}
-
-	var actions []Action
-	var err error
-	if in.CreatedBy != "" {
-		actions, err = t.store.ListPendingByCreator(ctx, in.CreatedBy)
-	} else {
-		actions, err = t.store.ListPending(ctx)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("schedule_list: %w", err)
-	}
-
-	if len(actions) == 0 {
-		return tool.TextResult("保留中のスケジュールはありません。"), nil
-	}
-
-	var sb strings.Builder
-	for _, a := range actions {
-		preview := a.Content
-		if utf8.RuneCountInString(preview) > 50 {
-			preview = string([]rune(preview)[:50]) + "…"
-		}
-		fmt.Fprintf(&sb, "- ID: %s | %s | ch: %s | %q", a.ID, a.ScheduledAt.Format("2006-01-02 15:04 MST"), a.ChannelID, preview)
-		if a.CronExpr != "" {
-			fmt.Fprintf(&sb, " | recurring: %s", a.CronExpr)
-		}
-		sb.WriteByte('\n')
-	}
-	return tool.TextResult(sb.String()), nil
-}
-
-// CancelTool は予約済みメッセージをキャンセルするツール。
-type CancelTool struct {
-	store *Store
-}
-
-// NewCancelTool は CancelTool のインスタンスを生成する。
-func NewCancelTool(store *Store) *CancelTool {
-	return &CancelTool{store: store}
-}
-
-func (t *CancelTool) Name() string   { return "schedule_cancel" }
-func (t *CancelTool) ReadOnly() bool { return false }
-
-func (t *CancelTool) Description() string {
-	return "予約済みのメッセージをIDで取り消す。繰り返し予約も止まる。"
-}
-
-func (t *CancelTool) InputSchema() json.RawMessage {
-	return json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"id": {"type": "string", "description": "The schedule ID to cancel."}
-		},
-		"required": ["id"]
-	}`)
-}
-
-type cancelInput struct {
-	ID string `json:"id"`
-}
-
-func (t *CancelTool) Execute(ctx context.Context, input json.RawMessage) (*tool.ToolResult, error) {
-	var in cancelInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return tool.ErrorResult("無効な入力: " + err.Error()), nil
-	}
-	if in.ID == "" {
-		return tool.ErrorResult("id は必須です"), nil
-	}
-
-	ok, err := t.store.Cancel(ctx, in.ID)
-	if err != nil {
-		return nil, fmt.Errorf("schedule_cancel: %w", err)
-	}
-	if !ok {
-		return tool.ErrorResult("スケジュールが見つからないか、既に実行済み・キャンセル済みです"), nil
-	}
-	return tool.TextResult(fmt.Sprintf("スケジュール %s をキャンセルしました", in.ID)), nil
 }
