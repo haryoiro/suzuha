@@ -2,58 +2,23 @@ package scheduler
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"log/slog"
-	"time"
-
-	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
-	portllm "github.com/haryoiro/suzuha/internal/port/llm"
-	portmem "github.com/haryoiro/suzuha/internal/port/memory"
-	"github.com/haryoiro/suzuha/internal/port/user"
-	"github.com/haryoiro/suzuha/internal/runtime/event"
-	"github.com/haryoiro/suzuha/internal/runtime/scheduler/notification"
 )
 
-// CronTask is a pluggable periodic job, analogous to tool.Tool for agent tools.
-// Each implementation handles a specific kind of scheduled work (topics, explore, etc.).
+// CronTask は scheduler が実行する定期ジョブの契約。
+// 各 task は constructor で必要な依存を受け取り、Execute 時点では ctx と
+// job 固有 cfg のみを受け取る (神オブジェクトを経由しない)。
 type CronTask interface {
-	// Name returns a unique identifier for this task type (e.g. "topics", "explore").
-	// This is matched against the "task" field in config.yaml job definitions.
+	// Name は task の一意識別子を返す (e.g. "topics", "explore")。
+	// config.yaml の job 定義の "task" フィールドと突き合わせされる。
 	Name() string
 
-	// Description returns a human-readable description.
+	// Description は人間向けの説明を返す。
 	Description() string
 
-	// Setup is called once when the scheduler starts. Use it for migrations,
-	// initial data loading, etc. It may be called with a nil CronContext field
-	// if the corresponding service is unavailable.
-	Setup(ctx context.Context, cc *CronContext) error
+	// Setup は scheduler 起動時に 1 回呼ばれる。マイグレーションや初期化に使う。
+	Setup(ctx context.Context) error
 
-	// Execute runs one iteration of the task. cfg contains the job-specific
-	// configuration from config.yaml, serialized as JSON.
-	Execute(ctx context.Context, cc *CronContext, cfg json.RawMessage) error
-}
-
-// CronContext は全 CronTask 実装に共有サービスと環境を渡すコンテナ。
-type CronContext struct {
-	// Services
-	LLM      portllm.Client
-	Memory   portmem.Memory
-	Notifier notification.Notifier
-	DB       *sql.DB // Keep for backward compat; prefer typed stores.
-	Logger   *slog.Logger
-
-	// Typed stores
-	Users           user.Store
-	ChannelActivity portconv.ActivityStore
-	MemoryAdmin     portmem.Management
-	MediaStore      portmem.Media
-
-	// Event injection
-	Bus *event.Bus
-
-	// Environment
-	Timezone     *time.Location
-	SystemPrompt string
+	// Execute は task を 1 回実行する。cfg は config.yaml の job 定義から渡される。
+	Execute(ctx context.Context, cfg json.RawMessage) error
 }

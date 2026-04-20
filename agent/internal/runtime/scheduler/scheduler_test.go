@@ -9,23 +9,26 @@ import (
 	"time"
 )
 
-// echoTask is a minimal CronTask for testing.
+// echoTask は最小限の CronTask テスト実装。
 type echoTask struct {
 	setupCalled atomic.Bool
 	execCount   atomic.Int32
+	logger      *slog.Logger
 }
 
 func (t *echoTask) Name() string        { return "echo" }
 func (t *echoTask) Description() string { return "test echo task" }
 
-func (t *echoTask) Setup(ctx context.Context, cc *CronContext) error {
+func (t *echoTask) Setup(_ context.Context) error {
 	t.setupCalled.Store(true)
 	return nil
 }
 
-func (t *echoTask) Execute(ctx context.Context, cc *CronContext, cfg json.RawMessage) error {
+func (t *echoTask) Execute(_ context.Context, cfg json.RawMessage) error {
 	t.execCount.Add(1)
-	cc.Logger.Info("echo task executed", "config", string(cfg))
+	if t.logger != nil {
+		t.logger.Info("echo task executed", "config", string(cfg))
+	}
 	return nil
 }
 
@@ -60,12 +63,11 @@ func TestRegistryAll(t *testing.T) {
 
 func TestSchedulerSetup(t *testing.T) {
 	logger := slog.Default()
-	task := &echoTask{}
+	task := &echoTask{logger: logger}
 	reg := NewRegistry()
 	reg.Register(task)
 
-	cc := &CronContext{Logger: logger}
-	sched := New(reg, cc, logger)
+	sched := New(reg, nil, logger)
 
 	if err := sched.Setup(context.Background()); err != nil {
 		t.Fatalf("setup: %v", err)
@@ -77,12 +79,11 @@ func TestSchedulerSetup(t *testing.T) {
 
 func TestSchedulerLoadAndRun(t *testing.T) {
 	logger := slog.Default()
-	task := &echoTask{}
+	task := &echoTask{logger: logger}
 	reg := NewRegistry()
 	reg.Register(task)
 
-	cc := &CronContext{Logger: logger}
-	sched := New(reg, cc, logger)
+	sched := New(reg, nil, logger)
 
 	jobs := []JobDef{
 		{
@@ -101,12 +102,10 @@ func TestSchedulerLoadAndRun(t *testing.T) {
 	}
 
 	sched.Start()
-	defer sched.Stop()
+	t.Cleanup(func() { sched.Stop() })
 
-	// Wait for at least one execution.
 	deadline := time.After(3 * time.Second)
 	for task.execCount.Load() <= 0 {
-
 		select {
 		case <-deadline:
 			t.Fatal("timed out waiting for task execution")
@@ -119,8 +118,7 @@ func TestSchedulerLoadAndRun(t *testing.T) {
 func TestSchedulerUnknownTaskSkipped(t *testing.T) {
 	logger := slog.Default()
 	reg := NewRegistry()
-	cc := &CronContext{Logger: logger}
-	sched := New(reg, cc, logger)
+	sched := New(reg, nil, logger)
 
 	jobs := []JobDef{
 		{

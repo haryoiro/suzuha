@@ -38,11 +38,10 @@ type jobMeta struct {
 	config   map[string]any
 }
 
-// Scheduler manages periodic CronTask execution in the Consolidator process.
+// Scheduler は登録された CronTask を cron 表現で定期実行する。
 type Scheduler struct {
 	cron     *cron.Cron
 	registry *TaskRegistry
-	cc       *CronContext
 	logger   *slog.Logger
 
 	mu      sync.Mutex
@@ -52,9 +51,9 @@ type Scheduler struct {
 	jobs    []jobMeta
 }
 
-// New creates a Scheduler.
-func New(registry *TaskRegistry, cc *CronContext, logger *slog.Logger) *Scheduler {
-	loc := cc.Timezone
+// New は Scheduler を生成する。timezone は nil なら UTC。
+func New(registry *TaskRegistry, timezone *time.Location, logger *slog.Logger) *Scheduler {
+	loc := timezone
 	if loc == nil {
 		loc = time.UTC
 	}
@@ -66,16 +65,15 @@ func New(registry *TaskRegistry, cc *CronContext, logger *slog.Logger) *Schedule
 	return &Scheduler{
 		cron:     c,
 		registry: registry,
-		cc:       cc,
 		logger:   logger,
 	}
 }
 
-// Setup calls Setup() on all registered tasks.
+// Setup は登録済み全タスクの Setup() を呼ぶ。
 func (s *Scheduler) Setup(ctx context.Context) error {
 	for _, t := range s.registry.All() {
 		s.logger.Info("scheduler: タスクをセットアップ中", "task", t.Name())
-		if err := t.Setup(ctx, s.cc); err != nil {
+		if err := t.Setup(ctx); err != nil {
 			return fmt.Errorf("scheduler: %s のセットアップに失敗: %w", t.Name(), err)
 		}
 	}
@@ -104,7 +102,7 @@ func (s *Scheduler) LoadJobs(jobs []JobDef) error {
 			if jobCtx == nil {
 				jobCtx = context.Background()
 			}
-			if execErr := task.Execute(jobCtx, s.cc, cfg); execErr != nil {
+			if execErr := task.Execute(jobCtx, cfg); execErr != nil {
 				s.logger.Error("scheduler: ジョブが失敗しました", "job", jobName, "task", taskName, "error", execErr)
 			}
 		})
@@ -201,5 +199,5 @@ func (s *Scheduler) TriggerTask(ctx context.Context, taskName string, cfg json.R
 		s.mu.Unlock()
 	}
 	s.logger.Info("scheduler: 手動トリガー", "task", taskName)
-	return task.Execute(ctx, s.cc, cfg)
+	return task.Execute(ctx, cfg)
 }

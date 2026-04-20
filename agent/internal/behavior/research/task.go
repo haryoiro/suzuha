@@ -2,7 +2,9 @@ package research
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -19,11 +21,19 @@ type taskState struct {
 	LastResearchedAt time.Time `json:"last_researched_at"`
 }
 
-// Task implements scheduler.CronTask for autonomous web research.
+// Task は自律的に Web 検索を実行する scheduler.CronTask 実装。
 type Task struct {
+	db     *sql.DB
+	logger *slog.Logger
+
 	mu               sync.Mutex
 	lastResearchedAt time.Time
 	nowFunc          func() time.Time
+}
+
+// NewTask は research Task を生成する。db は scheduler 状態永続化用。
+func NewTask(db *sql.DB, logger *slog.Logger) *Task {
+	return &Task{db: db, logger: logger}
 }
 
 var _ scheduler.CronTask = (*Task)(nil)
@@ -38,13 +48,14 @@ func (t *Task) now() time.Time {
 	return jtime.Now()
 }
 
-func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
-	if cc.DB == nil {
+// Setup は scheduler 起動時に呼ばれ、前回実行時刻を復元する。
+func (t *Task) Setup(ctx context.Context) error {
+	if t.db == nil {
 		return nil
 	}
 	var s taskState
-	if err := scheduler.LoadState(ctx, cc.DB, t.Name(), &s); err != nil {
-		cc.Logger.Warn("research: load state", "error", err)
+	if err := scheduler.LoadState(ctx, t.db, t.Name(), &s); err != nil {
+		t.logger.Warn("research: load state", "error", err)
 		return nil
 	}
 	t.mu.Lock()
@@ -53,15 +64,16 @@ func (t *Task) Setup(ctx context.Context, cc *scheduler.CronContext) error {
 	return nil
 }
 
-func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.RawMessage) error {
+// Execute は 1 回分のリサーチを実行する。
+func (t *Task) Execute(ctx context.Context, cfg json.RawMessage) error {
 	var tc taskConfig
 	if len(cfg) > 0 {
 		if err := json.Unmarshal(cfg, &tc); err != nil {
-			cc.Logger.Warn("research: config parse failed, using defaults", "error", err)
+			t.logger.Warn("research: config parse failed, using defaults", "error", err)
 		}
 	}
 	if tc.SearXNGURL == "" {
-		cc.Logger.Warn("research: no searxng_url configured, skipping")
+		t.logger.Warn("research: no searxng_url configured, skipping")
 		return nil
 	}
 	maxSources := tc.MaxSources
@@ -73,41 +85,41 @@ func (t *Task) Execute(ctx context.Context, cc *scheduler.CronContext, cfg json.
 
 	article, err := RandomArticle(ctx)
 	if err != nil {
-		cc.Logger.Error("research: wikipedia random", "error", err)
+		t.logger.Error("research: wikipedia random", "error", err)
 		return nil
 	}
 	query := article.Title
-	cc.Logger.Info("research: starting", "query", query)
+	t.logger.Info("research: starting", "query", query)
 
 	results, err := searx.Search(ctx, query, searchResults)
 	if err != nil || len(results) == 0 {
-		cc.Logger.Warn("research: no search results")
+		t.logger.Warn("research: no search results")
 		return nil
 	}
 
 	sources := fetchAll(ctx, searx, results, maxSources, pageMaxRunes)
 	if len(sources) == 0 {
-		cc.Logger.Warn("research: no pages fetched")
+		t.logger.Warn("research: no pages fetched")
 		return nil
 	}
 
-	cc.Logger.Info("research: finished", "query", query, "sources", len(sources))
+	t.logger.Info("research: finished", "query", query, "sources", len(sources))
 
 	t.mu.Lock()
 	t.lastResearchedAt = t.now()
 	t.mu.Unlock()
-	t.saveState(ctx, cc)
+	t.saveState(ctx)
 	return nil
 }
 
-func (t *Task) saveState(ctx context.Context, cc *scheduler.CronContext) {
-	if cc.DB == nil {
+func (t *Task) saveState(ctx context.Context) {
+	if t.db == nil {
 		return
 	}
 	t.mu.Lock()
 	s := taskState{LastResearchedAt: t.lastResearchedAt}
 	t.mu.Unlock()
-	if err := scheduler.SaveState(ctx, cc.DB, t.Name(), &s); err != nil {
-		cc.Logger.Warn("research: save state", "error", err)
+	if err := scheduler.SaveState(ctx, t.db, t.Name(), &s); err != nil {
+		t.logger.Warn("research: save state", "error", err)
 	}
 }
