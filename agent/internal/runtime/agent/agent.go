@@ -9,8 +9,9 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/lib/llmtoken"
 	portconv "github.com/haryoiro/suzuha/internal/port/conversation"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
@@ -67,7 +68,7 @@ type Agent struct {
 	contexts         map[SourceKey]*Context
 	compactMu        map[SourceKey]*sync.Mutex
 	sessions         map[SourceKey]Session
-	llm              *llm.Client
+	llm              portllm.Client
 	tools            *toolreg.Registry
 	memory           portmem.Memory
 	users            user.Store
@@ -183,7 +184,7 @@ func (t *Thought) BuildMessages(systemPrompt string, conversation []message.Mess
 func New(
 	cfg Config,
 	registrations []SourceRegistration,
-	llmClient *llm.Client,
+	llmClient portllm.Client,
 	tools *toolreg.Registry,
 	memStore portmem.Memory,
 	userStore user.Store,
@@ -340,8 +341,8 @@ func (a *Agent) LastForeground() []message.Message {
 // OnRoleSpecChanged は llm ロール変更時に必要な agent 側調整を行う。
 // conversation ロールに限り、token counter の更新とコンテキストサイズ
 // 調整、必要なら即時圧縮までを面倒見る。
-// llm.Client.SwapRoleSpec はこの呼び出しより前に済ませておくこと。
-func (a *Agent) OnRoleSpecChanged(role string, spec llm.RoleSpec) {
+// portllm.Client.SwapRoleSpec はこの呼び出しより前に済ませておくこと。
+func (a *Agent) OnRoleSpecChanged(role string, spec portllm.RoleSpec) {
 	if role != "conversation" {
 		return
 	}
@@ -360,7 +361,7 @@ func (a *Agent) OnRoleSpecChanged(role string, spec llm.RoleSpec) {
 // UpdateTokenCounter はプロバイダタイプとモデル名からトークンカウンタを更新する。
 // conversation ロールの swap 時に呼ぶ。
 func (a *Agent) UpdateTokenCounter(providerType, model string) {
-	counter := llm.NewTokenCounter(providerType, model, a.logger)
+	counter := llmtoken.NewTokenCounter(providerType, model, a.logger)
 	for _, ctx := range a.contexts {
 		ctx.SetTokenCounter(counter)
 	}

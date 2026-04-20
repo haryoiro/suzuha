@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/lib/llmtext"
 	"github.com/haryoiro/suzuha/internal/runtime/scheduler"
 	"github.com/mozilla-ai/any-llm-go/providers"
 )
@@ -127,7 +127,7 @@ func generateFromPrompt(ctx context.Context, cc *scheduler.CronContext, prompt s
 		return "", fmt.Errorf("llm: %w", err)
 	}
 
-	text := llm.StripDirectiveTags(resp.Text)
+	text := llmtext.StripDirectiveTags(resp.Text)
 	if text == "" {
 		return "", fmt.Errorf("LLMが空またはサイレントなレスポンスを返しました")
 	}

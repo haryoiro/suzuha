@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-faster/jx"
 	"github.com/haryoiro/suzuha/internal/api/control/gen"
-	"github.com/haryoiro/suzuha/internal/llm"
+	"github.com/haryoiro/suzuha/internal/capability/llm"
 	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/samber/do/v2"
 )
@@ -100,7 +100,7 @@ func (h *LLMHandler) LLMRefreshModels(ctx context.Context) (*gen.ModelsRefreshRe
 	}
 	var total int
 	for _, p := range providers {
-		meta := llm.GetProviderMeta(p.Type)
+		meta := h.registry.ProviderMeta(p.Type)
 		if meta == nil {
 			continue
 		}

@@ -11,6 +11,9 @@ import (
 
 	"github.com/haryoiro/suzuha/internal/adapter/embedder/gemini"
 	"github.com/haryoiro/suzuha/internal/adapter/embedder/textonly"
+	llmgemini "github.com/haryoiro/suzuha/internal/adapter/llm/gemini"
+	llmopenai "github.com/haryoiro/suzuha/internal/adapter/llm/openai"
+	llmzhipu "github.com/haryoiro/suzuha/internal/adapter/llm/zhipu"
 	"github.com/haryoiro/suzuha/internal/adapter/store/conversation"
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	userStore "github.com/haryoiro/suzuha/internal/adapter/store/user"
@@ -27,6 +30,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/behavior/video"
 	convcap "github.com/haryoiro/suzuha/internal/capability/conversation"
 	"github.com/haryoiro/suzuha/internal/capability/conversation/boredom"
+	"github.com/haryoiro/suzuha/internal/capability/llm"
 	"github.com/haryoiro/suzuha/internal/capability/mcp"
 	memcap "github.com/haryoiro/suzuha/internal/capability/memory"
 	capmemAcq "github.com/haryoiro/suzuha/internal/capability/memory/acquire"
@@ -41,11 +45,11 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
 	"github.com/haryoiro/suzuha/internal/lib/jtime"
-	"github.com/haryoiro/suzuha/internal/llm"
 	"github.com/haryoiro/suzuha/internal/observe"
 	"github.com/haryoiro/suzuha/internal/observe/langfuse"
 	"github.com/haryoiro/suzuha/internal/port/chat"
 	embedding "github.com/haryoiro/suzuha/internal/port/embedder"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/user"
 	"github.com/haryoiro/suzuha/internal/runtime/agent"
 	"github.com/haryoiro/suzuha/internal/runtime/agent/prompt"
@@ -114,7 +118,13 @@ func agentPackages(cfgPath string) func(do.Injector) {
 			if err != nil {
 				return nil, fmt.Errorf("暗号化の初期化に失敗: %w", err)
 			}
-			reg := llm.NewProviderRegistry(db, cipher, logger)
+			metas := map[string]portllm.ProviderMeta{
+				"openai": llmopenai.NewMeta(),
+				"zhipu":  llmzhipu.NewMeta(),
+				"gemini": llmgemini.NewMeta(),
+				"qwen":   llmopenai.NewMeta(), // OpenAI互換
+			}
+			reg := llm.NewProviderRegistry(db, cipher, metas, logger)
 
 			// 旧 llm_presets からの自動マイグレーション
 			if err := reg.MigrateFromPresets(context.Background()); err != nil {
@@ -211,7 +221,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 					MaxContextTokens: cfg.LLM.MaxTokens,
 				},
 				regs,
-				do.MustInvoke[*llm.Client](i),
+				do.MustInvoke[*llm.Client](i).AsPortClient(),
 				do.MustInvoke[*toolreg.Registry](i),
 				memBackend,
 				userStore,
@@ -306,7 +316,7 @@ func agentPackages(cfgPath string) func(do.Injector) {
 
 			registry.Register(video.NewWatchTool(videoFetcher, logger))
 			if videoExtractor != nil && llmClient != nil {
-				registry.Register(video.NewLookTool(videoExtractor, llmClient, logger))
+				registry.Register(video.NewLookTool(videoExtractor, llmClient.AsPortClient(), logger))
 			}
 
 			// vision (デバイスブロックで作成されていれば)。

@@ -2,7 +2,6 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,7 +11,8 @@ import (
 	"time"
 
 	"github.com/haryoiro/suzuha/internal/domain/message"
-	"github.com/haryoiro/suzuha/internal/lib/jtime"
+	"github.com/haryoiro/suzuha/internal/lib/llmconv"
+	"github.com/haryoiro/suzuha/internal/lib/llmtrace"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
@@ -61,25 +61,6 @@ func parseThinkTags(text string) (reasoning, cleaned string) {
 	}
 
 	return reasoning, cleaned
-}
-
-// directiveTags are agent-internal tags used to control response behavior.
-// They must never appear in user-visible output.
-var directiveTags = []string{"[RESPOND]", "[LISTEN]", "[SKIP]"}
-
-// StripDirectiveTags removes agent directive tags ([RESPOND], [LISTEN], [SKIP])
-// from LLM output. Use this before sending any LLM text to chat.
-func StripDirectiveTags(text string) string {
-	for _, tag := range directiveTags {
-		text = strings.ReplaceAll(text, tag, "")
-	}
-	return strings.TrimSpace(text)
-}
-
-// IsSilentResponse returns true if the LLM chose not to respond
-// (empty text or contains [SKIP]).
-func IsSilentResponse(text string) bool {
-	return text == "" || strings.Contains(strings.ToUpper(text), "[SKIP]")
 }
 
 // roleProvider はロールに割り当てられたプロバイダの状態。
@@ -135,8 +116,8 @@ func (c *Client) ProviderInfo() (providerName, model, apiBase string, visionCapa
 	return rp.providerName, rp.model, rp.apiBase, rp.hasCapability("vision")
 }
 
-// SwapRoleSpec はロールのプロバイダを RoleSpec で切り替える。
-func (c *Client) SwapRoleSpec(role string, spec RoleSpec) {
+// SwapRoleSpec はロールのプロバイダを portllm.RoleSpec で切り替える。
+func (c *Client) SwapRoleSpec(role string, spec portllm.RoleSpec) {
 	rp := roleProvider{
 		provider:     spec.ProviderInst,
 		providerName: spec.ProviderName,
@@ -473,7 +454,7 @@ func (c *Client) Complete(ctx context.Context, messages []message.Message, tools
 	var span trace.Span
 	if tracer != nil {
 		// Serialize messages for tracing (role + content only, skip images).
-		inputJSON := SerializeMessagesForTrace(messages)
+		inputJSON := llmtrace.SerializeMessages(messages)
 
 		ctx, span = tracer.Start(ctx, "llm.complete",
 			trace.WithSpanKind(trace.SpanKindClient),
@@ -490,8 +471,8 @@ func (c *Client) Complete(ctx context.Context, messages []message.Message, tools
 
 	params := providers.CompletionParams{
 		Model:    model,
-		Messages: ConvertMessages(messages, vision),
-		Tools:    ConvertTools(tools),
+		Messages: llmconv.ConvertMessages(messages, vision),
+		Tools:    llmconv.ConvertTools(tools),
 	}
 
 	c.logger.Debug("LLMにリクエスト",
@@ -536,7 +517,7 @@ func (c *Client) Complete(ctx context.Context, messages []message.Message, tools
 
 	// Record LLM response attributes to span.
 	if span != nil {
-		outputJSON := SerializeResponseForTrace(r)
+		outputJSON := llmtrace.SerializeResponse(r)
 		span.SetAttributes(
 			attribute.Int("gen_ai.usage.prompt_tokens", r.Usage.PromptTokens),
 			attribute.Int("gen_ai.usage.completion_tokens", r.Usage.CompletionTokens),
@@ -560,118 +541,6 @@ func (c *Client) Complete(ctx context.Context, messages []message.Message, tools
 	}
 
 	return r, nil
-}
-
-// ConvertMessages transforms suzuha Messages to any-llm-go Messages.
-// System messages after the first one are converted to user messages,
-// because some models (e.g. Qwen3.5) only allow a single system message at the start.
-// Orphaned tool messages and unmatched tool_calls are sanitized to satisfy
-// strict providers like OpenAI.
-func ConvertMessages(msgs []message.Message, visionCapable bool) []providers.Message {
-	// Collect tool_call IDs that have assistant requests and tool responses.
-	assistantToolCalls := make(map[string]bool)
-	toolResponses := make(map[string]bool)
-	for _, m := range msgs {
-		if m.Role == "assistant" {
-			for _, tc := range m.ToolCalls {
-				assistantToolCalls[tc.ID] = true
-			}
-		}
-		if m.Role == "tool" && m.ToolCallID != "" {
-			toolResponses[m.ToolCallID] = true
-		}
-	}
-
-	out := make([]providers.Message, 0, len(msgs))
-	seenSystem := false
-
-	for _, m := range msgs {
-		role := m.Role
-		content := m.Content
-
-		// Drop orphaned tool responses (no matching assistant tool_calls).
-		if role == "tool" && m.ToolCallID != "" && !assistantToolCalls[m.ToolCallID] {
-			continue
-		}
-
-		if role == "system" {
-			if seenSystem {
-				role = "user"
-				content = "[system]\n" + content
-			}
-			seenSystem = true
-		}
-		// Embed message metadata so the LLM can identify channel context.
-		// assistant メッセージにはメタデータを付与しない — LLM がフォーマットを真似て出力に含めるため。
-		if prefix := userMessagePrefix(m); prefix != "" {
-			content = prefix + m.Content
-		}
-
-		// Strip tool_calls from assistant messages if any response is missing.
-		var toolCalls []providers.ToolCall
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			allPresent := true
-			for _, tc := range m.ToolCalls {
-				if !toolResponses[tc.ID] {
-					allPresent = false
-					break
-				}
-			}
-			if allPresent {
-				toolCalls = m.ToolCalls
-			}
-			// else: drop tool_calls entirely — responses are missing
-		} else {
-			toolCalls = m.ToolCalls
-		}
-
-		// Build multimodal content if the LLM supports vision and there are images.
-		var msgContent any = content
-		if visionCapable && len(m.ImageURLs) > 0 && role == "user" {
-			parts := []providers.ContentPart{
-				{Type: "text", Text: content},
-			}
-			for _, u := range m.ImageURLs {
-				parts = append(parts, providers.ContentPart{
-					Type:     "image_url",
-					ImageURL: &providers.ImageURL{URL: u},
-				})
-			}
-			msgContent = parts
-		}
-
-		out = append(out, providers.Message{
-			Role:       role,
-			Content:    msgContent,
-			ToolCalls:  toolCalls,
-			ToolCallID: m.ToolCallID,
-		})
-	}
-	return out
-}
-
-// ConvertTools transforms suzuha Tool interfaces to any-llm-go Tool structs.
-func ConvertTools(tools []tool.Tool) []providers.Tool {
-	if len(tools) == 0 {
-		return nil
-	}
-	out := make([]providers.Tool, 0, len(tools))
-	for _, t := range tools {
-		var params map[string]any
-		if err := json.Unmarshal(t.InputSchema(), &params); err != nil {
-			slog.Warn("llm: ツールの入力スキーマのパースに失敗", "tool", t.Name(), "error", err)
-			continue
-		}
-		out = append(out, providers.Tool{
-			Type: "function",
-			Function: providers.Function{
-				Name:        t.Name(),
-				Description: t.Description(),
-				Parameters:  params,
-			},
-		})
-	}
-	return out
 }
 
 // Embed generates an embedding vector for the given text.
@@ -817,73 +686,4 @@ func retryOnRateLimit(ctx context.Context, logger *slog.Logger, fn func() error)
 		}
 	}
 	return err
-}
-
-// userMessagePrefix は user ロールのメッセージに付与するメタデータヘッダを返す。
-// MessageID が空なら空文字を返す。ConvertMessages と SerializeMessagesForTrace
-// の両方から使われ、LLM が実際に見る内容と Langfuse 可視化を一致させる。
-func userMessagePrefix(m message.Message) string {
-	if m.Role != "user" || m.MessageID == "" {
-		return ""
-	}
-	ts := ""
-	if !m.Timestamp.IsZero() {
-		// タイムゾーンの揺れを抑えるため設定されたロケーションに寄せる。
-		ts = jtime.In(m.Timestamp).Format("2006-01-02 15:04")
-	}
-	return fmt.Sprintf("[time=%s guild=%s guild_id=%s channel=#%s channel_id=%s message_id=%s platform=%s user_id=%s user=%s]\n",
-		ts, m.GuildName, m.GuildID, m.ChannelName, m.Channel, m.MessageID, m.Source, m.UserID, m.UserName)
-}
-
-// SerializeMessagesForTrace converts messages to a JSON array for Langfuse input.
-// Images are excluded to keep the payload manageable. user メッセージには
-// ConvertMessages と同じメタデータ prefix を付与する。Injected なメッセージは
-// Langfuse 上でのデバッグ用に `injected: true` を付ける。
-func SerializeMessagesForTrace(messages []message.Message) string {
-	type traceMsg struct {
-		Role     string `json:"role"`
-		Content  string `json:"content"`
-		Name     string `json:"name,omitempty"`
-		Injected bool   `json:"injected,omitempty"`
-	}
-	out := make([]traceMsg, 0, len(messages))
-	for _, m := range messages {
-		name := m.UserName
-		if m.Role == "tool" {
-			name = m.ToolCallID
-		}
-		content := m.Content
-		if prefix := userMessagePrefix(m); prefix != "" {
-			content = prefix + m.Content
-		}
-		out = append(out, traceMsg{
-			Role:     m.Role,
-			Content:  content,
-			Name:     name,
-			Injected: m.Injected,
-		})
-	}
-	b, _ := json.Marshal(out)
-	return string(b)
-}
-
-// SerializeResponseForTrace converts a Response to JSON for Langfuse output.
-func SerializeResponseForTrace(r *Response) string {
-	type traceToolCall struct {
-		Name string `json:"name"`
-		Args string `json:"arguments"`
-	}
-	type traceResp struct {
-		Text      string          `json:"text"`
-		ToolCalls []traceToolCall `json:"tool_calls,omitempty"`
-	}
-	resp := traceResp{Text: r.Text}
-	for _, tc := range r.ToolCalls {
-		resp.ToolCalls = append(resp.ToolCalls, traceToolCall{
-			Name: tc.Function.Name,
-			Args: tc.Function.Arguments,
-		})
-	}
-	b, _ := json.Marshal(resp)
-	return string(b)
 }

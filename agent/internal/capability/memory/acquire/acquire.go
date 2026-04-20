@@ -11,7 +11,6 @@ import (
 	"github.com/haryoiro/suzuha/internal/adapter/store/memory"
 	"github.com/haryoiro/suzuha/internal/domain/message"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
 	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	portmem "github.com/haryoiro/suzuha/internal/port/memory"
 )
@@ -73,7 +72,7 @@ func (a *Acquirer) extract(ctx context.Context, msgs []message.Message) ([]memor
 	systemPrompt := buildSystemPrompt(a.config.Rules)
 	userPrompt := buildCompactPrompt(msgs, existing)
 
-	resp, err := a.llm.CompleteRaw(ctx, []llm.RawMessage{
+	resp, err := a.llm.CompleteRaw(ctx, []portllm.RawMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	})

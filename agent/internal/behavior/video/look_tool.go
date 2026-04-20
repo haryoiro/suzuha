@@ -10,19 +10,19 @@ import (
 	"strings"
 
 	"github.com/haryoiro/suzuha/internal/adapter/transcript"
-	"github.com/haryoiro/suzuha/internal/llm"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"github.com/haryoiro/suzuha/internal/port/tool"
 )
 
 // lookTool は動画の特定時点のフレームを VLM で描写するツール。
 type lookTool struct {
 	extractor transcript.FrameExtractor
-	llmClient *llm.Client
+	llmClient portllm.Client
 	logger    *slog.Logger
 }
 
 // NewLookTool は video_look ツールを作成する。
-func NewLookTool(extractor transcript.FrameExtractor, llmClient *llm.Client, logger *slog.Logger) tool.Tool {
+func NewLookTool(extractor transcript.FrameExtractor, llmClient portllm.Client, logger *slog.Logger) tool.Tool {
 	return &lookTool{extractor: extractor, llmClient: llmClient, logger: logger}
 }
 

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/haryoiro/suzuha/internal/lib/llmconv"
+	"github.com/haryoiro/suzuha/internal/lib/llmtrace"
 	"github.com/haryoiro/suzuha/internal/lib/textutil"
-	"github.com/haryoiro/suzuha/internal/llm"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -23,8 +25,8 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 
 	// iter=0 のメッセージを構築。
 	msgs := a.buildIterMessages(ctx, agentCtx, t, ts, maxCtx, p.Channel, 0)
-	provMsgs := llm.ConvertMessages(msgs, rc.HasCapability("vision"))
-	provTools := llm.ConvertTools(ts.tools)
+	provMsgs := llmconv.ConvertMessages(msgs, rc.HasCapability("vision"))
+	provTools := llmconv.ConvertTools(ts.tools)
 
 	// Tracing span.
 	var span trace.Span
@@ -36,7 +38,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 				attribute.String("gen_ai.request.model", rc.Model()),
 				attribute.Int("gen_ai.prompt.message_count", len(msgs)),
 				attribute.Int("gen_ai.request.tool_count", len(ts.tools)),
-				attribute.String("gen_ai.input", llm.SerializeMessagesForTrace(msgs)),
+				attribute.String("gen_ai.input", llmtrace.SerializeMessages(msgs)),
 				attribute.Bool("gen_ai.stream", true),
 			),
 		)
@@ -50,7 +52,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 	var contentBuf strings.Builder
 	var reasoningBuf strings.Builder
 	var toolCallsDetected bool
-	var finalChunk llm.StreamChunk
+	var finalChunk portllm.StreamChunk
 
 	// チャンク消費 goroutine。
 	streamDone := make(chan error, 1)
@@ -110,7 +112,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 		span.SetAttributes(
 			attribute.String("gen_ai.response.finish_reason", finalChunk.FinishReason),
 			attribute.Int("gen_ai.response.tool_call_count", len(finalChunk.ToolCalls)),
-			attribute.String("gen_ai.output", llm.SerializeResponseForTrace(&llm.Response{
+			attribute.String("gen_ai.output", llmtrace.SerializeResponse(&portllm.Response{
 				Text:         fullText,
 				Reasoning:    reasoningBuf.String(),
 				ToolCalls:    finalChunk.ToolCalls,
@@ -142,7 +144,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 		a.logger.Info("ストリーミング中にツール呼び出し検出、バッチにフォールバック")
 
 		// ストリーミングで得たレスポンスを Response に変換してバッチパスに渡す。
-		resp := &llm.Response{
+		resp := &portllm.Response{
 			Text:         fullText,
 			Reasoning:    reasoningBuf.String(),
 			ToolCalls:    finalChunk.ToolCalls,
@@ -159,7 +161,7 @@ func (a *Agent) actStreamWith(ctx context.Context, agentCtx *Context, sess Strea
 	// ツールなし: コンテキストに追加。
 	agentCtx.Add(assistantMessage(fullText, p.Channel, p.LastMessage.ChannelName, nil))
 
-	return a.filterResponse(&llm.Response{Text: fullText, ToolCalls: finalChunk.ToolCalls}, p.Channel), nil
+	return a.filterResponse(&portllm.Response{Text: fullText, ToolCalls: finalChunk.ToolCalls}, p.Channel), nil
 }
 
 // handleToolLoopFallback はストリーミングで ToolCall を検出した後、
@@ -170,8 +172,8 @@ func (a *Agent) handleToolLoopFallback(
 	sess Session,
 	t *Thought,
 	ts toolSet,
-	rc *llm.RoleClient,
-	firstResp *llm.Response,
+	rc portllm.RoleClient,
+	firstResp *portllm.Response,
 	channel, channelName string,
 ) (string, error) {
 	// skip_response と text を同時生成した場合は tool_calls を剥がして text を採用する。

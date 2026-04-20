@@ -11,6 +11,7 @@ import (
 	"github.com/haryoiro/suzuha/internal/config"
 	domain "github.com/haryoiro/suzuha/internal/domain/llm"
 	"github.com/haryoiro/suzuha/internal/lib/crypto"
+	portllm "github.com/haryoiro/suzuha/internal/port/llm"
 	anyllm "github.com/mozilla-ai/any-llm-go"
 	"github.com/mozilla-ai/any-llm-go/providers"
 	"github.com/mozilla-ai/any-llm-go/providers/gemini"
@@ -24,22 +25,15 @@ type (
 	RoleAssignment = domain.RoleAssignment
 )
 
-// RoleSpec は Client.SwapRole に渡す解決済みのロール仕様。
-type RoleSpec struct {
-	ProviderInst providers.Provider
-	ProviderName string
-	ProviderType string // "openai", "zhipu", "gemini", "qwen"
-	ModelID      string
-	APIBase      string
-	MaxContext   int
-	Capabilities []string
-}
-
 // ProviderRegistry はプロバイダ・モデル・ロール割り当てを管理する。
 type ProviderRegistry struct {
 	db     *sql.DB
 	cipher *crypto.AESGCMCipher
 	logger *slog.Logger
+
+	// metas はプロバイダタイプ名 ("openai", "zhipu", "gemini", "qwen") →
+	// モデルカタログ取得実装。DI で注入される。
+	metas map[string]portllm.ProviderMeta
 
 	mu    sync.RWMutex
 	cache map[string]cachedProvider // provider name → cached instance
@@ -51,13 +45,19 @@ type cachedProvider struct {
 }
 
 // NewProviderRegistry は ProviderRegistry を作成する。
-func NewProviderRegistry(db *sql.DB, cipher *crypto.AESGCMCipher, logger *slog.Logger) *ProviderRegistry {
+func NewProviderRegistry(db *sql.DB, cipher *crypto.AESGCMCipher, metas map[string]portllm.ProviderMeta, logger *slog.Logger) *ProviderRegistry {
 	return &ProviderRegistry{
 		db:     db,
 		cipher: cipher,
 		logger: logger,
+		metas:  metas,
 		cache:  make(map[string]cachedProvider),
 	}
+}
+
+// ProviderMeta は指定プロバイダタイプに対応する ProviderMeta を返す。
+func (r *ProviderRegistry) ProviderMeta(providerType string) portllm.ProviderMeta {
+	return r.metas[providerType]
 }
 
 // --- Provider CRUD ---
@@ -254,12 +254,12 @@ func (r *ProviderRegistry) Assignments(ctx context.Context) ([]RoleAssignment, e
 
 // --- Resolution ---
 
-// BuildRoleSpec はプロバイダ名+モデルIDから RoleSpec を組み立てる。
-func (r *ProviderRegistry) BuildRoleSpec(ctx context.Context, providerName, modelID string) (*RoleSpec, error) {
+// BuildRoleSpec はプロバイダ名+モデルIDから portllm.RoleSpec を組み立てる。
+func (r *ProviderRegistry) BuildRoleSpec(ctx context.Context, providerName, modelID string) (*portllm.RoleSpec, error) {
 	return r.buildRoleSpec(ctx, providerName, modelID)
 }
 
-func (r *ProviderRegistry) buildRoleSpec(ctx context.Context, providerName, modelID string) (*RoleSpec, error) {
+func (r *ProviderRegistry) buildRoleSpec(ctx context.Context, providerName, modelID string) (*portllm.RoleSpec, error) {
 	entry, err := r.GetProvider(ctx, providerName)
 	if err != nil {
 		return nil, err
@@ -276,7 +276,7 @@ func (r *ProviderRegistry) buildRoleSpec(ctx context.Context, providerName, mode
 		return nil, err
 	}
 
-	spec := &RoleSpec{
+	spec := &portllm.RoleSpec{
 		ProviderInst: inst,
 		ProviderName: providerName,
 		ProviderType: entry.Type,
@@ -369,7 +369,7 @@ func (r *ProviderRegistry) SeedStaticModels(ctx context.Context) error {
 		}
 		seenTypes[p.Type] = true
 
-		meta := GetProviderMeta(p.Type)
+		meta := r.ProviderMeta(p.Type)
 		if meta == nil {
 			continue
 		}

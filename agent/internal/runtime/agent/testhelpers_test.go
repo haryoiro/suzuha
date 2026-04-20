@@ -178,7 +178,7 @@ func newTestAgent(opts ...func(*Agent)) *Agent {
 			MaxContextTokens: 10000,
 		},
 		regs,
-		nil, // llm.Client — nil is OK when we don't call Act
+		nil, // portllm.Client — nil is OK when we don't call Act
 		toolreg.NewRegistry(),
 		&mockMemory{},
 		&mockUsers{},
