@@ -17,7 +17,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/horiagug/youtube-transcript-api-go v0.0.13
 	github.com/hraban/opus v0.0.0-20251117090126-c76ea7e21bf3
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/mozilla-ai/any-llm-go v0.8.0
 	github.com/ogen-go/ogen v1.20.1
 	github.com/pgvector/pgvector-go v0.3.0
