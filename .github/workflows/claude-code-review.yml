@@ -102,7 +102,7 @@ jobs:
           gh pr edit "$PR_NUMBER" --add-label "$label"
 
           MARKER="<!-- ai-triage-sticky -->"
-          BODY=$(printf '%s\n## 🤖 AI Triage: `%s`\n\nラベル: `%s`\n\n**判定根拠**: %s\n\n> 判定基準: Kent Beck『Tidy First?』に基づく T1-T14 (整理) / NG1-NG7 (振る舞いの変更)\n> 詳細: `.claude/agents/pr-triage.md`\n' "$MARKER" "$verdict" "$label" "$reasoning")
+          BODY=$(printf '%s\n## 🤖 AI Triage: %s\n\n**判定根拠**: %s\n\n> 判定基準: Kent Beck『Tidy First?』に基づく T1-T14 (整理) / NG1-NG7 (振る舞いの変更)\n> 詳細: `.claude/agents/pr-triage.md`\n' "$MARKER" "$label" "$reasoning")
 
           existing_id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
             --jq ".[] | select(.user.login == \"github-actions[bot]\") | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
