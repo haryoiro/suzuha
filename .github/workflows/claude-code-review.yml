@@ -1,0 +1,160 @@
+name: PR Triage & Tidy Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      verdict: ${{ steps.parse.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure ai-review labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          upsert_label() {
+            local name="$1" color="$2" desc="$3"
+            gh label create "$name" --color "$color" --description "$desc" 2>/dev/null \
+              || gh label edit "$name" --color "$color" --description "$desc"
+          }
+          upsert_label "ai-review:approved"       "0e8a16" "Tidy First の整理のみ。人間レビュー不要 (形式承認のみで足りる)"
+          upsert_label "ai-review:human-required" "fbca04" "振る舞いの変更を含む。人間レビュー必要"
+          upsert_label "ai-review:undecidable"    "bfd4f2" "AI が判定不能 (規模超過 / 曖昧 / コンテキスト不足)"
+
+      - name: Reset previous triage labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for l in ai-review:approved ai-review:human-required ai-review:undecidable; do
+            gh pr edit "$PR_NUMBER" --remove-label "$l" 2>/dev/null || true
+          done
+
+      - name: Run pr-triage SubAgent
+        id: triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --max-turns 20
+            --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git log:*),Bash(git diff:*),Bash(find:*),Bash(wc:*)"
+            --json-schema '{"type":"object","required":["verdict","reasoning"],"properties":{"verdict":{"type":"string","enum":["tidy","needs-human","undecidable"]},"reasoning":{"type":"string"},"patterns":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"},"file":{"type":"string"},"summary":{"type":"string"}},"required":["category","summary"]}}}}'
+          prompt: |
+            # タスク: PR トリアージ
+
+            PR #${{ github.event.pull_request.number }} (リポジトリ ${{ github.repository }}) を
+            **pr-triage SubAgent** に委譲してください。Task ツールで `subagent_type: pr-triage`
+            を指定し、対象 PR 番号 (${{ github.event.pull_request.number }}) を伝えるプロンプトを構成すること。
+
+            SubAgent は最終発言で JSON ブロック (`<<<TRIAGE_JSON>>>` ... `<<<END_TRIAGE_JSON>>>`)
+            を返します。あなた (オーケストレータ) のタスクは以下の通り:
+
+            1. pr-triage SubAgent を起動し、判定 JSON を取得する
+            2. SubAgent の JSON の `verdict` / `reasoning` / `patterns` を、
+               あなた自身の最終回答 (json-schema 構造化出力) として返す
+            3. SubAgent の判定をあなたが書き換えたり、追加レビューしたりしてはいけない
+
+            判定基準・出力形式の詳細は `.claude/agents/pr-triage.md` に従う。
+            あなた自身がコードレビューや品質判定をしてはいけない。SubAgent に委譲すること。
+
+      - name: Parse triage verdict and label PR
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          STRUCTURED_OUTPUT: ${{ steps.triage.outputs.structured_output }}
+        run: |
+          set -e
+          if [ -z "$STRUCTURED_OUTPUT" ]; then
+            verdict="undecidable"
+            reasoning="triage SubAgent から structured output を取得できませんでした"
+          else
+            verdict=$(echo "$STRUCTURED_OUTPUT" | jq -r '.verdict // "undecidable"')
+            reasoning=$(echo "$STRUCTURED_OUTPUT" | jq -r '.reasoning // "(根拠未提示)"')
+          fi
+
+          case "$verdict" in
+            tidy)        label="ai-review:approved" ;;
+            needs-human) label="ai-review:human-required" ;;
+            *)           label="ai-review:undecidable"; verdict="undecidable" ;;
+          esac
+
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          echo "Triage verdict: $verdict"
+          echo "Reasoning: $reasoning"
+
+          gh pr edit "$PR_NUMBER" --add-label "$label"
+
+          BODY=$(printf '## 🤖 AI Triage: `%s`\n\nラベル: `%s`\n\n**判定根拠**: %s\n\n> 判定基準: Kent Beck『Tidy First?』に基づく T1-T14 (整理) / NG1-NG7 (振る舞いの変更)\n> 詳細: `.claude/agents/pr-triage.md`\n' "$verdict" "$label" "$reasoning")
+          gh pr comment "$PR_NUMBER" --body "$BODY"
+
+  tidy-review:
+    needs: triage
+    if: needs.triage.outputs.verdict == 'tidy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run pr-tidy-review SubAgent
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --max-turns 10
+            --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr edit:*),Bash(git diff:*)"
+          prompt: |
+            # タスク: Tidy 承認レビュー
+
+            PR #${{ github.event.pull_request.number }} は pr-triage で `tidy` と判定されました。
+            **pr-tidy-review SubAgent** に委譲して形式承認レビューを実施してください。
+            Task ツールで `subagent_type: pr-tidy-review` を指定すること。
+
+            SubAgent が担当すること:
+
+            1. 振る舞い不変性の最終確認 (反例探し)
+            2. 波及先 (snapshot / generated / spec / mock / docs) の整合確認
+            3. 結果コメントを PR に 1 件投稿
+            4. 振る舞い変更を再検出したらラベルを `ai-review:human-required` に張り替え
+
+            詳細は `.claude/agents/pr-tidy-review.md` を参照。
+            あなた自身は SubAgent の起動と完了確認だけを行い、レビュー内容には介入しないこと。
+
+  full-review:
+    needs: triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review (code-review plugin)
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
