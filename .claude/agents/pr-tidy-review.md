@@ -70,8 +70,8 @@ pr-triage で `tidy` と判定された PR のみを担当します。
 ### ケース 2: 振る舞い変更を検出 → 再トリアージ推奨
 
 ラベルを張り替える:
-- `gh pr edit <num> --remove-label "ai-review:approved"`
-- `gh pr edit <num> --add-label "ai-review:human-required"`
+- `gh pr edit <num> --remove-label "レビュー不要"`
+- `gh pr edit <num> --add-label "要レビュー"`
 
 コメントを投稿:
 
@@ -83,7 +83,7 @@ Tidy と判定されましたが、以下の箇所で振る舞いの変更を検
 - `path/file.go:LL` — <検出内容を 1 文で>
 - `path/file2.go:LL` — <検出内容を 1 文で>
 
-ラベルを `ai-review:human-required` に張り替えました。人間レビューをお願いします。
+ラベルを `要レビュー` に張り替えました。人間レビューをお願いします。
 
 ---
 🤖 自動レビュー (pr-tidy-review)
@@ -111,4 +111,4 @@ Tidy の整理パターンは確認できましたが、以下の追従が漏れ
 - 命名・設計・テスト充足度のレビュー (責務外)
 - コードの「改善提案」を出力する (やるのは検証だけ)
 - 複数コメントを投稿する (常に 1 件、内容は上記テンプレに沿う)
-- `ai-review:approved` ラベル付きの PR を勝手に `ai-review:human-required` 以外に張り替える
+- `レビュー不要` ラベル付きの PR を勝手に `要レビュー` 以外に張り替える
