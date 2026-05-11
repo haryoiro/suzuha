@@ -23,6 +23,35 @@ func StripCodeFence(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// CountSentences は日本語の文区切り (。！？!?) で分割した文の数を返す。
+// 末尾が区切り文字でない場合も、非空であれば 1 文としてカウントする。
+func CountSentences(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	count := 0
+	hasContent := false
+	for _, r := range s {
+		if strings.ContainsRune(sentenceBreaks, r) {
+			if hasContent {
+				count++
+				hasContent = false
+			}
+		} else if !isSpace(r) {
+			hasContent = true
+		}
+	}
+	if hasContent {
+		count++
+	}
+	return count
+}
+
+func isSpace(r rune) bool {
+	return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '　'
+}
+
 // EstimateTokens は文字種ごとの重みを用いて文字列のトークン数を推定する。
 func EstimateTokens(s string) int {
 	var total float64
