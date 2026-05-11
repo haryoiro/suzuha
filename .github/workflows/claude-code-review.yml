@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure ai-review labels exist
+      - name: Ensure triage labels exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -31,16 +31,16 @@ jobs:
             gh label create "$name" --color "$color" --description "$desc" 2>/dev/null \
               || gh label edit "$name" --color "$color" --description "$desc"
           }
-          upsert_label "ai-review:approved"       "0e8a16" "Tidy First の整理のみ。人間レビュー不要 (形式承認のみで足りる)"
-          upsert_label "ai-review:human-required" "fbca04" "振る舞いの変更を含む。人間レビュー必要"
-          upsert_label "ai-review:undecidable"    "bfd4f2" "AI が判定不能 (規模超過 / 曖昧 / コンテキスト不足)"
+          upsert_label "レビュー不要" "0e8a16" "Tidy First の整理のみ。人間レビュー不要 (形式承認のみで足りる)"
+          upsert_label "要レビュー"   "fbca04" "振る舞いの変更を含む。人間レビュー必要"
+          upsert_label "判定不能"     "bfd4f2" "AI が判定不能 (規模超過 / 曖昧 / コンテキスト不足)"
 
       - name: Reset previous triage labels
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          for l in ai-review:approved ai-review:human-required ai-review:undecidable; do
+          for l in "レビュー不要" "要レビュー" "判定不能"; do
             gh pr edit "$PR_NUMBER" --remove-label "$l" 2>/dev/null || true
           done
 
@@ -90,9 +90,9 @@ jobs:
           fi
 
           case "$verdict" in
-            tidy)        label="ai-review:approved" ;;
-            needs-human) label="ai-review:human-required" ;;
-            *)           label="ai-review:undecidable"; verdict="undecidable" ;;
+            tidy)        label="レビュー不要" ;;
+            needs-human) label="要レビュー" ;;
+            *)           label="判定不能"; verdict="undecidable" ;;
           esac
 
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
@@ -135,7 +135,7 @@ jobs:
             1. 振る舞い不変性の最終確認 (反例探し)
             2. 波及先 (snapshot / generated / spec / mock / docs) の整合確認
             3. 結果コメントを PR に 1 件投稿
-            4. 振る舞い変更を再検出したらラベルを `ai-review:human-required` に張り替え
+            4. 振る舞い変更を再検出したらラベルを `要レビュー` に張り替え
 
             詳細は `.claude/agents/pr-tidy-review.md` を参照。
             あなた自身は SubAgent の起動と完了確認だけを行い、レビュー内容には介入しないこと。
