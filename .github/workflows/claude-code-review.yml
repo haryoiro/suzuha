@@ -101,8 +101,19 @@ jobs:
 
           gh pr edit "$PR_NUMBER" --add-label "$label"
 
-          BODY=$(printf '## 🤖 AI Triage: `%s`\n\nラベル: `%s`\n\n**判定根拠**: %s\n\n> 判定基準: Kent Beck『Tidy First?』に基づく T1-T14 (整理) / NG1-NG7 (振る舞いの変更)\n> 詳細: `.claude/agents/pr-triage.md`\n' "$verdict" "$label" "$reasoning")
-          gh pr comment "$PR_NUMBER" --body "$BODY"
+          MARKER="<!-- ai-triage-sticky -->"
+          BODY=$(printf '%s\n## 🤖 AI Triage: `%s`\n\nラベル: `%s`\n\n**判定根拠**: %s\n\n> 判定基準: Kent Beck『Tidy First?』に基づく T1-T14 (整理) / NG1-NG7 (振る舞いの変更)\n> 詳細: `.claude/agents/pr-triage.md`\n' "$MARKER" "$verdict" "$label" "$reasoning")
+
+          existing_id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\") | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
+
+          if [ -n "$existing_id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing_id}" --field body="$BODY" >/dev/null
+            echo "Updated existing triage comment: $existing_id"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --field body="$BODY" >/dev/null
+            echo "Created new triage comment"
+          fi
 
   tidy-review:
     needs: triage
