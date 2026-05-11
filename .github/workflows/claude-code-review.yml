@@ -154,20 +154,102 @@ jobs:
   full-review:
     needs: triage
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
-      - name: Run Claude Code Review (code-review plugin)
+      - name: Run pr-full-review SubAgent
+        id: review
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          use_sticky_comment: true
-          track_progress: true
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git log:*),Bash(git diff:*),Bash(find:*),Bash(wc:*)"
+            --json-schema '{"type":"object","required":["summary","comments"],"properties":{"summary":{"type":"string"},"comments":{"type":"array","items":{"type":"object","required":["file","line","severity","category","body"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"severity":{"type":"string","enum":["critical","warning","nit","good"]},"category":{"type":"string","enum":["security","correctness","architecture","quality","performance","rich-domain"]},"body":{"type":"string"},"suggestion":{"type":"string"}}}}}}'
+          prompt: |
+            # タスク: フル PR レビュー
+
+            PR #${{ github.event.pull_request.number }} (リポジトリ ${{ github.repository }}) を
+            **pr-full-review SubAgent** に委譲してください。Task ツールで `subagent_type: pr-full-review`
+            を指定し、対象 PR 番号を伝えるプロンプトを構成すること。
+
+            SubAgent は最終発言で `summary` + `comments[]` の JSON を返します。
+            あなた (オーケストレータ) のタスク:
+
+            1. pr-full-review SubAgent を起動して JSON を取得
+            2. SubAgent の JSON を **そのまま** 最終回答 (json-schema 構造化出力) として返す
+            3. SubAgent の指摘内容を書き換えたり、追加・削除したりしてはいけない
+
+            詳細仕様は `.claude/agents/pr-full-review.md` に従う。
+            あなた自身がコードを読んだり指摘を出したりしてはいけない。SubAgent に完全委譲。
+
+      - name: Post review comments to PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          STRUCTURED_OUTPUT: ${{ steps.review.outputs.structured_output }}
+        run: |
+          set -e
+          if [ -z "$STRUCTURED_OUTPUT" ]; then
+            echo "::warning::structured_output が空のため review を投稿しません"
+            exit 0
+          fi
+
+          summary=$(jq -r '.summary // "(no summary)"' <<<"$STRUCTURED_OUTPUT")
+          comments_count=$(jq '.comments | length' <<<"$STRUCTURED_OUTPUT")
+          echo "summary: $summary"
+          echo "comments: $comments_count"
+
+          # body 用の件数内訳
+          counts=$(jq -r '.comments | group_by(.severity) | map("\(.[0].severity): \(length) 件") | join(" / ")' <<<"$STRUCTURED_OUTPUT")
+
+          review_body=$(jq -nr --arg s "$summary" --arg c "$counts" \
+            '"## 🤖 AI Full Review\n\n\($s)\n\n**内訳**: \($c)\n\n> 詳細は各行のインラインコメントを参照してください。\n> SubAgent 定義: `.claude/agents/pr-full-review.md`"')
+
+          if [ "$comments_count" = "0" ]; then
+            jq -nc --arg event COMMENT --arg body "$review_body" --arg sha "$HEAD_SHA" \
+              '{event: $event, body: $body, commit_id: $sha}' \
+              | gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input - >/dev/null
+            echo "Posted summary-only review (no inline comments)"
+            exit 0
+          fi
+
+          # SubAgent の comments[] を Reviews API 形式に変換 (path, line, side: RIGHT, body)
+          payload=$(jq --arg body "$review_body" --arg sha "$HEAD_SHA" '{
+            event: "COMMENT",
+            body: $body,
+            commit_id: $sha,
+            comments: (.comments | map({
+              path: .file,
+              line: .line,
+              side: "RIGHT",
+              body: (
+                (if .severity == "critical" then "🔴 **Critical**"
+                 elif .severity == "warning" then "🟡 **Warning**"
+                 elif .severity == "nit" then "💡 **Nit**"
+                 else "✅ **Good**" end)
+                + " (" + .category + ")\n\n"
+                + .body
+                + (if .suggestion then "\n\n**修正案**: " + .suggestion else "" end)
+              )
+            }))
+          }' <<<"$STRUCTURED_OUTPUT")
+
+          # 投稿。inline コメントが diff 範囲外の line を指していると 422 が返るので、
+          # 全体投稿に失敗したら summary のみで再投稿してフォールバック。
+          if ! echo "$payload" | gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input - >/dev/null 2>/tmp/review-err; then
+            echo "::warning::inline review 投稿に失敗 (おそらく diff 範囲外の line 指定)。summary のみで再投稿します"
+            cat /tmp/review-err
+            jq -nc --arg event COMMENT --arg body "$review_body" --arg sha "$HEAD_SHA" \
+              '{event: $event, body: $body, commit_id: $sha}' \
+              | gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input - >/dev/null
+            echo "Posted summary-only fallback review"
+            exit 0
+          fi
+          echo "Posted full review with $comments_count inline comments"
