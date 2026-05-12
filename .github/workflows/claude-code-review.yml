@@ -170,7 +170,7 @@ jobs:
           claude_args: |
             --max-turns 30
             --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git log:*),Bash(git diff:*),Bash(find:*),Bash(wc:*)"
-            --json-schema '{"type":"object","required":["summary","comments"],"properties":{"summary":{"type":"string"},"comments":{"type":"array","items":{"type":"object","required":["file","line","severity","category","body"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"severity":{"type":"string","enum":["critical","warning","nit","good"]},"category":{"type":"string","enum":["security","correctness","architecture","quality","performance","rich-domain"]},"body":{"type":"string"},"suggestion":{"type":"string"}}}}}}'
+            --json-schema '{"type":"object","required":["summary","comments"],"properties":{"summary":{"type":"string"},"comments":{"type":"array","items":{"type":"object","required":["file","line","severity","category","body"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"severity":{"type":"string","enum":["must","should","nit","praise"]},"category":{"type":"string","enum":["security","correctness","architecture","quality","performance","rich-domain"]},"body":{"type":"string"},"suggestion":{"type":"string"}}}}}}'
           prompt: |
             # タスク: フル PR レビュー
 
@@ -221,6 +221,7 @@ jobs:
           fi
 
           # SubAgent の comments[] を Reviews API 形式に変換 (path, line, side: RIGHT, body)
+          # Conventional Comments スタイル: 冒頭に [severity] (category) を付与
           payload=$(jq --arg body "$review_body" --arg sha "$HEAD_SHA" '{
             event: "COMMENT",
             body: $body,
@@ -230,11 +231,7 @@ jobs:
               line: .line,
               side: "RIGHT",
               body: (
-                (if .severity == "critical" then "🔴 **Critical**"
-                 elif .severity == "warning" then "🟡 **Warning**"
-                 elif .severity == "nit" then "💡 **Nit**"
-                 else "✅ **Good**" end)
-                + " (" + .category + ")\n\n"
+                "[" + .severity + "] (" + .category + ") "
                 + .body
                 + (if .suggestion then "\n\n**修正案**: " + .suggestion else "" end)
               )
