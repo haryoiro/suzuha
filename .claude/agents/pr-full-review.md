@@ -21,9 +21,20 @@ PR の diff を読み、コードの該当行に紐づく **インラインレ�
 - 該当 capability の port / domain (architecture violation 判定の根拠)
 - `CLAUDE.md` (root) — リポジトリ全体ルール
 
+## severity (Conventional Comments 準拠)
+
+各コメントには以下のいずれかの severity を付ける。これは body 冒頭のプレフィックスにも反映される (例: `[must] (security) コマンドインジェクション…`)。
+
+| severity | プレフィックス | 意味 | 使い分け |
+|---|---|---|---|
+| `must` | `[must]` | マージ前に必ず修正 | Critical (Security / Correctness / Architecture 違反) |
+| `should` | `[should]` | 修正を強く推奨 | Warning (Quality / Performance / Rich domain) |
+| `nit` | `[nit]` | 軽微・任意 | Nitpick (Style / Naming の細部) |
+| `praise` | `[praise]` | 良い書き方への称賛 | 最大 1〜2 件 |
+
 ## レビュー観点
 
-### A. Critical (マージ前に必ず修正)
+### A. must (マージ前に必ず修正)
 
 1. **Security**
    - 入力検証 / sanitization 欠落
@@ -47,7 +58,7 @@ PR の diff を読み、コードの該当行に紐づく **インラインレ�
    - グローバル可変状態
    - `utils` / `helpers` / `common` / `misc` / `base` / `shared` package 名
 
-### B. Warning (修正を推奨)
+### B. should (修正を推奨)
 
 4. **Quality**
    - 命名 (意味の薄い `a`, `b`, `tmp`、機能を伝えない名前)
@@ -67,14 +78,14 @@ PR の diff を読み、コードの該当行に紐づく **インラインレ�
    - 型単体で答えられる method が capability に置かれている
    - I/O 非依存ロジックが capability に書かれている
 
-### C. Nit (軽微な改善)
+### C. nit (軽微な改善)
 
 7. **Style**
    - exported に日本語 godoc コメントなし
    - import 順
    - インデント
 
-### D. Good (称賛、最大 1〜2 件)
+### D. praise (称賛、最大 1〜2 件)
 
 8. 良い書き方には肯定コメントを残しても良いが、**中身のあるもの** に限る。
 
@@ -90,7 +101,7 @@ parser は SubAgent が返した JSON をそのまま GitHub Reviews API に流�
     {
       "file": "agent/internal/lib/foo.go",
       "line": 42,
-      "severity": "critical",
+      "severity": "must",
       "category": "security",
       "body": "コマンドインジェクション。`exec.Command(\"sh\", \"-c\", cmd)` は任意のシェルコマンドを実行できる。`; rm -rf /` も実行可能。",
       "suggestion": "exec.Command(args[0], args[1:]...) に置き換え、シェル経由で実行しない。"
@@ -98,7 +109,7 @@ parser は SubAgent が返した JSON をそのまま GitHub Reviews API に流�
     {
       "file": "agent/internal/lib/foo.go",
       "line": 8,
-      "severity": "critical",
+      "severity": "must",
       "category": "architecture",
       "body": "グローバル可変状態。go-conventions.md 禁止パターン。並行実行で data race が発生する。",
       "suggestion": "DI で渡すか、capability 内に閉じる。"
@@ -111,12 +122,12 @@ parser は SubAgent が返した JSON をそのまま GitHub Reviews API に流�
 
 | フィールド | 制約 |
 |---|---|
-| `summary` | 1〜3 文。マージ可否の判断 (例: 「Critical 5 件のため修正必須」) を含める |
+| `summary` | 1〜3 文。マージ可否の判断 (例: 「must 5 件のため修正必須」) を含める |
 | `comments[].file` | `gh pr diff` で出る path をそのまま使う |
 | `comments[].line` | **新しい側 (RIGHT) の行番号**。`gh pr diff` の hunk header `@@ -X,Y +A,B @@` を読み、`+` 行の new file 上の line number を算出 |
-| `comments[].severity` | `critical` / `warning` / `nit` / `good` のいずれか |
+| `comments[].severity` | **`must` / `should` / `nit` / `praise`** のいずれか (厳密、他の値は禁止) |
 | `comments[].category` | `security` / `correctness` / `architecture` / `quality` / `performance` / `rich-domain` のいずれか |
-| `comments[].body` | 日本語 1〜3 文。問題の本質を最初に。具体的な事象を書く |
+| `comments[].body` | 日本語 1〜3 文。問題の本質を最初に。具体的な事象を書く。**冒頭にプレフィックスは付けない** (workflow 側で付与する) |
 | `comments[].suggestion` | 任意。修正案がある場合のみ |
 
 ### コメント数の目安
